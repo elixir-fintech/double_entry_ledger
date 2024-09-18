@@ -8,6 +8,7 @@ defmodule DoubleEntryLedger.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      DoubleEntryLedger.Repo
       # Starts a worker by calling: DoubleEntryLedger.Worker.start_link(arg)
       # {DoubleEntryLedger.Worker, arg}
     ]
