@@ -14,6 +14,9 @@ defmodule DoubleEntryLedger.RepoCase do
   this option is not recommended for other databases.
   """
 
+  alias DoubleEntryLedger.Repo
+  alias Ecto.Adapters.SQL.Sandbox
+
   use ExUnit.CaseTemplate
 
   using do
@@ -29,8 +32,8 @@ defmodule DoubleEntryLedger.RepoCase do
   end
 
   setup tags do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(DoubleEntryLedger.Repo, shared: not tags[:async])
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    pid = Sandbox.start_owner!(Repo, shared: not tags[:async])
+    on_exit(fn -> Sandbox.stop_owner(pid) end)
     :ok
   end
 end

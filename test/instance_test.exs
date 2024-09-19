@@ -1,11 +1,10 @@
 defmodule DoubleEntryLedger.InstanceTest do
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Repo
   alias DoubleEntryLedger.Instance
+  alias DoubleEntryLedger.Repo
 
   import DoubleEntryLedger.InstanceFixtures
-
 
   describe "instances" do
 

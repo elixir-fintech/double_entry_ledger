@@ -4,9 +4,10 @@ defmodule DoubleEntryLedger.InstanceFixtures do
   instance entities.
   """
 
-  alias DoubleEntryLedger.{ Repo, Instance }
+  alias DoubleEntryLedger.{Instance, Repo}
 
   @spec instance_fixture(any()) :: Instance.t()
+  @spec instance_fixture() :: Instance.t()
   @doc """
   Generate a instance.
   """
