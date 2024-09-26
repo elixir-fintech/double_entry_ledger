@@ -1,4 +1,4 @@
-alias TransactionStore.Ledger.{Entry, Types }
+alias DoubleEntryLedger.{Entry, Types }
 
 defprotocol EntryHelper do
   @spec debit_sum(t(), integer()) :: integer()
