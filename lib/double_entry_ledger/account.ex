@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.Account do
     - `allowed_negative` (boolean): Whether the account can have a negative balance.
     - `posted` (Balance.t()): The posted balance details of the account.
     - `pending` (Balance.t()): The pending balance details of the account.
-    - `ledger_instance_id` (binary): The ID of the associated ledger instance.
+    - `instance_id` (binary): The ID of the associated ledger instance.
     - `inserted_at` (DateTime): The timestamp when the account was created.
     - `updated_at` (DateTime): The timestamp when the account was last updated.
 
@@ -87,60 +87,51 @@ defmodule DoubleEntryLedger.Account do
     |> cast_embed(:pending, with: &Balance.changeset/2)
   end
 
-  @doc """
-  Updates the balances of the account based on the given entry and transaction type.
+  @spec update_balances(Account.t(), %{entry: Entry.t(), trx: Types.trx_types()}) :: Ecto.Changeset.t()
+  def update_balances(account, %{entry: entry, trx: trx}) do
+    account
+    |> change()
+    |> update(entry, trx)
+    |> update_available()
+  end
 
-  ## Parameters
+  @spec update(Ecto.Changeset.t(), Entry.t(), Types.trx_types()) :: Ecto.Changeset.t()
+  defp update(%{data: %{posted: po, type: t } } = changeset, %{amount: a, type: et }, trx) when trx == :posted do
+    changeset
+    |> put_embed(:posted, Balance.update_balance(po, a.amount, et, t))
+  end
 
-    - `account` (Account.t()): The account struct.
-    - `params` (map): A map containing the entry and transaction type.
+  defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending and et == t do
+    changeset
+    |> put_embed(:pending, Balance.update_balance(pe, a.amount, et, opposite_direction(et)))
+  end
 
-  """
-  #@spec update_balances(Account.t(), %{entry: Entry.t(), trx: Types.trx_types()}) :: Ecto.Changeset.t()
-  #def update_balances(account, %{entry: entry, trx: trx}) do
-    #account
-    #|> change()
-    #|> update(entry, trx)
-    #|> update_available()
-  #end
-#
-  #@spec update(Ecto.Changeset.t(), Entry.t(), Types.trx_types()) :: Ecto.Changeset.t()
-  #defp update(%{data: %{posted: po, type: t } } = changeset, %{amount: a, type: et }, trx) when trx == :posted do
-    #changeset
-    #|> put_embed(:posted, Balance.update_balance(po, a.amount, et, t))
-  #end
-#
-  #defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending and et == t do
-    #changeset
-    #|> put_embed(:pending, Balance.update_balance(pe, a.amount, et, opposite_direction(et)))
-  #end
-#
-  #defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending and et != t do
-    #changeset
-    #|> put_change(:pending, Balance.update_balance(pe, a.amount, et, et))
-  #end
-#
-  #defp update(%{data: %{pending: pe, posted: po, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending_to_posted do
-    #changeset
-    #|> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
-    #|> put_change(:posted, Balance.update_balance(po, a.amount, et, t))
-  #end
-#
-  #defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending_to_archived do
-    #changeset
-    #|> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
-  #end
-#
-  #@spec update_available(Ecto.Changeset.t()) :: Ecto.Changeset.t()
-  #defp update_available(%{data: %{allowed_negative: allowed_negative, type: type } } = changeset) do
-    #pending = fetch_field!(changeset, :pending)
-    #%{amount: amount } = fetch_field!(changeset, :posted)
-    #available = amount - Map.fetch!(pending, opposite_direction(type))
-    #case !allowed_negative && available < 0  do
-      #true -> add_error(changeset, :available, "amount can't be negative")
-      #false -> put_change(changeset, :available, max(0, available))
-    #end
-  #end
+  defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending and et != t do
+    changeset
+    |> put_change(:pending, Balance.update_balance(pe, a.amount, et, et))
+  end
+
+  defp update(%{data: %{pending: pe, posted: po, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending_to_posted do
+    changeset
+    |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
+    |> put_change(:posted, Balance.update_balance(po, a.amount, et, t))
+  end
+
+  defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending_to_archived do
+    changeset
+    |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
+  end
+
+  @spec update_available(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp update_available(%{data: %{allowed_negative: allowed_negative, type: type } } = changeset) do
+    pending = fetch_field!(changeset, :pending)
+    %{amount: amount } = fetch_field!(changeset, :posted)
+    available = amount - Map.fetch!(pending, opposite_direction(type))
+    case !allowed_negative && available < 0  do
+      true -> add_error(changeset, :available, "amount can't be negative")
+      false -> put_change(changeset, :available, max(0, available))
+    end
+  end
 
   @spec opposite_direction(Types.c_or_d()) :: Types.c_or_d()
   defp opposite_direction(direction) do
