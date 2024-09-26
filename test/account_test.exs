@@ -1,4 +1,8 @@
 defmodule DoubleEntryLedger.AccountTest do
+  @moduledoc """
+  This module provides tests for the Account module.
+  """
+
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Account, Balance}
@@ -38,7 +42,7 @@ defmodule DoubleEntryLedger.AccountTest do
     end
   end
 
-  describe "update balances debit account: trx = ppsted" do
+  describe "update balances debit account: trx = posted" do
     setup [:create_instance]
 
     test "debit entry", %{instance: %{id: id}} do
@@ -123,7 +127,7 @@ defmodule DoubleEntryLedger.AccountTest do
     end
   end
 
-  describe "update balances credit account: trx = ppsted" do
+  describe "update balances credit account: trx = posted" do
     setup [:create_instance]
 
     test "credit entry", %{instance: %{id: id}} do

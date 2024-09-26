@@ -1,4 +1,8 @@
 defmodule DoubleEntryLedger.BalanceTest do
+  @moduledoc """
+  This module contains tests for the `DoubleEntryLedger.Balance` module. It ensures that the balance calculations and related functionalities are working as expected.
+  """
+
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 

@@ -1,4 +1,7 @@
 defmodule DoubleEntryLedger.InstanceTest do
+  @moduledoc """
+  This module contains tests for the instance
+  """
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Instance, Transaction, Repo}
