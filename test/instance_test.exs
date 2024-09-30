@@ -10,6 +10,8 @@ defmodule DoubleEntryLedger.InstanceTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.TransactionFixtures
 
+  doctest Instance
+
   describe "instances" do
 
     test "Name is only required field", _ctx do

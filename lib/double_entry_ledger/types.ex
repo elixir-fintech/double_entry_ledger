@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Types do
   @moduledoc """
-  TODO
+  This module defines types used in the DoubleEntryLedger application.
   """
   @type c_or_d :: :credit | :debit
 

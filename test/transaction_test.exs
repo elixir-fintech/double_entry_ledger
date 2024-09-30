@@ -8,6 +8,8 @@ defmodule DoubleEntryLedger.TransactionTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.TransactionFixtures
 
+  doctest Transaction
+
   describe "transaction 2 entries" do
     setup [:create_instance, :create_accounts]
 
