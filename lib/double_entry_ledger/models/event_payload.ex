@@ -9,7 +9,6 @@ defmodule DoubleEntryLedger.EventPayload do
 
   @primary_key false
   embedded_schema do
-    field :version, :integer, default: 1
     field :instance_id, Ecto.UUID
     embeds_one :transaction, TransactionData
   end
@@ -48,6 +47,16 @@ defmodule DoubleEntryLedger.EventPayload.TransactionData do
     |> validate_required([:effective_at, :status])
     |> validate_inclusion(:status, @states)
     |> cast_embed(:entries, with: &EntryData.changeset/2, required: true)
+    |> validate_entries_count()
+  end
+
+  defp validate_entries_count(changeset) do
+    entries = get_field(changeset, :entries, [])
+    if length(entries) < 2 do
+      add_error(changeset, :entries, "must have at least 2 entries")
+    else
+      changeset
+    end
   end
 end
 
@@ -65,8 +74,8 @@ defmodule DoubleEntryLedger.EventPayload.EntryData do
   @primary_key false
   embedded_schema do
     field :account_id, Ecto.UUID
-    field :amount, :integer, default: 0
-    field :currency, Ecto.Enum, values: @currency_atoms, default: :EUR
+    field :amount, :integer
+    field :currency, Ecto.Enum, values: @currency_atoms
   end
 
   @doc false
