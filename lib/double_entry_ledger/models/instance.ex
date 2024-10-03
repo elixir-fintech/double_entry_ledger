@@ -1,14 +1,13 @@
 defmodule DoubleEntryLedger.Instance do
   @moduledoc """
   The `DoubleEntryLedger.Instance` module defines the schema and functions for managing ledger instances.
-  A ledger instance represents a collection of accounts and transactions, and includes configuration and metadata.
+  A ledger instance represents a collection of accounts and transactions, and includes configuration.
 
   ## Schema Fields
 
     - `id` (binary): The unique identifier for the ledger instance.
     - `config` (map): Configuration settings for the ledger instance.
     - `description` (String.t()): A description of the ledger instance.
-    - `metadata` (map): Additional metadata for the ledger instance.
     - `name` (String.t()): The name of the ledger instance.
     - `accounts` ([Account.t()] | Ecto.Association.NotLoaded.t()): The accounts associated with the ledger instance.
     - `transactions` ([Transaction.t()] | Ecto.Association.NotLoaded.t()): The transactions associated with the ledger instance.
@@ -31,7 +30,6 @@ defmodule DoubleEntryLedger.Instance do
     id: binary() | nil,
     config: map() | nil,
     description: String.t() | nil,
-    metadata: map() | nil,
     name: String.t() | nil,
     accounts: [Account.t()]| Ecto.Association.NotLoaded.t(),
     transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
@@ -44,7 +42,6 @@ defmodule DoubleEntryLedger.Instance do
   schema "instances" do
     field :config, :map
     field :description, :string
-    field :metadata, :map
     field :name, :string
     has_many :accounts, Account, foreign_key: :instance_id
     has_many :transactions, Transaction, foreign_key: :instance_id
@@ -56,7 +53,7 @@ defmodule DoubleEntryLedger.Instance do
   @spec changeset(Instance.t(), map()) :: Ecto.Changeset.t()
   def changeset(instance, attrs) do
     instance
-    |> cast(attrs, [:name, :description, :config, :metadata])
+    |> cast(attrs, [:name, :description, :config])
     |> validate_required([:name])
   end
 

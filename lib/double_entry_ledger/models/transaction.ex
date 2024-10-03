@@ -1,18 +1,16 @@
 defmodule DoubleEntryLedger.Transaction do
   @moduledoc """
   The `DoubleEntryLedger.Transaction` module defines the schema and functions for managing transactions within a ledger instance.
-  A transaction consists of multiple entries that affect account balances and includes metadata and status information.
+  A transaction consists of multiple entries that affect account balances and includes status information.
 
   ## Schema Fields
 
     - `id` (binary): The unique identifier for the transaction.
     - `effective_at` (DateTime.t()): The effective date and time of the transaction.
-    - `event_id` (String.t()): An optional event identifier associated with the transaction.
     - `instance` (Instance.t() | Ecto.Association.NotLoaded.t()): The associated ledger instance.
     - `instance_id` (binary): The ID of the associated ledger instance.
-    - `metadata` (map): Additional metadata for the transaction.
     - `posted_at` (DateTime.t()): The date and time when the transaction was posted.
-    - `status` (:pending | :posted | :archived): The status of the transaction.
+    - `status` (:pending | :posted | :archived): Thhe transaction.
     - `entries` ([Entry.t()] | Ecto.Association.NotLoaded.t()): The entries associated with the transaction.
     - `inserted_at` (DateTime.t()): The timestamp when the transaction was created.
     - `updated_at` (DateTime.t()): The timestamp when the transaction was last updated.
@@ -35,10 +33,8 @@ defmodule DoubleEntryLedger.Transaction do
   @type t :: %__MODULE__{
     id: binary() | nil,
     effective_at: DateTime.t() | nil,
-    event_id: String.t() | nil,
     instance: Instance.t() | Ecto.Association.NotLoaded.t(),
     instance_id: binary() | nil,
-    metadata: map() | nil,
     posted_at: DateTime.t() | nil,
     status: :pending | :posted | :archived | nil,
     entries: [Entry.t()] | Ecto.Association.NotLoaded.t(),
@@ -47,7 +43,7 @@ defmodule DoubleEntryLedger.Transaction do
   }
 
   @required_attrs ~w(status effective_at instance_id)a
-  @optional_attrs ~w(event_id posted_at metadata)a
+  @optional_attrs ~w(posted_at)a
 
   @states [:pending, :posted, :archived]
   @primary_key {:id, :binary_id, autogenerate: true}
@@ -55,8 +51,6 @@ defmodule DoubleEntryLedger.Transaction do
 
   schema "transactions" do
     field :effective_at, :utc_datetime_usec, default: DateTime.utc_now
-    field :event_id, :string
-    field :metadata, :map, default: %{}
     field :posted_at, :utc_datetime_usec
     field :status, Ecto.Enum, values: @states
     belongs_to :instance, Instance

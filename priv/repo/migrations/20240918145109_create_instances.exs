@@ -7,7 +7,6 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateInstances do
       add :name, :string
       add :description, :string
       add :config, :map, default: %{}
-      add :metadata, :map, default: %{}
 
       timestamps(type: :utc_datetime_usec)
     end

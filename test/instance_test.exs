@@ -30,7 +30,6 @@ defmodule DoubleEntryLedger.InstanceTest do
       )
       assert %Instance{
         config: %{},
-        metadata: %{}
       } = instance
     end
   end
