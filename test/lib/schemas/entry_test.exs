@@ -1,4 +1,8 @@
 defmodule DoubleEntryLedger.EntryTest do
+  @moduledoc """
+  Tests for the Entry schema.
+  """
+
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Entry, Repo}
@@ -21,7 +25,7 @@ defmodule DoubleEntryLedger.EntryTest do
     end
 
     # validation allows empty transaction_id, but must be present in db
-    # Entries must have a transation_id, and transaction must have at least 2 entries
+    # Entries must have a transaction_id, and transaction must have at least 2 entries
     test "raises not-null constraint error for missing transaction_id", ctx do
       attr = entry_attr(account_id: ctx.account.id)
       assert_raise Postgrex.Error,

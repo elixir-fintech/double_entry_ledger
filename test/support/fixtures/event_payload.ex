@@ -28,5 +28,4 @@ defmodule DoubleEntryLedger.EventPayloadFixtures do
       }
     }
   end
-
 end
