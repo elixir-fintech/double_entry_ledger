@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.EventPayloadTest do
   Tests for the event payload
   """
   use ExUnit.Case
+  import DoubleEntryLedger.EventPayloadFixtures
 
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
@@ -13,7 +14,7 @@ defmodule DoubleEntryLedger.EventPayloadTest do
   doctest EventPayload
 
   describe "EventPayload" do
-    test "changeset not valid for empty payload" do
+    test "changeset not valid for empty transaction and instance_id" do
       assert %Changeset{errors: [
         transaction: {"can't be blank", [validation: :required]},
         instance_id: {"can't be blank", [validation: :required]}
@@ -24,13 +25,6 @@ defmodule DoubleEntryLedger.EventPayloadTest do
       attrs = %{instance_id: "some_id", transaction: %{}}
       assert %Changeset{errors: [
         instance_id: {"is invalid", [type: Ecto.UUID, validation: :cast]}
-      ]} = EventPayload.changeset(%EventPayload{}, attrs)
-    end
-
-    test "changeset not valid for missing transaction" do
-      attrs = %{instance_id: Ecto.UUID.generate()}
-      assert %Changeset{errors: [
-        transaction: {"can't be blank", [validation: :required]}
       ]} = EventPayload.changeset(%EventPayload{}, attrs)
     end
 
@@ -48,14 +42,7 @@ defmodule DoubleEntryLedger.EventPayloadTest do
     end
 
     test "changeset valid for valid payload" do
-      attrs = %{
-        instance_id: Ecto.UUID.generate(),
-        transaction: %{
-          effective_at: DateTime.utc_now(),
-          status: :pending,
-          entries: create_2_entries()
-        }
-      }
+      attrs = pending_payload()
       assert %Changeset{valid?: true} = EventPayload.changeset(%EventPayload{}, attrs)
     end
   end
@@ -97,7 +84,7 @@ defmodule DoubleEntryLedger.EventPayloadTest do
     end
 
     test "changeset not valid for less than 2 entries" do
-      [h | tail] = create_2_entries()
+      [_ | tail] = create_2_entries()
       attrs = %{
         effective_at: DateTime.utc_now(),
         status: :pending,
@@ -151,20 +138,5 @@ defmodule DoubleEntryLedger.EventPayloadTest do
       }
       assert %Changeset{valid?: true} = EntryData.changeset(%EntryData{}, attrs)
     end
-  end
-
-  defp create_2_entries do
-    [
-      %{
-        account_id: Ecto.UUID.generate(),
-        amount: 100,
-        currency: :EUR
-      },
-      %{
-        account_id: Ecto.UUID.generate(),
-        amount: -100,
-        currency: :EUR
-      }
-    ]
   end
 end

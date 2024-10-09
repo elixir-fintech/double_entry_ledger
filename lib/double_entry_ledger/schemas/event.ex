@@ -39,8 +39,9 @@ defmodule DoubleEntryLedger.Event do
   @doc false
   def changeset(event, attrs) do
     event
-    |> cast(attrs, [:status, :event_type, :source])
-    |> validate_required([:status, :event_type, :source])
-    |> cast_embed(:payload, with: &DoubleEntryLedger.EventPayload.changeset/2)
+    |> cast(attrs, [:event_type, :source, :source_data, :source_id])
+    |> validate_required([:event_type, :source, :source_id])
+    |> validate_inclusion(:event_type, @event_types)
+    |> cast_embed(:payload, with: &DoubleEntryLedger.EventPayload.changeset/2, required: true)
   end
 end
