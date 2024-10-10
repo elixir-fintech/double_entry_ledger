@@ -3,13 +3,9 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
   This module tests the TransactionStore module.
   """
   use ExUnit.Case, async: true
+  use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
   alias DoubleEntryLedger.{Account, TransactionStore, Transaction, Balance, Repo, Event}
-
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-    :ok = Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
-  end
 
   describe "save successful transaction" do
 

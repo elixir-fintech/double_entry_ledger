@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.InstanceTest do
   """
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Instance, Transaction, Repo}
+  alias DoubleEntryLedger.{Instance, Transaction, TransactionStore, Repo}
 
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
@@ -57,8 +57,8 @@ defmodule DoubleEntryLedger.InstanceTest do
         %{type: :debit, amount: Money.new(30, :EUR), account_id:  a3.id},
       ])
 
-      Transaction.create(attr) |> Repo.transaction()
-      Transaction.create(attr2) |> Repo.transaction()
+      TransactionStore.create(attr)
+      TransactionStore.create(attr2)
       assert {
         :ok,
         %{pending_credit: 40, pending_debit: 40, posted_credit: 100, posted_debit: 100}

@@ -3,13 +3,9 @@ defmodule DoubleEntryLedger.EventStoreTest do
   This module tests the EventStore module.
   """
   use ExUnit.Case, async: true
+  use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
   alias DoubleEntryLedger.{EventStore, Repo, Event}
-
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-    :ok = Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
-  end
 
   describe "insert_event/1" do
     test "inserts a new event" do
