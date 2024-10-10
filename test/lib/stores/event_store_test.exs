@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
-  alias DoubleEntryLedger.{EventStore, Repo, Event}
+  alias DoubleEntryLedger.{EventStore, Event}
 
   describe "insert_event/1" do
     test "inserts a new event" do

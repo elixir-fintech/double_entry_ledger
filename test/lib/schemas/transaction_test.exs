@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.TransactionTest do
   This module defines tests for the transaction
   """
   use DoubleEntryLedger.RepoCase
-  alias DoubleEntryLedger.{Transaction, Account, Balance, Repo}
+  alias DoubleEntryLedger.Transaction
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.TransactionFixtures

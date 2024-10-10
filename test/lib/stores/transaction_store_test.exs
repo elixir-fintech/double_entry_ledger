@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
-  alias DoubleEntryLedger.{Account, TransactionStore, Transaction, Balance, Repo, Event}
+  alias DoubleEntryLedger.{Account, TransactionStore, Transaction, Balance, Repo}
 
   describe "save successful transaction" do
 

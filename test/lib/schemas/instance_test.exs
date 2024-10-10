@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.InstanceTest do
   """
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Instance, Transaction, TransactionStore, Repo}
+  alias DoubleEntryLedger.{Instance, TransactionStore, Repo}
 
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
