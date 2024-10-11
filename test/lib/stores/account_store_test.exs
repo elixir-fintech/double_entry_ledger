@@ -32,6 +32,22 @@ defmodule DoubleEntryLedger.AccountStoreTest do
     end
   end
 
+  describe "get_accounts_by_instance_id" do
+    setup [:create_instance]
+
+    test "returns accounts with given instance id", %{instance: instance} do
+      accounts = [
+        account_fixture(instance_id: instance.id),
+        account_fixture(instance_id: instance.id)
+      ]
+      assert {:ok, accounts} == AccountStore.get_accounts_by_instance_id(instance.id)
+    end
+
+    test "returns error when no accounts are found", %{instance: instance} do
+      assert {:error, "No accounts were found"} == AccountStore.get_accounts_by_instance_id(instance.id)
+    end
+  end
+
   defp create_instance(_ctx) do
     %{instance: instance_fixture()}
   end
