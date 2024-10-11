@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.Event do
   @type t :: %Event{
     id: Ecto.UUID.t(),
     status: :pending | :processed | :failed,
-    event_type: :create | :update,
+    action: :create | :update,
     source: String.t(),
     source_data: map(),
     source_id: String.t(),
@@ -20,12 +20,12 @@ defmodule DoubleEntryLedger.Event do
   }
 
   @states [:pending, :processed, :failed]
-  @event_types [:create, :update]
+  @actions [:create, :update]
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "events" do
     field :status, Ecto.Enum, values: @states, default: :pending
-    field :event_type, Ecto.Enum, values: @event_types
+    field :action, Ecto.Enum, values: @actions
     field :source, :string
     field :source_data, :map, default: %{}
     field :source_id, :string
@@ -39,9 +39,9 @@ defmodule DoubleEntryLedger.Event do
   @doc false
   def changeset(event, attrs) do
     event
-    |> cast(attrs, [:event_type, :source, :source_data, :source_id])
-    |> validate_required([:event_type, :source, :source_id])
-    |> validate_inclusion(:event_type, @event_types)
+    |> cast(attrs, [:action, :source, :source_data, :source_id])
+    |> validate_required([:action, :source, :source_id])
+    |> validate_inclusion(:action, @actions)
     |> cast_embed(:payload, with: &DoubleEntryLedger.EventPayload.changeset/2, required: true)
   end
 end

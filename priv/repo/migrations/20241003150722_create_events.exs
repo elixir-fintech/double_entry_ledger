@@ -7,15 +7,15 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
 
       # Enum fields stored as strings
       add :status, :string, null: false, default: "pending"
-      add :event_type, :string, null: false
+      add :action, :string, null: false
 
       add :source, :string, null: false
+      add :source_id, :string, null: false
       add :source_data, :map, null: false, default: %{}
-      add :source_id, :string
       add :processed_at, :utc_datetime_usec
 
       # Embedded schema stored as a JSONB column
-      add :payload, :map
+      add :payload, :map, null: false
 
       timestamps(type: :utc_datetime_usec)
     end

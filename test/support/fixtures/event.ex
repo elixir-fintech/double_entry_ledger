@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   def event_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{
-      event_type: :create,
+      action: :create,
       source: "source",
       source_id: "source_id",
       payload: pending_payload()
