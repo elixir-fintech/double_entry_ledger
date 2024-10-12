@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.AccountStoreTest do
 
   doctest AccountStore
 
-  describe "get_accounts" do
+  describe "get_accounts_by_instance_id" do
     setup [:create_instance]
 
     test "returns accounts with given ids", %{instance: instance} do
@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.AccountStoreTest do
         account_fixture(instance_id: instance.id),
         account_fixture(instance_id: instance.id)
       ]
-      assert {:ok, accounts} == AccountStore.get_accounts(Enum.map(accounts, &(&1.id)))
+      assert {:ok, accounts} == AccountStore.get_accounts_by_instance_id(instance.id, Enum.map(accounts, &(&1.id)))
     end
 
     test "returns error when some accounts are not found", %{instance: instance} do
@@ -28,11 +28,11 @@ defmodule DoubleEntryLedger.AccountStoreTest do
         account_fixture(instance_id: instance.id)
       ]
       account_ids = [instance.id | Enum.map(accounts, &(&1.id))]
-      assert {:error, "Some accounts were not found"} == AccountStore.get_accounts(account_ids)
+      assert {:error, "Some accounts were not found"} == AccountStore.get_accounts_by_instance_id(instance.id, account_ids)
     end
   end
 
-  describe "get_accounts_by_instance_id" do
+  describe "get_all_accounts_by_instance_id" do
     setup [:create_instance]
 
     test "returns accounts with given instance id", %{instance: instance} do
@@ -40,11 +40,11 @@ defmodule DoubleEntryLedger.AccountStoreTest do
         account_fixture(instance_id: instance.id),
         account_fixture(instance_id: instance.id)
       ]
-      assert {:ok, accounts} == AccountStore.get_accounts_by_instance_id(instance.id)
+      assert {:ok, accounts} == AccountStore.get_all_accounts_by_instance_id(instance.id)
     end
 
     test "returns error when no accounts are found", %{instance: instance} do
-      assert {:error, "No accounts were found"} == AccountStore.get_accounts_by_instance_id(instance.id)
+      assert {:error, "No accounts were found"} == AccountStore.get_all_accounts_by_instance_id(instance.id)
     end
   end
 

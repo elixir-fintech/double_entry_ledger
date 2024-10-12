@@ -46,9 +46,9 @@ defmodule DoubleEntryLedger.EventProcessor do
     {:error, "Update action is not supported"}
   end
 
-  @spec convert_payload_to_transaction_map(Event.t()) :: {:ok, map() } | {:error, String.t()}
+  @spec convert_payload_to_transaction_map(EventPayload.t()) :: {:ok, map() } | {:error, String.t()}
   defp convert_payload_to_transaction_map(%EventPayload{transaction: t}) do
-    case get_accounts_with_entries(t.entries) do
+    case get_accounts_with_entries(t.instance_id, t.entries) do
       {:ok, accounts_and_entries} -> {:ok, %{
           instance_id: t.instance_id,
           status: t.status,
@@ -58,10 +58,10 @@ defmodule DoubleEntryLedger.EventProcessor do
     end
   end
 
-  @spec get_accounts_with_entries(list(EntryData.t())) :: {:ok, list({Account.t(), EntryData.t()})} | {:error, String.t()}
-  defp get_accounts_with_entries(entries) do
+  @spec get_accounts_with_entries(Ecto.UUID.t(),list(EntryData.t())) :: {:ok, list({Account.t(), EntryData.t()})} | {:error, String.t()}
+  defp get_accounts_with_entries(instance_id, entries) do
     account_ids = Enum.map(entries, &(&1.account_id))
-    case AccountStore.get_accounts(account_ids) do
+    case AccountStore.get_accounts_by_instance_id(instance_id,account_ids) do
       {:ok, accounts} -> {:ok, struct_match_accounts_entries(accounts, entries)}
       {:error, error} -> {:error, error}
     end
