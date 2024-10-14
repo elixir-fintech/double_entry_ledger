@@ -85,18 +85,22 @@ defmodule DoubleEntryLedger.EventProcessor do
 
   @spec entry_data_to_entry_map({Account.t(), EntryData.t()}) :: map()
   defp entry_data_to_entry_map({%{type: type} = acc, %{amount: amt} = ed}) when type == :debit and amt > 0 do
-    %{account_id: acc.id, amount: amt, currency: ed.currency, type: :debit}
+    %{account_id: acc.id, amount: to_money(amt, ed.currency), type: :debit}
   end
 
   defp entry_data_to_entry_map({%{type: type} = acc, ed}) when type == :debit do
-    %{account_id: acc.id, amount: ed.amt, currency: ed.currency, type: :credit}
+    %{account_id: acc.id, amount: to_money(ed.amount, ed.currency), type: :credit}
   end
 
   defp entry_data_to_entry_map({%{type: type} = acc, %{amount: amt} = ed}) when type == :credit and amt > 0 do
-    %{account_id: acc.id, amount: amt, currency: ed.currency, type: :credit}
+    %{account_id: acc.id, amount: to_money(amt, ed.currency), type: :credit}
   end
 
   defp entry_data_to_entry_map({%{type: type} = acc, ed}) when type == :credit do
-    %{account_id: acc.id, amount: ed.amount, currency: ed.currency, type: :debit}
+    %{account_id: acc.id, amount: to_money(ed.amount, ed.currency), type: :debit}
+  end
+
+  defp to_money(amount, currency) do
+    Money.new(abs(amount), currency)
   end
 end

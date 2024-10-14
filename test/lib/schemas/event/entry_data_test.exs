@@ -3,7 +3,6 @@ defmodule DoubleEntryLedger.Event.EntryDataTest do
   Tests for the event payload
   """
   use ExUnit.Case
-  import DoubleEntryLedger.Event.TransactionDataFixtures
 
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase

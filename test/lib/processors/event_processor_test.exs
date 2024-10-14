@@ -17,26 +17,23 @@ defmodule DoubleEntryLedger.EventProcessorTest do
   describe "EventProcessor" do
     setup [:create_instance, :create_accounts]
 
-    test "process create event successfully", %{instance: inst, accounts: [a1, a2,_,_] } do
+    test "process create event successfully", %{instance: inst, accounts: [a1, a2, _, _]} do
       {:ok, event} = EventStore.insert_event(event_attrs(
-        payload: %{
+        transaction_data: %{
           instance_id: inst.id,
-          transaction: %{
-            effective_at: DateTime.utc_now(),
-            status: :posted,
-            entries: [
-              %{
-                account_id: a1.id,
-                amount: 100,
-                currency: :EUR
-              },
-              %{
-                account_id: a2.id,
-                amount: -100,
-                currency: :EUR
-              }
-            ]
-          }
+          status: :posted,
+          entries: [
+            %{
+              account_id: a1.id,
+              amount: 100,
+              currency: "EUR"
+            },
+            %{
+              account_id: a2.id,
+              amount: 100,
+              currency: "EUR"
+            }
+          ]
         }
       ))
       assert {:ok, _} = EventProcessor.process_event(event)
