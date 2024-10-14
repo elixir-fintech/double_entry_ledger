@@ -10,15 +10,15 @@ defmodule DoubleEntryLedger.Transaction do
     - `instance` (Instance.t() | Ecto.Association.NotLoaded.t()): The associated ledger instance.
     - `instance_id` (binary): The ID of the associated ledger instance.
     - `posted_at` (DateTime.t()): The date and time when the transaction was posted.
-    - `status` (:pending | :posted | :archived): The transaction.
+    - `status` (:pending | :posted | :archived): The transaction status.
     - `entries` ([Entry.t()] | Ecto.Association.NotLoaded.t()): The entries associated with the transaction.
     - `inserted_at` (DateTime.t()): The timestamp when the transaction was created.
     - `updated_at` (DateTime.t()): The timestamp when the transaction was last updated.
 
   ## Functions
 
-    - `create/1`: Creates a new transaction with associated entries.
-    - `update/2`: Updates the status of an existing transaction and its associated entries.
+    - `states/0`: Returns the list of transaction states.
+    - `changeset/2`: Creates and validates the changeset.
   """
   use Ecto.Schema
   import Ecto.Changeset
@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.Transaction do
     instance: Instance.t() | Ecto.Association.NotLoaded.t(),
     instance_id: binary() | nil,
     posted_at: DateTime.t() | nil,
-    status: :pending | :posted | :archived | nil,
+    status: :pending | :posted | :archived,
     entries: [Entry.t()] | Ecto.Association.NotLoaded.t(),
     inserted_at: DateTime.t() | nil,
     updated_at: DateTime.t() | nil
@@ -66,12 +66,15 @@ defmodule DoubleEntryLedger.Transaction do
     |> cast(attrs, @required_attrs ++ @optional_attrs)
     |> cast_assoc(:entries, with: &Entry.changeset/2)
     |> validate_required(@required_attrs)
-    |> validate_inclusion(:status, [:pending, :posted, :archived])
+    |> validate_inclusion(:status, @states)
     |> validate_state_transition()
     |> validate_currency()
     |> validate_entries()
     |> validate_accounts()
   end
+
+  @spec states() :: [:pending | :posted | :archived]
+  def states, do: @states
 
   defp validate_state_transition(changeset) do
     now = changeset.data.status
