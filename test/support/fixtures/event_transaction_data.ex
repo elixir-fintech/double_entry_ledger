@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventPayloadFixtures do
+defmodule DoubleEntryLedger.Event.TransactionDataFixtures do
   @moduledoc """
   This module defines test helpers for creating
   event payload entities.
@@ -21,11 +21,8 @@ defmodule DoubleEntryLedger.EventPayloadFixtures do
   def pending_payload do
     %{
       instance_id: Ecto.UUID.generate(),
-      transaction: %{
-        effective_at: DateTime.utc_now(),
-        status: :pending,
-        entries: create_2_entries()
-      }
+      status: :pending,
+      entries: create_2_entries()
     }
   end
 end

@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   This module defines test helpers for creating
   event entities.
   """
-  import DoubleEntryLedger.EventPayloadFixtures
+  import DoubleEntryLedger.Event.TransactionDataFixtures
 
   def event_attrs(attrs \\ %{}) do
     attrs
@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       action: :create,
       source: "source",
       source_id: "source_id",
-      payload: pending_payload()
+      transaction_data: pending_payload()
     })
   end
 end

@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
       add :processed_at, :utc_datetime_usec
 
       # Embedded schema stored as a JSONB column
-      add :payload, :map, null: false
+      add :transaction_data, :map, null: false
 
       timestamps(type: :utc_datetime_usec)
     end

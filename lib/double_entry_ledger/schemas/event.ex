@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.Event do
     source_data: map(),
     source_id: String.t(),
     processed_at: DateTime.t() | nil,
-    payload: DoubleEntryLedger.EventPayload.t() | nil,
+    transaction_data: DoubleEntryLedger.Event.TransactionData.t() | nil,
     inserted_at: DateTime.t(),
     updated_at: DateTime.t()
   }
@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.Event do
     field :source_id, :string
     field :processed_at, :utc_datetime_usec
 
-    embeds_one :payload, DoubleEntryLedger.EventPayload
+    embeds_one :transaction_data, DoubleEntryLedger.Event.TransactionData
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -42,6 +42,6 @@ defmodule DoubleEntryLedger.Event do
     |> cast(attrs, [:action, :source, :source_data, :source_id])
     |> validate_required([:action, :source, :source_id])
     |> validate_inclusion(:action, @actions)
-    |> cast_embed(:payload, with: &DoubleEntryLedger.EventPayload.changeset/2, required: true)
+    |> cast_embed(:transaction_data, with: &DoubleEntryLedger.Event.TransactionData.changeset/2, required: true)
   end
 end

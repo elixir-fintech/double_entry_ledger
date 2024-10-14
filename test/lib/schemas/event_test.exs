@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.EventTest do
   Tests for the event
   """
   use ExUnit.Case
-  import DoubleEntryLedger.EventPayloadFixtures
+  import DoubleEntryLedger.Event.TransactionDataFixtures
 
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.EventTest do
   describe "Event" do
     test "changeset not valid for empty payload" do
       assert %Changeset{errors: [
-        payload: {"can't be blank", [validation: :required]},
+        transaction_data: {"can't be blank", [validation: :required]},
         action: {"can't be blank", [validation: :required]},
         source: {"can't be blank", [validation: :required]},
         source_id: {"can't be blank", [validation: :required]},
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.EventTest do
         action: :create,
         source: "source",
         source_id: "source_id",
-        payload: pending_payload()
+        transaction_data: pending_payload()
       }
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
     end
