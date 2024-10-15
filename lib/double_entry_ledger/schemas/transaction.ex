@@ -31,7 +31,6 @@ defmodule DoubleEntryLedger.Transaction do
 
   @type t :: %__MODULE__{
     id: binary() | nil,
-    effective_at: DateTime.t() | nil,
     instance: Instance.t() | Ecto.Association.NotLoaded.t(),
     instance_id: binary() | nil,
     posted_at: DateTime.t() | nil,
@@ -41,7 +40,7 @@ defmodule DoubleEntryLedger.Transaction do
     updated_at: DateTime.t() | nil
   }
 
-  @required_attrs ~w(status effective_at instance_id)a
+  @required_attrs ~w(status instance_id)a
   @optional_attrs ~w(posted_at)a
 
   @states [:pending, :posted, :archived]
@@ -49,7 +48,6 @@ defmodule DoubleEntryLedger.Transaction do
   @foreign_key_type :binary_id
 
   schema "transactions" do
-    field :effective_at, :utc_datetime_usec, default: DateTime.utc_now
     field :posted_at, :utc_datetime_usec
     field :status, Ecto.Enum, values: @states
     belongs_to :instance, Instance

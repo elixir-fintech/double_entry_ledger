@@ -6,7 +6,6 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateTransactions do
       add :id, :binary_id, primary_key: true
       add :status, :string, null: false
       add :posted_at, :utc_datetime_usec
-      add :effective_at, :utc_datetime_usec
       add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
 
       timestamps(type: :utc_datetime_usec)
