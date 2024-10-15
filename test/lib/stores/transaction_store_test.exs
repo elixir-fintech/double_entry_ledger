@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
         %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},
         %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id}
       ])
-      {:ok, %{entries: %{id: id }}} = TransactionStore.create(attr)
+      {:ok, %{id: id}} = TransactionStore.create(attr)
       trx = Repo.get!(Transaction, id)
       TransactionStore.update(trx, %{status: :posted})
 

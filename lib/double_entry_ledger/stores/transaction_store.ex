@@ -46,8 +46,10 @@ defmodule DoubleEntryLedger.TransactionStore do
   """
   @spec create(Transaction.t() | map()) :: {:ok, Transaction.t()} | {:error, Ecto.Changeset.t()}
   def create(transaction) do
-    build_create(transaction)
-    |> Repo.transaction()
+    case build_create(transaction) |> Repo.transaction() do
+      {:ok, %{transaction: transaction}} -> {:ok, transaction}
+      {:error, changeset} -> {:error, changeset}
+    end
   end
 
   @doc """

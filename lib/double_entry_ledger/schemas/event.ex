@@ -5,6 +5,8 @@ defmodule DoubleEntryLedger.Event do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias DoubleEntryLedger.Transaction
+
   alias __MODULE__, as: Event
   @type t :: %Event{
     id: Ecto.UUID.t(),
@@ -31,6 +33,7 @@ defmodule DoubleEntryLedger.Event do
     field :source_id, :string
     field :processed_at, :utc_datetime_usec
 
+    belongs_to :processed_transaction, Transaction, type: :binary_id
     embeds_one :transaction_data, DoubleEntryLedger.Event.TransactionData
 
     timestamps(type: :utc_datetime_usec)

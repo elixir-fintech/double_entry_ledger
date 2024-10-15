@@ -14,6 +14,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
       add :source_data, :map, null: false, default: %{}
       add :processed_at, :utc_datetime_usec
 
+      add :processed_transaction_id, references(:transactions, on_delete: :nothing, type: :binary_id), null: true
       # Embedded schema stored as a JSONB column
       add :transaction_data, :map, null: false
 

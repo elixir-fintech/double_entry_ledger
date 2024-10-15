@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.EventProcessor do
       {:ok, transaction_map} ->
         case TransactionStore.create(transaction_map) do
           {:ok, transaction} ->
-            EventStore.mark_as_processed(event)
+            EventStore.mark_as_processed(event, transaction.id)
             {:ok, transaction}
           {:error, error} ->
             EventStore.mark_as_failed(event, error)

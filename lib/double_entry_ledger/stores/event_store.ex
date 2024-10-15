@@ -12,10 +12,10 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.insert()
   end
 
-  @spec mark_as_processed(Event.t()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
-  def mark_as_processed(event) do
+  @spec mark_as_processed(Event.t(), Ecto.UUID.t()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
+  def mark_as_processed(event, transaction_id) do
     event
-    |> Ecto.Changeset.change(status: :processed, processed_at: DateTime.utc_now())
+    |> Ecto.Changeset.change(status: :processed, processed_at: DateTime.utc_now(), processed_transaction_id: transaction_id)
     |> Repo.update()
   end
 
