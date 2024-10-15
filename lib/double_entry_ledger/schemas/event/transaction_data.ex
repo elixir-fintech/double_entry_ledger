@@ -7,7 +7,16 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
   @states DoubleEntryLedger.Transaction.states
 
+  alias DoubleEntryLedger.Transaction
   alias DoubleEntryLedger.Event.EntryData
+  alias __MODULE__, as: TransactionData
+
+
+  @type t :: %TransactionData{
+    instance_id: Ecto.UUID.t() | nil,
+    status: Transaction.state(),
+    entries: [EntryData.t()]
+  }
 
   @primary_key false
   embedded_schema do

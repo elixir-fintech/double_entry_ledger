@@ -6,7 +6,6 @@ defmodule DoubleEntryLedger.Transaction do
   ## Schema Fields
 
     - `id` (binary): The unique identifier for the transaction.
-    - `effective_at` (DateTime.t()): The effective date and time of the transaction.
     - `instance` (Instance.t() | Ecto.Association.NotLoaded.t()): The associated ledger instance.
     - `instance_id` (binary): The ID of the associated ledger instance.
     - `posted_at` (DateTime.t()): The date and time when the transaction was posted.
@@ -27,14 +26,17 @@ defmodule DoubleEntryLedger.Transaction do
   alias Ecto.UUID
   alias DoubleEntryLedger.{Entry, Instance, Repo}
   alias EntryHelper
-  alias __MODULE__, as: Transaction
+
+  @states [:pending, :posted, :archived]
+  @type state :: unquote(Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end))
+  @type states :: [state]
 
   @type t :: %__MODULE__{
     id: binary() | nil,
     instance: Instance.t() | Ecto.Association.NotLoaded.t(),
     instance_id: binary() | nil,
     posted_at: DateTime.t() | nil,
-    status: :pending | :posted | :archived,
+    status: :state,
     entries: [Entry.t()] | Ecto.Association.NotLoaded.t(),
     inserted_at: DateTime.t() | nil,
     updated_at: DateTime.t() | nil
@@ -43,7 +45,6 @@ defmodule DoubleEntryLedger.Transaction do
   @required_attrs ~w(status instance_id)a
   @optional_attrs ~w(posted_at)a
 
-  @states [:pending, :posted, :archived]
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
@@ -57,7 +58,7 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   @doc false
-  @spec changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(transaction, attrs) do
     transaction
     |> Repo.preload([:instance, entries: :account])
@@ -71,7 +72,7 @@ defmodule DoubleEntryLedger.Transaction do
     |> validate_accounts()
   end
 
-  @spec states() :: [:pending | :posted | :archived]
+  @spec states() :: states()
   def states, do: @states
 
   defp validate_state_transition(changeset) do
