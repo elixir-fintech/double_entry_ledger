@@ -212,6 +212,22 @@ defmodule DoubleEntryLedger.AccountTest do
     end
   end
 
+  describe "Optimtistic locking" do
+    setup [:create_instance]
+
+    test "throws stale update error when updates run concurrently", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, type: :debit, allowed_negative: false)
+      entry1 = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry2 = %{account: account, amount: %Money{amount: 150, currency: :EUR}, type: :debit }
+
+      changeset1 = Account.update_balances(account, %{entry: entry1, trx: :posted})
+      changeset2 = Account.update_balances(account, %{entry: entry2, trx: :posted})
+      changeset1 |> Repo.update()
+
+      assert_raise(Ecto.StaleEntryError, fn -> changeset2 |> Repo.update() end)
+    end
+  end
+
   defp create_instance(_ctx) do
     %{instance: instance_fixture()}
   end

@@ -58,6 +58,7 @@ defmodule DoubleEntryLedger.Account do
     field :type, Ecto.Enum, values: [:debit, :credit]
     field :available, :integer, default: 0
     field :allowed_negative, :boolean, default: true
+    field :lock_version, :integer, default: 1
 
     embeds_one :posted, Balance, on_replace: :delete
     embeds_one :pending, Balance, on_replace: :delete
@@ -93,6 +94,7 @@ defmodule DoubleEntryLedger.Account do
     |> change()
     |> update(entry, trx)
     |> update_available()
+    |> optimistic_lock(:lock_version)
   end
 
   @spec update(Ecto.Changeset.t(), Entry.t(), Types.trx_types()) :: Ecto.Changeset.t()
