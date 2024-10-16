@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Account do
   """
   use Ecto.Schema
   import Ecto.Changeset
-  alias DoubleEntryLedger.{Balance, Types, Currency}
+  alias DoubleEntryLedger.{Balance, Types, Currency, Entry}
   alias __MODULE__, as: Account
 
   @type t :: %__MODULE__{

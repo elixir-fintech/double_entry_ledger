@@ -6,8 +6,15 @@ defmodule DoubleEntryLedger.Event.EntryData do
   import Ecto.Changeset
 
   alias DoubleEntryLedger.Currency
+  alias __MODULE__, as: EntryData
 
   @currency_atoms Currency.currency_atoms()
+
+  @type t :: %EntryData{
+    account_id: Ecto.UUID.t(),
+    amount: integer(),
+    currency: Currency.currency_atom()
+  }
 
   @primary_key false
   embedded_schema do
