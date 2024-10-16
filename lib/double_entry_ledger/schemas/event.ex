@@ -7,11 +7,16 @@ defmodule DoubleEntryLedger.Event do
 
   alias DoubleEntryLedger.Transaction
 
+  @states [:pending, :processed, :failed]
+  @actions [:create, :update]
+  @type state :: unquote(Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end))
+  @type action :: unquote(Enum.reduce(@actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end))
+
   alias __MODULE__, as: Event
   @type t :: %Event{
     id: Ecto.UUID.t(),
-    status: :pending | :processed | :failed,
-    action: :create | :update,
+    status: state(),
+    action: action(),
     source: String.t(),
     source_data: map(),
     source_id: String.t(),
@@ -20,9 +25,6 @@ defmodule DoubleEntryLedger.Event do
     inserted_at: DateTime.t(),
     updated_at: DateTime.t()
   }
-
-  @states [:pending, :processed, :failed]
-  @actions [:create, :update]
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "events" do

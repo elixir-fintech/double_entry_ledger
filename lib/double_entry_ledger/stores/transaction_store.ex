@@ -16,8 +16,8 @@ defmodule DoubleEntryLedger.TransactionStore do
 
       - An `Ecto.Multi` struct representing the database operations to be performed.
   """
-  @spec build_create(Transaction.t() | map()) :: Ecto.Multi.t()
-  def build_create(transaction) do
+  @spec build_create(map()) :: Ecto.Multi.t()
+  def build_create(%{} = transaction) do # Dialyzer requires a map here
     Multi.new()
     |> Multi.insert(:transaction, Transaction.changeset(%Transaction{}, transaction))
     |> Multi.run(:entries, fn repo, %{transaction: t} ->

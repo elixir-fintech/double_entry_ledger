@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.Balance do
     field :credit, :integer, default: 0
   end
 
-  @type t :: %__MODULE__{
+  @type t :: %Balance{
     amount: integer(),
     credit: integer(),
     debit: integer()

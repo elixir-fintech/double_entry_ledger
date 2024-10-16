@@ -5,10 +5,8 @@ defmodule DoubleEntryLedger.EventProcessor do
 
   alias DoubleEntryLedger.Repo
   alias Ecto.Multi
-  alias DoubleEntryLedger.EventStore
   alias DoubleEntryLedger.{
-    Account, AccountStore,
-    Event, Transaction, TransactionStore
+    Account, AccountStore, Event, EventStore, Transaction, TransactionStore
   }
   alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Event.EntryData
@@ -44,7 +42,8 @@ defmodule DoubleEntryLedger.EventProcessor do
     end
   end
 
-  @spec create_transaction_and_update_event(Event.t(), map()) :: {:ok, Multi.t()} | {:error, String.t()}
+  @spec create_transaction_and_update_event(Event.t(), map()) ::
+    {:ok, %{create_transaction: %{transaction: Transaction.t()}, update_event: Event.t()}} | {:error, any()}
   defp create_transaction_and_update_event(event, transaction_map) do
     Multi.new()
     |> Multi.run(:create_transaction, fn repo, _ ->

@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Instance do
   alias DoubleEntryLedger.{Account, Repo, Transaction}
   alias __MODULE__, as: Instance
 
-  @type t :: %__MODULE__{
+  @type t :: %Instance{
     id: binary() | nil,
     config: map() | nil,
     description: String.t() | nil,

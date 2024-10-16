@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Currency do
   @type currency_atom ::
     unquote(
       Money.Currency.all
-      |> Enum.map_join(" | ", fn {k, _v} -> inspect(k) end)
+      |> Enum.map_join(" | ", fn {k, _v} -> k end)
       |> Code.string_to_quoted!()
     )
 

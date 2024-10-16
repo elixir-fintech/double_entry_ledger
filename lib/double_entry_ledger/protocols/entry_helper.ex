@@ -1,4 +1,4 @@
-alias DoubleEntryLedger.{Entry, Types }
+alias DoubleEntryLedger.Entry
 
 defprotocol EntryHelper do
   @spec debit_sum(t(), integer()) :: integer()
@@ -38,8 +38,6 @@ defimpl EntryHelper, for: Ecto.Changeset do
 end
 
 defimpl EntryHelper, for: Entry do
-
-  @type c_or_d :: Types.c_or_d()
 
   @spec debit_sum(Entry.t(), integer()) :: integer()
   def debit_sum(%{type: t, amount: a }, acc) do

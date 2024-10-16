@@ -26,17 +26,18 @@ defmodule DoubleEntryLedger.Transaction do
   alias Ecto.UUID
   alias DoubleEntryLedger.{Entry, Instance, Repo}
   alias EntryHelper
+  alias __MODULE__, as: Transaction
 
   @states [:pending, :posted, :archived]
   @type state :: unquote(Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end))
   @type states :: [state]
 
   @type t :: %__MODULE__{
-    id: binary() | nil,
+    id: Ecto.UUID.t() | nil,
     instance: Instance.t() | Ecto.Association.NotLoaded.t(),
-    instance_id: binary() | nil,
+    instance_id: Ecto.UUID.t() | nil,
     posted_at: DateTime.t() | nil,
-    status: :state,
+    status: state() | nil,
     entries: [Entry.t()] | Ecto.Association.NotLoaded.t(),
     inserted_at: DateTime.t() | nil,
     updated_at: DateTime.t() | nil
@@ -58,8 +59,8 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   @doc false
-  @spec changeset(t(), map()) :: Ecto.Changeset.t()
-  def changeset(transaction, attrs) do
+  @spec changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
+  def changeset(transaction, %{} = attrs) do
     transaction
     |> Repo.preload([:instance, entries: :account])
     |> cast(attrs, @required_attrs ++ @optional_attrs)

@@ -24,17 +24,19 @@ defmodule DoubleEntryLedger.Entry do
   alias DoubleEntryLedger.{Account, Repo, Transaction, Types}
   alias __MODULE__, as: Entry
 
-  @type t :: %__MODULE__{
-    id: binary() | nil,
-    amount: Money.t(),
-    type: Types.c_or_d(),
+  @type t :: %Entry{
+    id: Ecto.UUID.t() | nil,
+    amount: Money.t() | nil,
+    type: Types.credit_or_debit() | nil,
     transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
-    transaction_id: binary() | nil,
+    transaction_id: Ecto.UUID.t() | nil,
     account: Account.t() | Ecto.Association.NotLoaded.t(),
-    account_id: binary(),
-    inserted_at: DateTime.t(),
-    updated_at: DateTime.t()
+    account_id: Ecto.UUID.t() | nil,
+    inserted_at: DateTime.t() | nil,
+    updated_at: DateTime.t() | nil
   }
+
+  @debit_and_credit Types.credit_and_debit()
 
   @required_attrs ~w(type amount account_id)a
   @optional_attrs ~w(transaction_id)a
@@ -42,7 +44,7 @@ defmodule DoubleEntryLedger.Entry do
   @foreign_key_type :binary_id
   schema "entries" do
     field :amount, Money.Ecto.Composite.Type
-    field :type, Ecto.Enum, values: [:debit, :credit]
+    field :type, Ecto.Enum, values: @debit_and_credit
     belongs_to :transaction, Transaction
     belongs_to :account, Account
 
@@ -56,6 +58,6 @@ defmodule DoubleEntryLedger.Entry do
     |> Repo.preload([:transaction, :account])
     |> cast(attrs, @required_attrs ++ @optional_attrs)
     |> validate_required(@required_attrs)
-    |> validate_inclusion(:type, [:debit, :credit])
+    |> validate_inclusion(:type, @debit_and_credit)
   end
 end

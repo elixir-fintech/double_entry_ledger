@@ -30,13 +30,15 @@ defmodule DoubleEntryLedger.Account do
   alias DoubleEntryLedger.{Balance, Types, Currency, Entry}
   alias __MODULE__, as: Account
 
-  @type t :: %__MODULE__{
+  @credit_and_debit Types.credit_and_debit()
+
+  @type t :: %Account{
     id: binary() | nil,
-    currency: Currency.currency_atom(),
+    currency: Currency.currency_atom() | nil,
     description: String.t() | nil,
     context: map() | nil,
     name: String.t() | nil,
-    type: Types.c_or_d() | nil,
+    type: Types.credit_or_debit() | nil,
     available: integer(),
     allowed_negative: boolean(),
     posted: Balance.t() | nil,
@@ -55,7 +57,7 @@ defmodule DoubleEntryLedger.Account do
     field :description, :string
     field :context, :map
     field :name, :string
-    field :type, Ecto.Enum, values: [:debit, :credit]
+    field :type, Ecto.Enum, values: @credit_and_debit
     field :available, :integer, default: 0
     field :allowed_negative, :boolean, default: true
     field :lock_version, :integer, default: 1
@@ -82,7 +84,7 @@ defmodule DoubleEntryLedger.Account do
     account
     |> cast(attrs, [:name, :description, :currency, :type, :context, :allowed_negative, :instance_id])
     |> validate_required([:name, :currency, :type, :instance_id])
-    |> validate_inclusion(:type, [:debit, :credit])
+    |> validate_inclusion(:type, @credit_and_debit)
     |> validate_inclusion(:currency, @currency_atoms)
     |> cast_embed(:posted, with: &Balance.changeset/2)
     |> cast_embed(:pending, with: &Balance.changeset/2)
@@ -135,7 +137,7 @@ defmodule DoubleEntryLedger.Account do
     end
   end
 
-  @spec opposite_direction(Types.c_or_d()) :: Types.c_or_d()
+  @spec opposite_direction(Types.credit_or_debit()) :: Types.credit_or_debit()
   defp opposite_direction(direction) do
     if direction == :debit, do: :credit, else: :debit
   end
