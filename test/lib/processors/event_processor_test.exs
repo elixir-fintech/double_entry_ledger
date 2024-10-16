@@ -11,6 +11,7 @@ defmodule DoubleEntryLedger.EventProcessorTest do
 
   alias DoubleEntryLedger.EventProcessor
   alias DoubleEntryLedger.EventStore
+  alias DoubleEntryLedger.Event
 
   doctest EventProcessor
 
@@ -36,7 +37,17 @@ defmodule DoubleEntryLedger.EventProcessorTest do
           ]
         }
       ))
-      assert {:ok, _} = EventProcessor.process_event(event)
+
+      {:ok, transaction, processed_event } = EventProcessor.process_event(event)
+      assert processed_event.status == :processed
+      assert processed_event.processed_transaction_id == transaction.id
+      assert processed_event.processed_at != nil
+      assert transaction.status == :posted
+    end
+
+    test "only process pending events" do
+      assert {:error, "Event is not in pending state"} = EventProcessor.process_event(%Event{status: :processed})
+      assert {:error, "Event is not in pending state"} = EventProcessor.process_event(%Event{status: :failed})
     end
   end
 
