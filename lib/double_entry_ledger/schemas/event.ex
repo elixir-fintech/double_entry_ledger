@@ -27,6 +27,7 @@ defmodule DoubleEntryLedger.Event do
     instance_id: Ecto.UUID.t() | nil,
     processed_transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
     processed_transaction_id: Ecto.UUID.t() | nil,
+    errors: list(map()) | nil,
     inserted_at: DateTime.t(),
     updated_at: DateTime.t()
   }
@@ -39,6 +40,7 @@ defmodule DoubleEntryLedger.Event do
     field :source_data, :map, default: %{}
     field :source_id, :string
     field :processed_at, :utc_datetime_usec
+    field :errors, {:array, :map}, default: []
 
     belongs_to :instance, Instance, type: Ecto.UUID
     belongs_to :processed_transaction, Transaction, type: Ecto.UUID

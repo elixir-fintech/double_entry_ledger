@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.EventProcessor do
   This module processes events and updates the balances of the accounts
   """
 
+  alias DoubleEntryLedger.EventProcessor
   alias DoubleEntryLedger.Repo
   alias Ecto.Multi
   alias DoubleEntryLedger.{
@@ -11,6 +12,8 @@ defmodule DoubleEntryLedger.EventProcessor do
   alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Event.EntryData
 
+  @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
+  @retry_interval Application.compile_env(:double_entry_ledger, :retry_interval, 200)
 
   @spec process_event(Event.t()) :: {:ok, Transaction.t()} | {:error, String.t()}
   def process_event(%Event{status: status, action: action } = event) when status == :pending do
@@ -29,7 +32,7 @@ defmodule DoubleEntryLedger.EventProcessor do
   defp process_create_event(%Event{transaction_data: td, instance_id: i_id} = event) do
     case convert_payload_to_transaction_map(td, i_id) do
       {:ok, transaction_map} ->
-        case create_transaction_and_update_event(event, transaction_map) do
+        case retry(&EventProcessor.create_transaction_and_update_event/2, @max_retries, {event, transaction_map}) do
           {:ok, %{create_transaction: %{transaction: transaction}, update_event: event }} ->
             {:ok, transaction, event}
           {:error, error} ->
@@ -44,7 +47,7 @@ defmodule DoubleEntryLedger.EventProcessor do
 
   @spec create_transaction_and_update_event(Event.t(), map()) ::
     {:ok, %{create_transaction: %{transaction: Transaction.t()}, update_event: Event.t()}} | {:error, any()}
-  defp create_transaction_and_update_event(event, transaction_map) do
+  def create_transaction_and_update_event(event, transaction_map) do
     Multi.new()
     |> Multi.run(:create_transaction, fn repo, _ ->
         TransactionStore.build_create(transaction_map)
@@ -58,7 +61,7 @@ defmodule DoubleEntryLedger.EventProcessor do
   end
 
   defp update_transaction(_event) do
-    {:error, "Update action is not supported"}
+    {:error, "Update action is not yet supported"}
   end
 
   @spec convert_payload_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) :: {:ok, map() } | {:error, String.t()}
@@ -116,5 +119,22 @@ defmodule DoubleEntryLedger.EventProcessor do
 
   defp to_money(amount, currency) do
     Money.new(abs(amount), currency)
+  end
+
+  @spec retry(fun(), integer(), {Event.t(), map()}) :: {:error, any()} | {:ok, any()}
+  defp retry(fun, attempts, {event, map} = args) when attempts > 0 do
+    try do
+      apply(fun, [event, map])
+    rescue
+      Ecto.StaleEntryError ->
+        delay = (@max_retries - attempts + 1) * @retry_interval
+        EventStore.add_error(event, "OCC conflict detected, retrying after #{delay} ms... #{attempts - 1} attempts left")
+        :timer.sleep(delay)
+        retry(fun, attempts - 1, args)
+    end
+  end
+
+  defp retry(_fun, 0, _args) do
+    {:error, "OCC conflict: Max number of #{@max_retries} retries reached"}
   end
 end

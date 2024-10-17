@@ -41,7 +41,21 @@ defmodule DoubleEntryLedger.EventStoreTest do
         |> Repo.update()
       assert updated_event.status == :failed
       assert updated_event.processed_at == nil
-      # TODO: Add assertion for logging reason if implemented
+
+      assert [%{message: "some reason"} | _ ] = updated_event.errors
+    end
+  end
+
+  describe "add_error/2" do
+    setup [:create_instance]
+    test "marks an event as failed", %{instance: instance} do
+      {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
+      assert {:ok, %Event{} = updated_event} =
+        EventStore.add_error(event, "some reason")
+        |> Repo.update()
+      assert updated_event.status == :pending
+      assert updated_event.processed_at == nil
+      assert [%{message: "some reason"} | _ ] = updated_event.errors
     end
   end
 

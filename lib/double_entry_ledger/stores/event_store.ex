@@ -19,9 +19,21 @@ defmodule DoubleEntryLedger.EventStore do
   end
 
   @spec mark_as_failed(Event.t(), String.t()) :: Ecto.Changeset.t()
-  def mark_as_failed(event, _reason) do
-    # TODO log reason in event
+  def mark_as_failed(event, reason) do
     event
-    |> Ecto.Changeset.change(status: :failed)
+    |> Ecto.Changeset.change(status: :failed, errors: [build_error(reason) | event.errors])
+  end
+
+  @spec add_error(Event.t(), any()) :: Ecto.Changeset.t()
+  def add_error(event, error) do
+    event
+    |> Ecto.Changeset.change(errors: [build_error(error) | event.errors])
+  end
+
+  defp build_error(error) do
+    %{
+      message: error,
+      inserted_at: DateTime.utc_now(:microsecond),
+    }
   end
 end

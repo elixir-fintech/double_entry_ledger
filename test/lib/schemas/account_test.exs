@@ -212,7 +212,7 @@ defmodule DoubleEntryLedger.AccountTest do
     end
   end
 
-  describe "Optimtistic locking" do
+  describe "Optimistic concurrency control" do
     setup [:create_instance]
 
     test "throws stale update error when updates run concurrently", %{instance: %{id: id}} do
