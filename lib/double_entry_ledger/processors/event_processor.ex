@@ -26,8 +26,8 @@ defmodule DoubleEntryLedger.EventProcessor do
   end
 
   @spec process_create_event(Event.t()) :: {:ok, Transaction.t(), Event.t() } | {:error, String.t()}
-  defp process_create_event(%Event{transaction_data: td} = event) do
-    case convert_payload_to_transaction_map(td) do
+  defp process_create_event(%Event{transaction_data: td, instance_id: i_id} = event) do
+    case convert_payload_to_transaction_map(td, i_id) do
       {:ok, transaction_map} ->
         case create_transaction_and_update_event(event, transaction_map) do
           {:ok, %{create_transaction: %{transaction: transaction}, update_event: event }} ->
@@ -61,11 +61,11 @@ defmodule DoubleEntryLedger.EventProcessor do
     {:error, "Update action is not supported"}
   end
 
-  @spec convert_payload_to_transaction_map(TransactionData.t()) :: {:ok, map() } | {:error, String.t()}
-  defp convert_payload_to_transaction_map(%TransactionData{instance_id: id, entries: entries, status: status}) do
-    case get_accounts_with_entries(id, entries) do
+  @spec convert_payload_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) :: {:ok, map() } | {:error, String.t()}
+  defp convert_payload_to_transaction_map(%TransactionData{entries: entries, status: status}, instance_id) do
+    case get_accounts_with_entries(instance_id, entries) do
       {:ok, accounts_and_entries} -> {:ok, %{
-          instance_id: id,
+          instance_id: instance_id,
           status: status,
           entries: Enum.map(accounts_and_entries, &entry_data_to_entry_map/1)
         }}

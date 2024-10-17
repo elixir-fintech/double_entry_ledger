@@ -13,14 +13,12 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
 
   @type t :: %TransactionData{
-    instance_id: Ecto.UUID.t() | nil,
     status: Transaction.state(),
     entries: [EntryData.t()]
   }
 
   @primary_key false
   embedded_schema do
-    field :instance_id, Ecto.UUID
     field :status, Ecto.Enum, values: @states
     embeds_many :entries, EntryData
   end
@@ -28,8 +26,8 @@ defmodule DoubleEntryLedger.Event.TransactionData do
   @doc false
   def changeset(transaction_data, attrs) do
     transaction_data
-    |> cast(attrs, [:instance_id, :status])
-    |> validate_required([:instance_id, :status])
+    |> cast(attrs, [:status])
+    |> validate_required([:status])
     |> validate_inclusion(:status, @states)
     |> cast_embed(:entries, with: &EntryData.changeset/2, required: true)
     |> validate_entries_count()

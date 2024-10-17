@@ -19,6 +19,7 @@ defmodule DoubleEntryLedger.EventTest do
         action: {"can't be blank", [validation: :required]},
         source: {"can't be blank", [validation: :required]},
         source_id: {"can't be blank", [validation: :required]},
+        instance_id: {"can't be blank", [validation: :required]}
       ]} = Event.changeset(%Event{}, %{})
     end
 
@@ -26,6 +27,7 @@ defmodule DoubleEntryLedger.EventTest do
       attrs = %{
         action: :create,
         source: "source",
+        instance_id: Ecto.UUID.generate(),
         source_id: "source_id",
         transaction_data: pending_payload()
       }

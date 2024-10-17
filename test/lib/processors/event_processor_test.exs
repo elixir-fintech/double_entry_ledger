@@ -20,8 +20,8 @@ defmodule DoubleEntryLedger.EventProcessorTest do
 
     test "process create event successfully", %{instance: inst, accounts: [a1, a2, _, _]} do
       {:ok, event} = EventStore.insert_event(event_attrs(
+        instance_id: inst.id,
         transaction_data: %{
-          instance_id: inst.id,
           status: :posted,
           entries: [
             %{

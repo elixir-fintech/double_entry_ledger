@@ -15,26 +15,22 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
       assert %Changeset{errors: [
         entries: {"must have at least 2 entries", []},
         entries: {"can't be blank", [validation: :required]},
-        instance_id: {"can't be blank", [validation: :required]},
         status: {"can't be blank", [validation: :required]}
       ]} = TransactionData.changeset(%TransactionData{}, %{})
     end
 
     test "changeset not valid for invalid status and datetime" do
       attrs = %{
-        instance_id: "some_date",
         status: "invalid",
         entries: create_2_entries()
       }
       assert %Changeset{errors: [
-        instance_id: {"is invalid", [type: Ecto.UUID, validation: :cast]},
         status: {"is invalid", _}
       ]} = TransactionData.changeset(%TransactionData{}, attrs)
     end
 
     test "changeset not valid for empty entries" do
       attrs = %{
-        instance_id: Ecto.UUID.generate(),
         status: :pending,
         entries: [%{}]
       }
@@ -49,7 +45,6 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
     test "changeset not valid for less than 2 entries" do
       [_ | tail] = create_2_entries()
       attrs = %{
-        instance_id: Ecto.UUID.generate(),
         status: :pending,
         entries: tail
       }
@@ -60,7 +55,6 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
 
     test "changeset valid for valid transaction data" do
       attrs = %{
-        instance_id: Ecto.UUID.generate(),
         status: :pending,
         entries: create_2_entries()
       }

@@ -20,7 +20,6 @@ defmodule DoubleEntryLedger.Event.TransactionDataFixtures do
 
   def pending_payload do
     %{
-      instance_id: Ecto.UUID.generate(),
       status: :pending,
       entries: create_2_entries()
     }

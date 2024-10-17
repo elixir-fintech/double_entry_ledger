@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.Event do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias DoubleEntryLedger.Transaction
+  alias DoubleEntryLedger.{Transaction, Instance}
   alias DoubleEntryLedger.Event.TransactionData
 
   @states [:pending, :processed, :failed]
@@ -23,6 +23,8 @@ defmodule DoubleEntryLedger.Event do
     source_id: String.t(),
     processed_at: DateTime.t() | nil,
     transaction_data: TransactionData.t() | nil,
+    instance: Instance.t() | Ecto.Association.NotLoaded.t(),
+    instance_id: Ecto.UUID.t() | nil,
     processed_transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
     processed_transaction_id: Ecto.UUID.t() | nil,
     inserted_at: DateTime.t(),
@@ -38,6 +40,7 @@ defmodule DoubleEntryLedger.Event do
     field :source_id, :string
     field :processed_at, :utc_datetime_usec
 
+    belongs_to :instance, Instance, type: Ecto.UUID
     belongs_to :processed_transaction, Transaction, type: Ecto.UUID
     embeds_one :transaction_data, DoubleEntryLedger.Event.TransactionData
 
@@ -47,8 +50,8 @@ defmodule DoubleEntryLedger.Event do
   @doc false
   def changeset(event, attrs) do
     event
-    |> cast(attrs, [:action, :source, :source_data, :source_id])
-    |> validate_required([:action, :source, :source_id])
+    |> cast(attrs, [:action, :source, :source_data, :source_id, :instance_id])
+    |> validate_required([:action, :source, :source_id, :instance_id])
     |> validate_inclusion(:action, @actions)
     |> cast_embed(:transaction_data, with: &DoubleEntryLedger.Event.TransactionData.changeset/2, required: true)
   end

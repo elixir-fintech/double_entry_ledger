@@ -11,8 +11,9 @@ defmodule DoubleEntryLedger.EventStoreTest do
   alias DoubleEntryLedger.{EventStore, Event, TransactionStore}
 
   describe "insert_event/1" do
-    test "inserts a new event" do
-      assert {:ok, %Event{} = event} = EventStore.insert_event(event_attrs())
+    setup [:create_instance]
+    test "inserts a new event", %{instance: instance} do
+      assert {:ok, %Event{} = event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
       assert event.status == :pending
       assert event.processed_at == nil
     end
@@ -20,8 +21,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
   describe "mark_as_processed/1" do
     setup [:create_instance, :create_accounts, :create_transaction]
-    test "marks an event as processed", %{transaction: transaction} do
-      {:ok, event} = EventStore.insert_event(event_attrs())
+    test "marks an event as processed", %{instance: instance, transaction: transaction} do
+      {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
       assert {:ok, %Event{} = updated_event} =
         EventStore.mark_as_processed(event, transaction.id)
         |> Repo.update()
@@ -32,8 +33,9 @@ defmodule DoubleEntryLedger.EventStoreTest do
   end
 
   describe "mark_as_failed/2" do
-    test "marks an event as failed" do
-      {:ok, event} = EventStore.insert_event(event_attrs())
+    setup [:create_instance]
+    test "marks an event as failed", %{instance: instance} do
+      {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
       assert {:ok, %Event{} = updated_event} =
         EventStore.mark_as_failed(event, "some reason")
         |> Repo.update()
