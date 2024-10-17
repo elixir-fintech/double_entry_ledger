@@ -6,6 +6,7 @@ defmodule DoubleEntryLedger.Event do
   import Ecto.Changeset
 
   alias DoubleEntryLedger.Transaction
+  alias DoubleEntryLedger.Event.TransactionData
 
   @states [:pending, :processed, :failed]
   @actions [:create, :update]
@@ -21,7 +22,9 @@ defmodule DoubleEntryLedger.Event do
     source_data: map(),
     source_id: String.t(),
     processed_at: DateTime.t() | nil,
-    transaction_data: DoubleEntryLedger.Event.TransactionData.t() | nil,
+    transaction_data: TransactionData.t() | nil,
+    processed_transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
+    processed_transaction_id: Ecto.UUID.t() | nil,
     inserted_at: DateTime.t(),
     updated_at: DateTime.t()
   }
@@ -35,7 +38,7 @@ defmodule DoubleEntryLedger.Event do
     field :source_id, :string
     field :processed_at, :utc_datetime_usec
 
-    belongs_to :processed_transaction, Transaction, type: :binary_id
+    belongs_to :processed_transaction, Transaction, type: Ecto.UUID
     embeds_one :transaction_data, DoubleEntryLedger.Event.TransactionData
 
     timestamps(type: :utc_datetime_usec)
