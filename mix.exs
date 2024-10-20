@@ -36,11 +36,12 @@ defmodule DoubleEntryLedger.MixProject do
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:perf), do: ["lib", "test/performance"]
   defp elixirc_paths(_), do: ["lib"]
 
   defp aliases do
     [
-     test: ["ecto.create --quiet", "ecto.migrate", "test"]
+     test: ["ecto.create --quiet", "ecto.migrate", "test"],
     ]
   end
 end
