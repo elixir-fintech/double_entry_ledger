@@ -8,6 +8,6 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   port: "5433",
   stacktrace: false,
   show_sensitive_data_on_connection_error: false,
-  pool_size: 10,
-  loggers: [{Ecto.LogEntry, :log, [:warn]}]
-config :logger, level: :warn
+  pool_size: 10
+
+config :logger, level: :warning
