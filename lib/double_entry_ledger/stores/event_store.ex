@@ -12,22 +12,31 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.insert()
   end
 
-  @spec mark_as_processed(Event.t(), Ecto.UUID.t()) :: Ecto.Changeset.t()
-  def mark_as_processed(event, transaction_id) do
+  @spec build_mark_as_processed(Event.t(), Ecto.UUID.t()) :: Ecto.Changeset.t()
+  def build_mark_as_processed(event, transaction_id) do
     event
     |> Ecto.Changeset.change(status: :processed, processed_at: DateTime.utc_now(), processed_transaction_id: transaction_id)
   end
 
-  @spec mark_as_failed(Event.t(), String.t()) :: Ecto.Changeset.t()
+  @spec mark_as_failed(Event.t(), String.t()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
   def mark_as_failed(event, reason) do
     event
-    |> Ecto.Changeset.change(status: :failed, errors: [build_error(reason) | event.errors])
+    |> build_add_error(reason)
+    |> Ecto.Changeset.change(status: :failed)
+    |> Repo.update()
   end
 
-  @spec add_error(Event.t(), any()) :: Ecto.Changeset.t()
-  def add_error(event, error) do
+  @spec build_add_error(Event.t(), any()) :: Ecto.Changeset.t()
+  def build_add_error(event, error) do
     event
     |> Ecto.Changeset.change(errors: [build_error(error) | event.errors])
+  end
+
+  @spec add_error(Event.t(), any()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
+  def add_error(event, error) do
+    event
+    |> build_add_error(error)
+    |> Repo.update()
   end
 
   defp build_error(error) do

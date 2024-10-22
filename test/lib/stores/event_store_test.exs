@@ -19,12 +19,12 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
-  describe "mark_as_processed/1" do
+  describe "build_mark_as_processed/1" do
     setup [:create_instance, :create_accounts, :create_transaction]
     test "marks an event as processed", %{instance: instance, transaction: transaction} do
       {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
       assert {:ok, %Event{} = updated_event} =
-        EventStore.mark_as_processed(event, transaction.id)
+        EventStore.build_mark_as_processed(event, transaction.id)
         |> Repo.update()
       assert updated_event.status == :processed
       assert updated_event.processed_at != nil
@@ -38,7 +38,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
       {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
       assert {:ok, %Event{} = updated_event} =
         EventStore.mark_as_failed(event, "some reason")
-        |> Repo.update()
       assert updated_event.status == :failed
       assert updated_event.processed_at == nil
 
@@ -52,7 +51,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
       {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
       assert {:ok, %Event{} = updated_event} =
         EventStore.add_error(event, "some reason")
-        |> Repo.update()
       assert updated_event.status == :pending
       assert updated_event.processed_at == nil
       assert [%{message: "some reason"} | _ ] = updated_event.errors
