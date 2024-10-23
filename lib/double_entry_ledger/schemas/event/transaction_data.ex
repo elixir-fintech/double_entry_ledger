@@ -33,6 +33,24 @@ defmodule DoubleEntryLedger.Event.TransactionData do
     |> validate_entries_count()
   end
 
+  def update_event_changeset(transaction_data, %{status: :posted} = attrs) do
+    if Map.has_key?(attrs, :entries) do
+      changeset(transaction_data, attrs)
+    else
+      transaction_data
+      |> cast(attrs, [:status])
+    end
+  end
+
+  def update_event_changeset(transaction_data, %{status: :archived} = attrs) do
+    transaction_data
+    |> cast(attrs, [:status])
+  end
+
+  def update_event_changeset(transaction_data, attrs) do
+    changeset(transaction_data, attrs)
+  end
+
   defp validate_entries_count(changeset) do
     entries = get_field(changeset, :entries, [])
     if length(entries) < 2 do

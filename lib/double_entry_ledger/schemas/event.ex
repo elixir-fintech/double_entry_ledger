@@ -54,7 +54,14 @@ defmodule DoubleEntryLedger.Event do
     event
     |> cast(attrs, [:action, :source, :source_data, :source_id, :instance_id])
     |> validate_required([:source, :source_id, :instance_id])
-    |> cast_embed(:transaction_data, with: &DoubleEntryLedger.Event.TransactionData.changeset/2, required: true)
+    |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
+  end
+
+  def changeset(event, %{action: :update, transaction_data: %{status: :posted}} = attrs) do
+    event
+    |> cast(attrs, [:action, :source, :source_data, :source_id, :instance_id])
+    |> validate_required([:source, :source_id, :instance_id])
+    |> cast_embed(:transaction_data, with: &TransactionData.update_event_changeset/2, required: true)
   end
 
   def changeset(event, attrs) do
