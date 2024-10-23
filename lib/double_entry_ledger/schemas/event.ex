@@ -50,6 +50,13 @@ defmodule DoubleEntryLedger.Event do
   end
 
   @doc false
+  def changeset(event, %{action: :create} = attrs) do
+    event
+    |> cast(attrs, [:action, :source, :source_data, :source_id, :instance_id])
+    |> validate_required([:source, :source_id, :instance_id])
+    |> cast_embed(:transaction_data, with: &DoubleEntryLedger.Event.TransactionData.changeset/2, required: true)
+  end
+
   def changeset(event, attrs) do
     event
     |> cast(attrs, [:action, :source, :source_data, :source_id, :instance_id])
