@@ -1,5 +1,7 @@
 import Config
-
+config :double_entry_ledger,
+  max_retries: 2,
+  retry_interval: 10
 config :double_entry_ledger, DoubleEntryLedger.Repo,
   database: "double_entry_ledger_repo_test",
   username: "postgres",

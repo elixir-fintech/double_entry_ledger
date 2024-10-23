@@ -1,9 +1,8 @@
-defmodule DoubleEntryLedger.EventProcessor do
+defmodule DoubleEntryLedger.EventWorker do
   @moduledoc """
   This module processes events and updates the balances of the accounts
   """
 
-  alias DoubleEntryLedger.EventProcessor
   alias DoubleEntryLedger.Repo
   alias Ecto.Multi
   alias DoubleEntryLedger.{
@@ -32,7 +31,7 @@ defmodule DoubleEntryLedger.EventProcessor do
   def process_create_event(%Event{transaction_data: transaction_data, instance_id: id} = event) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
-        retry(&EventProcessor.create_transaction_and_update_event/2, @max_retries, {event, transaction_map})
+        retry(&create_transaction_and_update_event/2, @max_retries, {event, transaction_map})
       {:error, error} ->
         EventStore.mark_as_failed(event, error)
         {:error, error}
@@ -71,15 +70,15 @@ defmodule DoubleEntryLedger.EventProcessor do
   end
 
   @spec retry(fun(), integer(), {Event.t(), map()}) :: {:error, any()} | {:ok, any()}
-  def retry(fun, attempts, {event, map} = args) when attempts > 0 do
+  def retry(fun, attempts, {event, map}) when attempts > 0 do
     try do
       apply(fun, [event, map])
     rescue
       Ecto.StaleEntryError ->
         delay = (@max_retries - attempts + 1) * @retry_interval
-        EventStore.add_error(event, "OCC conflict detected, retrying after #{delay} ms... #{attempts - 1} attempts left")
+        {:ok, updated_event} = EventStore.add_error(event, "OCC conflict detected, retrying after #{delay} ms... #{attempts - 1} attempts left")
         :timer.sleep(delay)
-        retry(fun, attempts - 1, args)
+        retry(fun, attempts - 1, {updated_event, map})
     end
   end
 

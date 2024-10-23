@@ -57,6 +57,19 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
+  describe "add_error/2 accumulates errors" do
+    setup [:create_instance]
+    test "marks an event as failed", %{instance: instance} do
+      {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
+      {:ok, event1} = EventStore.add_error(event, "reason1")
+      {:ok, updated_event} = EventStore.add_error(event1, "reason2")
+      assert updated_event.status == :pending
+      assert updated_event.processed_at == nil
+      assert [%{message: "reason2"}, %{message: "reason1"}] = updated_event.errors
+    end
+  end
+
+
   defp create_instance(_ctx) do
     %{instance: instance_fixture()}
   end
