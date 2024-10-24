@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   Both defaults can be overridden by setting the @seconds_to_run and @destination_accounts module attributes.
   """
 
-  alias DoubleEntryLedger.{Account, Balance, Instance, EventStore, EventProcessor, Repo}
+  alias DoubleEntryLedger.{Account, Balance, Instance, EventStore, EventWorker, Repo}
 
   @destination_accounts 10
   @seconds_to_run 1
@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.LoadTesting do
       source: "source",
       source_id: Ecto.UUID.generate(),
       transaction_data: params, instance_id: instance.id})
-    EventProcessor.process_event(event)
+    EventWorker.process_event(event)
   end
 
   # create as many source debit accounts as concurrent transactions to minimize contention
