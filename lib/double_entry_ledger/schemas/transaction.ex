@@ -44,7 +44,6 @@ defmodule DoubleEntryLedger.Transaction do
   }
 
   @required_attrs ~w(status instance_id)a
-  @optional_attrs ~w(posted_at)a
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -63,7 +62,7 @@ defmodule DoubleEntryLedger.Transaction do
   def changeset(transaction, %{} = attrs) do
     transaction
     |> Repo.preload([:instance, entries: :account])
-    |> cast(attrs, @required_attrs ++ @optional_attrs)
+    |> cast(attrs, @required_attrs)
     |> cast_assoc(:entries, with: &Entry.changeset/2)
     |> validate_required(@required_attrs)
     |> validate_inclusion(:status, @states)
@@ -71,6 +70,7 @@ defmodule DoubleEntryLedger.Transaction do
     |> validate_currency()
     |> validate_entries()
     |> validate_accounts()
+    |> update_posted_at()
   end
 
   @spec states() :: states()
@@ -80,10 +80,9 @@ defmodule DoubleEntryLedger.Transaction do
     now = changeset.data.status
     change = get_change(changeset, :status)
     cond do
-      now == nil && change in @states -> changeset
-      change == nil && now in @states -> changeset
-      now == :pending && change in [:posted, :archived] -> changeset
-      true -> add_error(changeset, :status, "cannot transition from #{now} to #{change}")
+      change == :archived && now == nil -> add_error(changeset, :status, "cannot create :archived transactions, must be transitioned from :pending")
+      now in [:archived, :posted] -> add_error(changeset, :status, "cannot update when in :#{now} state")
+      true -> changeset
     end
   end
 
@@ -120,6 +119,15 @@ defmodule DoubleEntryLedger.Transaction do
     cond do
       Enum.all?(entries, &(&1.amount.currency == accounts[&1.account_id])) -> changeset
       true -> add_error(changeset, :entries, "currency must be the same as account")
+    end
+  end
+
+  defp update_posted_at(changeset) do
+    status = get_field(changeset, :status)
+    if status == :posted do
+      put_change(changeset, :posted_at, DateTime.utc_now())
+    else
+      changeset
     end
   end
 

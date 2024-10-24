@@ -3,7 +3,9 @@ defmodule DoubleEntryLedger.TransactionStore do
   This module defines the TransactionStore behaviour.
   """
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Transaction, Account}
+  alias DoubleEntryLedger.{
+    Entry, Repo, Transaction, Account, Types
+  }
 
   @doc """
   Builds an Ecto.Multi() struct to create a new transaction with the given attributes.
@@ -16,7 +18,7 @@ defmodule DoubleEntryLedger.TransactionStore do
 
       - An `Ecto.Multi` struct representing the database operations to be performed.
   """
-  @spec build_create(map()) :: Ecto.Multi.t()
+  @spec build_create(map()) :: Multi.t()
   def build_create(%{} = transaction) do # Dialyzer requires a map here
     Multi.new()
     |> Multi.insert(:transaction, Transaction.changeset(%Transaction{}, transaction))
@@ -44,11 +46,11 @@ defmodule DoubleEntryLedger.TransactionStore do
   ## Returns
     - {:ok, Transaction.t()} | {:error, Ecto.Changeset.t()}
   """
-  @spec create(Transaction.t() | map()) :: {:ok, Transaction.t()} | {:error, Ecto.Changeset.t()}
+  @spec create(Transaction.t() | map()) :: {:ok, Transaction.t()} | {:error, any()}
   def create(transaction) do
     case build_create(transaction) |> Repo.transaction() do
       {:ok, %{transaction: transaction}} -> {:ok, transaction}
-      {:error, changeset} -> {:error, changeset}
+      {:error, _name , failed_step, _changes_so_far} -> {:error, failed_step}
     end
   end
 
@@ -62,29 +64,17 @@ defmodule DoubleEntryLedger.TransactionStore do
   ## Returns
     - An `Ecto.Multi` struct representing the database operations to be performed.
   """
-  @spec build_update(Transaction.t(), map()) :: Ecto.Multi.t()
-  def build_update(%{status: now } = transaction, %{status: next } = attr) do
-    transition = case {now, next } do
-      {:pending, :posted } -> :pending_to_posted
-      {:pending, :archived } -> :pending_to_archived
-      {_, _ } -> now
-    end
+  @spec build_update(Transaction.t(), map()) :: Multi.t()
+  def build_update(%{status: :pending } = trx, %{status: :posted } = attr) when %{status: :posted} == attr do
+    base_build_update(trx, attr, :pending_to_posted)
+  end
 
-    Multi.new()
-    |> Multi.update(:transaction, Transaction.changeset(transaction, attr))
-    |> Multi.run(:entries, fn repo, %{transaction: t} ->
-        {:ok, repo.preload(t, [entries: :account], [{:force, true}])}
-      end)
-    |> Multi.merge(fn %{entries: %{entries: entries}} ->
-        Enum.reduce(entries, Multi.new(), fn %{account: account} = entry, multi ->
-          multi
-          |> Multi.update(
-              account.id,
-              Account.update_balances(account, %{entry: entry, trx: transition})
-            )
-        end)
-      end
-    )
+  def build_update(%{status: :pending } = trx, %{status: :archived } = attr) do
+    base_build_update(trx, attr, :pending_to_archived)
+  end
+
+  def build_update(%{status: :pending } = trx, attr) do
+    base_build_update(trx, attr, :pending)
   end
 
   @doc """
@@ -95,11 +85,35 @@ defmodule DoubleEntryLedger.TransactionStore do
     - attrs: A map of attributes to update the transaction with.
 
   ## Returns
-      - {:ok, Transaction.t()} | {:error, Ecto.Changeset.t()}
+      - {:ok, Transaction.t()} | {:error, any()}
   """
-  @spec update(Transaction.t(), map()) :: {:ok, Transaction.t()} | {:error, Ecto.Changeset.t()}
+  @spec update(Transaction.t(), map()) :: {:ok, Transaction.t()} | {:error, any()}
   def update(transaction, attrs) do
-    build_update(transaction, attrs)
-    |> Repo.transaction()
+    case build_update(transaction, attrs) |> Repo.transaction() do
+      {:ok, %{transaction: transaction}} -> {:ok, transaction}
+      {:error, _name , failed_step, _changes_so_far} -> {:error, failed_step}
+    end
+  end
+
+  @spec base_build_update(Transaction.t(), map(), Types.trx_types()) :: Ecto.Multi.t()
+  defp base_build_update(transaction, attr, transition) do
+    Multi.new()
+    |> Multi.update(:transaction, Transaction.changeset(transaction, attr))
+    |> Multi.run(:entries, fn repo, %{transaction: t} ->
+        {:ok, repo.preload(t, [entries: :account], [{:force, true}])}
+      end)
+    |> Multi.merge(fn %{entries: %{entries: entries}} ->
+        Enum.reduce(entries, Multi.new(), &build_account_update(&1, &2, transition))
+      end
+    )
+  end
+
+  @spec build_account_update(Entry.t(), Ecto.Multi.t(), Types.trx_types()) :: Ecto.Multi.t()
+  defp build_account_update(%{account: account} = entry, multi, transition) do
+    multi
+    |> Multi.update(
+        account.id,
+        Account.update_balances(account, %{entry: entry, trx: transition})
+      )
   end
 end
