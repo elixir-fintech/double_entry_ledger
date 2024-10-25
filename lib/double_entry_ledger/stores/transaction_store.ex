@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.TransactionStore do
   """
   alias Ecto.Multi
   alias DoubleEntryLedger.{
-    Entry, Repo, Transaction, Account, Types
+    Repo, Transaction, Account, Types
   }
 
   @doc """
@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.TransactionStore do
     - An `Ecto.Multi` struct representing the database operations to be performed.
   """
   @spec build_update(Transaction.t(), map()) :: Multi.t()
-  def build_update(%{status: :pending } = trx, %{status: :posted } = attr) when %{status: :posted} == attr do
+  def build_update(%{status: :pending } = trx, %{status: :posted } = attr) do
     base_build_update(trx, attr, :pending_to_posted)
   end
 
@@ -97,23 +97,8 @@ defmodule DoubleEntryLedger.TransactionStore do
 
   @spec base_build_update(Transaction.t(), map(), Types.trx_types()) :: Ecto.Multi.t()
   defp base_build_update(transaction, attr, transition) do
+    changeset = Transaction.changeset(transaction, attr, transition)
     Multi.new()
-    |> Multi.update(:transaction, Transaction.changeset(transaction, attr))
-    |> Multi.run(:entries, fn repo, %{transaction: t} ->
-        {:ok, repo.preload(t, [entries: :account], [{:force, true}])}
-      end)
-    |> Multi.merge(fn %{entries: %{entries: entries}} ->
-        Enum.reduce(entries, Multi.new(), &build_account_update(&1, &2, transition))
-      end
-    )
-  end
-
-  @spec build_account_update(Entry.t(), Ecto.Multi.t(), Types.trx_types()) :: Ecto.Multi.t()
-  defp build_account_update(%{account: account} = entry, multi, transition) do
-    multi
-    |> Multi.update(
-        account.id,
-        Account.update_balances(account, %{entry: entry, trx: transition})
-      )
+    |> Multi.update(:transaction, changeset)
   end
 end

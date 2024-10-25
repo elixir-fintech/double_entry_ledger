@@ -40,6 +40,7 @@ defmodule DoubleEntryLedger.Entry do
 
   @required_attrs ~w(type amount account_id)a
   @optional_attrs ~w(transaction_id)a
+
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "entries" do
@@ -59,5 +60,16 @@ defmodule DoubleEntryLedger.Entry do
     |> cast(attrs, @required_attrs ++ @optional_attrs)
     |> validate_required(@required_attrs)
     |> validate_inclusion(:type, @debit_and_credit)
+  end
+
+  @spec update_changeset(Entry.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
+  def update_changeset(entry, attrs, transition) do
+    changeset = entry
+    |> Repo.preload([:transaction, :account], force: true)
+    |> cast(attrs, @required_attrs ++ @optional_attrs)
+    |> validate_required(@required_attrs)
+    |> validate_inclusion(:type, @debit_and_credit)
+
+    put_assoc(changeset, :account, Account.update_balances(entry.account, %{entry: changeset, trx: transition}))
   end
 end

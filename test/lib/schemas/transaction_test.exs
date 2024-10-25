@@ -264,7 +264,7 @@ defmodule DoubleEntryLedger.TransactionTest do
       } = Transaction.changeset(%Transaction{}, attr)
     end
 
-    test "update posted_at for posted to pending", ctx do
+    test "update posted_at for pending to posted", ctx do
       {:ok, trx} = create_transaction(ctx, :pending)
       assert %Ecto.Changeset{
         valid?: true,

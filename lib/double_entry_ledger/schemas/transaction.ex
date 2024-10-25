@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Transaction do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.UUID
-  alias DoubleEntryLedger.{Entry, Instance, Repo}
+  alias DoubleEntryLedger.{Entry, Instance, Repo, Types}
   alias EntryHelper
   alias __MODULE__, as: Transaction
 
@@ -58,18 +58,31 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   @doc false
-  @spec changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
-  def changeset(transaction, %{} = attrs) do
-    transaction
-    |> Repo.preload([:instance, entries: :account])
-    |> cast(attrs, @required_attrs)
-    |> cast_assoc(:entries, with: &Entry.changeset/2)
-    |> validate_required(@required_attrs)
-    |> validate_inclusion(:status, @states)
-    |> validate_state_transition()
+  @spec changeset(Transaction.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
+  def changeset(%{status: status} = transaction, attrs, transition) when status == :pending do
+    transaction_changeset(transaction, attrs)
+    |> map_ids_to_entries(attrs, transition)
     |> validate_currency()
     |> validate_entries()
     |> validate_accounts()
+  end
+
+  def changeset(transaction, %{} = attrs) do
+    transaction_changeset(transaction, attrs)
+    |> cast_assoc(:entries, with: &Entry.changeset/2)
+    |> validate_currency()
+    |> validate_entries()
+    |> validate_accounts()
+  end
+
+  @spec transaction_changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
+  defp transaction_changeset(transaction, attrs) do
+    transaction
+    |> Repo.preload([:instance, entries: :account], force: true)
+    |> cast(attrs, @required_attrs)
+    |> validate_required(@required_attrs)
+    |> validate_inclusion(:status, @states)
+    |> validate_state_transition()
     |> update_posted_at()
   end
 
@@ -120,6 +133,32 @@ defmodule DoubleEntryLedger.Transaction do
       Enum.all?(entries, &(&1.amount.currency == accounts[&1.account_id])) -> changeset
       true -> add_error(changeset, :entries, "currency must be the same as account")
     end
+  end
+
+  @spec map_ids_to_entries(Ecto.Changeset.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
+  defp map_ids_to_entries(changeset, %{entries: new_entries}, transition) do
+    entries = changeset.data.entries
+    # credo:disable-for-next-line Credo.Check.Refactor.CondStatements
+    cond do
+      length(new_entries) != length(entries) -> add_error(changeset, :entries, "cannot change number of entries")
+      true ->
+        updated_entries = match_on_account_id(entries, new_entries, transition)
+        put_assoc(changeset, :entries, updated_entries)
+    end
+  end
+
+  defp map_ids_to_entries(changeset, _attrs, transition) do
+    entries = changeset.data.entries
+    updated_entries = Enum.map(entries, fn entry -> Entry.update_changeset(entry, %{}, transition) end)
+    put_assoc(changeset, :entries, updated_entries)
+  end
+
+  @spec match_on_account_id([Entry.t()], [map()], Types.trx_types()) :: [Ecto.Changeset.t()]
+  defp match_on_account_id(entries, new_entries, transition) do
+    Enum.map(entries, fn entry ->
+      new_entry = Enum.find(new_entries, fn new_entry -> new_entry.account_id == entry.account_id end)
+      Entry.update_changeset(entry, Map.put_new(new_entry, :id, entry.id), transition)
+    end)
   end
 
   defp update_posted_at(changeset) do

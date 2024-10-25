@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.Account do
     |> cast_embed(:pending, with: &Balance.changeset/2)
   end
 
-  @spec update_balances(Account.t(), %{entry: Entry.t(), trx: Types.trx_types()}) :: Ecto.Changeset.t()
+  @spec update_balances(Account.t(), %{entry: (Entry.t() | Ecto.Changeset.t()), trx: Types.trx_types()}) :: Ecto.Changeset.t()
   def update_balances(account, %{entry: entry, trx: trx}) do
     account
     |> change()
@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.Account do
     |> optimistic_lock(:lock_version)
   end
 
-  @spec update(Ecto.Changeset.t(), Entry.t(), Types.trx_types()) :: Ecto.Changeset.t()
+  @spec update(Ecto.Changeset.t(), Entry.t() | Ecto.Changeset.t(), Types.trx_types()) :: Ecto.Changeset.t()
   defp update(%{data: %{posted: po, type: t } } = changeset, %{amount: a, type: et }, trx) when trx == :posted do
     changeset
     |> put_embed(:posted, Balance.update_balance(po, a.amount, et, t))
@@ -119,6 +119,18 @@ defmodule DoubleEntryLedger.Account do
     changeset
     |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
     |> put_change(:posted, Balance.update_balance(po, a.amount, et, t))
+  end
+
+  defp update(%{data: %{pending: pe, posted: po, type: t }} = changeset, %{data: %{amount: a, type: et }} = entry, trx) when trx == :pending_to_posted do
+    na = get_field(entry, :amount)
+    changeset
+    |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
+    |> put_change(:posted, Balance.update_balance(po, na.amount, et, t))
+  end
+
+  defp update(%{data: %{pending: pe, type: t }} = changeset, %{data: %{amount: a, type: et }}, trx) when trx == :pending_to_archived do
+    changeset
+    |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
   end
 
   defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending_to_archived do

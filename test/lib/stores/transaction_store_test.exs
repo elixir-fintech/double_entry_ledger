@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       } = Repo.get!(Account, a2.id)
     end
 
-    @tag :skip
+    #@tag :skip
     test "pending_to_posted update with changing entries", %{accounts: [a1, a2, _, _]} = ctx do
       {:ok, trx} = create_transaction(ctx)
       TransactionStore.update(trx, %{status: :posted, entries: [
@@ -89,13 +89,13 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       assert %{status: :posted} = Repo.reload(trx)
       assert %{
         pending: %Balance{amount: 0, credit: 0, debit: 0 },
-        posted: %Balance{amount: 100, credit: 0, debit: 100 },
-        available: 100, type: :debit,
+        posted: %Balance{amount: 50, credit: 0, debit: 50 },
+        available: 50, type: :debit,
       } = Repo.get!(Account, a1.id)
       assert %{
         pending: %Balance{amount: 0, credit: 0, debit: 0 },
-        posted: %Balance{amount: 100, credit: 100, debit: 0 },
-        available: 100, type: :credit,
+        posted: %Balance{amount: 50, credit: 50, debit: 0 },
+        available: 50, type: :credit,
       } = Repo.get!(Account, a2.id)
     end
 
