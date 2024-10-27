@@ -68,15 +68,6 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     %{instance: instance_fixture()}
   end
 
-  defp create_accounts(%{instance: instance}) do
-    %{instance: instance, accounts: [
-      account_fixture(instance_id: instance.id, type: :debit),
-      account_fixture(instance_id: instance.id, type: :credit),
-      account_fixture(instance_id: instance.id, type: :debit),
-      account_fixture(instance_id: instance.id, type: :credit)
-    ]}
-  end
-
   defp create_event(%{instance: inst, accounts: [a1, a2, _, _] }) do
     EventStore.insert_event(event_attrs(
       instance_id: inst.id,

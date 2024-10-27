@@ -69,13 +69,4 @@ defmodule DoubleEntryLedger.InstanceTest do
   defp create_instance(_ctx) do
     %{instance: instance_fixture()}
   end
-
-  defp create_accounts(%{instance: instance}) do
-    %{instance: instance, accounts: [
-      account_fixture(instance_id: instance.id, type: :debit),
-      account_fixture(instance_id: instance.id, type: :credit),
-      account_fixture(instance_id: instance.id, type: :debit),
-      account_fixture(instance_id: instance.id, type: :credit)
-    ]}
-  end
 end

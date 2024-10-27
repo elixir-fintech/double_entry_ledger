@@ -30,4 +30,13 @@ defmodule DoubleEntryLedger.AccountFixtures do
 
     account
   end
+
+  def create_accounts(%{instance: instance}) do
+    %{instance: instance, accounts: [
+      account_fixture(instance_id: instance.id, type: :debit),
+      account_fixture(instance_id: instance.id, type: :credit),
+      account_fixture(instance_id: instance.id, type: :debit),
+      account_fixture(instance_id: instance.id, type: :credit)
+    ]}
+  end
 end

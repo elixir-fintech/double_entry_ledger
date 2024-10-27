@@ -121,15 +121,6 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
     %{instance: instance_fixture()}
   end
 
-  defp create_accounts(%{instance: instance}) do
-    %{instance: instance, accounts: [
-      account_fixture(instance_id: instance.id, type: :debit),
-      account_fixture(instance_id: instance.id, type: :credit),
-      account_fixture(instance_id: instance.id, type: :debit),
-      account_fixture(instance_id: instance.id, type: :credit)
-    ]}
-  end
-
   defp create_transaction(%{instance: inst, accounts: [a1, a2, _, _ ]}) do
       attr = transaction_attr(instance_id: inst.id, entries: [
         %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},

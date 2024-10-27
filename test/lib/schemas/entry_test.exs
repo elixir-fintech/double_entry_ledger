@@ -5,12 +5,13 @@ defmodule DoubleEntryLedger.EntryTest do
 
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Entry, Repo}
+  alias DoubleEntryLedger.{Entry, Repo, TransactionStore}
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
+  import DoubleEntryLedger.TransactionFixtures
 
-  describe "entries" do
+  describe "changeset" do
     setup [:create_instance, :create_account]
 
     test "returns error changeset for missing fields", _ctx do
@@ -34,6 +35,20 @@ defmodule DoubleEntryLedger.EntryTest do
     end
   end
 
+  describe "update_changeset/2" do
+    setup [:create_instance, :create_accounts, :create_transaction]
+
+    test "returns valid changeset with update to account", %{transaction: %{entries: [e0, _]}}  do
+      assert %Ecto.Changeset{
+        valid?: true,
+        changes: %{
+          account: _,
+          amount: %Money{amount: 50, currency: :EUR},
+        }
+      } = Entry.update_changeset(e0, %{amount: Money.new(50, :EUR)}, :pending_to_posted)
+    end
+  end
+
   defp create_instance(_ctx) do
     %{instance: instance_fixture()}
   end
@@ -48,5 +63,15 @@ defmodule DoubleEntryLedger.EntryTest do
         amount: Money.new(100, :EUR),
         type: :debit
       })
+  end
+
+  defp create_transaction(%{instance: instance, accounts: [a1, a2,_, _]}) do
+    transaction = transaction_attr(status: :pending,
+      instance_id: instance.id, entries: [
+        %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},
+        %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id}
+      ])
+    {:ok, trx} = TransactionStore.create(transaction)
+    %{transaction: trx}
   end
 end

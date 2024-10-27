@@ -121,13 +121,14 @@ defmodule DoubleEntryLedger.Transaction do
 
   defp validate_currency(changeset) do
     entries = get_field(changeset, :entries) || []
-    accounts = Repo.all(from a in "accounts",
-                         where: a.id in ^account_ids(entries),
-                         select: [a.id, a.currency ])
-               |> Enum.reduce(
-                    %{},
-                    fn [id, currency], acc -> Map.put(acc, UUID.cast!(id), String.to_atom(currency)) end
-                  )
+    accounts =
+      Repo.all(from a in "accounts",
+        where: a.id in ^account_ids(entries),
+        select: [a.id, a.currency ])
+      |> Enum.reduce(
+          %{},
+          fn [id, currency], acc -> Map.put(acc, UUID.cast!(id), String.to_atom(currency)) end
+        )
     # credo:disable-for-next-line Credo.Check.Refactor.CondStatements
     cond do
       Enum.all?(entries, &(&1.amount.currency == accounts[&1.account_id])) -> changeset
