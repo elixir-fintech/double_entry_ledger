@@ -62,7 +62,6 @@ defmodule DoubleEntryLedger.Transaction do
   def changeset(%{status: status} = transaction, attrs, transition) when status == :pending do
     transaction_changeset(transaction, attrs)
     |> map_ids_to_entries(attrs, transition)
-    |> validate_currency()
     |> validate_entries()
     |> validate_accounts()
   end
@@ -89,8 +88,7 @@ defmodule DoubleEntryLedger.Transaction do
   @spec states() :: states()
   def states, do: @states
 
-  defp validate_state_transition(changeset) do
-    now = changeset.data.status
+  defp validate_state_transition(%{data: %{status: now}} = changeset) do
     change = get_change(changeset, :status)
     cond do
       change == :archived && now == nil -> add_error(changeset, :status, "cannot create :archived transactions, must be transitioned from :pending")
@@ -100,7 +98,7 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   defp validate_entries(changeset) do
-    entries = get_field(changeset, :entries) || []
+    entries = get_assoc(changeset, :entries, :struct) || []
     cond do
       Enum.count(entries) < 2 -> add_error(changeset, :entries, "must have at least 2 entries")
       !debit_equals_credit_per_currency(entries) -> add_error(changeset, :entries, "must have equal debit and credit")
@@ -109,7 +107,7 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   defp validate_accounts(changeset) do
-    entries = get_field(changeset, :entries) || []
+    entries = get_assoc(changeset, :entries, :struct) || []
     ledger_ids = Repo.all(from a in "accounts", where: a.id in ^account_ids(entries), select: a.instance_id)
       |> Enum.map(&UUID.cast!(&1))
     cond do
@@ -120,7 +118,7 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   defp validate_currency(changeset) do
-    entries = get_field(changeset, :entries) || []
+    entries = get_assoc(changeset, :entries, :struct) || []
     accounts =
       Repo.all(from a in "accounts",
         where: a.id in ^account_ids(entries),
@@ -137,8 +135,7 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   @spec map_ids_to_entries(Ecto.Changeset.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
-  defp map_ids_to_entries(changeset, %{entries: new_entries}, transition) do
-    entries = changeset.data.entries
+  defp map_ids_to_entries(%{data: %{entries: entries}} = changeset, %{entries: new_entries}, transition) do
     # credo:disable-for-next-line Credo.Check.Refactor.CondStatements
     cond do
       length(new_entries) != length(entries) -> add_error(changeset, :entries, "cannot change number of entries")
@@ -148,8 +145,7 @@ defmodule DoubleEntryLedger.Transaction do
     end
   end
 
-  defp map_ids_to_entries(changeset, _attrs, transition) do
-    entries = changeset.data.entries
+  defp map_ids_to_entries(%{data: %{entries: entries}} = changeset, _attrs, transition) do
     updated_entries = Enum.map(entries, fn entry -> Entry.update_changeset(entry, %{}, transition) end)
     put_assoc(changeset, :entries, updated_entries)
   end
