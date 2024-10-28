@@ -47,6 +47,24 @@ defmodule DoubleEntryLedger.EntryTest do
         }
       } = Entry.update_changeset(e0, %{amount: Money.new(50, :EUR)}, :pending_to_posted)
     end
+
+    test "returns error changeset for missing amount", %{transaction: %{entries: [e0, _]}} do
+      assert %Ecto.Changeset{
+        valid?: false,
+        errors: [amount: {"is invalid", [type: Money.Ecto.Composite.Type, validation: :cast]}]
+      } = Entry.update_changeset(e0, %{amount: %{}}, :pending_to_posted)
+    end
+  end
+
+  describe "validate_same_account_currency/1" do
+    setup [:create_instance, :create_accounts, :create_transaction]
+
+    test "returns error changeset for different currency", %{transaction: %{entries: [e0, _]}} do
+      assert %Ecto.Changeset{
+        valid?: false,
+        errors: [account: {"currency (EUR) must be equal to entry currency (USD)", []}]
+      } = Entry.update_changeset(e0, %{amount: Money.new(100, :USD)}, :pending_to_posted)
+    end
   end
 
   defp create_instance(_ctx) do

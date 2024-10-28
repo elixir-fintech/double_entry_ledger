@@ -64,20 +64,32 @@ defmodule DoubleEntryLedger.Entry do
 
   @spec update_changeset(Entry.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
   def update_changeset(entry, attrs, transition) do
-    %{data: %{account: account}} = changeset = entry
+    entry
     |> Repo.preload([:transaction, :account], force: true)
     |> cast(attrs, [:amount])
     |> validate_required([:amount])
-
-    put_assoc(changeset, :account, Account.update_balances(account, %{entry: changeset, trx: transition}))
+    |> validate_same_account_currency()
+    |> put_account_assoc(transition)
   end
 
-  #defp validate_currency(changeset, account) do
-    #currency = get_field(changeset, :amount).currency
-    #if account.currency != currency do
-      #add_error(changeset, :account_id, "currency must account transaction currency")
-    #else
-      #changeset
-    #end
-  #end
+  defp put_account_assoc(%{data: %{account: account}} = changeset, transition) do
+    put_assoc(
+      changeset,
+      :account,
+      Account.update_balances(account, %{entry: changeset, trx: transition})
+    )
+  end
+
+  defp validate_same_account_currency(%{data: %{account: account}} = changeset) do
+    currency = get_field(changeset, :amount).currency
+    if account.currency != currency do
+      add_error(
+        changeset,
+        :account,
+        "currency (#{account.currency}) must be equal to entry currency (#{currency})"
+      )
+    else
+      changeset
+    end
+  end
 end
