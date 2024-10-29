@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.Account do
 
   @spec update_balances(Account.t(), %{entry: (Entry.t() | Ecto.Changeset.t()), trx: Types.trx_types()}) :: Ecto.Changeset.t()
   def update_balances(account, %{entry: entry, trx: trx}) when is_struct(entry, Entry)  do
-    entry_changeset = change(entry)
+    entry_changeset = Entry.changeset(entry, %{})
     update_balances(account, %{entry: entry_changeset, trx: trx})
   end
 
@@ -100,9 +100,21 @@ defmodule DoubleEntryLedger.Account do
     entry_type = get_field(entry_changeset, :type)
     account
     |> change()
+    |> validate_entry_changeset(entry_changeset)
     |> update(entry_changeset, entry_type, trx)
     |> update_available()
     |> optimistic_lock(:lock_version)
+  end
+
+  defp validate_entry_changeset(%{data: %{id: account_id, currency: currency}} = changeset, entry_changeset) do
+    entry_account_id = get_field(entry_changeset, :account_id)
+    entry_currency = get_field(entry_changeset, :amount).currency
+    cond do
+      !entry_changeset.valid? -> add_error(changeset, :balance, "can't apply an invalid entry changeset")
+      account_id != entry_account_id -> add_error(changeset, :id, "entry account_id (#{entry_account_id}) must be equal to account id (#{account_id})")
+      currency != entry_currency -> add_error(changeset, :currency, "entry currency (#{entry_currency}) must be equal to account currency (#{currency})")
+      true -> changeset
+    end
   end
 
   @spec update(Ecto.Changeset.t(), Ecto.Changeset.t(), Types.credit_or_debit(), Types.trx_types()) :: Ecto.Changeset.t()

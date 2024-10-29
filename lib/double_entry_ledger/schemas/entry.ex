@@ -54,7 +54,6 @@ defmodule DoubleEntryLedger.Entry do
   end
 
   @spec changeset(Entry.t(), map(), Transaction.state()) :: Ecto.Changeset.t()
-  @doc false
   def changeset(entry, %{account_id: id} = attrs, transition) when transition in @transaction_states do
     entry
     |> Repo.preload([:account], force: true)
@@ -66,9 +65,15 @@ defmodule DoubleEntryLedger.Entry do
   end
 
   def changeset(entry, attrs, _transition) do # catch-all clause
+    changeset(entry, attrs)
+  end
+
+  @spec changeset(Entry.t(), map()) :: Ecto.Changeset.t()
+  def changeset(entry, attrs) do # catch-all clause
     entry
     |> cast(attrs, @required_attrs)
     |> validate_required(@required_attrs)
+    |> validate_inclusion(:type, @debit_and_credit)
   end
 
   @spec update_changeset(Entry.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
