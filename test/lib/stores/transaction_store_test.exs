@@ -78,7 +78,6 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       } = Repo.get!(Account, a2.id)
     end
 
-    #@tag :skip
     test "pending_to_posted update with changing entries", %{accounts: [a1, a2, _, _]} = ctx do
       {:ok, trx} = create_transaction(ctx)
       TransactionStore.update(trx, %{status: :posted, entries: [
@@ -98,6 +97,36 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
         available: 50, type: :credit,
       } = Repo.get!(Account, a2.id)
     end
+
+    test "pending_to_posted update with changing entries that are too big for the accounts", %{instance: inst, accounts: [_, _, a1, a2]} = ctx do
+      attr = transaction_attr(instance_id: inst.id, status: :posted, entries: [
+        %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},
+        %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id}
+      ])
+      {:ok, posted_trx} = TransactionStore.create(attr) # posted transaction to create balances
+      {:ok, trx } = TransactionStore.create(transaction_attr(
+        instance_id: inst.id, status: :pending, entries: [
+          %{type: :credit, amount: Money.new(50, :EUR), account_id: a1.id},
+          %{type: :debit, amount: Money.new(50, :EUR), account_id: a2.id}
+        ])) # pending transaction to update
+      TransactionStore.update(trx, %{status: :posted, entries: [
+        %{type: :credit, amount: Money.new(150, :EUR), account_id: a1.id},
+        %{type: :debit, amount: Money.new(150, :EUR), account_id: a2.id}
+      ]}) # update pending transaction with values that are too big for the accounts
+
+      assert %{status: :pending} = Repo.reload(trx) # transaction should still be pending
+      assert %{
+        pending: %Balance{amount: 50, credit: 50, debit: 0 },
+        posted: %Balance{amount: 100, credit: 0, debit: 100 },
+        available: 50, type: :debit,
+      } = Repo.get!(Account, a1.id)  # accounts should have the original values from the pending transaction
+      assert %{
+        pending: %Balance{amount: 50, credit: 0, debit: 50 },
+        posted: %Balance{amount: 100, credit: 100, debit: 0 },
+        available: 50, type: :credit,
+      } = Repo.get!(Account, a2.id)
+    end
+
 
     test "simple pending_to_archived update", %{accounts: [a1, a2, _, _]} = ctx do
       {:ok, trx} = create_transaction(ctx)
