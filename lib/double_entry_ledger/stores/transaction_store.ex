@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.TransactionStore do
   """
   alias Ecto.Multi
   alias DoubleEntryLedger.{
-    Repo, Transaction, Account, Types
+    Repo, Transaction, Types
   }
 
   @doc """
@@ -22,19 +22,6 @@ defmodule DoubleEntryLedger.TransactionStore do
   def build_create(%{} = transaction) do # Dialyzer requires a map here
     Multi.new()
     |> Multi.insert(:transaction, Transaction.changeset(%Transaction{}, transaction))
-    |> Multi.run(:entries, fn repo, %{transaction: t} ->
-        {:ok, repo.preload(t, [entries: :account], [{:force, true}])}
-      end)
-    |> Multi.merge(fn %{entries: %{entries: entries}} ->
-        Enum.reduce(entries, Multi.new(), fn %{account: account} = entry, multi ->
-          multi
-          |> Multi.update(
-              account.id,
-              Account.update_balances(account, %{entry: entry, trx: transaction.status})
-            )
-        end)
-      end
-    )
   end
 
   @doc """

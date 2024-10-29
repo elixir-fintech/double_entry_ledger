@@ -66,9 +66,9 @@ defmodule DoubleEntryLedger.Transaction do
     |> validate_accounts()
   end
 
-  def changeset(transaction, %{} = attrs) do
+  def changeset(transaction, %{status: status} = attrs) do
     transaction_changeset(transaction, attrs)
-    |> cast_assoc(:entries, with: &Entry.changeset/2)
+    |> cast_assoc(:entries, with: &Entry.changeset(&1, &2, status))
     |> validate_currency()
     |> validate_entries()
     |> validate_accounts()

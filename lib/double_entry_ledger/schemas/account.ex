@@ -91,52 +91,55 @@ defmodule DoubleEntryLedger.Account do
   end
 
   @spec update_balances(Account.t(), %{entry: (Entry.t() | Ecto.Changeset.t()), trx: Types.trx_types()}) :: Ecto.Changeset.t()
-  def update_balances(account, %{entry: entry, trx: trx}) do
+  def update_balances(account, %{entry: entry, trx: trx}) when is_struct(entry, Entry)  do
+    entry_changeset = change(entry)
+    update_balances(account, %{entry: entry_changeset, trx: trx})
+  end
+
+  def update_balances(account, %{entry: entry_changeset, trx: trx}) do
+    entry_type = get_field(entry_changeset, :type)
     account
     |> change()
-    |> update(entry, trx)
+    |> update(entry_changeset, entry_type, trx)
     |> update_available()
     |> optimistic_lock(:lock_version)
   end
 
-  @spec update(Ecto.Changeset.t(), Entry.t() | Ecto.Changeset.t(), Types.trx_types()) :: Ecto.Changeset.t()
-  defp update(%{data: %{posted: po, type: t } } = changeset, %{amount: a, type: et }, trx) when trx == :posted do
+  @spec update(Ecto.Changeset.t(), Ecto.Changeset.t(), Types.credit_or_debit(), Types.trx_types()) :: Ecto.Changeset.t()
+  defp update(%{data: %{posted: po, type: t}} = changeset, entry, entry_type, trx) when trx == :posted do
+    entry_amount = get_field(entry, :amount)
     changeset
-    |> put_embed(:posted, Balance.update_balance(po, a.amount, et, t))
+    |> put_embed(:posted, Balance.update_balance(po, entry_amount.amount, entry_type, t))
   end
 
-  defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending and et == t do
+  defp update(%{data: %{pending: pe, type: t}} = changeset, entry, entry_type, trx) when trx == :pending and entry_type == t do
+    entry_amount = get_field(entry, :amount)
     changeset
-    |> put_embed(:pending, Balance.update_balance(pe, a.amount, et, opposite_direction(et)))
+    |> put_embed(:pending, Balance.update_balance(pe, entry_amount.amount, entry_type, opposite_direction(entry_type)))
   end
 
-  defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending and et != t do
+  defp update(%{data: %{pending: pe, type: t }} = changeset, entry, entry_type, trx) when trx == :pending and entry_type != t do
+    entry_amount = get_field(entry, :amount)
     changeset
-    |> put_change(:pending, Balance.update_balance(pe, a.amount, et, et))
+    |> put_change(:pending, Balance.update_balance(pe, entry_amount.amount, entry_type, entry_type))
   end
 
-  defp update(%{data: %{pending: pe, posted: po, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending_to_posted do
+  defp update(%{data: %{pending: pe, posted: po, type: t }} = changeset, entry, entry_type, trx) when trx == :pending_to_posted do
+    new_value = get_field(entry, :amount)
+    current_value = entry.data.amount
     changeset
-    |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
-    |> put_change(:posted, Balance.update_balance(po, a.amount, et, t))
+    |> put_change(:pending, Balance.reverse_pending(pe, current_value.amount, entry_type, t))
+    |> put_change(:posted, Balance.update_balance(po, new_value.amount, entry_type, t))
   end
 
-  defp update(%{data: %{pending: pe, posted: po, type: t }} = changeset, %{data: %{amount: a, type: et }} = entry, trx) when trx == :pending_to_posted do
-    na = get_field(entry, :amount)
+  defp update(%{data: %{pending: pe, type: t }} = changeset, entry, entry_type, trx) when trx == :pending_to_archived do
+    entry_value = get_field(entry, :amount)
     changeset
-    |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
-    |> put_change(:posted, Balance.update_balance(po, na.amount, et, t))
+    |> put_change(:pending, Balance.reverse_pending(pe, entry_value.amount, entry_type, t))
   end
 
-  defp update(%{data: %{pending: pe, type: t }} = changeset, %{data: %{amount: a, type: et }}, trx) when trx == :pending_to_archived do
-    changeset
-    |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
-  end
-
-  defp update(%{data: %{pending: pe, type: t }} = changeset, %{amount: a, type: et }, trx) when trx == :pending_to_archived do
-    changeset
-    |> put_change(:pending, Balance.reverse_pending(pe, a.amount, et, t))
-  end
+  # catch-all clause
+  defp update(changeset, _, _, transition), do: add_error(changeset, :entry, "invalid transition: #{transition}")
 
   @spec update_available(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp update_available(%{data: %{allowed_negative: allowed_negative, type: type } } = changeset) do

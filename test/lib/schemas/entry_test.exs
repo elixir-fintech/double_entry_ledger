@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.EntryTest do
           amount: {"can't be blank", [validation: :required]},
           account_id: {"can't be blank", [validation: :required]}
         ]
-      } = Entry.changeset(%Entry{}, %{})
+      } = Entry.changeset(%Entry{}, %{}, :pending)
     end
 
     # validation allows empty transaction_id, but must be present in db
@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.EntryTest do
       attr = entry_attr(account_id: ctx.account.id)
       assert_raise Postgrex.Error,
         ~r/"transaction_id" of relation "entries" violates not-null constraint/,
-        fn -> Repo.insert(Entry.changeset(%Entry{}, attr)) end
+        fn -> Repo.insert(Entry.changeset(%Entry{}, attr, :pending)) end
     end
   end
 
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.EntryTest do
       })
   end
 
-  defp create_transaction(%{instance: instance, accounts: [a1, a2,_, _]}) do
+  defp create_transaction(%{instance: instance, accounts: [a1, a2, _, _]}) do
     transaction = transaction_attr(status: :pending,
       instance_id: instance.id, entries: [
         %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},

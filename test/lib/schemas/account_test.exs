@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Account, Balance}
+  alias DoubleEntryLedger.{Account, Balance, Entry}
 
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
@@ -47,7 +47,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "debit entry", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :debit)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
 
       assert %Ecto.Changeset{
         valid?: true,
@@ -61,7 +61,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit entry", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :debit)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
 
       assert %Ecto.Changeset{
         valid?: true,
@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "debit entry", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :debit)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
 
       assert %Ecto.Changeset{
         valid?: true,
@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit entry", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :debit)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
 
       assert %Ecto.Changeset{
         valid?: true,
@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit entry trx: posted", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :debit, allowed_negative: false)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
 
       assert %Ecto.Changeset{
         valid?: false,
@@ -118,7 +118,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit entry trx: pending", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :debit, allowed_negative: false)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
 
       assert %Ecto.Changeset{
         valid?: false,
@@ -132,7 +132,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit entry", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :credit)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
 
       assert %Ecto.Changeset{
         valid?: true,
@@ -146,7 +146,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "debit entry", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :credit)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
 
       assert %Ecto.Changeset{
         valid?: true,
@@ -163,7 +163,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "debit entry", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :credit)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
 
       assert %Ecto.Changeset{
         valid?: true,
@@ -176,7 +176,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit entry", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :credit)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :credit }
 
       assert %Ecto.Changeset{
         valid?: true,
@@ -193,7 +193,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit entry trx: posted", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :credit, allowed_negative: false)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
 
       assert %Ecto.Changeset{
         valid?: false,
@@ -203,7 +203,7 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit entry trx: pending", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :credit, allowed_negative: false)
-      entry = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
 
       assert %Ecto.Changeset{
         valid?: false,
@@ -217,8 +217,8 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "throws stale update error when updates run concurrently", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, type: :debit, allowed_negative: false)
-      entry1 = %{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
-      entry2 = %{account: account, amount: %Money{amount: 150, currency: :EUR}, type: :debit }
+      entry1 = %Entry{account: account, amount: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry2 = %Entry{account: account, amount: %Money{amount: 150, currency: :EUR}, type: :debit }
 
       changeset1 = Account.update_balances(account, %{entry: entry1, trx: :posted})
       changeset2 = Account.update_balances(account, %{entry: entry2, trx: :posted})

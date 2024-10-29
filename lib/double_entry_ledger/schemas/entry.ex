@@ -37,6 +37,7 @@ defmodule DoubleEntryLedger.Entry do
   }
 
   @debit_and_credit Types.credit_and_debit()
+  @transaction_states Transaction.states()
 
   @required_attrs ~w(type amount account_id)a
   @optional_attrs ~w(transaction_id)a
@@ -52,14 +53,22 @@ defmodule DoubleEntryLedger.Entry do
     timestamps(type: :utc_datetime_usec)
   end
 
-  @spec changeset(Entry.t(), map()) :: Ecto.Changeset.t()
+  @spec changeset(Entry.t(), map(), Transaction.state()) :: Ecto.Changeset.t()
   @doc false
-  def changeset(entry, attrs) do
+  def changeset(entry, %{account_id: id} = attrs, transition) when transition in @transaction_states do
     entry
-    |> Repo.preload([:transaction, :account])
+    |> Repo.preload([:account], force: true)
     |> cast(attrs, @required_attrs ++ @optional_attrs)
     |> validate_required(@required_attrs)
     |> validate_inclusion(:type, @debit_and_credit)
+    |> put_assoc(:account, Repo.get!(Account, id))
+    |> put_account_assoc(transition)
+  end
+
+  def changeset(entry, attrs, _transition) do # catch-all clause
+    entry
+    |> cast(attrs, @required_attrs)
+    |> validate_required(@required_attrs)
   end
 
   @spec update_changeset(Entry.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
@@ -72,7 +81,8 @@ defmodule DoubleEntryLedger.Entry do
     |> put_account_assoc(transition)
   end
 
-  defp put_account_assoc(%{data: %{account: account}} = changeset, transition) do
+  defp put_account_assoc(changeset, transition) do
+    account = get_assoc(changeset, :account, :struct)
     put_assoc(
       changeset,
       :account,
@@ -80,7 +90,8 @@ defmodule DoubleEntryLedger.Entry do
     )
   end
 
-  defp validate_same_account_currency(%{data: %{account: account}} = changeset) do
+  defp validate_same_account_currency(changeset) do
+    account = get_assoc(changeset, :account, :struct)
     currency = get_field(changeset, :amount).currency
     if account.currency != currency do
       add_error(
