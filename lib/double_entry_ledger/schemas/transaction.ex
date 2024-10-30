@@ -129,7 +129,7 @@ defmodule DoubleEntryLedger.Transaction do
         )
     # credo:disable-for-next-line Credo.Check.Refactor.CondStatements
     cond do
-      Enum.all?(entries, &(&1.amount.currency == accounts[&1.account_id])) -> changeset
+      Enum.all?(entries, &(&1.value.currency == accounts[&1.account_id])) -> changeset
       true -> add_error(changeset, :entries, "currency must be the same as account")
     end
   end

@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Entry do
 
   @type t :: %Entry{
     id: Ecto.UUID.t() | nil,
-    amount: Money.t() | nil,
+    value: Money.t() | nil,
     type: Types.credit_or_debit() | nil,
     transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
     transaction_id: Ecto.UUID.t() | nil,
@@ -39,13 +39,13 @@ defmodule DoubleEntryLedger.Entry do
   @debit_and_credit Types.credit_and_debit()
   @transaction_states Transaction.states()
 
-  @required_attrs ~w(type amount account_id)a
+  @required_attrs ~w(type value account_id)a
   @optional_attrs ~w(transaction_id)a
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "entries" do
-    field :amount, Money.Ecto.Composite.Type
+    field :value, Money.Ecto.Composite.Type
     field :type, Ecto.Enum, values: @debit_and_credit
     belongs_to :transaction, Transaction
     belongs_to :account, Account
@@ -80,8 +80,8 @@ defmodule DoubleEntryLedger.Entry do
   def update_changeset(entry, attrs, transition) do
     entry
     |> Repo.preload([:transaction, :account], force: true)
-    |> cast(attrs, [:amount])
-    |> validate_required([:amount])
+    |> cast(attrs, [:value])
+    |> validate_required([:value])
     |> validate_same_account_currency()
     |> put_account_assoc(transition)
   end
@@ -97,7 +97,7 @@ defmodule DoubleEntryLedger.Entry do
 
   defp validate_same_account_currency(changeset) do
     account = get_assoc(changeset, :account, :struct)
-    currency = get_field(changeset, :amount).currency
+    currency = get_field(changeset, :value).currency
     if account.currency != currency do
       add_error(
         changeset,

@@ -74,10 +74,10 @@ defmodule DoubleEntryLedger.EventStoreTest do
     %{instance: instance_fixture()}
   end
 
-  defp create_transaction(%{instance: instance, accounts: [acc1, acc2, _,_] = accounts}) do
+  defp create_transaction(%{instance: instance, accounts: [acc1, acc2, _, _] = accounts}) do
     transaction = transaction_attr(instance_id: instance.id, entries: [
-      %{type: :debit, amount: Money.new(100, :EUR), account_id:  acc1.id},
-      %{type: :credit, amount: Money.new(100, :EUR), account_id:  acc2.id}
+      %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
+      %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
     ])
     {:ok, transaction} = TransactionStore.create(transaction)
     %{instance: instance, transaction: transaction, accounts: accounts}

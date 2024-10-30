@@ -29,8 +29,8 @@ defmodule DoubleEntryLedger.TransactionTest do
       a1 = account_fixture(instance_id: ctx.instance.id, type: :debit)
       a2 = account_fixture(instance_id: instance2.id, type: :credit)
       attr = transaction_attr(instance_id: ctx.instance.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id:  a1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id:  a2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id:  a1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id:  a2.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -44,8 +44,8 @@ defmodule DoubleEntryLedger.TransactionTest do
       a1 = account_fixture(instance_id: ctx.instance.id, type: :debit)
       a2 = account_fixture(instance_id: ctx.instance.id, type: :credit)
       attr = transaction_attr(instance_id: instance2.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -72,7 +72,7 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "one entry", %{instance: inst, accounts: [acc1, _, _, _]} do
       attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id:  acc1.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -83,8 +83,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "both debit entries", %{instance: inst, accounts: [acc1, acc2, _, _] } do
       attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id:  acc1.id},
-        %{type: :debit, amount: Money.new(100, :EUR), account_id:  acc2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
+        %{type: :debit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -95,8 +95,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "both credit entries", %{instance: inst, accounts: [acc1, acc2, _, _] } do
       attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :credit, amount: Money.new(100, :EUR), account_id:  acc1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id:  acc2.id}
+        %{type: :credit, value: Money.new(100, :EUR), account_id:  acc1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -107,8 +107,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "amount different", %{instance: inst, accounts: [acc1, acc2, _, _] } do
       attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(101, :EUR), account_id:  acc1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id:  acc2.id}
+        %{type: :debit, value: Money.new(101, :EUR), account_id:  acc1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -119,8 +119,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "same amount", %{instance: inst, accounts: [acc1, acc2, _, _] } do
       attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id:  acc1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id:  acc2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
       assert %Ecto.Changeset{
         valid?: true,
@@ -136,8 +136,8 @@ defmodule DoubleEntryLedger.TransactionTest do
       acc1 = account_fixture(instance_id: inst.id, type: :debit, currency: :EUR)
       acc2 = account_fixture(instance_id: inst.id, type: :credit, currency: :USD)
       attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id:  acc1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id:  acc2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -153,10 +153,10 @@ defmodule DoubleEntryLedger.TransactionTest do
       acc3 = account_fixture(instance_id: inst.id, type: :debit, currency: :EUR)
       acc4 = account_fixture(instance_id: inst.id, type: :credit, currency: :USD)
       attr = transaction_attr(instance_id: inst.id, entries: [
-         %{type: :debit, amount: Money.new(50, :EUR), account_id:  acc1.id},
-         %{type: :credit, amount: Money.new(100, :USD), account_id:  acc2.id},
-         %{type: :credit, amount: Money.new(50, :EUR), account_id:  acc3.id},
-         %{type: :debit, amount: Money.new(100, :USD), account_id:  acc4.id}
+         %{type: :debit, value: Money.new(50, :EUR), account_id:  acc1.id},
+         %{type: :credit, value: Money.new(100, :USD), account_id:  acc2.id},
+         %{type: :credit, value: Money.new(50, :EUR), account_id:  acc3.id},
+         %{type: :debit, value: Money.new(100, :USD), account_id:  acc4.id}
       ])
       assert %Ecto.Changeset{
         valid?: true,
@@ -166,8 +166,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "currency entry != currency account", %{instance: inst, accounts: [acc1, acc2, _, _] } do
       attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :USD), account_id: acc1.id},
-        %{type: :credit, amount: Money.new(100, :USD), account_id: acc2.id}
+        %{type: :debit, value: Money.new(100, :USD), account_id: acc1.id},
+        %{type: :credit, value: Money.new(100, :USD), account_id: acc2.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -235,8 +235,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "can't create archived", %{instance: inst, accounts: [acc1, acc2, _, _]} do
       attr = transaction_attr(status: :archived, instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id: acc1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id: acc2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id: acc1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id: acc2.id}
       ])
       assert %Ecto.Changeset{
         valid?: false,
@@ -252,8 +252,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "update posted_at for posted", %{instance: inst, accounts: [acc1, acc2, _, _]} do
       attr = transaction_attr(status: :posted, instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id: acc1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id: acc2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id: acc1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id: acc2.id}
       ])
       assert %Ecto.Changeset{
         valid?: true,
@@ -277,8 +277,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "is not updating for pending", %{instance: inst, accounts: [acc1, acc2, _, _]} do
       attr = transaction_attr(status: :pending, instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id: acc1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id: acc2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id: acc1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id: acc2.id}
       ])
       cs = Transaction.changeset(%Transaction{}, attr)
       assert !Map.has_key?(cs.changes, :posted_at)
@@ -291,8 +291,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
   defp create_transaction(%{instance: inst, accounts: [a1, a2, _, _ ]}, status) do
     attr = transaction_attr(status: status, instance_id: inst.id, entries: [
-      %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},
-      %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id}
+      %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
+      %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
     ])
     TransactionStore.create(attr)
   end

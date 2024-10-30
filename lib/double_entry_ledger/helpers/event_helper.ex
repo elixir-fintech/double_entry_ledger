@@ -43,20 +43,20 @@ defmodule DoubleEntryLedger.EventHelper do
   end
 
   @spec entry_data_to_entry_map({Account.t(), EntryData.t()}) :: map()
-  defp entry_data_to_entry_map({%{type: :debit} = acc, %{amount: amt} = ed}) when amt > 0 do
-    %{account_id: acc.id, amount: to_money(amt, ed.currency), type: :debit}
+  defp entry_data_to_entry_map({%{type: :debit} = acc, %{value: amt} = ed}) when amt > 0 do
+    %{account_id: acc.id, value: to_money(amt, ed.currency), type: :debit}
   end
 
   defp entry_data_to_entry_map({%{type: :debit} = acc, ed}) do
-    %{account_id: acc.id, amount: to_money(ed.amount, ed.currency), type: :credit}
+    %{account_id: acc.id, value: to_money(ed.amount, ed.currency), type: :credit}
   end
 
-  defp entry_data_to_entry_map({%{type: :credit} = acc, %{amount: amt} = ed}) when amt > 0 do
-    %{account_id: acc.id, amount: to_money(amt, ed.currency), type: :credit}
+  defp entry_data_to_entry_map({%{type: :credit} = acc, %{value: amt} = ed}) when amt > 0 do
+    %{account_id: acc.id, value: to_money(amt, ed.currency), type: :credit}
   end
 
   defp entry_data_to_entry_map({%{type: :credit} = acc, ed}) do
-    %{account_id: acc.id, amount: to_money(ed.amount, ed.currency), type: :debit}
+    %{account_id: acc.id, value: to_money(ed.amount, ed.currency), type: :debit}
   end
 
   defp to_money(amount, currency) do

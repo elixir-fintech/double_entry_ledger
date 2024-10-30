@@ -31,9 +31,9 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
     test "create transaction with 3 accounts", %{instance: inst, accounts: [a1, a2, a3, _]} do
       attr = transaction_attr(status: :posted,
         instance_id: inst.id, entries: [
-          %{type: :debit, amount: Money.new(50, :EUR), account_id: a1.id},
-          %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id},
-          %{type: :debit, amount: Money.new(50, :EUR), account_id: a3.id},
+          %{type: :debit, value: Money.new(50, :EUR), account_id: a1.id},
+          %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id},
+          %{type: :debit, value: Money.new(50, :EUR), account_id: a3.id},
           ])
       TransactionStore.create(attr)
 
@@ -81,8 +81,8 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
     test "pending_to_posted update with changing entries", %{accounts: [a1, a2, _, _]} = ctx do
       {:ok, trx} = create_transaction(ctx)
       TransactionStore.update(trx, %{status: :posted, entries: [
-        %{type: :debit, amount: Money.new(50, :EUR), account_id: a1.id},
-        %{type: :credit, amount: Money.new(50, :EUR), account_id: a2.id}
+        %{type: :debit, value: Money.new(50, :EUR), account_id: a1.id},
+        %{type: :credit, value: Money.new(50, :EUR), account_id: a2.id}
       ]})
 
       assert %{status: :posted} = Repo.reload(trx)
@@ -98,20 +98,20 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       } = Repo.get!(Account, a2.id)
     end
 
-    test "pending_to_posted update with changing entries that are too big for the accounts", %{instance: inst, accounts: [_, _, a1, a2]} = ctx do
+    test "pending_to_posted update with changing entries that are too big for the accounts", %{instance: inst, accounts: [_, _, a1, a2]} do
       attr = transaction_attr(instance_id: inst.id, status: :posted, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
       ])
-      {:ok, posted_trx} = TransactionStore.create(attr) # posted transaction to create balances
+      {:ok, _} = TransactionStore.create(attr) # posted transaction to create balances
       {:ok, trx } = TransactionStore.create(transaction_attr(
         instance_id: inst.id, status: :pending, entries: [
-          %{type: :credit, amount: Money.new(50, :EUR), account_id: a1.id},
-          %{type: :debit, amount: Money.new(50, :EUR), account_id: a2.id}
+          %{type: :credit, value: Money.new(50, :EUR), account_id: a1.id},
+          %{type: :debit, value: Money.new(50, :EUR), account_id: a2.id}
         ])) # pending transaction to update
       TransactionStore.update(trx, %{status: :posted, entries: [
-        %{type: :credit, amount: Money.new(150, :EUR), account_id: a1.id},
-        %{type: :debit, amount: Money.new(150, :EUR), account_id: a2.id}
+        %{type: :credit, value: Money.new(150, :EUR), account_id: a1.id},
+        %{type: :debit, value: Money.new(150, :EUR), account_id: a2.id}
       ]}) # update pending transaction with values that are too big for the accounts
 
       assert %{status: :pending} = Repo.reload(trx) # transaction should still be pending
@@ -152,8 +152,8 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
 
   defp create_transaction(%{instance: inst, accounts: [a1, a2, _, _ ]}) do
       attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
       ])
       TransactionStore.create(attr)
   end

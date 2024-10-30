@@ -20,13 +20,13 @@ end
 defimpl EntryHelper, for: Ecto.Changeset do
 
   @spec debit_sum(Ecto.Changeset.t(), integer()) :: integer()
-  def debit_sum(%{changes: %{type: t, amount: a }}, acc) do
-    if t == :debit, do: acc + a.amount, else: acc
+  def debit_sum(%{changes: %{type: t, value: v }}, acc) do
+    if t == :debit, do: acc + v.amount, else: acc
   end
 
   @spec credit_sum(Ecto.Changeset.t(), integer()) :: integer()
-  def credit_sum(%{changes: %{type: t, amount: a }}, acc) do
-    if t == :credit, do: acc + a.amount, else: acc
+  def credit_sum(%{changes: %{type: t, value: v }}, acc) do
+    if t == :credit, do: acc + v.amount, else: acc
   end
 
   @spec uuid(Ecto.Changeset.t()) :: <<_::128>>
@@ -34,24 +34,24 @@ defimpl EntryHelper, for: Ecto.Changeset do
 
 
   @spec currency(Ecto.Changeset.t()) :: atom()
-  def currency(%{changes: %{amount: a}}), do: a.currency
+  def currency(%{changes: %{value: v}}), do: v.currency
 end
 
 defimpl EntryHelper, for: Entry do
 
   @spec debit_sum(Entry.t(), integer()) :: integer()
-  def debit_sum(%{type: t, amount: a }, acc) do
-    if t == :debit, do: acc + a.amount, else: acc
+  def debit_sum(%{type: t, value: v }, acc) do
+    if t == :debit, do: acc + v.amount, else: acc
   end
 
   @spec credit_sum(Entry.t(), integer()) :: integer()
-  def credit_sum(%{type: t, amount: a }, acc) do
-    if t == :credit, do: acc + a.amount, else: acc
+  def credit_sum(%{type: t, value: v }, acc) do
+    if t == :credit, do: acc + v.amount, else: acc
   end
 
   @spec uuid(Entry.t()) :: <<_::128>>
   def uuid(%{account_id: id}), do: Ecto.UUID.dump!(id)
 
   @spec currency(Entry.t()) :: atom()
-  def currency(%{amount: a}), do: a.currency
+  def currency(%{value: v}), do: v.currency
 end

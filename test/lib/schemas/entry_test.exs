@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.EntryTest do
         valid?: false,
         errors: [
           type: {"can't be blank", [validation: :required]},
-          amount: {"can't be blank", [validation: :required]},
+          value: {"can't be blank", [validation: :required]},
           account_id: {"can't be blank", [validation: :required]}
         ]
       } = Entry.changeset(%Entry{}, %{}, :pending)
@@ -43,16 +43,16 @@ defmodule DoubleEntryLedger.EntryTest do
         valid?: true,
         changes: %{
           account: _,
-          amount: %Money{amount: 50, currency: :EUR},
+          value: %Money{amount: 50, currency: :EUR},
         }
-      } = Entry.update_changeset(e0, %{amount: Money.new(50, :EUR)}, :pending_to_posted)
+      } = Entry.update_changeset(e0, %{value: Money.new(50, :EUR)}, :pending_to_posted)
     end
 
-    test "returns error changeset for missing amount", %{transaction: %{entries: [e0, _]}} do
+    test "returns error changeset for missing value", %{transaction: %{entries: [e0, _]}} do
       assert %Ecto.Changeset{
         valid?: false,
-        errors: [amount: {"is invalid", [type: Money.Ecto.Composite.Type, validation: :cast]}]
-      } = Entry.update_changeset(e0, %{amount: %{}}, :pending_to_posted)
+        errors: [value: {"is invalid", [type: Money.Ecto.Composite.Type, validation: :cast]}]
+      } = Entry.update_changeset(e0, %{value: %{}}, :pending_to_posted)
     end
   end
 
@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.EntryTest do
       assert %Ecto.Changeset{
         valid?: false,
         errors: [account: {"currency (EUR) must be equal to entry currency (USD)", []}]
-      } = Entry.update_changeset(e0, %{amount: Money.new(100, :USD)}, :pending_to_posted)
+      } = Entry.update_changeset(e0, %{value: Money.new(100, :USD)}, :pending_to_posted)
     end
   end
 
@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.EntryTest do
   defp entry_attr(attrs) do
       attrs
       |> Enum.into(%{
-        amount: Money.new(100, :EUR),
+        value: Money.new(100, :EUR),
         type: :debit
       })
   end
@@ -86,8 +86,8 @@ defmodule DoubleEntryLedger.EntryTest do
   defp create_transaction(%{instance: instance, accounts: [a1, a2, _, _]}) do
     transaction = transaction_attr(status: :pending,
       instance_id: instance.id, entries: [
-        %{type: :debit, amount: Money.new(100, :EUR), account_id: a1.id},
-        %{type: :credit, amount: Money.new(100, :EUR), account_id: a2.id}
+        %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
       ])
     {:ok, trx} = TransactionStore.create(transaction)
     %{transaction: trx}
