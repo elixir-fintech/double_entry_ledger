@@ -67,10 +67,6 @@ defmodule DoubleEntryLedger.EntryTest do
     end
   end
 
-  defp create_instance(_ctx) do
-    %{instance: instance_fixture()}
-  end
-
   defp create_account(ctx) do
     %{account: account_fixture(instance_id: ctx.instance.id)}
   end

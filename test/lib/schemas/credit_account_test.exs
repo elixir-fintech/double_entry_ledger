@@ -167,8 +167,4 @@ defmodule DoubleEntryLedger.CreditAccountTest do
       } = Account.update_balances(account, %{entry: entry, trx: :pending_to_archived } )
     end
   end
-
-  defp create_instance(_ctx) do
-    %{instance: instance_fixture()}
-  end
 end

@@ -65,8 +65,4 @@ defmodule DoubleEntryLedger.InstanceTest do
       } = Instance.validate_account_balances(inst)
     end
   end
-
-  defp create_instance(_ctx) do
-    %{instance: instance_fixture()}
-  end
 end

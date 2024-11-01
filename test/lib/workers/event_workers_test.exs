@@ -64,10 +64,6 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     end
   end
 
-  defp create_instance(_ctx) do
-    %{instance: instance_fixture()}
-  end
-
   defp create_event(%{instance: inst, accounts: [a1, a2, _, _] }) do
     EventStore.insert_event(event_attrs(
       instance_id: inst.id,

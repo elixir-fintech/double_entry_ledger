@@ -47,8 +47,4 @@ defmodule DoubleEntryLedger.AccountStoreTest do
       assert {:error, "No accounts were found"} == AccountStore.get_all_accounts_by_instance_id(instance.id)
     end
   end
-
-  defp create_instance(_ctx) do
-    %{instance: instance_fixture()}
-  end
 end

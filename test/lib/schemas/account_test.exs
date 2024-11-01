@@ -263,8 +263,4 @@ defmodule DoubleEntryLedger.AccountTest do
       assert_raise(Ecto.StaleEntryError, fn -> changeset2 |> Repo.update() end)
     end
   end
-
-  defp create_instance(_ctx) do
-    %{instance: instance_fixture()}
-  end
 end

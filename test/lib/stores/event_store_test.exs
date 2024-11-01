@@ -69,11 +69,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
-
-  defp create_instance(_ctx) do
-    %{instance: instance_fixture()}
-  end
-
   defp create_transaction(%{instance: instance, accounts: [acc1, acc2, _, _] = accounts}) do
     transaction = transaction_attr(instance_id: instance.id, entries: [
       %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
