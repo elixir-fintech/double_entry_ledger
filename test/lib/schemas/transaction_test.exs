@@ -181,7 +181,7 @@ defmodule DoubleEntryLedger.TransactionTest do
     setup [:create_instance, :create_accounts]
 
     test "pending to posted", ctx do
-      {:ok, trx} = create_transaction(ctx, :pending)
+      %{transaction: trx} = create_pending_transaction(ctx)
       assert %Ecto.Changeset{
         valid?: true,
         errors: [],
@@ -193,7 +193,7 @@ defmodule DoubleEntryLedger.TransactionTest do
     end
 
     test "posted to pending or archived", ctx do
-      {:ok, trx} = create_transaction(ctx, :posted)
+      %{transaction: trx} = create_posted_transaction(ctx)
       assert %Ecto.Changeset{
         errors: [
           status: {"cannot update when in :posted state", []}
@@ -211,7 +211,7 @@ defmodule DoubleEntryLedger.TransactionTest do
     setup [:create_instance, :create_accounts]
 
     test "pending to archived", ctx do
-      {:ok, trx} = create_transaction(ctx, :pending)
+      %{transaction: trx} = create_pending_transaction(ctx)
       assert %Ecto.Changeset{
         valid?: true,
         errors: []
@@ -219,7 +219,7 @@ defmodule DoubleEntryLedger.TransactionTest do
     end
 
     test "archived to pending or posted", ctx do
-      {:ok, trx} = create_transaction(ctx, :pending)
+      %{transaction: trx} = create_pending_transaction(ctx)
       {:ok, trx} = TransactionStore.update(trx, %{status: :archived})
       assert %Ecto.Changeset{
         errors: [
@@ -265,7 +265,7 @@ defmodule DoubleEntryLedger.TransactionTest do
     end
 
     test "update posted_at for pending to posted", ctx do
-      {:ok, trx} = create_transaction(ctx, :pending)
+      %{transaction: trx} = create_pending_transaction(ctx)
       assert %Ecto.Changeset{
         valid?: true,
         errors: [],
@@ -283,13 +283,5 @@ defmodule DoubleEntryLedger.TransactionTest do
       cs = Transaction.changeset(%Transaction{}, attr)
       assert !Map.has_key?(cs.changes, :posted_at)
     end
-  end
-
-  defp create_transaction(%{instance: inst, accounts: [a1, a2, _, _ ]}, status) do
-    attr = transaction_attr(status: status, instance_id: inst.id, entries: [
-      %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
-      %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
-    ])
-    TransactionStore.create(attr)
   end
 end

@@ -4,6 +4,8 @@ defmodule DoubleEntryLedger.TransactionFixtures do
   transaction entities.
   """
 
+  alias DoubleEntryLedger.TransactionStore
+
   def transaction_attr(attrs) do
     attrs
     |> Enum.into(%{
@@ -13,4 +15,20 @@ defmodule DoubleEntryLedger.TransactionFixtures do
       status: :pending,
     })
   end
+
+  def create_transaction(%{instance: instance, accounts: [acc1, acc2, _, _]} = ctx, status \\ :pending) do
+    transaction = transaction_attr(
+      instance_id: instance.id,
+      status: status,
+      entries: [
+      %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
+      %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
+    ])
+    {:ok, transaction} = TransactionStore.create(transaction)
+    Map.put(ctx, :transaction, transaction)
+  end
+
+
+  def create_pending_transaction(ctx), do: create_transaction(ctx, :pending)
+  def create_posted_transaction(ctx), do: create_transaction(ctx, :posted)
 end

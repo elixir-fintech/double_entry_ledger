@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.TransactionFixtures
-  alias DoubleEntryLedger.{EventStore, Event, TransactionStore}
+  alias DoubleEntryLedger.{EventStore, Event}
 
   describe "insert_event/1" do
     setup [:create_instance]
@@ -67,14 +67,5 @@ defmodule DoubleEntryLedger.EventStoreTest do
       assert updated_event.processed_at == nil
       assert [%{message: "reason2"}, %{message: "reason1"}] = updated_event.errors
     end
-  end
-
-  defp create_transaction(%{instance: instance, accounts: [acc1, acc2, _, _] = accounts}) do
-    transaction = transaction_attr(instance_id: instance.id, entries: [
-      %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
-      %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
-    ])
-    {:ok, transaction} = TransactionStore.create(transaction)
-    %{instance: instance, transaction: transaction, accounts: accounts}
   end
 end

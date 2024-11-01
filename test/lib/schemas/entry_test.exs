@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EntryTest do
 
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Entry, Repo, TransactionStore}
+  alias DoubleEntryLedger.{Entry, Repo}
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
@@ -77,15 +77,5 @@ defmodule DoubleEntryLedger.EntryTest do
         value: Money.new(100, :EUR),
         type: :debit
       })
-  end
-
-  defp create_transaction(%{instance: instance, accounts: [a1, a2, _, _]}) do
-    transaction = transaction_attr(status: :pending,
-      instance_id: instance.id, entries: [
-        %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
-        %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
-      ])
-    {:ok, trx} = TransactionStore.create(transaction)
-    %{transaction: trx}
   end
 end

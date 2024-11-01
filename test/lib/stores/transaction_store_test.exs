@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
     setup [:create_instance, :create_accounts]
 
     test "simple pending_to_posted update", %{accounts: [a1, a2, _, _]} = ctx do
-      {:ok, trx} = create_transaction(ctx)
+      %{transaction: trx} = create_transaction(ctx)
       TransactionStore.update(trx, %{status: :posted})
 
       assert %{status: :posted} = Repo.reload(trx)
@@ -79,7 +79,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
     end
 
     test "pending_to_posted update with changing entries", %{accounts: [a1, a2, _, _]} = ctx do
-      {:ok, trx} = create_transaction(ctx)
+      %{transaction: trx} = create_transaction(ctx)
       TransactionStore.update(trx, %{status: :posted, entries: [
         %{type: :debit, value: Money.new(50, :EUR), account_id: a1.id},
         %{type: :credit, value: Money.new(50, :EUR), account_id: a2.id}
@@ -129,7 +129,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
 
 
     test "simple pending_to_archived update", %{accounts: [a1, a2, _, _]} = ctx do
-      {:ok, trx} = create_transaction(ctx)
+      %{transaction: trx} = create_transaction(ctx)
       TransactionStore.update(trx, %{status: :archived})
 
       assert %{status: :archived} = Repo.reload(trx)
@@ -144,13 +144,5 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
         available: 0, type: :credit,
       } = Repo.get!(Account, a2.id)
     end
-  end
-
-  defp create_transaction(%{instance: inst, accounts: [a1, a2, _, _ ]}) do
-      attr = transaction_attr(instance_id: inst.id, entries: [
-        %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
-        %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
-      ])
-      TransactionStore.create(attr)
   end
 end

@@ -10,7 +10,6 @@ defmodule DoubleEntryLedger.EventWorkerTest do
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.EventWorker
-  alias DoubleEntryLedger.EventStore
   alias DoubleEntryLedger.Event
 
   doctest EventWorker
@@ -19,7 +18,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     setup [:create_instance, :create_accounts]
 
     test "process create event successfully", ctx do
-      {:ok, event} = create_event(ctx)
+      %{event: event} = create_event(ctx)
 
       {:ok, transaction, processed_event } = EventWorker.process_event(event)
       assert processed_event.status == :processed
@@ -38,7 +37,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     end
 
     test "retry for 1 attempt left", ctx do
-      {:ok, event} = create_event(ctx)
+      %{event: event} = create_event(ctx)
 
       func = fn _event, _map ->
         raise Ecto.StaleEntryError,
@@ -50,7 +49,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     end
 
     test "retry for 2 accumulates errors", ctx do
-      {:ok, event} = create_event(ctx)
+      %{event: event} = create_event(ctx)
 
       func = fn _event, _map ->
         raise Ecto.StaleEntryError,
@@ -62,26 +61,5 @@ defmodule DoubleEntryLedger.EventWorkerTest do
         %{"message" => "OCC conflict detected, retrying after 20 ms... 0 attempts left"},
         %{"message" => "OCC conflict detected, retrying after 10 ms... 1 attempts left"}] = Repo.reload(event).errors
     end
-  end
-
-  defp create_event(%{instance: inst, accounts: [a1, a2, _, _] }) do
-    EventStore.insert_event(event_attrs(
-      instance_id: inst.id,
-      transaction_data: %{
-        status: :posted,
-        entries: [
-          %{
-            account_id: a1.id,
-            amount: 100,
-            currency: "EUR"
-          },
-          %{
-            account_id: a2.id,
-            amount: 100,
-            currency: "EUR"
-          }
-        ]
-      }
-    ))
   end
 end
