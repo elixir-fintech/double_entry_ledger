@@ -6,6 +6,8 @@ defmodule DoubleEntryLedger.EventHelper do
   alias DoubleEntryLedger.{Account, AccountStore}
   alias DoubleEntryLedger.Event.{EntryData, TransactionData}
 
+  import DoubleEntryLedger.Currency
+
   @spec transaction_data_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) :: {:ok, map() } | {:error, String.t()}
   def transaction_data_to_transaction_map(%TransactionData{entries: entries, status: status}, instance_id) do
     case get_accounts_with_entries(instance_id, entries) do
@@ -43,23 +45,19 @@ defmodule DoubleEntryLedger.EventHelper do
   end
 
   @spec entry_data_to_entry_map({Account.t(), EntryData.t()}) :: map()
-  defp entry_data_to_entry_map({%{type: :debit} = acc, %{value: amt} = ed}) when amt > 0 do
-    %{account_id: acc.id, value: to_money(amt, ed.currency), type: :debit}
+  defp entry_data_to_entry_map({%{type: :debit} = acc, %{amount: amt} = ed}) when amt > 0 do
+    %{account_id: acc.id, value: to_abs_money(amt, ed.currency), type: :debit}
   end
 
   defp entry_data_to_entry_map({%{type: :debit} = acc, ed}) do
-    %{account_id: acc.id, value: to_money(ed.amount, ed.currency), type: :credit}
+    %{account_id: acc.id, value: to_abs_money(ed.amount, ed.currency), type: :credit}
   end
 
-  defp entry_data_to_entry_map({%{type: :credit} = acc, %{value: amt} = ed}) when amt > 0 do
-    %{account_id: acc.id, value: to_money(amt, ed.currency), type: :credit}
+  defp entry_data_to_entry_map({%{type: :credit} = acc, %{amount: amt} = ed}) when amt > 0 do
+    %{account_id: acc.id, value: to_abs_money(amt, ed.currency), type: :credit}
   end
 
   defp entry_data_to_entry_map({%{type: :credit} = acc, ed}) do
-    %{account_id: acc.id, value: to_money(ed.amount, ed.currency), type: :debit}
-  end
-
-  defp to_money(amount, currency) do
-    Money.new(abs(amount), currency)
+    %{account_id: acc.id, value: to_abs_money(ed.amount, ed.currency), type: :debit}
   end
 end
