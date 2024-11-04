@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.EventWorkerTest do
+defmodule DoubleEntryLedger.CreateEventTest do
   @moduledoc """
-  This module tests the EventWorker.
+  This module tests the CreateEvent module.
   """
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
@@ -9,27 +9,21 @@ defmodule DoubleEntryLedger.EventWorkerTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventWorker
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.CreateEvent
 
-  doctest EventWorker
+  doctest CreateEvent
 
-  describe "process_event/1" do
+  describe "process_create_event/1" do
     setup [:create_instance, :create_accounts]
 
     test "process create event successfully", ctx do
       %{event: event} = create_event(ctx)
 
-      {:ok, transaction, processed_event } = EventWorker.process_event(event)
+      {:ok, transaction, processed_event } = CreateEvent.process_create_event(event)
       assert processed_event.status == :processed
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :posted
-    end
-
-    test "only process pending events" do
-      assert {:error, "Event is not in pending state"} = EventWorker.process_event(%Event{status: :processed})
-      assert {:error, "Event is not in pending state"} = EventWorker.process_event(%Event{status: :failed})
     end
   end
 end

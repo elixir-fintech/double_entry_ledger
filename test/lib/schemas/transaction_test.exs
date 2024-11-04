@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.TransactionTest do
       } = Transaction.changeset(%Transaction{}, attr)
     end
 
-    test "on account on a different ledgers", ctx do
+    test "one account on a different ledgers", ctx do
       instance2 = instance_fixture()
       a1 = account_fixture(instance_id: ctx.instance.id, type: :debit)
       a2 = account_fixture(instance_id: instance2.id, type: :credit)

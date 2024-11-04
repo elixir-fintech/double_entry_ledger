@@ -9,7 +9,11 @@ defmodule DoubleEntryLedger.EventHelper do
   import DoubleEntryLedger.Currency
 
   @spec transaction_data_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) :: {:ok, map() } | {:error, String.t()}
-  def transaction_data_to_transaction_map(%TransactionData{entries: entries, status: status}, instance_id) do
+  def transaction_data_to_transaction_map(%{entries: [], status: status}, instance_id) do
+    {:ok, %{instance_id: instance_id, status: status, entries: []}}
+  end
+
+  def transaction_data_to_transaction_map(%{entries: entries, status: status}, instance_id) do
     case get_accounts_with_entries(instance_id, entries) do
       {:ok, accounts_and_entries} -> {:ok, %{
           instance_id: instance_id,

@@ -46,5 +46,12 @@ defmodule DoubleEntryLedger.EventHelperTest do
         %{account_id: a2.id, value: %Money{amount: 100, currency: :EUR}, type: :debit}
       ] == transaction_map.entries
     end
+
+    test "it works for empty entries", %{instance: instance} do
+      transaction_data = %TransactionData{status: :posted}
+      {:ok, transaction_map} = EventHelper.transaction_data_to_transaction_map(transaction_data, instance.id)
+
+      assert [] == transaction_map.entries
+    end
   end
 end
