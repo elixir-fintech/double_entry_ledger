@@ -8,14 +8,14 @@ defmodule DoubleEntryLedger.CreateEvent do
     Event, Transaction, EventStore, TransactionStore, Repo
   }
 
-  import DoubleEntryLedger.OccRetry, only: [retry: 3]
+  import DoubleEntryLedger.OccRetry, only: [retry: 2]
   import DoubleEntryLedger.EventHelper, only: [transaction_data_to_transaction_map: 2]
 
   @spec process_create_event(Event.t()) :: {:ok, Transaction.t(), Event.t() } | {:error, String.t()}
   def process_create_event(%Event{transaction_data: transaction_data, instance_id: id} = event) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
-        retry(&create_transaction_and_update_event/2, event, transaction_map)
+        retry(&create_transaction_and_update_event/2, [event, transaction_map])
       {:error, error} ->
         EventStore.mark_as_failed(event, error)
         {:error, error}

@@ -13,11 +13,11 @@ defmodule DoubleEntryLedger.OccRetryTest do
 
   describe "retry/3" do
     test "it implements retry for Event" do
-      assert {:ok, 1} = OccRetry.retry(fn (_, _) -> {:ok, 1} end, %Event{}, %{})
+      assert {:ok, 1} = OccRetry.retry(fn (_, _) -> {:ok, 1} end, [%Event{}, %{}])
     end
 
     test "does not implement retry for anonymous struct" do
-      assert {:error, "Not implemented"} = OccRetry.retry(fn (_, _) -> {:ok, 1} end, %{}, %{})
+      assert {:error, "Not implemented"} = OccRetry.retry(fn (_, _) -> {:ok, 1} end, [%{}, %{}])
     end
   end
 
@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.OccRetryTest do
     setup [:create_instance, :create_accounts]
 
     test "retry for 0 attempts left" do
-      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry({}, {%{}, %{}}, 0)
+      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry({}, [%{}, %{}], 0)
     end
 
     test "retry for 1 attempt left", ctx do
@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.OccRetryTest do
           action: :update,
           changeset: %{data: ""}
         end
-      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry(func, {event, %{}}, 1)
+      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry(func, [event, %{}], 1)
       assert [%{"message" => "OCC conflict detected, retrying after 20 ms... 0 attempts left"}] = Repo.reload(event).errors
     end
 
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.OccRetryTest do
           action: :update,
           changeset: %{data: ""}
         end
-      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry(func, {event, %{}}, 2)
+      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry(func, [event, %{}], 2)
       assert [
         %{"message" => "OCC conflict detected, retrying after 20 ms... 0 attempts left"},
         %{"message" => "OCC conflict detected, retrying after 10 ms... 1 attempts left"}] = Repo.reload(event).errors

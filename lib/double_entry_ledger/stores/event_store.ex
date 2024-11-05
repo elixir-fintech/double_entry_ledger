@@ -12,6 +12,13 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.insert()
   end
 
+  @spec get_create_event_by_source(String.t(), String.t(), Ecto.UUID.t()) :: Event.t() | nil
+  def get_create_event_by_source(source, source_id, instance_id) do
+    Event
+    |> Repo.get_by(action: :create, source: source, source_id: source_id, instance_id: instance_id)
+    |> Repo.preload(processed_transaction: [entries: :account])
+  end
+
   @spec build_mark_as_processed(Event.t(), Ecto.UUID.t()) :: Ecto.Changeset.t()
   def build_mark_as_processed(event, transaction_id) do
     event

@@ -3,12 +3,13 @@ defmodule DoubleEntryLedger.EventStoreTest do
   This module tests the EventStore module.
   """
   use ExUnit.Case, async: true
+      alias DoubleEntryLedger.CreateEvent
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.TransactionFixtures
-  alias DoubleEntryLedger.{EventStore, Event}
+  alias DoubleEntryLedger.{EventStore, Event, CreateEvent}
 
   describe "insert_event/1" do
     setup [:create_instance]
@@ -66,6 +67,27 @@ defmodule DoubleEntryLedger.EventStoreTest do
       assert updated_event.status == :pending
       assert updated_event.processed_at == nil
       assert [%{message: "reason2"}, %{message: "reason1"}] = updated_event.errors
+    end
+  end
+
+  describe "get_create_event_by_source/3" do
+    setup [:create_instance, :create_accounts]
+    test "gets an event by source", %{instance: instance} do
+      {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
+      assert %Event{} = found_event = EventStore.get_create_event_by_source(event.source, event.source_id, instance.id)
+      assert found_event.id == event.id
+    end
+
+    test "returns processed_transaction", %{instance: instance} = ctx do
+      %{event: event} = create_event(ctx, :pending)
+      {:ok, transaction, _} = CreateEvent.process_create_event(event)
+      assert %Event{} = found_event = EventStore.get_create_event_by_source(event.source, event.source_id, instance.id)
+      assert found_event.processed_transaction.id == transaction.id
+      assert found_event.processed_transaction.entries == transaction.entries
+    end
+
+    test "returns nil for non-existent event", %{instance: instance} do
+      assert nil == EventStore.get_create_event_by_source("source", "source_id", instance.id)
     end
   end
 end

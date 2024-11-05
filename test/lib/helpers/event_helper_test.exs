@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.EventHelperTest do
       transaction_data = %TransactionData{status: :posted}
       {:ok, transaction_map} = EventHelper.transaction_data_to_transaction_map(transaction_data, instance.id)
 
-      assert [] == transaction_map.entries
+      assert !Map.has_key?(transaction_map, :entries)
     end
   end
 end
