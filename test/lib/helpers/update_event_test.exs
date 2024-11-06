@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
     test "process update event successfully for simple update to posted", %{instance: inst} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      {:ok, pending_transaction, %{source: s, source_id: s_id}} = CreateEvent.process_create_event(pending_event)
+      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} = CreateEvent.process_create_event(pending_event)
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [-100, -100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
     test "process update event successfully for simple update to :archived", %{instance: inst} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      {:ok, pending_transaction, %{source: s, source_id: s_id}} = CreateEvent.process_create_event(pending_event)
+      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} = CreateEvent.process_create_event(pending_event)
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [-100, -100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :archived)
@@ -45,7 +45,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
     test "process update event successfully for changing entries and to :posted", %{instance: inst, accounts: [a1, a2| _]} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      {:ok, pending_transaction, %{source: s, source_id: s_id}} = CreateEvent.process_create_event(pending_event)
+      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} = CreateEvent.process_create_event(pending_event)
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [-100, -100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted, [
@@ -61,7 +61,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
     test "process update event successfully for changing entries and to :pending", %{instance: inst, accounts: [a1, a2| _]} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      {:ok, pending_transaction, %{source: s, source_id: s_id}} = CreateEvent.process_create_event(pending_event)
+      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} = CreateEvent.process_create_event(pending_event)
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [-100, -100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :pending, [
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
     test "process update event successfully to :archived", %{instance: inst, accounts: [a1, a2| _]} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      {:ok, pending_transaction, %{source: s, source_id: s_id}} = CreateEvent.process_create_event(pending_event)
+      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} = CreateEvent.process_create_event(pending_event)
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [-100, -100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :archived, [
@@ -98,14 +98,14 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     end
 
     test "fails when create event is still pending", %{instance: inst} = ctx do
-      %{event: %{id: e_id, source: s, source_id: s_id}} = create_event(ctx, :pending)
+      %{event: %{id: e_id, source: s, source_idempk: s_id}} = create_event(ctx, :pending)
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
       assert {:error, "Create event (id: #{e_id}) has not yet been processed"} == UpdateEvent.process_update_event(event)
     end
 
     test "fails when update event failed", %{instance: inst} = ctx do
-      %{event: %{source: s, source_id: s_id} = pending_event} = create_event(ctx, :pending)
+      %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
       EventStore.mark_as_failed(pending_event, "some reason")
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
@@ -114,11 +114,11 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     end
   end
 
-  defp create_update_event(source, source_id, instance_id, trx_status, entries \\ []) do
+  defp create_update_event(source, source_idempk, instance_id, trx_status, entries \\ []) do
     event_attrs(%{
       action: :update,
       source: source,
-      source_id: source_id,
+      source_idempk: source_idempk,
       instance_id: instance_id,
       transaction_data: %{
         status: trx_status,

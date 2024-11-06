@@ -25,8 +25,8 @@ defmodule DoubleEntryLedger.UpdateEvent do
 
   @spec fetch_create_event_transaction(Event.t()) ::
     {:ok, Transaction.t(), Event.t()} | {(:error | :pending_error), String.t(), (Event.t() | nil)}
-  defp fetch_create_event_transaction(%{id: e_id, source: source, source_id: source_id, instance_id: id}) do
-    case EventStore.get_create_event_by_source(source, source_id, id) do
+  defp fetch_create_event_transaction(%{id: e_id, source: source, source_idempk: source_idempk, instance_id: id}) do
+    case EventStore.get_create_event_by_source(source, source_idempk, id) do
       %{processed_transaction: %{id: _} = transaction} = event ->
         {:ok, transaction, event}
       %{id: id, status: :pending} = event ->

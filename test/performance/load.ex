@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.LoadTesting do
       action: :create,
       status: :pending,
       source: "source",
-      source_id: Ecto.UUID.generate(),
+      source_idempk: Ecto.UUID.generate(),
       transaction_data: params, instance_id: instance.id})
     EventWorker.process_event(event)
   end

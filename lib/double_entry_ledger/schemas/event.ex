@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.Event do
     action: action(),
     source: String.t(),
     source_data: map(),
-    source_id: String.t(),
+    source_idempk: String.t(),
     processed_at: DateTime.t() | nil,
     transaction_data: TransactionData.t() | nil,
     instance: Instance.t() | Ecto.Association.NotLoaded.t(),
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.Event do
     field :action, Ecto.Enum, values: @actions
     field :source, :string
     field :source_data, :map, default: %{}
-    field :source_id, :string
+    field :source_idempk, :string
     field :processed_at, :utc_datetime_usec
     field :errors, {:array, :map}, default: []
 
@@ -64,8 +64,8 @@ defmodule DoubleEntryLedger.Event do
 
   defp base_changeset(event, attrs) do
     event
-    |> cast(attrs, [:action, :source, :source_data, :source_id, :instance_id])
-    |> validate_required([:action, :source, :source_id, :instance_id])
+    |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id])
+    |> validate_required([:action, :source, :source_idempk, :instance_id])
     |> validate_inclusion(:action, @actions)
   end
 end

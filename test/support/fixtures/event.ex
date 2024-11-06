@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     |> Enum.into(%{
       action: :create,
       source: "source",
-      source_id: "source_id",
+      source_idempk: "source_idempk",
       transaction_data: pending_payload()
     })
   end

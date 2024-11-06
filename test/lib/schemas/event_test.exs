@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.EventTest do
         transaction_data: {"can't be blank", [validation: :required]},
         action: {"can't be blank", [validation: :required]},
         source: {"can't be blank", [validation: :required]},
-        source_id: {"can't be blank", [validation: :required]},
+        source_idempk: {"can't be blank", [validation: :required]},
         instance_id: {"can't be blank", [validation: :required]}
       ]} = Event.changeset(%Event{}, %{})
     end
@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.EventTest do
         action: :create,
         source: "source",
         instance_id: Ecto.UUID.generate(),
-        source_id: "source_id",
+        source_idempk: "source_idempk",
         transaction_data: pending_payload()
       }
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.EventTest do
         action: :update,
         source: "source",
         instance_id: Ecto.UUID.generate(),
-        source_id: "source_id",
+        source_idempk: "source_idempk",
         transaction_data: %{
           status: :posted,
         }
