@@ -149,4 +149,19 @@ defmodule DoubleEntryLedger.Balance do
     |> put_change(:amount, amt - amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount)
   end
+
+  @spec reverse_and_update_pending(Balance.t(), integer(), integer(), atom(), atom()) :: Ecto.Changeset.t()
+  def reverse_and_update_pending(%{amount: amt } = balance, amount_to_reverse, new_amount, e_type, a_type) when e_type == a_type do
+    balance
+    |> change()
+    |> put_change(:amount, amt + amount_to_reverse - new_amount)
+    |> put_change(e_type, Map.get(balance, e_type) - amount_to_reverse + new_amount)
+  end
+
+  def reverse_and_update_pending(%{amount: amt } = balance, amount_to_reverse, new_amount, e_type, a_type) when e_type != a_type do
+    balance
+    |> change()
+    |> put_change(:amount, amt - amount_to_reverse + new_amount)
+    |> put_change(e_type, Map.get(balance, e_type) - amount_to_reverse + new_amount)
+  end
 end

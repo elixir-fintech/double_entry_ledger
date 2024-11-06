@@ -144,6 +144,13 @@ defmodule DoubleEntryLedger.Account do
     |> put_change(:posted, Balance.update_balance(po, new_value.amount, entry_type, t))
   end
 
+  defp update(%{data: %{pending: pe, type: t }} = changeset, entry, entry_type, trx) when trx == :pending_to_pending do
+    new_value = get_field(entry, :value)
+    current_value = entry.data.value
+    changeset
+    |> put_change(:pending, Balance.reverse_and_update_pending(pe, current_value.amount, new_value.amount, entry_type, t))
+  end
+
   defp update(%{data: %{pending: pe, type: t}} = changeset, entry, entry_type, trx) when trx == :pending_to_archived do
     entry_value = get_field(entry, :value)
     changeset

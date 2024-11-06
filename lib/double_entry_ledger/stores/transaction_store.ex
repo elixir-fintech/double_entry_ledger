@@ -60,8 +60,8 @@ defmodule DoubleEntryLedger.TransactionStore do
     base_build_update(trx, attr, :pending_to_archived)
   end
 
-  def build_update(%{status: :pending } = trx, attr) do
-    base_build_update(trx, attr, :pending)
+  def build_update(%{status: :pending } = trx, %{} = attr) do
+    base_build_update(trx, attr, :pending_to_pending)
   end
 
   @doc """

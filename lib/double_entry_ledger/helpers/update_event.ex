@@ -24,23 +24,23 @@ defmodule DoubleEntryLedger.UpdateEvent do
   end
 
   @spec fetch_create_event_transaction(Event.t()) ::
-    {:ok, Transaction.t(), Event.t()} | {(:error | :pending_error), String.t(), Event.t()}
-  def fetch_create_event_transaction(%{source: source, source_id: source_id, instance_id: id}) do
+    {:ok, Transaction.t(), Event.t()} | {(:error | :pending_error), String.t(), (Event.t() | nil)}
+  defp fetch_create_event_transaction(%{id: e_id, source: source, source_id: source_id, instance_id: id}) do
     case EventStore.get_create_event_by_source(source, source_id, id) do
-      %Event{processed_transaction: %{id: _} = transaction} = event ->
+      %{processed_transaction: %{id: _} = transaction} = event ->
         {:ok, transaction, event}
-      %Event{id: id, status: :pending} = event ->
-        {:pending_error, "Create event has not yet been processed (event_id: #{id})", event}
-      %Event{id: id, status: :failed} = event ->
-        {:error, "Create event has failed (event_id: #{id})", event}
+      %{id: id, status: :pending} = event ->
+        {:pending_error, "Create event (id: #{id}) has not yet been processed", event}
+      %{id: id, status: :failed} = event ->
+        {:error, "Create event (id: #{id}) has failed for Update Event (id: #{e_id})", event}
       nil ->
-        {:error, "Event not found", nil}
+        {:error, "Create Event not found for Update Event (id: #{e_id})", nil}
     end
   end
 
   @spec update_transaction_and_event(Event.t(), Transaction.t()) ::
     {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
-  def update_transaction_and_event(%{instance_id: id, transaction_data: td} = event, transaction) do
+  defp update_transaction_and_event(%{instance_id: id, transaction_data: td} = event, transaction) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
         retry(&update_transaction_and_event/3, [event, transaction, transaction_map])
@@ -52,7 +52,7 @@ defmodule DoubleEntryLedger.UpdateEvent do
 
   @spec update_transaction_and_event(Event.t(), Transaction.t(), map()) ::
     {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
-  def update_transaction_and_event(event, transaction, attrs) do
+  defp update_transaction_and_event(event, transaction, attrs) do
     case build_update_transaction_and_event(transaction, event, attrs) |> Repo.transaction() do
       {:ok, %{
         update_transaction: %{transaction: transaction},
@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.UpdateEvent do
   end
 
   @spec build_update_transaction_and_event(Transaction.t(), Event.t(), map()) :: Ecto.Multi.t()
-  def build_update_transaction_and_event(transaction, event, attr) do
+  defp build_update_transaction_and_event(transaction, event, attr) do
     Multi.new()
     |> Multi.run(:update_transaction, fn repo, _ ->
         TransactionStore.build_update(transaction, attr)

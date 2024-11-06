@@ -135,6 +135,36 @@ defmodule DoubleEntryLedger.DebitAccountTest do
     end
   end
 
+  describe "Debit Account update balances [:pending_to_pending]: " do
+    setup [:create_instance]
+
+    test "debit entry", %{instance: inst} do
+      account = account_fixture(type: :debit, instance_id: inst.id,
+        posted: %{amount: 100, debit: 100, credit: 0}, pending: %{amount: -50, debit: 50, credit: 0 }, available: 100 )
+      entry = Entry.changeset(%Entry{account_id: account.id, type: :debit, value: Money.new(25, :EUR)}, %{value: Money.new(10, :EUR)})
+      assert %Ecto.Changeset{
+        valid?: true,
+        changes: %{
+          available: 100,
+          pending: %Ecto.Changeset{action: :insert, valid?: true, changes: %{amount: -35, debit: 35} },
+        },
+      } = Account.update_balances(account, %{entry: entry, trx: :pending_to_pending } )
+    end
+
+    test "credit entry", %{instance: inst} do
+      account = account_fixture(type: :debit, instance_id: inst.id,
+        posted: %{amount: 100, debit: 100, credit: 0}, pending: %{amount: 50, debit: 0, credit: 50 }, available: 50 )
+      entry = Entry.changeset(%Entry{account_id: account.id, type: :credit, value: Money.new(25, :EUR)}, %{value: Money.new(10, :EUR)})
+      assert %Ecto.Changeset{
+        valid?: true,
+        changes: %{
+          available: 65,
+          pending: %Ecto.Changeset{action: :insert, valid?: true, changes: %{amount: 35, credit: 35} },
+        },
+      } = Account.update_balances(account, %{entry: entry, trx: :pending_to_pending } )
+    end
+  end
+
   describe "Debit Account update balances [:pending_to_archived]: " do
     setup [:create_instance]
 

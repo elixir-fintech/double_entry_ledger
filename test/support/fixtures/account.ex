@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.AccountFixtures do
   account entities.
   """
 
-  alias DoubleEntryLedger.{Account, Balance, Repo}
+  alias DoubleEntryLedger.{Account, AccountStore, Balance, Repo}
 
   @doc """
   Generate a account.
@@ -38,5 +38,26 @@ defmodule DoubleEntryLedger.AccountFixtures do
       account_fixture(instance_id: instance.id, type: :debit, allowed_negative: false),
       account_fixture(instance_id: instance.id, type: :credit, allowed_negative: false)
     ]}
+  end
+
+  def return_available_balances(ctx, items \\ 2) do
+    accounts(ctx, items)
+    |> Enum.map(& &1.available)
+  end
+
+  def return_pending_balances(ctx, items \\ 2) do
+    accounts(ctx, items)
+    |> Enum.map(& &1.pending.amount)
+  end
+
+  def return_posted_balances(ctx, items \\ 2) do
+    accounts(ctx, items)
+    |> Enum.map(& &1.posted.amount)
+  end
+
+  defp accounts(%{instance: inst, accounts: ctx_accounts}, items) do
+    account_ids = ctx_accounts |> Enum.take(items) |> Enum.map(& &1.id)
+    {:ok, accounts} = AccountStore.get_accounts_by_instance_id(inst.id, account_ids)
+    accounts
   end
 end
