@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.OccRetry do
   @doc """
   Retries a function call a number of times in case of an OCC conflict.
   """
-  @spec retry(fun(), [retry_schema(), ...]) :: {:error, any()} | {:ok, any()}
+  @spec retry(fun(), [retry_schema(), ...]) :: {:error, String.t()} | {:ok, any()}
   def retry(fun, [schema| _] = payload) when is_struct(schema, Event) do
     event_retry(fun, payload, @max_retries)
   end
@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.OccRetry do
   @doc """
   Retries a function call a number of times in case of an OCC conflict for an event.
   """
-  @spec event_retry(fun(), [retry_schema(), ...], integer()) :: {:error, any()} | {:ok, any()}
+  @spec event_retry(fun(), [retry_schema(), ...], integer()) :: {:error, String.t()} | {:ok, any()}
   def event_retry(fun, [event | args] = payload, attempts) when attempts > 0 do
     try do
       apply(fun, payload)
@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.OccRetry do
         delay = (@max_retries - attempts + 1) * @retry_interval
         {:ok, updated_event} = EventStore.add_error(event, "OCC conflict detected, retrying after #{delay} ms... #{attempts - 1} attempts left")
         :timer.sleep(delay)
-        event_retry(fun, [updated_event| args], attempts - 1)
+        event_retry(fun, [updated_event | args], attempts - 1)
     end
   end
 
