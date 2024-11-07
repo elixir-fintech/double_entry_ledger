@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.CreateEvent do
   @moduledoc """
-  Helper functions for creating events.
+  Provides helper functions for creating events in the double-entry ledger system.
   """
 
   alias Ecto.Multi
@@ -11,7 +11,12 @@ defmodule DoubleEntryLedger.CreateEvent do
   import DoubleEntryLedger.OccRetry, only: [retry: 2]
   import DoubleEntryLedger.EventHelper, only: [transaction_data_to_transaction_map: 2]
 
-  @spec process_create_event(Event.t()) :: {:ok, Transaction.t(), Event.t() } | {:error, String.t()}
+  @doc """
+  Processes the creation of an event by transforming transaction data and creating a transaction.
+
+  Returns `{:ok, transaction, event}` on success, or `{:error, reason}` on failure.
+  """
+  @spec process_create_event(Event.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_create_event(%Event{transaction_data: transaction_data, instance_id: id} = event) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->

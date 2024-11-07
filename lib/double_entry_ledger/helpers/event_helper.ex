@@ -1,6 +1,9 @@
 defmodule DoubleEntryLedger.EventHelper do
   @moduledoc """
-  Helper functions for events.
+  Provides helper functions for processing events within the double-entry ledger system.
+
+  This module includes functions to transform transaction and entry data into the formats
+  required by the ledger, handling account retrieval, and mapping entries.
   """
 
   alias DoubleEntryLedger.{Account, AccountStore}
@@ -8,6 +11,19 @@ defmodule DoubleEntryLedger.EventHelper do
 
   import DoubleEntryLedger.Currency
 
+  @doc """
+  Transforms transaction data into a transaction map suitable for ledger operations.
+
+  ## Parameters
+
+    - `transaction_data` - A `%TransactionData{}` struct containing the transaction information.
+    - `instance_id` - The UUID of the instance associated with the transaction.
+
+  ## Returns
+
+    - `{:ok, transaction_map}` on success.
+    - `{:error, reason}` if an error occurs during transformation.
+  """
   @spec transaction_data_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) :: {:ok, map() } | {:error, String.t()}
   def transaction_data_to_transaction_map(%{entries: [], status: status}, instance_id) do
     {:ok, %{instance_id: instance_id, status: status}}

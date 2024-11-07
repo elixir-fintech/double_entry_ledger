@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.UpdateEvent do
   @moduledoc """
-  Helper functions for updating events.
+  Provides helper functions for updating events in the double-entry ledger system.
   """
   alias Ecto.Multi
   alias DoubleEntryLedger.{
@@ -10,6 +10,11 @@ defmodule DoubleEntryLedger.UpdateEvent do
   import DoubleEntryLedger.OccRetry, only: [retry: 2]
   import DoubleEntryLedger.EventHelper, only: [transaction_data_to_transaction_map: 2]
 
+  @doc """
+  Processes the update of an event by fetching the corresponding transaction and applying updates.
+
+  Returns `{:ok, transaction, event}` on success, or `{:error, reason}` on failure.
+  """
   @spec process_update_event(Event.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_update_event(event) do
     case fetch_create_event_transaction(event) do
