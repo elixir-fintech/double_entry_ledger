@@ -67,5 +67,7 @@ defmodule DoubleEntryLedger.Event do
     |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id])
     |> validate_required([:action, :source, :source_idempk, :instance_id])
     |> validate_inclusion(:action, @actions)
+    |> unique_constraint(:source_idempk, name: "unique_instance_source_source_idempk",
+      message: "already exists for this instance")
   end
 end

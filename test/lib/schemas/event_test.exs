@@ -3,16 +3,19 @@ defmodule DoubleEntryLedger.EventTest do
   Tests for the event
   """
   use ExUnit.Case
+  use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.Event.TransactionDataFixtures
+  import DoubleEntryLedger.InstanceFixtures
 
   alias Ecto.Changeset
-  use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.{Event, EventStore}
 
   doctest Event
 
-  describe "Event" do
+  describe "changeset" do
+    setup [:create_instance]
+
     test "changeset not valid for empty payload" do
       assert %Changeset{errors: [
         transaction_data: {"can't be blank", [validation: :required]},
@@ -32,6 +35,22 @@ defmodule DoubleEntryLedger.EventTest do
         transaction_data: pending_payload()
       }
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
+    end
+
+    test "can't save the same event twice", %{instance: inst} do
+      attrs = %{
+        instance_id: inst.id,
+        action: :create,
+        source: "source",
+        source_idempk: "source_idempk",
+        transaction_data: pending_payload()
+      }
+      assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
+      assert {:ok, _event} = EventStore.insert_event(attrs)
+      assert {:error, %{errors: [
+        source_idempk: {_, [{:constraint, :unique}, _]}
+      ]
+      }} = EventStore.insert_event(attrs)
     end
 
     test "changeset valid for simple update action, without any entry information" do

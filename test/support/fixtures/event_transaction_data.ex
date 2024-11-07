@@ -24,4 +24,22 @@ defmodule DoubleEntryLedger.Event.TransactionDataFixtures do
       entries: create_2_entries()
     }
   end
+
+  def pending_payload_with_valid_accounts(%{accounts: [a1, a2, _, _]}) do
+    %{
+      status: :pending,
+      entries: [
+        %{
+          account_id: a1.id,
+          amount: 100,
+          currency: :EUR
+        },
+        %{
+          account_id: a2.id,
+          amount: 100,
+          currency: :EUR
+        }
+      ]
+    }
+  end
 end

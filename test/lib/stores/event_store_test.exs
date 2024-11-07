@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
   This module tests the EventStore module.
   """
   use ExUnit.Case, async: true
-      alias DoubleEntryLedger.CreateEvent
+  alias DoubleEntryLedger.CreateEvent
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures

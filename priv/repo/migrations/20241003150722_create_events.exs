@@ -33,6 +33,9 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create index(:events, [:processed_transaction_id])
     create index(:events, [:instance_id, :status])
     create index(:events, [:instance_id, :action])
-    create index(:events, [:instance_id, :source, :source_idempk])
+    create unique_index(:events, [:instance_id, :source, :source_idempk],
+      name: "unique_instance_source_source_idempk",
+      where: "action = 'create'"
+    )
   end
 end
