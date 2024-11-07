@@ -120,6 +120,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       source: source,
       source_idempk: source_idempk,
       instance_id: instance_id,
+      update_idempk: Ecto.UUID.generate(),
       transaction_data: %{
         status: trx_status,
         entries: entries

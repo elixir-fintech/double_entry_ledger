@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.InstanceFixtures do
     instance
   end
 
-  def create_instance(_ctx) do
-    {:ok, instance: instance_fixture()}
+  def create_instance(_ctx \\ %{}) do
+    %{instance: instance_fixture()}
   end
 end

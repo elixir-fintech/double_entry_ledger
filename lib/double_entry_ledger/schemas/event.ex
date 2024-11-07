@@ -39,6 +39,7 @@ defmodule DoubleEntryLedger.Event do
     field :source, :string
     field :source_data, :map, default: %{}
     field :source_idempk, :string
+    field :update_idempk, :string
     field :processed_at, :utc_datetime_usec
     field :errors, {:array, :map}, default: []
 
@@ -53,7 +54,15 @@ defmodule DoubleEntryLedger.Event do
   def changeset(event, %{action: :update, transaction_data: %{status: state}} = attrs) when state in [:posted, :archived] do
     event
     |> base_changeset(attrs)
+    |> update_changeset()
     |> cast_embed(:transaction_data, with: &TransactionData.update_event_changeset/2, required: true)
+  end
+
+  def changeset(event, %{action: :update, transaction_data: %{status: :pending}} = attrs) do
+    event
+    |> base_changeset(attrs)
+    |> update_changeset()
+    |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
   end
 
   def changeset(event, attrs) do
@@ -64,10 +73,17 @@ defmodule DoubleEntryLedger.Event do
 
   defp base_changeset(event, attrs) do
     event
-    |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id])
+    |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id, :update_idempk])
     |> validate_required([:action, :source, :source_idempk, :instance_id])
     |> validate_inclusion(:action, @actions)
     |> unique_constraint(:source_idempk, name: "unique_instance_source_source_idempk",
-      message: "already exists for this instance")
+         message: "already exists for this instance")
+  end
+
+  defp update_changeset(changeset) do
+    changeset
+    |> validate_required([:update_idempk])
+    |> unique_constraint(:update_idempk, name: "unique_instance_source_source_idempk_update_idempk",
+         message: "already exists for this source_idempk")
   end
 end

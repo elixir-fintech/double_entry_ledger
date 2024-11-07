@@ -12,6 +12,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
       add :source, :string, null: false
       add :source_idempk, :string, null: false
       add :source_data, :map, null: false, default: %{}
+      add :update_idempk, :string
       add :processed_at, :utc_datetime_usec
 
       add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
@@ -36,6 +37,10 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create unique_index(:events, [:instance_id, :source, :source_idempk],
       name: "unique_instance_source_source_idempk",
       where: "action = 'create'"
+    )
+    create unique_index(:events, [:instance_id, :source, :source_idempk, :update_idempk],
+      name: "unique_instance_source_source_idempk_update_idempk",
+      where: "action = 'update'"
     )
   end
 end

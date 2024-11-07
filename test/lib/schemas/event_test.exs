@@ -13,10 +13,9 @@ defmodule DoubleEntryLedger.EventTest do
 
   doctest Event
 
-  describe "changeset" do
-    setup [:create_instance]
+  describe "changeset/2 for action: :create" do
 
-    test "changeset not valid for empty payload" do
+    test "not valid for empty payload" do
       assert %Changeset{errors: [
         transaction_data: {"can't be blank", [validation: :required]},
         action: {"can't be blank", [validation: :required]},
@@ -26,7 +25,7 @@ defmodule DoubleEntryLedger.EventTest do
       ]} = Event.changeset(%Event{}, %{})
     end
 
-    test "changeset valid with required attributes for action create" do
+    test "valid with required attributes for action create" do
       attrs = %{
         action: :create,
         source: "source",
@@ -37,7 +36,8 @@ defmodule DoubleEntryLedger.EventTest do
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
     end
 
-    test "can't save the same event twice", %{instance: inst} do
+    test "idempotent: can't save the same event twice" do
+      %{instance: inst} = create_instance()
       attrs = %{
         instance_id: inst.id,
         action: :create,
@@ -47,25 +47,51 @@ defmodule DoubleEntryLedger.EventTest do
       }
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
       assert {:ok, _event} = EventStore.insert_event(attrs)
-      assert {:error, %{errors: [
-        source_idempk: {_, [{:constraint, :unique}, _]}
-      ]
-      }} = EventStore.insert_event(attrs)
+      assert {:error, %{errors: [source_idempk: {_, [{:constraint, :unique}, _]}]}} =
+        EventStore.insert_event(attrs)
     end
+  end
 
+  describe "changeset/2 for action: :update" do
     test "changeset valid for simple update action, without any entry information" do
       attrs = %{
         action: :update,
         source: "source",
         instance_id: Ecto.UUID.generate(),
         source_idempk: "source_idempk",
+        update_idempk: "update_idempk",
         transaction_data: %{
           status: :posted,
         }
       }
       assert %Changeset{
         valid?: true,
-        changes: %{transaction_data: %{changes: %{status: :posted}}}} = Event.changeset(%Event{}, attrs)
+        changes: %{transaction_data: %{changes: %{status: :posted}}}} =
+          Event.changeset(%Event{}, attrs)
+    end
+
+    test "idempotent: can't save the same update event twice" do
+      %{instance: inst} = create_instance()
+      attrs = %{
+        instance_id: inst.id,
+        action: :update,
+        source: "source",
+        source_idempk: "source_idempk",
+        update_idempk: "update_idempk",
+        transaction_data: pending_payload()
+      }
+      assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
+      assert {:ok, _event} = EventStore.insert_event(attrs)
+      assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
+        EventStore.insert_event(attrs)
+
+      # check it's true for posted and archived status as well
+      posted_payload = put_in(attrs, [:transaction_data, :status], :posted)
+      archived_payload = put_in(attrs, [:transaction_data, :status], :archived)
+      assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
+        EventStore.insert_event(posted_payload)
+      assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
+        EventStore.insert_event(archived_payload)
     end
   end
 end

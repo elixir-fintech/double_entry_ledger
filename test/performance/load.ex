@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   alias DoubleEntryLedger.{Account, Balance, Instance, EventStore, EventWorker, Repo}
 
   @destination_accounts 10
-  @seconds_to_run 1
+  @seconds_to_run 60
 
   # Function to run a single transaction process
 
