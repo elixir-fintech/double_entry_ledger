@@ -1,6 +1,9 @@
 defmodule DoubleEntryLedger.EventWorker do
   @moduledoc """
-  This module processes events and updates the balances of the accounts
+  Processes events to create and update Transactions
+  that update the balances of accounts.
+
+  Handles events with actions `:create` and `:update`, and updates the ledger accordingly.
   """
 
   alias DoubleEntryLedger.{
@@ -10,6 +13,18 @@ defmodule DoubleEntryLedger.EventWorker do
   import CreateEvent, only: [process_create_event: 1]
   import UpdateEvent, only: [process_update_event: 1]
 
+  @doc """
+  Processes an event based on its action and status.
+
+  ## Parameters
+
+    - `event`: The `%Event{}` struct to be processed.
+
+  ## Returns
+
+    - `{:ok, transaction, event}` on success.
+    - `{:error, reason}` on failure.
+  """
   @spec process_event(Event.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_event(%Event{status: :pending, action: action } = event) do
     case action do
