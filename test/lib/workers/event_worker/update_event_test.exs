@@ -114,20 +114,6 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     end
   end
 
-  defp create_update_event(source, source_idempk, instance_id, trx_status, entries \\ []) do
-    event_attrs(%{
-      action: :update,
-      source: source,
-      source_idempk: source_idempk,
-      instance_id: instance_id,
-      update_idempk: Ecto.UUID.generate(),
-      transaction_data: %{
-        status: trx_status,
-        entries: entries
-      }
-    }) |> EventStore.insert_event()
-  end
-
   defp shared_event_asserts(transaction, processed_event, pending_transaction) do
     assert processed_event.status == :processed
     assert processed_event.processed_transaction_id == pending_transaction.id

@@ -4,10 +4,11 @@ defmodule DoubleEntryLedger.EventWorker do
   """
 
   alias DoubleEntryLedger.{
-    CreateEvent, Event, Transaction
+    CreateEvent, Event, Transaction, UpdateEvent
   }
 
   import CreateEvent, only: [process_create_event: 1]
+  import UpdateEvent, only: [process_update_event: 1]
 
   @spec process_event(Event.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_event(%Event{status: :pending, action: action } = event) do
@@ -20,10 +21,5 @@ defmodule DoubleEntryLedger.EventWorker do
 
   def process_event(_event) do
     {:error, "Event is not in pending state"}
-  end
-
-
-  def process_update_event(_event) do
-    {:error, "Update action is not yet supported"}
   end
 end
