@@ -51,18 +51,18 @@ defmodule DoubleEntryLedger.Event do
   end
 
   @doc false
-  def changeset(event, %{action: :update, transaction_data: %{status: state}} = attrs) when state in [:posted, :archived] do
-    event
-    |> base_changeset(attrs)
-    |> update_changeset()
-    |> cast_embed(:transaction_data, with: &TransactionData.update_event_changeset/2, required: true)
-  end
-
   def changeset(event, %{action: :update, transaction_data: %{status: :pending}} = attrs) do
     event
     |> base_changeset(attrs)
     |> update_changeset()
     |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
+  end
+
+  def changeset(event, %{action: :update} = attrs) do
+    event
+    |> base_changeset(attrs)
+    |> update_changeset()
+    |> cast_embed(:transaction_data, with: &TransactionData.update_event_changeset/2, required: true)
   end
 
   def changeset(event, attrs) do
