@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventHelper do
+defmodule DoubleEntryLedger.EventTransformer do
   @moduledoc """
   Provides helper functions for processing events within the double-entry ledger system.
 

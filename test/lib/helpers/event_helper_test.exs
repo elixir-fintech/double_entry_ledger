@@ -1,12 +1,12 @@
-defmodule DoubleEntryLedger.EventHelperTest do
+defmodule DoubleEntryLedger.EventTransformerTest do
   @moduledoc """
-  This module tests the EventHelper.
+  This module tests the EventTransformer.
   """
 
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.EventHelper
+  alias DoubleEntryLedger.EventTransformer
   alias DoubleEntryLedger.Event.{EntryData, TransactionData}
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.EventHelperTest do
       ]
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
-      {:ok, transaction_map} = EventHelper.transaction_data_to_transaction_map(transaction_data, instance.id)
+      {:ok, transaction_map} = EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
 
       assert [
         %{account_id: a1.id, value: %Money{amount: 100, currency: :EUR}, type: :debit},
@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.EventHelperTest do
       ]
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
-      {:ok, transaction_map} = EventHelper.transaction_data_to_transaction_map(transaction_data, instance.id)
+      {:ok, transaction_map} = EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
 
       assert [
         %{account_id: a1.id, value: %Money{amount: 100, currency: :EUR}, type: :credit},
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventHelperTest do
 
     test "it works for empty entries", %{instance: instance} do
       transaction_data = %TransactionData{status: :posted}
-      {:ok, transaction_map} = EventHelper.transaction_data_to_transaction_map(transaction_data, instance.id)
+      {:ok, transaction_map} = EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
 
       assert !Map.has_key?(transaction_map, :entries)
     end

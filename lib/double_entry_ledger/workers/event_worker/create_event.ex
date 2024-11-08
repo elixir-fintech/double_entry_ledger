@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.CreateEvent do
   }
 
   import DoubleEntryLedger.OccRetry, only: [retry: 2]
-  import DoubleEntryLedger.EventHelper, only: [transaction_data_to_transaction_map: 2]
+  import DoubleEntryLedger.EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
   @doc """
   Processes the creation of an event by transforming transaction data and creating a transaction.

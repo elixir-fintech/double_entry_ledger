@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.UpdateEvent do
   }
 
   import DoubleEntryLedger.OccRetry, only: [retry: 2]
-  import DoubleEntryLedger.EventHelper, only: [transaction_data_to_transaction_map: 2]
+  import DoubleEntryLedger.EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
   @doc """
   Processes the update of an event by fetching the corresponding transaction and applying updates.
