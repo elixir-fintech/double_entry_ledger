@@ -21,6 +21,7 @@ defmodule DoubleEntryLedger.Event do
     source: String.t(),
     source_data: map(),
     source_idempk: String.t(),
+    update_idempk: String.t() | nil,
     processed_at: DateTime.t() | nil,
     transaction_data: TransactionData.t() | nil,
     instance: Instance.t() | Ecto.Association.NotLoaded.t(),
@@ -30,6 +31,16 @@ defmodule DoubleEntryLedger.Event do
     errors: list(map()) | nil,
     inserted_at: DateTime.t(),
     updated_at: DateTime.t()
+  }
+
+  @type event_map() :: %{
+    action: action(),
+    instance_id: Ecto.UUID.t() | nil,
+    source: String.t(),
+    source_data: map(),
+    source_idempk: String.t(),
+    update_idempk: String.t() | nil,
+    transaction_data: TransactionData.t(),
   }
 
   @primary_key {:id, :binary_id, autogenerate: true}
