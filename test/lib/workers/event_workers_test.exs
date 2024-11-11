@@ -9,18 +9,19 @@ defmodule DoubleEntryLedger.EventWorkerTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventWorker
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.{
+    EventStore, EventWorker
+  }
 
   doctest EventWorker
 
-  describe "process_event/1" do
+  describe "process_event_with_id/1" do
     setup [:create_instance, :create_accounts]
 
     test "process create event successfully", ctx do
       %{event: event} = create_event(ctx)
 
-      {:ok, transaction, processed_event } = EventWorker.process_event(event)
+      {:ok, transaction, processed_event } = EventWorker.process_event_with_id(event.id)
       assert processed_event.status == :processed
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil
@@ -29,7 +30,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
     test "update event for changing entries and to :posted", %{instance: inst, accounts: [a1, a2| _]} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} = EventWorker.process_event(pending_event)
+      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} = EventWorker.process_event_with_id(pending_event.id)
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [-100, -100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted, [
@@ -37,7 +38,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
         %{account_id: a2.id, amount: 50, currency: "EUR" }
       ])
 
-      {:ok, transaction, processed_event } = EventWorker.process_event(event)
+      {:ok, transaction, processed_event } = EventWorker.process_event_with_id(event.id)
       assert processed_event.status == :processed
       assert processed_event.processed_transaction_id == pending_transaction.id
       assert transaction.id == pending_transaction.id
@@ -46,6 +47,17 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       assert transaction.status == :posted
     end
 
+    test "only process pending events", ctx do
+      %{event: event} = create_event(ctx)
+      EventWorker.process_event_with_id(event.id)
+      assert {:error, "Event is not in pending state"} = EventWorker.process_event_with_id(event.id)
+      EventStore.mark_as_failed(event, "test")
+      assert {:error, "Event is not in pending state"} = EventWorker.process_event_with_id(event.id)
+    end
+  end
+
+  describe "process_event_map/1" do
+    setup [:create_instance, :create_accounts]
     test "create event for event_map, which must also create the event", %{instance: inst, accounts: [a1, a2, _, _]} do
       event_map = %{
         action: :create,
@@ -63,28 +75,11 @@ defmodule DoubleEntryLedger.EventWorkerTest do
         }
       }
 
-      {:ok, transaction, processed_event } = EventWorker.process_event(event_map)
+      {:ok, transaction, processed_event } = EventWorker.process_new_event(event_map)
       assert processed_event.status == :processed
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :pending
-    end
-
-    test "only process pending events" do
-      assert {:error, "Event is not in pending state"} = EventWorker.process_event(%Event{status: :processed})
-      assert {:error, "Event is not in pending state"} = EventWorker.process_event(%Event{status: :failed})
-    end
-  end
-
-  describe "process_event_with_id/1" do
-    setup [:create_instance, :create_accounts]
-    test "process event by its UUID", %{instance: inst} = ctx do
-      %{event: pending_event} = create_event(ctx)
-      {:ok, transaction, processed_event } = EventWorker.process_event_with_id(pending_event.id)
-      assert processed_event.status == :processed
-      assert processed_event.processed_transaction_id == transaction.id
-      assert processed_event.processed_at != nil
-      assert transaction.status == :posted
     end
   end
 end
