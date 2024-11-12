@@ -7,9 +7,14 @@ defmodule DoubleEntryLedger.EventStore do
 
   @spec insert_event(map()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
   def insert_event(attrs) do
+    build_insert_event(attrs)
+    |> Repo.insert()
+  end
+
+  @spec build_insert_event(Event.event_map()) :: Ecto.Changeset.t()
+  def build_insert_event(attrs) do
     %Event{}
     |> Event.changeset(attrs)
-    |> Repo.insert()
   end
 
   def get_event(id) do

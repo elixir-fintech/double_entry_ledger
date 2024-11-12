@@ -18,10 +18,10 @@ defmodule DoubleEntryLedger.TransactionStore do
 
       - An `Ecto.Multi` struct representing the database operations to be performed.
   """
-  @spec build_create(map()) :: Multi.t()
-  def build_create(%{} = transaction) do # Dialyzer requires a map here
-    Multi.new()
-    |> Multi.insert(:transaction, Transaction.changeset(%Transaction{}, transaction))
+  @spec build_create(Multi.t(), atom(), map()) :: Multi.t()
+  def build_create(multi, step, %{} = transaction) do # Dialyzer requires a map here
+    multi
+    |> Multi.insert(step, Transaction.changeset(%Transaction{}, transaction))
   end
 
   @doc """
@@ -35,10 +35,9 @@ defmodule DoubleEntryLedger.TransactionStore do
   """
   @spec create(Transaction.t() | map()) :: {:ok, Transaction.t()} | {:error, any()}
   def create(transaction) do
-    case build_create(transaction) |> Repo.transaction() do
-      {:ok, %{transaction: transaction}} -> {:ok, transaction}
-      {:error, _name , failed_step, _changes_so_far} -> {:error, failed_step}
-    end
+    %Transaction{}
+    |> Transaction.changeset(transaction)
+    |> Repo.insert()
   end
 
   @doc """

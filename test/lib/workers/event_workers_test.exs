@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     test "process create event successfully", ctx do
       %{event: event} = create_event(ctx)
 
-      {:ok, transaction, processed_event } = EventWorker.process_event_with_id(event.id)
+      {:ok, {transaction, processed_event} } = EventWorker.process_event_with_id(event.id)
       assert processed_event.status == :processed
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil
@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
     test "update event for changing entries and to :posted", %{instance: inst, accounts: [a1, a2| _]} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} = EventWorker.process_event_with_id(pending_event.id)
+      {:ok, {pending_transaction, %{source: s, source_idempk: s_id}}} = EventWorker.process_event_with_id(pending_event.id)
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [-100, -100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted, [
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
         %{account_id: a2.id, amount: 50, currency: "EUR" }
       ])
 
-      {:ok, transaction, processed_event } = EventWorker.process_event_with_id(event.id)
+      {:ok, {transaction, processed_event}} = EventWorker.process_event_with_id(event.id)
       assert processed_event.status == :processed
       assert processed_event.processed_transaction_id == pending_transaction.id
       assert transaction.id == pending_transaction.id

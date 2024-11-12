@@ -28,13 +28,11 @@ defmodule DoubleEntryLedger.CreateEvent do
   end
 
   @spec create_transaction_and_update_event(Event.t(), map()) ::
-    {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
+    {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
   defp create_transaction_and_update_event(event, transaction_map) do
     case build_create_transaction_and_update_event(event, transaction_map)
     |> Repo.transaction() do
-      {:ok, %{
-        create_transaction: %{transaction: transaction},
-        update_event: update_event}} -> {:ok, transaction, update_event}
+      {:ok, %{transaction: transaction, event: update_event}} -> {:ok, {transaction, update_event}}
       {:error, step, error, _} -> {:error, "#{step} failed: #{error}"}
       {:error, error} -> {:error, "#{error}"}
     end
@@ -43,13 +41,9 @@ defmodule DoubleEntryLedger.CreateEvent do
   @spec build_create_transaction_and_update_event(Event.t(), map()) :: Ecto.Multi.t()
   defp build_create_transaction_and_update_event(event, transaction_map) do
     Multi.new()
-    |> Multi.run(:create_transaction, fn repo, _ ->
-        TransactionStore.build_create(transaction_map)
-        |> repo.transaction()
-      end)
-    |> Multi.run(:update_event, fn repo, %{create_transaction: %{transaction: td}} ->
+    |> TransactionStore.build_create(:transaction, transaction_map)
+    |> Multi.update(:event, fn %{transaction: td} ->
         EventStore.build_mark_as_processed(event, td.id)
-        |> repo.update()
       end)
   end
 end

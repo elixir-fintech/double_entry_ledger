@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.ProcessEvent do
     - `{:ok, transaction, event}` on success.
     - `{:error, reason}` on failure.
   """
-  @spec process_event(Event.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, binary()}
+  @spec process_event(Event.t()) :: {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
   def process_event(%Event{status: :pending, action: :create} = event) do
     process_create_event(event)
   end
@@ -61,18 +61,17 @@ defmodule DoubleEntryLedger.ProcessEvent do
 
   @spec build_process_event_map(Event.event_map()) :: Multi.t()
   defp build_process_event_map(event_map) do
+    new_event_map = Map.put_new(event_map, :status, :pending)
     Multi.new()
-    |> Multi.run(:create_event, fn _repo, _changes ->
-      EventStore.insert_event(Map.put_new(event_map, :status, :pending))
-    end)
+    |> Multi.insert(:create_event, EventStore.build_insert_event(new_event_map))
     |> Multi.run(:process_event, fn _repo, %{create_event: new_event} ->
       case process_event(new_event) do
-        {:ok, transaction, event} -> {:ok, {transaction, event}}
+        {:ok, {transaction, event}} -> {:ok, {transaction, event}}
         {:error, reason} -> {:error, :process_event, reason}
       end
     end)
-    |> Multi.run(:update_event, fn _repo, %{process_event: {transaction, event}} ->
-      EventStore.mark_as_processed(event, transaction.id)
+    |> Multi.update(:update_event, fn %{process_event: {transaction, event}} ->
+      EventStore.build_mark_as_processed(event, transaction.id)
     end)
   end
 end
