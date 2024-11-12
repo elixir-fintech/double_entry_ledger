@@ -63,9 +63,8 @@ defmodule DoubleEntryLedger.UpdateEvent do
         update_transaction: %{transaction: transaction},
         update_event: update_event}} ->
         {:ok, transaction, update_event}
-      {:error, error} ->
-        EventStore.mark_as_failed(event, error)
-        {:error, error}
+      {:error, step, error, _} -> {:error, "#{step} failed: #{error}"}
+      {:error, error} -> {:error, error}
     end
   end
 

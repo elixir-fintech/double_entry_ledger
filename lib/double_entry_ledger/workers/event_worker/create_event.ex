@@ -27,17 +27,16 @@ defmodule DoubleEntryLedger.CreateEvent do
     end
   end
 
-  @spec create_transaction_and_update_event(Event.t(), map()) :: {:ok, Transaction.t(), Event.t()} | {:error, any()}
+  @spec create_transaction_and_update_event(Event.t(), map()) ::
+    {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   defp create_transaction_and_update_event(event, transaction_map) do
     case build_create_transaction_and_update_event(event, transaction_map)
     |> Repo.transaction() do
       {:ok, %{
         create_transaction: %{transaction: transaction},
-        update_event: update_event}} ->
-        {:ok, transaction, update_event}
-      {:error, error} ->
-        EventStore.mark_as_failed(event, error)
-        {:error, error}
+        update_event: update_event}} -> {:ok, transaction, update_event}
+      {:error, step, error, _} -> {:error, "#{step} failed: #{error}"}
+      {:error, error} -> {:error, "#{error}"}
     end
   end
 

@@ -13,6 +13,7 @@ defmodule DoubleEntryLedger.MixProject do
       dialyzer: [
         plt_add_deps: [:ecto, :postgrex, :money],
         plt_add_apps: [:mix],
+        #flags: [:overspecs]
       ],
     ]
   end
