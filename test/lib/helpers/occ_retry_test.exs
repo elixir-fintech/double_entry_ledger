@@ -3,56 +3,56 @@ defmodule DoubleEntryLedger.OccRetryTest do
   This module tests the OccRetry module.
   """
   use ExUnit.Case
-      alias DoubleEntryLedger.Event
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{OccRetry, Repo}
-  import DoubleEntryLedger.EventFixtures
-  import DoubleEntryLedger.AccountFixtures
-  import DoubleEntryLedger.InstanceFixtures
+  alias DoubleEntryLedger.OccRetry
 
-  describe "retry/3" do
-    test "it implements retry for Event" do
-      assert {:ok, 1} = OccRetry.retry(fn (_, _) -> {:ok, 1} end, [%Event{}, %{}])
+  doctest OccRetry
+
+  @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
+
+  describe "delay/1" do
+    test "returns delay" do
+      assert 20 = OccRetry.delay(@max_retries - 1)
     end
 
-    test "does not implement retry for anonymous struct" do
-      assert {:error, "Not implemented"} = OccRetry.retry(fn (_, _) -> {:ok, 1} end, [%{}, %{}])
+    test "delay gets bigger with each attempt" do
+      assert 30 = OccRetry.delay(@max_retries - 2)
     end
   end
 
-
-  describe "event_retry/3" do
-    setup [:create_instance, :create_accounts]
-
-    test "retry for 0 attempts left" do
-      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry({}, [%{}, %{}], 0)
+  describe "set_delay_timer/1" do
+    test "waits for the correct amount of time" do
+      attempts = 3
+      delay = OccRetry.delay(attempts)
+      start_time = :os.system_time(:millisecond)
+      OccRetry.set_delay_timer(attempts)
+      end_time = :os.system_time(:millisecond)
+      assert end_time - start_time >= delay
     end
+  end
 
-    test "retry for 1 attempt left", ctx do
-      %{event: event} = create_event(ctx)
-
-      func = fn _event, _map ->
-        raise Ecto.StaleEntryError,
-          action: :update,
-          changeset: %{data: ""}
-        end
-      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry(func, [event, %{}], 1)
-      assert [%{"message" => "OCC conflict detected, retrying after 20 ms... 0 attempts left"}] = Repo.reload(event).errors
+  describe "max_retries/0" do
+    test "returns the correct max retries" do
+      assert OccRetry.max_retries() == @max_retries
     end
+  end
 
-    test "retry for 2 accumulates errors", ctx do
-      %{event: event} = create_event(ctx)
+  describe "occ_error_message/1" do
+    test "returns the correct error message" do
+      attempts = 3
 
-      func = fn _event, _map ->
-        raise Ecto.StaleEntryError,
-          action: :update,
-          changeset: %{data: ""}
-        end
-      assert {:error, "OCC conflict: Max number of 2 retries reached"  } = OccRetry.event_retry(func, [event, %{}], 2)
-      assert [
-        %{"message" => "OCC conflict detected, retrying after 20 ms... 0 attempts left"},
-        %{"message" => "OCC conflict detected, retrying after 10 ms... 1 attempts left"}] = Repo.reload(event).errors
+      expected_message =
+        "OCC conflict detected, retrying after #{OccRetry.delay(attempts)} ms... #{attempts - 1} attempts left"
+
+      assert OccRetry.occ_error_message(attempts) == expected_message
+    end
+  end
+
+  describe "occ_final_error_message/0" do
+    test "returns the correct final error message" do
+      expected_message = "OCC conflict: Max number of #{@max_retries} retries reached"
+      assert OccRetry.occ_final_error_message() == expected_message
     end
   end
 end
