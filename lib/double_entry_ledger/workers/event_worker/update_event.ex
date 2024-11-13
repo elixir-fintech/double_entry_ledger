@@ -7,7 +7,8 @@ defmodule DoubleEntryLedger.UpdateEvent do
     Event, Transaction, EventStore, TransactionStore, Repo
   }
 
-  import DoubleEntryLedger.OccRetry, only: [event_retry: 2]
+
+  import DoubleEntryLedger.OccRetry
   import DoubleEntryLedger.EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
   @doc """
@@ -48,9 +49,7 @@ defmodule DoubleEntryLedger.UpdateEvent do
   defp update_transaction_and_event(%{instance_id: id, transaction_data: td} = event, transaction) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
-        event_retry(&update_transaction_and_event/3, [event, transaction, transaction_map])
-        # TODO retry causes the dialyzer issue
-        # update_transaction_and_event(event, transaction, transaction_map)
+        update_event(event, transaction, transaction_map)
       {:error, error} ->
         EventStore.mark_as_failed(event, error)
         {:error, error}
@@ -80,5 +79,24 @@ defmodule DoubleEntryLedger.UpdateEvent do
     |> Multi.update(:update_event, fn %{update_transaction: %{transaction: td}} ->
         EventStore.build_mark_as_processed(event, td.id)
       end)
+  end
+
+  def update_event(event, transaction, transaction_map) do
+    retry_update_event(event, transaction, transaction_map, max_retries())
+  end
+
+  def retry_update_event(event, transaction, transaction_map, attempts) when attempts > 0 do
+    try do
+      update_transaction_and_event(event, transaction, transaction_map)
+    rescue
+      Ecto.StaleEntryError ->
+        {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
+        set_delay_timer(attempts)
+        retry_update_event(updated_event, transaction, transaction, attempts - 1)
+    end
+  end
+
+  def retry_update_event(_event, _transaction, _transaction_map, 0) do
+    {:error, occ_final_error_message()}
   end
 end

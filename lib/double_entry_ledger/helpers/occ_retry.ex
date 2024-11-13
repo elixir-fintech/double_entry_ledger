@@ -11,6 +11,29 @@ defmodule DoubleEntryLedger.OccRetry do
   @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
   @retry_interval Application.compile_env(:double_entry_ledger, :retry_interval, 200)
 
+  def set_delay_timer(attempts) do
+    delay(attempts)
+    |> :timer.sleep()
+  end
+
+  @spec delay(integer()) :: number()
+  def delay(attempts) do
+    (@max_retries - attempts + 1) * @retry_interval
+  end
+
+  @spec max_retries() :: integer()
+  def max_retries(), do: @max_retries
+
+  @spec occ_error_message(integer()) :: String.t()
+  def occ_error_message(attempts) do
+    "OCC conflict detected, retrying after #{delay(attempts)} ms... #{attempts - 1} attempts left"
+  end
+
+  @spec occ_final_error_message() :: String.t()
+  def occ_final_error_message() do
+    "OCC conflict: Max number of #{@max_retries} retries reached"
+  end
+
   @type event_retry_fun() ::
     ((Event.t(), Transaction.t(), map()) -> {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()})
     | ((Event.t(), Transaction.t()) -> {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()})
