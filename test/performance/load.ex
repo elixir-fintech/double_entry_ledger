@@ -9,10 +9,10 @@ defmodule DoubleEntryLedger.LoadTesting do
   Both defaults can be overridden by setting the @seconds_to_run and @destination_accounts module attributes.
   """
 
-  alias DoubleEntryLedger.{Account, Balance, Instance, EventStore, EventWorker, Repo}
+  alias DoubleEntryLedger.{Account, Balance, Instance, EventWorker, Repo}
 
   @destination_accounts 10
-  @seconds_to_run 60
+  @seconds_to_run 10
 
   # Function to run a single transaction process
 
@@ -44,6 +44,7 @@ defmodule DoubleEntryLedger.LoadTesting do
     # Use a counter to keep track of successful transactions
     successful_transactions = run_transactions(concurrency, end_time, 0, instance, 0, transaction_lists)
     IO.puts("Transactions processed in #{@seconds_to_run} second(s): #{successful_transactions}")
+    IO.puts("Transactions per second: #{successful_transactions / @seconds_to_run} tps")
     validate_instance_balance(instance)
     IO.puts("#{bold("After:")} #{validate_instance_balance(instance)}")
   end
@@ -83,13 +84,14 @@ defmodule DoubleEntryLedger.LoadTesting do
 
   # insert a single event and then create the transaction from it
   defp run_transaction(instance, params ) do
-    {:ok, event} = EventStore.insert_event(%{
-      action: :create,
-      status: :pending,
-      source: "source",
-      source_idempk: Ecto.UUID.generate(),
-      transaction_data: params, instance_id: instance.id})
-    EventWorker.process_event(event)
+    event_map = %{
+        action: :create,
+        status: :pending,
+        source: "source",
+        source_idempk: Ecto.UUID.generate(),
+        transaction_data: params, instance_id: instance.id
+      }
+    EventWorker.process_new_event(event_map)
   end
 
   # create as many source debit accounts as concurrent transactions to minimize contention
