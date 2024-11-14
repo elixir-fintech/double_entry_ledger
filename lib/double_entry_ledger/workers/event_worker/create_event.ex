@@ -34,28 +34,30 @@ defmodule DoubleEntryLedger.CreateEvent do
     end
   end
 
-  @spec create_event_with_retry(Event.t(), map(), integer()) ::
+  @spec create_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()) ::
           {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
-  def create_event_with_retry(event, transaction_map, attempts) when attempts > 0 do
+  def create_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
+
+  def create_event_with_retry(event, transaction_map, attempts, repo) when attempts > 0 do
     try do
-      create_transaction_and_update_event(event, transaction_map)
+      create_transaction_and_update_event(event, transaction_map, repo)
     rescue
       Ecto.StaleEntryError ->
         {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
         set_delay_timer(attempts)
-        create_event_with_retry(updated_event, transaction_map, attempts - 1)
+        create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
     end
   end
 
-  def create_event_with_retry(_event, _transaction_map, 0) do
+  def create_event_with_retry(_event, _transaction_map, 0, _repo) do
     {:error, occ_final_error_message()}
   end
 
-  @spec create_transaction_and_update_event(Event.t(), map()) ::
+  @spec create_transaction_and_update_event(Event.t(), map(), Ecto.Repo.t()) ::
           {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
-  defp create_transaction_and_update_event(event, transaction_map) do
+  defp create_transaction_and_update_event(event, transaction_map, repo) do
     case build_create_transaction_and_update_event(event, transaction_map)
-         |> Repo.transaction() do
+         |> repo.transaction() do
       {:ok, %{transaction: transaction, event: update_event}} ->
         {:ok, {transaction, update_event}}
 

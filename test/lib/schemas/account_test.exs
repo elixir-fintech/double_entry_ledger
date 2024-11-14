@@ -3,7 +3,6 @@ defmodule DoubleEntryLedger.AccountTest do
   This module provides tests for the Account module.
   """
 
-      alias ElixirLS.LanguageServer.Providers.Completion.Reducers.Struct
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Account, Balance, Entry}

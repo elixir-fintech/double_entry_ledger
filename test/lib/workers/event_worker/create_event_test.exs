@@ -3,11 +3,14 @@ defmodule DoubleEntryLedger.CreateEventTest do
   This module tests the CreateEvent module.
   """
   use ExUnit.Case
+  import Mox
+
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
+  import DoubleEntryLedger.EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
   alias DoubleEntryLedger.CreateEvent
 
@@ -24,6 +27,23 @@ defmodule DoubleEntryLedger.CreateEventTest do
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :posted
+    end
+  end
+
+  describe "create_event_with_retry/4" do
+    setup [:create_instance, :create_accounts, :verify_on_exit!]
+
+    test "create event with last retry that fails", ctx do
+      %{event: %{transaction_data: transaction_data, instance_id: id} = event} = create_event(ctx)
+      {:ok, transaction_map} = transaction_data_to_transaction_map(transaction_data, id)
+
+      DoubleEntryLedger.MockRepo
+      |> expect(:transaction, fn multi ->
+        raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
+      end)
+
+      assert {:error, "OCC conflict: Max number of 5 retries reached"} =
+        CreateEvent.create_event_with_retry(event, transaction_map, 1, DoubleEntryLedger.MockRepo)
     end
   end
 end
