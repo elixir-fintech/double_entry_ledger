@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.AccountTest do
   This module provides tests for the Account module.
   """
 
+      alias ElixirLS.LanguageServer.Providers.Completion.Reducers.Struct
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Account, Balance, Entry}
@@ -261,6 +262,33 @@ defmodule DoubleEntryLedger.AccountTest do
       changeset1 |> Repo.update()
 
       assert_raise(Ecto.StaleEntryError, fn -> changeset2 |> Repo.update() end)
+    end
+
+    test "throws Ecto.Multi.failure() with stale_error_field: in a Multi scenario", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, type: :debit, allowed_negative: false)
+      entry1 = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :debit }
+      entry2 = %Entry{account_id: account.id, value: %Money{amount: 150, currency: :EUR}, type: :debit }
+
+      changeset1 = Account.update_balances(account, %{entry: entry1, trx: :posted})
+      changeset2 = Account.update_balances(account, %{entry: entry2, trx: :posted})
+
+      multi = Ecto.Multi.new()
+      try do
+        multi
+        |> Ecto.Multi.update(:update1, changeset1)
+        |> Ecto.Multi.update(:update2, changeset2)
+        |> Repo.transaction()
+      rescue e in Ecto.StaleEntryError  ->
+        IO.puts(inspect(e))
+        {:error, e}
+      end
+
+      assert {:error, :update2, %Ecto.Changeset{errors: errors}, %{update1: %DoubleEntryLedger.Account{available: 100}} } = Repo.transaction(
+        Ecto.Multi.new()
+        |> Ecto.Multi.update(:update1, changeset1)
+        |> Ecto.Multi.update(:update2, changeset2, stale_error_field: :lock_version)
+      )
+      assert {"is stale", [stale: true]} = errors[:lock_version]
     end
   end
 end

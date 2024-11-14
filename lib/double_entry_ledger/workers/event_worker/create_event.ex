@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.CreateEvent do
   def process_create_event(%Event{transaction_data: transaction_data, instance_id: id} = event) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
-        create_event(event, transaction_map)
+        create_event_with_retry(event, transaction_map, max_retries())
 
       {:error, error} ->
         EventStore.mark_as_failed(event, error)
@@ -34,26 +34,20 @@ defmodule DoubleEntryLedger.CreateEvent do
     end
   end
 
-  @spec create_event(Event.t(), map()) ::
+  @spec create_event_with_retry(Event.t(), map(), integer()) ::
           {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
-  defp create_event(event, transaction_map) do
-    retry_create_event(event, transaction_map, max_retries())
-  end
-
-  @spec retry_create_event(Event.t(), map(), integer()) ::
-          {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
-  defp retry_create_event(event, transaction_map, attempts) when attempts > 0 do
+  def create_event_with_retry(event, transaction_map, attempts) when attempts > 0 do
     try do
       create_transaction_and_update_event(event, transaction_map)
     rescue
       Ecto.StaleEntryError ->
         {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
         set_delay_timer(attempts)
-        retry_create_event(updated_event, transaction_map, attempts - 1)
+        create_event_with_retry(updated_event, transaction_map, attempts - 1)
     end
   end
 
-  defp retry_create_event(_event, _transaction_map, 0) do
+  def create_event_with_retry(_event, _transaction_map, 0) do
     {:error, occ_final_error_message()}
   end
 
