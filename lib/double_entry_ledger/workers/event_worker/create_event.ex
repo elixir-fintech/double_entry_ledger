@@ -1,6 +1,7 @@
 defmodule DoubleEntryLedger.CreateEvent do
   @moduledoc """
-  Provides helper functions for creating events in the double-entry ledger system.
+  Provides helper functions for handling events with the `action: :create` attributes
+  in the double-entry ledger system.
   """
 
   alias Ecto.Multi
@@ -39,29 +40,30 @@ defmodule DoubleEntryLedger.CreateEvent do
   def create_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
 
   def create_event_with_retry(event, transaction_map, attempts, repo) when attempts > 0 do
-      case build_create_transaction_and_update_event(event, transaction_map, repo)
-        |> repo.transaction() do
-        {:ok, %{transaction: transaction, event: update_event}} ->
-          {:ok, {transaction, update_event}}
+    case build_create_transaction_and_update_event(event, transaction_map, repo)
+         |> repo.transaction() do
+      {:ok, %{transaction: transaction, event: update_event}} ->
+        {:ok, {transaction, update_event}}
 
-        {:error, :transaction, %Ecto.StaleEntryError{}, %{}} ->
-          {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
-          set_delay_timer(attempts)
-          create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
+      {:error, :transaction, %Ecto.StaleEntryError{}, %{}} ->
+        {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
+        set_delay_timer(attempts)
+        create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
 
-        {:error, step, error, _} ->
-          {:error, "#{step} failed: #{inspect(error)}"}
+      {:error, step, error, _} ->
+        {:error, "#{step} failed: #{inspect(error)}"}
 
-        {:error, error} ->
-          {:error, "#{error}"}
-      end
+      {:error, error} ->
+        {:error, "#{error}"}
+    end
   end
 
   def create_event_with_retry(_event, _transaction_map, 0, _repo) do
     {:error, occ_final_error_message()}
   end
 
-  @spec build_create_transaction_and_update_event(Event.t(), map(), Ecto.Repo.t()) :: Ecto.Multi.t()
+  @spec build_create_transaction_and_update_event(Event.t(), map(), Ecto.Repo.t()) ::
+          Ecto.Multi.t()
   defp build_create_transaction_and_update_event(event, transaction_map, repo) do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)

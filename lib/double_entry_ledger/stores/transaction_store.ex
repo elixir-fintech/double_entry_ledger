@@ -3,8 +3,11 @@ defmodule DoubleEntryLedger.TransactionStore do
   This module defines the TransactionStore behaviour.
   """
   alias Ecto.Multi
+
   alias DoubleEntryLedger.{
-    Repo, Transaction, Types
+    Repo,
+    Transaction,
+    Types
   }
 
   @doc """
@@ -19,7 +22,8 @@ defmodule DoubleEntryLedger.TransactionStore do
       - An `Ecto.Multi` struct representing the database operations to be performed.
   """
   @spec build_create(Multi.t(), atom(), map(), Ecto.Repo.t()) :: Multi.t()
-  def build_create(multi, step, %{} = transaction, repo \\ Repo) do # Dialyzer requires a map here
+  # Dialyzer requires a map here
+  def build_create(multi, step, %{} = transaction, repo \\ Repo) do
     multi
     |> Multi.run(step, fn _, _ ->
       try do
@@ -28,8 +32,6 @@ defmodule DoubleEntryLedger.TransactionStore do
       rescue
         e in Ecto.StaleEntryError ->
           {:error, e}
-
-
       end
     end)
   end
@@ -61,15 +63,15 @@ defmodule DoubleEntryLedger.TransactionStore do
     - An `Ecto.Multi` struct representing the database operations to be performed.
   """
   @spec build_update(Multi.t(), atom(), Transaction.t(), map()) :: Multi.t()
-  def build_update(multi, step, %{status: :pending } = trx, %{status: :posted } = attr) do
+  def build_update(multi, step, %{status: :pending} = trx, %{status: :posted} = attr) do
     base_build_update(multi, step, trx, attr, :pending_to_posted)
   end
 
-  def build_update(multi, step, %{status: :pending } = trx, %{status: :archived } = attr) do
+  def build_update(multi, step, %{status: :pending} = trx, %{status: :archived} = attr) do
     base_build_update(multi, step, trx, attr, :pending_to_archived)
   end
 
-  def build_update(multi, step, %{status: :pending } = trx, %{} = attr) do
+  def build_update(multi, step, %{status: :pending} = trx, %{} = attr) do
     base_build_update(multi, step, trx, attr, :pending_to_pending)
   end
 
@@ -87,19 +89,21 @@ defmodule DoubleEntryLedger.TransactionStore do
   def update(transaction, attrs) do
     case perform_update(:transaction, transaction, attrs) do
       {:ok, %{transaction: transaction}} -> {:ok, transaction}
-      {:error, _name , failed_step, _changes_so_far} -> {:error, failed_step}
+      {:error, _name, failed_step, _changes_so_far} -> {:error, failed_step}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  @spec perform_update(atom(), Transaction.t(), map()) :: {:ok, map()} | {:error, any()} | Multi.failure()
+  @spec perform_update(atom(), Transaction.t(), map()) ::
+          {:ok, map()} | {:error, any()} | Multi.failure()
   def perform_update(step, transaction, attrs) do
     Multi.new()
     |> build_update(step, transaction, attrs)
     |> Repo.transaction()
   end
 
-  @spec base_build_update(Multi.t(), atom(), Transaction.t(), map(), Types.trx_types()) :: Multi.t()
+  @spec base_build_update(Multi.t(), atom(), Transaction.t(), map(), Types.trx_types()) ::
+          Multi.t()
   defp base_build_update(multi, step, transaction, attr, transition) do
     multi
     |> Multi.update(step, Transaction.changeset(transaction, attr, transition))

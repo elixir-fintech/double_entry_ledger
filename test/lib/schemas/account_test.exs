@@ -278,7 +278,6 @@ defmodule DoubleEntryLedger.AccountTest do
         |> Ecto.Multi.update(:update2, changeset2)
         |> Repo.transaction()
       rescue e in Ecto.StaleEntryError  ->
-        IO.puts(inspect(e))
         {:error, e}
       end
 
