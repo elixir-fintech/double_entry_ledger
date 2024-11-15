@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.UpdateEvent do
   defp update_transaction_and_event(%{instance_id: id, transaction_data: td} = event, transaction) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
-        update_event(event, transaction, transaction_map)
+        retry_update_event(event, transaction, transaction_map, max_retries())
 
       {:error, error} ->
         EventStore.mark_as_failed(event, error)
@@ -96,12 +96,6 @@ defmodule DoubleEntryLedger.UpdateEvent do
     |> Multi.update(:event, fn %{transaction: td} ->
       EventStore.build_mark_as_processed(event, td.id)
     end)
-  end
-
-  @spec update_event(Event.t(), Transaction.t(), map()) ::
-          {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
-  defp update_event(event, transaction, transaction_map) do
-    retry_update_event(event, transaction, transaction_map, max_retries())
   end
 
   @spec retry_update_event(Event.t(), Transaction.t(), map(), integer()) ::

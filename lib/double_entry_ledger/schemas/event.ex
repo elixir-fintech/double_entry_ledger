@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.Event do
   alias DoubleEntryLedger.{Transaction, Instance}
   alias DoubleEntryLedger.Event.TransactionData
 
-  @states [:pending, :processed, :failed]
+  @states [:pending, :processed, :failed, :occ_timeout]
   @actions [:create, :update]
   @type state :: unquote(Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end))
   @type action :: unquote(Enum.reduce(@actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end))
@@ -51,6 +51,7 @@ defmodule DoubleEntryLedger.Event do
     field :source_data, :map, default: %{}
     field :source_idempk, :string
     field :update_idempk, :string
+    field :tries, :integer, default: 0
     field :processed_at, :utc_datetime_usec
     field :errors, {:array, :map}, default: []
 

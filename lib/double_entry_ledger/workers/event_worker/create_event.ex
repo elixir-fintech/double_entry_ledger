@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.CreateEvent do
   @moduledoc """
-  Provides helper functions for handling events with the `action: :create` attributes
+  Provides helper functions for handling events with the `action: :create` attribute
   in the double-entry ledger system.
   """
 
@@ -18,9 +18,26 @@ defmodule DoubleEntryLedger.CreateEvent do
   import DoubleEntryLedger.EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
   @doc """
-  Processes the creation of an event by transforming transaction data and creating a transaction.
+  Processes the event by transforming transaction data and creating a transaction.
 
-  Returns `{:ok, transaction, event}` on success, or `{:error, reason}` on failure.
+  Given an `Event` struct, it transforms the embedded transaction data into a transaction map,
+  then attempts to create a transaction within the ledger system. If the transformation and creation
+  are successful, it returns `{:ok, transaction, event}`.
+
+  It returns `{:error, reason}` if the transformation of transaction data to transaction map
+  fails and sets the event status to `:failed`.
+
+  In order to handle optimistic concurrency control (OCC) conflicts, it uses the
+  `create_event_with_retry/4` function which implements retry logic.
+
+  ## Parameters
+
+    - `event`: An `Event` struct containing the transaction data to be processed.
+
+  ## Returns
+
+    - `{:ok, transaction, event}` on successful processing.
+    - `{:error, reason}` if processing fails.
   """
   @spec process_create_event(Event.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
@@ -35,6 +52,30 @@ defmodule DoubleEntryLedger.CreateEvent do
     end
   end
 
+  @doc """
+  Attempts to process the event with the transaction map to create a transaction and update the event with retry logic.
+
+  This function handles the creation of a transaction and updates the event accordingly.
+  It implements retry logic to handle cases where optimistic concurrency control conflicts occur.
+  If a `StaleEntryError` is encountered, it retries the operation until the maximum number of
+  attempts is reached. If the maximum number of attempts is reached, it sets the event
+  status as `:occ_timeout` and returns `{:error, reason}`.
+
+  These retries are implemented with exponential backoff. An event wit the status `:occ_timeout`
+  can be retried
+
+  ## Parameters
+
+    - `event`: The `Event` struct to be processed.
+    - `transaction_map`: A map representing the transaction data.
+    - `attempts`: The number of remaining attempts.
+    - `repo`: (Optional) The Ecto repository module. Defaults to `Repo`.
+
+  ## Returns
+
+    - `{:ok, {transaction, event}}` if the transaction is successfully created.
+    - `{:error, reason}` if the operation fails after all retries.
+  """
   @spec create_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()) ::
           {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
   def create_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
@@ -51,14 +92,15 @@ defmodule DoubleEntryLedger.CreateEvent do
         create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
 
       {:error, step, error, _} ->
-        {:error, "#{step} failed: #{inspect(error)}"}
+        handle_error(event, "#{step} failed: #{inspect(error)}")
 
       {:error, error} ->
-        {:error, "#{error}"}
+        handle_error(event, "#{inspect(error)}")
     end
   end
 
-  def create_event_with_retry(_event, _transaction_map, 0, _repo) do
+  def create_event_with_retry(event, _transaction_map, 0, _repo) do
+    EventStore.mark_as_occ_timeout(event, occ_final_error_message())
     {:error, occ_final_error_message()}
   end
 
@@ -70,5 +112,10 @@ defmodule DoubleEntryLedger.CreateEvent do
     |> Multi.update(:event, fn %{transaction: td} ->
       EventStore.build_mark_as_processed(event, td.id)
     end)
+  end
+
+  defp handle_error(event, reason) do
+    EventStore.mark_as_failed(event, reason)
+    {:error, reason}
   end
 end

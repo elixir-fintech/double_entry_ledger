@@ -65,6 +65,7 @@ defmodule DoubleEntryLedger.ProcessEvent do
     Multi.new()
     |> Multi.insert(:create_event, EventStore.build_insert_event(new_event_map))
     |> Multi.run(:process_event, fn _repo, %{create_event: new_event} ->
+      #TODO: handle when transaction is not created, the event should be created and marked accordingly
       case process_event(new_event) do
         {:ok, {transaction, event}} -> {:ok, {transaction, event}}
         {:error, reason} -> {:error, :process_event, reason}

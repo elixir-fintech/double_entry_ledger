@@ -17,6 +17,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
       assert {:ok, %Event{} = event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
       assert event.status == :pending
       assert event.processed_at == nil
+      assert event.tries == 0
     end
   end
 
@@ -30,6 +31,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
       assert updated_event.status == :processed
       assert updated_event.processed_at != nil
       assert updated_event.processed_transaction_id == transaction.id
+      assert updated_event.tries == 1
     end
   end
 
@@ -41,6 +43,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
         EventStore.mark_as_failed(event, "some reason")
       assert updated_event.status == :failed
       assert updated_event.processed_at == nil
+      assert updated_event.tries == 1
 
       assert [%{message: "some reason"} | _ ] = updated_event.errors
     end
@@ -54,6 +57,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
         EventStore.add_error(event, "some reason")
       assert updated_event.status == :pending
       assert updated_event.processed_at == nil
+      assert updated_event.tries == 1
       assert [%{message: "some reason"} | _ ] = updated_event.errors
     end
   end
@@ -66,7 +70,21 @@ defmodule DoubleEntryLedger.EventStoreTest do
       {:ok, updated_event} = EventStore.add_error(event1, "reason2")
       assert updated_event.status == :pending
       assert updated_event.processed_at == nil
+      assert updated_event.tries == 2
       assert [%{message: "reason2"}, %{message: "reason1"}] = updated_event.errors
+    end
+  end
+
+  describe "mark_as_occ_timeout" do
+    setup [:create_instance]
+    test "marks an event as failed", %{instance: instance} do
+      {:ok, event} = EventStore.insert_event(event_attrs(instance_id: instance.id))
+      assert {:ok, %Event{} = updated_event} =
+        EventStore.mark_as_occ_timeout(event, "some reason")
+      assert updated_event.status == :occ_timeout
+      assert updated_event.processed_at == nil
+      assert updated_event.tries == 1
+      assert [%{message: "some reason"} | _ ] = updated_event.errors
     end
   end
 
