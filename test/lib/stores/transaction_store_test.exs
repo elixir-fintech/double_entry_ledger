@@ -4,6 +4,8 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
   """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
+  import Mox
+
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
   alias DoubleEntryLedger.{Account, TransactionStore, Balance, Repo}
 
@@ -143,6 +145,27 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
         posted: %Balance{amount: 0, credit: 0, debit: 0 },
         available: 0, type: :credit,
       } = Repo.get!(Account, a2.id)
+    end
+  end
+
+  describe "build_create/3" do
+    setup [:create_instance, :create_accounts, :verify_on_exit!]
+
+    test "can handle StaleEntryError so the multi step returns a Multi.failure()", %{instance: inst, accounts: [a1, a2, _, _]} do
+      attr = transaction_attr(status: :pending, instance_id: inst.id, entries: [
+        %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
+      ])
+
+      DoubleEntryLedger.MockRepo
+      |> expect(:insert, fn _changeset ->
+        raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
+      end)
+
+      assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
+        Ecto.Multi.new()
+        |> TransactionStore.build_create(:transaction, attr, DoubleEntryLedger.MockRepo)
+        |> Repo.transaction()
     end
   end
 end

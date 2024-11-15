@@ -39,40 +39,32 @@ defmodule DoubleEntryLedger.CreateEvent do
   def create_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
 
   def create_event_with_retry(event, transaction_map, attempts, repo) when attempts > 0 do
-    try do
-      create_transaction_and_update_event(event, transaction_map, repo)
-    rescue
-      Ecto.StaleEntryError ->
-        {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
-        set_delay_timer(attempts)
-        create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
-    end
+      case build_create_transaction_and_update_event(event, transaction_map, repo)
+        |> repo.transaction() do
+        {:ok, %{transaction: transaction, event: update_event}} ->
+          {:ok, {transaction, update_event}}
+
+        {:error, :transaction, %Ecto.StaleEntryError{}, %{}} ->
+          {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
+          set_delay_timer(attempts)
+          create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
+
+        {:error, step, error, _} ->
+          {:error, "#{step} failed: #{inspect(error)}"}
+
+        {:error, error} ->
+          {:error, "#{error}"}
+      end
   end
 
   def create_event_with_retry(_event, _transaction_map, 0, _repo) do
     {:error, occ_final_error_message()}
   end
 
-  @spec create_transaction_and_update_event(Event.t(), map(), Ecto.Repo.t()) ::
-          {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
-  defp create_transaction_and_update_event(event, transaction_map, repo) do
-    case build_create_transaction_and_update_event(event, transaction_map)
-         |> repo.transaction() do
-      {:ok, %{transaction: transaction, event: update_event}} ->
-        {:ok, {transaction, update_event}}
-
-      {:error, step, error, _} ->
-        {:error, "#{step} failed: #{error}"}
-
-      {:error, error} ->
-        {:error, "#{error}"}
-    end
-  end
-
-  @spec build_create_transaction_and_update_event(Event.t(), map()) :: Ecto.Multi.t()
-  defp build_create_transaction_and_update_event(event, transaction_map) do
+  @spec build_create_transaction_and_update_event(Event.t(), map(), Ecto.Repo.t()) :: Ecto.Multi.t()
+  defp build_create_transaction_and_update_event(event, transaction_map, repo) do
     Multi.new()
-    |> TransactionStore.build_create(:transaction, transaction_map)
+    |> TransactionStore.build_create(:transaction, transaction_map, repo)
     |> Multi.update(:event, fn %{transaction: td} ->
       EventStore.build_mark_as_processed(event, td.id)
     end)

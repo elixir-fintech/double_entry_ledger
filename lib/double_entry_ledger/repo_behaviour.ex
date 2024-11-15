@@ -5,4 +5,5 @@ defmodule DoubleEntryLedger.RepoBehaviour do
   module implements the required functions.
   """
   @callback transaction(fun :: (() -> any())) :: any()
+  @callback insert(fun :: (() -> any())) :: any()
 end
