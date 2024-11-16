@@ -53,7 +53,7 @@ defmodule DoubleEntryLedger.EventTransformer do
   defp struct_match_accounts_entries(accounts, entries) do
     entries_map = Map.new(
       entries,
-      fn %EntryData{account_id: id} = entry_data -> {id, entry_data} end
+      fn %{account_id: id} = entry_data -> {id, entry_data} end
     )
 
     Enum.flat_map(accounts, fn %Account{id: id} = account ->

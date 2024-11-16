@@ -10,8 +10,10 @@ defmodule DoubleEntryLedger.EventWorkerTest do
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.{
-    EventStore, EventWorker
+    EventStore, EventWorker,
   }
+
+  alias DoubleEntryLedger.Event.EntryData
 
   doctest EventWorker
 

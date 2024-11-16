@@ -44,7 +44,16 @@ defmodule DoubleEntryLedger.CreateEvent do
   def process_create_event(%Event{transaction_data: transaction_data, instance_id: id} = event) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
-        create_event_with_retry(event, transaction_map, max_retries())
+        case process_create_event_with_retry(event, transaction_map, max_retries()) do
+          {:ok, %{transaction: transaction, event: update_event}} ->
+            {:ok, {transaction, update_event}}
+
+          {:error, step, error, _} ->
+            handle_error(event, "#{step} step failed: #{inspect(error)}")
+
+          {:error, error} ->
+            handle_error(event, "#{inspect(error)}")
+        end
 
       {:error, error} ->
         EventStore.mark_as_failed(event, error)
@@ -76,30 +85,24 @@ defmodule DoubleEntryLedger.CreateEvent do
     - `{:ok, {transaction, event}}` if the transaction is successfully created.
     - `{:error, reason}` if the operation fails after all retries.
   """
-  @spec create_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()) ::
-          {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
-  def create_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
+  @spec process_create_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()) ::
+          {:ok, %{transaction: Transaction.t(), event: Event.t()}} | {:error, String.t()} | Multi.failure()
+  def process_create_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
 
-  def create_event_with_retry(event, transaction_map, attempts, repo) when attempts > 0 do
+  def process_create_event_with_retry(event, transaction_map, attempts, repo) when attempts > 0 do
     case build_create_transaction_and_update_event(event, transaction_map, repo)
          |> repo.transaction() do
-      {:ok, %{transaction: transaction, event: update_event}} ->
-        {:ok, {transaction, update_event}}
-
       {:error, :transaction, %Ecto.StaleEntryError{}, %{}} ->
         {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
         set_delay_timer(attempts)
-        create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
+        process_create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
 
-      {:error, step, error, _} ->
-        handle_error(event, "#{step} failed: #{inspect(error)}")
-
-      {:error, error} ->
-        handle_error(event, "#{inspect(error)}")
+      result ->
+        result
     end
   end
 
-  def create_event_with_retry(event, _transaction_map, 0, _repo) do
+  def process_create_event_with_retry(event, _transaction_map, 0, _repo) do
     EventStore.mark_as_occ_timeout(event, occ_final_error_message())
     {:error, occ_final_error_message()}
   end

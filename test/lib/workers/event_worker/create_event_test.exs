@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
     end
   end
 
-  describe "create_event_with_retry/4" do
+  describe "process_create_event_with_retry/4" do
     setup [:create_instance, :create_accounts, :verify_on_exit!]
 
     test "create event with last retry that fails", ctx do
@@ -48,12 +48,35 @@ defmodule DoubleEntryLedger.CreateEventTest do
       end)
 
       assert {:error, "OCC conflict: Max number of 5 retries reached"} =
-               CreateEvent.create_event_with_retry(
+               CreateEvent.process_create_event_with_retry(
                  event,
                  transaction_map,
                  1,
                  DoubleEntryLedger.MockRepo
                )
     end
+
+    # test "when transaction can't be created for other reasons", ctx do
+    # %{event: %{transaction_data: transaction_data, instance_id: id} = event} = create_event(ctx)
+    # {:ok, transaction_map} = transaction_data_to_transaction_map(transaction_data, id)
+    #
+    # DoubleEntryLedger.MockRepo
+    # |> expect(:insert, fn changeset ->
+    ## simulate a conflict when adding the transaction
+    # {:error, changeset}
+    # end)
+    # |> expect(:transaction, fn multi ->
+    ## the transaction has to be handled by the Repo
+    # Repo.transaction(multi)
+    # end)
+    #
+    # assert {:error, "OCC conflict: Max number of 5 retries reached"} =
+    # CreateEvent.create_event_with_retry(
+    # event,
+    # transaction_map,
+    # 1,
+    # DoubleEntryLedger.MockRepo
+    # )
+    # end
   end
 end
