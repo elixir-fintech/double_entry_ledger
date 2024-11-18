@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.CreateEvent do
+defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   @moduledoc """
   Provides helper functions for handling events with the `action: :create` attribute
   in the double-entry ledger system.
@@ -15,7 +15,9 @@ defmodule DoubleEntryLedger.CreateEvent do
   }
 
   import DoubleEntryLedger.OccRetry
-  import DoubleEntryLedger.EventTransformer, only: [transaction_data_to_transaction_map: 2]
+
+  import DoubleEntryLedger.EventWorker.EventTransformer,
+    only: [transaction_data_to_transaction_map: 2]
 
   @doc """
   Processes the event by transforming transaction data and creating a transaction.
@@ -86,7 +88,9 @@ defmodule DoubleEntryLedger.CreateEvent do
     - `{:error, reason}` if the operation fails after all retries.
   """
   @spec process_create_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()) ::
-          {:ok, %{transaction: Transaction.t(), event: Event.t()}} | {:error, String.t()} | Multi.failure()
+          {:ok, %{transaction: Transaction.t(), event: Event.t()}}
+          | {:error, String.t()}
+          | Multi.failure()
   def process_create_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
 
   def process_create_event_with_retry(event, transaction_map, attempts, repo) when attempts > 0 do

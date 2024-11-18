@@ -10,9 +10,11 @@ defmodule DoubleEntryLedger.CreateEventTest do
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
-  import DoubleEntryLedger.EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
-  alias DoubleEntryLedger.CreateEvent
+  import DoubleEntryLedger.EventWorker.EventTransformer,
+    only: [transaction_data_to_transaction_map: 2]
+
+  alias DoubleEntryLedger.EventWorker.CreateEvent
 
   doctest CreateEvent
 

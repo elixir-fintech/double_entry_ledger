@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.UpdateEvent do
+defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   @moduledoc """
   Provides helper functions for updating events in the double-entry ledger system.
   """
@@ -13,7 +13,9 @@ defmodule DoubleEntryLedger.UpdateEvent do
   }
 
   import DoubleEntryLedger.OccRetry
-  import DoubleEntryLedger.EventTransformer, only: [transaction_data_to_transaction_map: 2]
+
+  import DoubleEntryLedger.EventWorker.EventTransformer,
+    only: [transaction_data_to_transaction_map: 2]
 
   @doc """
   Processes the update of an event by fetching the corresponding transaction and applying updates.

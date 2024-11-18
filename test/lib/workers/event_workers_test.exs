@@ -13,8 +13,6 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     EventStore, EventWorker,
   }
 
-  alias DoubleEntryLedger.Event.EntryData
-
   doctest EventWorker
 
   describe "process_event_with_id/1" do

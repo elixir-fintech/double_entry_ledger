@@ -62,6 +62,8 @@ defmodule DoubleEntryLedger.Event do
     timestamps(type: :utc_datetime_usec)
   end
 
+  def actions(), do: @actions
+
   @doc false
   def changeset(event, %{action: :update, transaction_data: %{status: :pending}} = attrs) do
     event

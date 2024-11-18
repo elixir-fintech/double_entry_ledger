@@ -9,7 +9,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.TransactionFixtures
-  alias DoubleEntryLedger.{EventStore, Event, CreateEvent}
+  alias DoubleEntryLedger.{EventStore, Event}
+  alias DoubleEntryLedger.EventWorker.CreateEvent
 
   describe "insert_event/1" do
     setup [:create_instance]

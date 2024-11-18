@@ -9,8 +9,11 @@ defmodule DoubleEntryLedger.EventWorker do
   Existing events must be in the `:pending` state to be processed.
   """
   alias DoubleEntryLedger.{
-    ProcessEvent, Event, EventStore, Transaction
+    Event, EventStore, Transaction
   }
+
+  alias DoubleEntryLedger.EventWorker.ProcessEvent
+
 
   import ProcessEvent, only: [process_event: 1, process_event_map: 1]
 
