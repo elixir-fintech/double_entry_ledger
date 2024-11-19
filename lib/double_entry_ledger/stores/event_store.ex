@@ -75,6 +75,13 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.update()
   end
 
+  @spec create_event_after_failure(Event.t(), list(), atom()) :: {:ok, Event.t()} | {:error, Changeset.t()}
+  def create_event_after_failure(event, errors, status) do
+    event
+    |> Changeset.change(errors: errors, status: status)
+    |> Repo.insert()
+  end
+
   defp build_error(error) do
     %{
       message: error,
