@@ -17,6 +17,14 @@ defmodule DoubleEntryLedger.EventStore do
     |> Event.changeset(attrs)
   end
 
+  @spec create_event_after_failure(Event.t(), list(), integer(), atom()) ::
+          {:ok, Event.t()} | {:error, Changeset.t()}
+  def create_event_after_failure(event, errors, retries, status) do
+    event
+    |> Changeset.change(errors: errors, status: status, tries: retries)
+    |> Repo.insert()
+  end
+
   def get_event(id) do
     case Repo.get(Event, id) do
       nil -> {:error, "Event not found"}
@@ -27,7 +35,12 @@ defmodule DoubleEntryLedger.EventStore do
   @spec get_create_event_by_source(String.t(), String.t(), Ecto.UUID.t()) :: Event.t() | nil
   def get_create_event_by_source(source, source_idempk, instance_id) do
     Event
-    |> Repo.get_by(action: :create, source: source, source_idempk: source_idempk, instance_id: instance_id)
+    |> Repo.get_by(
+      action: :create,
+      source: source,
+      source_idempk: source_idempk,
+      instance_id: instance_id
+    )
     |> Repo.preload(processed_transaction: [entries: :account])
   end
 
@@ -41,7 +54,11 @@ defmodule DoubleEntryLedger.EventStore do
   @spec build_mark_as_processed(Event.t(), Ecto.UUID.t()) :: Changeset.t()
   def build_mark_as_processed(event, transaction_id) do
     event
-    |> Changeset.change(status: :processed, processed_at: DateTime.utc_now(), processed_transaction_id: transaction_id)
+    |> Changeset.change(
+      status: :processed,
+      processed_at: DateTime.utc_now(),
+      processed_transaction_id: transaction_id
+    )
     |> increment_tries()
   end
 
@@ -75,17 +92,11 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.update()
   end
 
-  @spec create_event_after_failure(Event.t(), list(), atom()) :: {:ok, Event.t()} | {:error, Changeset.t()}
-  def create_event_after_failure(event, errors, status) do
-    event
-    |> Changeset.change(errors: errors, status: status)
-    |> Repo.insert()
-  end
-
+  @spec build_error(String.t()) :: %{message: String.t(), inserted_at: DateTime.t()}
   defp build_error(error) do
     %{
       message: error,
-      inserted_at: DateTime.utc_now(:microsecond),
+      inserted_at: DateTime.utc_now(:microsecond)
     }
   end
 

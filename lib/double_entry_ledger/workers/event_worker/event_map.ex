@@ -29,7 +29,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
               message: String.t(),
               inserted_at: DateTime.t()
             }),
-          steps_so_far: map()
+          steps_so_far: map(),
+          retries: integer()
         }
 
   @doc """
@@ -64,7 +65,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
   def process_map(%{transaction_data: transaction_data, instance_id: id} = event_map, repo) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
-        event_error_map = %{errors: [], steps_so_far: %{}}
+        event_error_map = %{errors: [], steps_so_far: %{}, retries: 1}
 
         case process_map_with_retry(
                event_map,
@@ -114,7 +115,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
       {:error, :transaction, %Ecto.StaleEntryError{}, steps_so_far} ->
         new_error_map = %{
           errors: build_errors(occ_error_message(attempts), error_map.errors),
-          steps_so_far: steps_so_far
+          steps_so_far: steps_so_far,
+          retries: error_map.retries + 1
         }
 
         set_delay_timer(attempts)
@@ -129,6 +131,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     case EventStore.create_event_after_failure(
            error_map.steps_so_far.create_event,
            [build_error(occ_final_error_message()) | error_map.errors],
+           error_map.retries,
            :occ_timeout
          ) do
       {:ok, event} ->

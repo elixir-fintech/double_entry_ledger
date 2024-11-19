@@ -54,30 +54,12 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
                EventMap.process_map_with_retry(
                  event_map,
                  transaction_map,
-                 %{errors: [], steps_so_far: %{}},
+                 %{errors: [], steps_so_far: %{}, retries: 1},
                  1,
                  DoubleEntryLedger.MockRepo
                )
 
-      assert %Event{status: :occ_timeout} = Repo.get(Event, id)
+      assert %Event{status: :occ_timeout, tries: 2} = Repo.get(Event, id)
     end
-  end
-
-  defp event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}) do
-    %{
-      action: :create,
-      instance_id: id,
-      source: "source",
-      source_data: %{},
-      source_idempk: "source_idempk",
-      update_idempk: nil,
-      transaction_data: %{
-        status: :pending,
-        entries: [
-          %{account_id: a1.id, amount: 100, currency: "EUR"},
-          %{account_id: a2.id, amount: 100, currency: "EUR"}
-        ]
-      }
-    }
   end
 end
