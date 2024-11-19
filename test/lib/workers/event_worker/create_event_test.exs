@@ -58,27 +58,27 @@ defmodule DoubleEntryLedger.CreateEventTest do
                )
     end
 
-    # test "when transaction can't be created for other reasons", ctx do
-    # %{event: %{transaction_data: transaction_data, instance_id: id} = event} = create_event(ctx)
-    # {:ok, transaction_map} = transaction_data_to_transaction_map(transaction_data, id)
-    #
-    # DoubleEntryLedger.MockRepo
-    # |> expect(:insert, fn changeset ->
-    ## simulate a conflict when adding the transaction
-    # {:error, changeset}
-    # end)
-    # |> expect(:transaction, fn multi ->
-    ## the transaction has to be handled by the Repo
-    # Repo.transaction(multi)
-    # end)
-    #
-    # assert {:error, "OCC conflict: Max number of 5 retries reached"} =
-    # CreateEvent.create_event_with_retry(
-    # event,
-    # transaction_map,
-    # 1,
-    # DoubleEntryLedger.MockRepo
-    # )
-    # end
+    test "when transaction can't be created for other reasons", ctx do
+      %{event: %{transaction_data: transaction_data, instance_id: id} = event} = create_event(ctx)
+      {:ok, transaction_map} = transaction_data_to_transaction_map(transaction_data, id)
+
+      DoubleEntryLedger.MockRepo
+      |> expect(:insert, fn changeset ->
+        # simulate a conflict when adding the transaction
+        {:error, changeset}
+      end)
+      |> expect(:transaction, fn multi ->
+        # the transaction has to be handled by the Repo
+        Repo.transaction(multi)
+      end)
+
+      assert {:error, :transaction, %Ecto.Changeset{}, %{}} =
+               CreateEvent.process_create_event_with_retry(
+                 event,
+                 transaction_map,
+                 1,
+                 DoubleEntryLedger.MockRepo
+               )
+    end
   end
 end
