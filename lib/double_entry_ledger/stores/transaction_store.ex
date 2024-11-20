@@ -11,15 +11,23 @@ defmodule DoubleEntryLedger.TransactionStore do
   }
 
   @doc """
-  Builds an Ecto.Multi() struct to create a new transaction with the given attributes.
+  Builds an `Ecto.Multi` to create a new transaction. This is used as a building block for more complex
+  operations.
+
+  It also handles the `Ecto.StaleEntryError` exception that can be raised when accounts associated
+  with the transaction have been updated in the meantime. In this case it returns an error tuple
+  which is then converted to an Ecto.Multi.failure() to be handled by the caller.
 
   ## Parameters
 
-    - transaction: The attributes of the transaction to be created.
+    - `multi` - The existing `Ecto.Multi` struct.
+    - `step` - An atom representing the name of the operation.
+    - `transaction` - A map of transaction attributes.
+    - `repo` - The repository module (defaults to `Repo`).
 
   ## Returns
 
-      - An `Ecto.Multi` struct representing the database operations to be performed.
+    - An `Ecto.Multi` struct with the create operation added.
   """
   @spec build_create(Multi.t(), atom(), map(), Ecto.Repo.t()) :: Multi.t()
   # Dialyzer requires a map here
@@ -37,13 +45,19 @@ defmodule DoubleEntryLedger.TransactionStore do
   end
 
   @doc """
-  Creates a new transaction with the given attributes.
+  Creates a new transaction with the given attributes. This can throw an
+  `Ecto.StaleEntryError` if the accounts associated with this transaction have
+  been updated in the meantime. Generally it is recommended to use an event
+  to create a transaction as this creates the full audit trail.
 
   ## Parameters
-    - transaction: The attributes of the transaction to be created.
+
+    - `transaction` - A map or `Transaction` struct containing the transaction data.
 
   ## Returns
-    - {:ok, Transaction.t()} | {:error, Ecto.Changeset.t()}
+
+    - `{:ok, %Transaction{}}` on success.
+    - `{:error, changeset}` on failure.
   """
   @spec create(Transaction.t() | map()) :: {:ok, Transaction.t()} | {:error, any()}
   def create(transaction) do
@@ -53,59 +67,68 @@ defmodule DoubleEntryLedger.TransactionStore do
   end
 
   @doc """
-  Builds an Ecto.Multi() to update a transaction with the given attributes.
+  Updates an existing transaction with the given attributes. This can throw an
+  `Ecto.StaleEntryError` if the accounts associated with this transaction have
+  been updated in the meantime. Generally it is recommended to use an event
+  to update a transaction as this creates the full audit trail.
 
   ## Parameters
-    - transaction: The `Transaction` struct to be updated.
-    - attrs: A map of attributes to update the transaction with.
+
+    - `transaction` - The `Transaction` struct to be updated.
+    - `attrs` - A map of attributes for the update.
 
   ## Returns
-    - An `Ecto.Multi` struct representing the database operations to be performed.
-  """
-  @spec build_update(Multi.t(), atom(), Transaction.t(), map()) :: Multi.t()
-  def build_update(multi, step, %{status: :pending} = trx, %{status: :posted} = attr) do
-    base_build_update(multi, step, trx, attr, :pending_to_posted)
-  end
 
-  def build_update(multi, step, %{status: :pending} = trx, %{status: :archived} = attr) do
-    base_build_update(multi, step, trx, attr, :pending_to_archived)
-  end
-
-  def build_update(multi, step, %{status: :pending} = trx, %{} = attr) do
-    base_build_update(multi, step, trx, attr, :pending_to_pending)
-  end
-
-  @doc """
-  Updates a transaction with the given attributes.
-
-  ## Parameters
-    - transaction: The `Transaction` struct to be updated.
-    - attrs: A map of attributes to update the transaction with.
-
-  ## Returns
-      - {:ok, Transaction.t()} | {:error, any()}
+    - `{:ok, %Transaction{}}` on success.
+    - `{:error, changeset}` on failure.
   """
   @spec update(Transaction.t(), map()) :: {:ok, Transaction.t()} | {:error, any()}
   def update(transaction, attrs) do
-    case perform_update(:transaction, transaction, attrs) do
-      {:ok, %{transaction: transaction}} -> {:ok, transaction}
-      {:error, _name, failed_step, _changes_so_far} -> {:error, failed_step}
-      {:error, reason} -> {:error, reason}
-    end
+    transition = update_transition(transaction, attrs)
+
+    transaction
+    |> Transaction.changeset(attrs, transition)
+    |> Repo.update()
   end
 
-  @spec perform_update(atom(), Transaction.t(), map()) ::
-          {:ok, map()} | {:error, any()} | Multi.failure()
-  def perform_update(step, transaction, attrs) do
-    Multi.new()
-    |> build_update(step, transaction, attrs)
-    |> Repo.transaction()
-  end
+  @doc """
+  Builds an `Ecto.Multi` to update a transaction. This is used as a building block for more complex
+  operations.
 
-  @spec base_build_update(Multi.t(), atom(), Transaction.t(), map(), Types.trx_types()) ::
-          Multi.t()
-  defp base_build_update(multi, step, transaction, attr, transition) do
+  It also handles the `Ecto.StaleEntryError` exception that can be raised when accounts associated
+  with the transaction have been updated in the meantime. In this case it returns an error tuple
+  which is then converted to an Ecto.Multi.failure() to be handled by the caller.
+
+  ## Parameters
+
+    - `multi` - The existing `Ecto.Multi` struct.
+    - `step` - An atom representing the name of the operation.
+    - `transaction` - The `Transaction` struct to be updated.
+    - `attrs` - A map of attributes for the update.
+    - `repo` - The repository module (defaults to `Repo`).
+
+  ## Returns
+
+    - An `Ecto.Multi` struct with the update operation added.
+  """
+  @spec build_update(Multi.t(), atom(), Transaction.t(), map(), Ecto.Repo.t()) :: Multi.t()
+  def build_update(multi, step, transaction, attrs, repo \\ Repo) do
+    transition = update_transition(transaction, attrs)
+
     multi
-    |> Multi.update(step, Transaction.changeset(transaction, attr, transition))
+    |> Multi.run(step, fn _, _ ->
+      try do
+        Transaction.changeset(transaction, attrs, transition)
+        |> repo.update()
+      rescue
+        e in Ecto.StaleEntryError ->
+          {:error, e}
+      end
+    end)
   end
+
+  @spec update_transition(Transaction.t(), map()) :: Types.trx_types()
+  defp update_transition(%{status: :pending}, %{status: :posted}), do: :pending_to_posted
+  defp update_transition(%{status: :pending}, %{status: :archived}), do: :pending_to_archived
+  defp update_transition(%{status: :pending}, %{}), do: :pending_to_pending
 end
