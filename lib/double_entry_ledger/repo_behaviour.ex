@@ -5,5 +5,6 @@ defmodule DoubleEntryLedger.RepoBehaviour do
   module implements the required functions.
   """
   @callback transaction(fun :: (() -> any())) :: any()
-  @callback insert(fun :: (() -> any())) :: any()
+  @callback insert(struct_or_changeset :: Ecto.Schema.t() | Ecto.Changeset.t()) ::
+              {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()}
 end
