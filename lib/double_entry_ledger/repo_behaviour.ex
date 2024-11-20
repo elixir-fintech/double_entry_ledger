@@ -7,4 +7,6 @@ defmodule DoubleEntryLedger.RepoBehaviour do
   @callback transaction(fun :: (() -> any())) :: any()
   @callback insert(struct_or_changeset :: Ecto.Schema.t() | Ecto.Changeset.t()) ::
               {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()}
+  @callback update(struct_or_changeset :: Ecto.Schema.t() | Ecto.Changeset.t()) ::
+              {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()}
 end
