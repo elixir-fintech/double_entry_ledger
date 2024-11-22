@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.{EventStore, Event}
+  alias DoubleEntryLedger.EventStore
   alias DoubleEntryLedger.EventWorker.{UpdateEvent, CreateEvent}
 
   import DoubleEntryLedger.EventWorker.EventTransformer,
@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     test "fails when create event does not exist", %{instance: inst} do
       {:ok, event} = create_update_event("source", "1", inst.id, :posted)
 
-      assert {:error, "Create Event not found for Update Event (id: #{event.id})", nil} ==
+      assert {:error, "Create Event not found for Update Event (id: #{event.id})"} ==
                UpdateEvent.process_update_event(event)
     end
 
@@ -134,7 +134,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: %{id: e_id, source: s, source_idempk: s_id}} = create_event(ctx, :pending)
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      {:pending_error, message, _} = UpdateEvent.process_update_event(event)
+      {:error, message} = UpdateEvent.process_update_event(event)
       assert message == "Create event (id: #{e_id}) has not yet been processed for Update Event (id: #{event.id})"
     end
 
@@ -143,7 +143,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       EventStore.mark_as_failed(pending_event, "some reason")
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      {:error, message, _} = UpdateEvent.process_update_event(event)
+      {:error, message} = UpdateEvent.process_update_event(event)
       assert message == "Create event (id: #{pending_event.id}) has failed for Update Event (id: #{event.id})"
     end
   end
@@ -154,7 +154,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     test "update event with last retry that fails", %{instance: inst} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
 
-      {:ok, {pending_transaction, %{source: s, source_idempk: s_id}}} =
+      {:ok, {_pending_transaction, %{source: s, source_idempk: s_id}}} =
         CreateEvent.process_create_event(pending_event)
 
       {:ok, %{transaction_data: transaction_data} = event} =
@@ -175,7 +175,6 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert {:error, "OCC conflict: Max number of 5 retries reached"} =
                UpdateEvent.process_update_event_with_retry(
                  event,
-                 pending_transaction,
                  transaction_map,
                  1,
                  DoubleEntryLedger.MockRepo
@@ -185,7 +184,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     test "when transaction can't be created for other reasons", %{instance: inst} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
 
-      {:ok, {pending_transaction, %{source: s, source_idempk: s_id}}} =
+      {:ok, {_pending_transaction, %{source: s, source_idempk: s_id}}} =
         CreateEvent.process_create_event(pending_event)
 
       {:ok, %{transaction_data: transaction_data} = event} =
@@ -206,7 +205,6 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert {:error, :transaction, %Ecto.Changeset{}, %{}} =
                UpdateEvent.process_update_event_with_retry(
                  event,
-                 pending_transaction,
                  transaction_map,
                  1,
                  DoubleEntryLedger.MockRepo

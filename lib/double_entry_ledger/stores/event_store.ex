@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.EventStore do
   This module defines the EventStore behaviour.
   """
   alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.{Repo, Event}
+  alias DoubleEntryLedger.{Repo, Event, Transaction}
   alias DoubleEntryLedger.EventStore.CreateEventError
 
   @spec insert_event(map()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
@@ -168,6 +168,7 @@ defmodule DoubleEntryLedger.EventStore.CreateEventError do
         %CreateEventError{
           message: "Create Event not found for Update Event (id: #{update_event.id})",
           create_event: nil,
+          update_event: update_event,
           reason: :create_event_not_found
         }
     end
