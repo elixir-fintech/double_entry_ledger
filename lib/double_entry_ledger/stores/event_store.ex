@@ -2,8 +2,9 @@ defmodule DoubleEntryLedger.EventStore do
   @moduledoc """
   This module defines the EventStore behaviour.
   """
-  alias Ecto.Changeset
+  alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.{Repo, Event}
+  alias DoubleEntryLedger.EventStore.CreateEventError
 
   @spec insert_event(map()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
   def insert_event(attrs) do
@@ -42,6 +43,37 @@ defmodule DoubleEntryLedger.EventStore do
       instance_id: instance_id
     )
     |> Repo.preload(processed_transaction: [entries: :account])
+  end
+
+  @spec get_create_event_transaction(Event.t()) ::
+          {:ok, {Transaction.t(), Event.t()}}
+          | {:error | :pending_error, String.t(), Event.t() | nil}
+  def get_create_event_transaction(%{
+        source: source,
+        source_idempk: source_idempk,
+        instance_id: id
+      } = event) do
+    case get_create_event_by_source(source, source_idempk, id) do
+      %{processed_transaction: %{id: _} = transaction, status: :processed} = create_event ->
+        {:ok, {transaction, create_event}}
+
+      create_event ->
+        raise CreateEventError, create_event: create_event, update_event: event
+    end
+  end
+
+  @spec build_get_create_event_transaction(Ecto.Multi.t(), atom(), Event.t()) :: Ecto.Multi.t()
+  def build_get_create_event_transaction(multi, step, event) do
+    multi
+    |> Multi.run(step, fn _, _ ->
+      try do
+        {:ok, {transaction, _}} = get_create_event_transaction(event)
+        {:ok, transaction}
+      rescue
+        e in CreateEventError ->
+          {:error, e}
+      end
+    end)
   end
 
   @spec mark_as_processed(Event.t(), Ecto.UUID.t()) :: {:ok, Event.t()} | {:error, Changeset.t()}
@@ -104,5 +136,40 @@ defmodule DoubleEntryLedger.EventStore do
   defp increment_tries(changeset) do
     current_tries = Changeset.get_field(changeset, :tries) || 0
     Changeset.put_change(changeset, :tries, current_tries + 1)
+  end
+end
+
+
+defmodule DoubleEntryLedger.EventStore.CreateEventError do
+  defexception [:message, :create_event, :update_event, :reason]
+
+  alias DoubleEntryLedger.Event
+  alias __MODULE__, as: CreateEventError
+
+  @impl true
+  def exception(opts) do
+    update_event = Keyword.get(opts, :update_event)
+    create_event = Keyword.get(opts, :create_event)
+    case create_event do
+      %Event{status: :pending} ->
+        %CreateEventError{
+          message: "Create event (id: #{create_event.id}) has not yet been processed for Update Event (id: #{update_event.id})",
+          create_event: create_event,
+          update_event: update_event,
+          reason: :create_event_pending}
+      %Event{status: :failed} ->
+        %CreateEventError{
+          message: "Create event (id: #{create_event.id}) has failed for Update Event (id: #{update_event.id})",
+          create_event: create_event,
+          update_event: update_event,
+          reason: :create_event_failed
+        }
+      nil ->
+        %CreateEventError{
+          message: "Create Event not found for Update Event (id: #{update_event.id})",
+          create_event: nil,
+          reason: :create_event_not_found
+        }
+    end
   end
 end

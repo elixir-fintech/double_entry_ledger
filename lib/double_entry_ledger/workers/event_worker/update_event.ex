@@ -20,6 +20,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     TransactionStore,
     Repo
   }
+  alias DoubleEntryLedger.EventStore.CreateEventError
 
   import DoubleEntryLedger.OccRetry
 
@@ -42,57 +43,21 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   @spec process_update_event(Event.t()) ::
           {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
   def process_update_event(event) do
-    case fetch_create_event_transaction(event) do
-      {:ok, {transaction, _}} ->
-        update_transaction_and_event(event, transaction)
+    try do
+      {:ok, {transaction, _}} = EventStore.get_create_event_transaction(event)
+      update_transaction_and_event(event, transaction)
+    rescue
+      e in CreateEventError ->
+      case e.reason do
+        :create_event_pending ->
+          {:pending_error, e.message, e.update_event}
 
-      {:pending_error, error, _} ->
-        EventStore.add_error(event, error)
-        {:error, error}
+        :create_event_failed ->
+          {:error, e.message, e.update_event}
 
-      {:error, error, _} ->
-        {:error, error}
-    end
-  end
-
-  @doc """
-  Fetches the create event transaction associated with the given update event.
-
-  Retrieves the corresponding create event based on the source, source idempotency key, and instance ID.
-  Handles various statuses of the create event, such as pending or failed, and returns appropriate results or errors.
-
-  ## Parameters
-
-    - `event`: The `%Event{}` struct representing the update event.
-
-  ## Returns
-
-    - `{:ok, {transaction, event}}` if the create event and transaction are found and processed.
-    - `{:pending_error, reason, event}` if the create event is pending.
-    - `{:error, reason, event}` if the create event failed or was not found.
-
-  """
-  @spec fetch_create_event_transaction(Event.t()) ::
-          {:ok, {Transaction.t(), Event.t()}}
-          | {:error | :pending_error, String.t(), Event.t() | nil}
-  def fetch_create_event_transaction(%{
-        id: e_id,
-        source: source,
-        source_idempk: source_idempk,
-        instance_id: id
-      }) do
-    case EventStore.get_create_event_by_source(source, source_idempk, id) do
-      %{processed_transaction: %{id: _} = transaction} = event ->
-        {:ok, {transaction, event}}
-
-      %{id: id, status: :pending} = event ->
-        {:pending_error, "Create event (id: #{id}) has not yet been processed", event}
-
-      %{id: id, status: :failed} = event ->
-        {:error, "Create event (id: #{id}) has failed for Update Event (id: #{e_id})", event}
-
-      nil ->
-        {:error, "Create Event not found for Update Event (id: #{e_id})", nil}
+        :create_event_not_found ->
+          {:error, e.message, e.update_event}
+      end
     end
   end
 
@@ -198,7 +163,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
           Multi.t()
   defp build_update_transaction_and_event(transaction, event, attr, repo) do
     Multi.new()
-    |> TransactionStore.build_update(:transaction, transaction, attr, repo)
+    |> EventStore.build_get_create_event_transaction(:create_event_transaction, event)
+    |> TransactionStore.build_update2(:transaction, :create_event_transaction, attr, repo)
     |> Multi.update(:event, fn %{transaction: td} ->
       EventStore.build_mark_as_processed(event, td.id)
     end)

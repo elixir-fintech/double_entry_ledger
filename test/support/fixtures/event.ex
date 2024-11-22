@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     |> EventStore.insert_event()
   end
 
-  def event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}) do
+  def event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}, trx_status \\ :pending) do
     %{
       action: :create,
       instance_id: id,
@@ -66,10 +66,28 @@ defmodule DoubleEntryLedger.EventFixtures do
       source_idempk: "source_idempk",
       update_idempk: nil,
       transaction_data: %{
-        status: :pending,
+        status: trx_status,
         entries: [
           %{account_id: a1.id, amount: 100, currency: "EUR"},
           %{account_id: a2.id, amount: 100, currency: "EUR"}
+        ]
+      }
+    }
+  end
+
+  def update_event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}, create_event, trx_status \\ :posted) do
+    %{
+      action: :update,
+      instance_id: id,
+      source: create_event.source,
+      source_data: %{},
+      source_idempk: create_event.source_idempk,
+      update_idempk: Ecto.UUID.generate(),
+      transaction_data: %{
+        status: trx_status,
+        entries: [
+          %{account_id: a1.id, amount: 50, currency: "EUR"},
+          %{account_id: a2.id, amount: 50, currency: "EUR"}
         ]
       }
     }

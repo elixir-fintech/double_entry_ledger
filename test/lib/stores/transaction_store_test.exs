@@ -8,6 +8,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
 
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
   alias DoubleEntryLedger.{Account, TransactionStore, Balance, Repo}
+  alias Ecto.Multi
 
   describe "create/1" do
     setup [:create_instance, :create_accounts]
@@ -199,7 +200,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
     end
   end
 
-  describe "build_create/3" do
+  describe "build_create/4" do
     setup [:create_instance, :create_accounts, :verify_on_exit!]
 
     test "can handle StaleEntryError so the multi step returns a Multi.failure()", %{
@@ -224,6 +225,43 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
                Ecto.Multi.new()
                |> TransactionStore.build_create(:transaction, attr, DoubleEntryLedger.MockRepo)
+               |> Repo.transaction()
+    end
+  end
+
+  describe "build_update/5" do
+    setup [:create_instance, :create_accounts, :verify_on_exit!]
+
+    test "can handle StaleEntryError so the multi step returns a Multi.failure()", ctx do
+      %{transaction: trx} = create_transaction(ctx, :pending)
+
+      DoubleEntryLedger.MockRepo
+      |> expect(:update, fn _changeset ->
+        raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
+      end)
+
+      assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
+               Multi.new()
+               |> TransactionStore.build_update(:transaction, trx, %{status: :posted}, DoubleEntryLedger.MockRepo)
+               |> Repo.transaction()
+    end
+  end
+
+  describe "build_update2/5" do
+    setup [:create_instance, :create_accounts, :verify_on_exit!]
+
+    test "can handle StaleEntryError so the multi step returns a Multi.failure()", ctx do
+      %{transaction: trx} = create_transaction(ctx, :pending)
+
+      DoubleEntryLedger.MockRepo
+      |> expect(:update, fn _changeset ->
+        raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
+      end)
+
+      assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
+               Multi.new()
+               |> Multi.run(:create_event_trx, fn _repo, _changes -> {:ok, trx} end)
+               |> TransactionStore.build_update2(:transaction, :create_event_trx, %{status: :posted}, DoubleEntryLedger.MockRepo)
                |> Repo.transaction()
     end
   end

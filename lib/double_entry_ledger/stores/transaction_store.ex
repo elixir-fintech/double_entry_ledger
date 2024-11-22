@@ -127,6 +127,23 @@ defmodule DoubleEntryLedger.TransactionStore do
     end)
   end
 
+  @spec build_update2(Multi.t(), atom(), atom(), map(), Ecto.Repo.t()) :: Multi.t()
+  def build_update2(multi, step, transaction_step, attrs, repo \\ Repo) do
+
+    multi
+    |> Multi.run(step, fn _, results ->
+      transaction = Map.fetch!(results, transaction_step)
+      transition = update_transition(transaction, attrs)
+      try do
+        Transaction.changeset(transaction, attrs, transition)
+        |> repo.update()
+      rescue
+        e in Ecto.StaleEntryError ->
+          {:error, e}
+      end
+    end)
+  end
+
   @spec update_transition(Transaction.t(), map()) :: Types.trx_types()
   defp update_transition(%{status: :pending}, %{status: :posted}), do: :pending_to_posted
   defp update_transition(%{status: :pending}, %{status: :archived}), do: :pending_to_archived

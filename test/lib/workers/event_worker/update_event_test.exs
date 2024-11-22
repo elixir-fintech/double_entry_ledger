@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventStore
+  alias DoubleEntryLedger.{EventStore, Event}
   alias DoubleEntryLedger.EventWorker.{UpdateEvent, CreateEvent}
 
   import DoubleEntryLedger.EventWorker.EventTransformer,
@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     test "fails when create event does not exist", %{instance: inst} do
       {:ok, event} = create_update_event("source", "1", inst.id, :posted)
 
-      assert {:error, "Create Event not found for Update Event (id: #{event.id})"} ==
+      assert {:error, "Create Event not found for Update Event (id: #{event.id})", nil} ==
                UpdateEvent.process_update_event(event)
     end
 
@@ -134,8 +134,8 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: %{id: e_id, source: s, source_idempk: s_id}} = create_event(ctx, :pending)
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      assert {:error, "Create event (id: #{e_id}) has not yet been processed"} ==
-               UpdateEvent.process_update_event(event)
+      {:pending_error, message, _} = UpdateEvent.process_update_event(event)
+      assert message == "Create event (id: #{e_id}) has not yet been processed for Update Event (id: #{event.id})"
     end
 
     test "fails when update event failed", %{instance: inst} = ctx do
@@ -143,9 +143,8 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       EventStore.mark_as_failed(pending_event, "some reason")
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      assert {:error,
-              "Create event (id: #{pending_event.id}) has failed for Update Event (id: #{event.id})"} ==
-               UpdateEvent.process_update_event(event)
+      {:error, message, _} = UpdateEvent.process_update_event(event)
+      assert message == "Create event (id: #{pending_event.id}) has failed for Update Event (id: #{event.id})"
     end
   end
 

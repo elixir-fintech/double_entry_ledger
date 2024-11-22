@@ -15,6 +15,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     only: [transaction_data_to_transaction_map: 2]
 
   alias DoubleEntryLedger.EventWorker.EventMap
+  alias DoubleEntryLedger.EventWorker.CreateEvent
   alias DoubleEntryLedger.Event
 
   doctest EventMap
@@ -30,6 +31,20 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :pending
+    end
+
+    test "update event for event_map, which should also create the event", ctx do
+      %{event: pending_event} = create_event(ctx, :pending)
+      {:ok, {pending_transaction, _}} =
+        CreateEvent.process_create_event(pending_event)
+      update_event = update_event_map(ctx, pending_event, :posted)
+
+      {:ok, transaction, processed_event } = EventMap.process_map(update_event)
+      assert processed_event.status == :processed
+      assert processed_event.processed_transaction_id == transaction.id
+      assert processed_event.processed_transaction_id == pending_transaction.id
+      assert processed_event.processed_at != nil
+      assert transaction.status == :posted
     end
   end
 
