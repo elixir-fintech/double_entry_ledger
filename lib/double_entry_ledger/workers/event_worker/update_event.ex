@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   defp build_update_transaction_and_event(event, attr, repo) do
     Multi.new()
     |> EventStore.build_get_create_event_transaction(:get_create_event_transaction, event)
-    |> TransactionStore.build_update2(:transaction, :get_create_event_transaction, attr, repo)
+    |> TransactionStore.build_update(:transaction, :get_create_event_transaction, attr, repo)
     |> Multi.update(:event, fn %{transaction: td} ->
       EventStore.build_mark_as_processed(event, td.id)
     end)

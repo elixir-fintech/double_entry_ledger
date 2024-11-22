@@ -232,7 +232,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
   describe "build_update/5" do
     setup [:create_instance, :create_accounts, :verify_on_exit!]
 
-    test "can handle StaleEntryError so the multi step returns a Multi.failure()", ctx do
+    test "with transaction, can handle StaleEntryError so the multi step returns a Multi.failure()", ctx do
       %{transaction: trx} = create_transaction(ctx, :pending)
 
       DoubleEntryLedger.MockRepo
@@ -245,12 +245,8 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
                |> TransactionStore.build_update(:transaction, trx, %{status: :posted}, DoubleEntryLedger.MockRepo)
                |> Repo.transaction()
     end
-  end
 
-  describe "build_update2/5" do
-    setup [:create_instance, :create_accounts, :verify_on_exit!]
-
-    test "can handle StaleEntryError so the multi step returns a Multi.failure()", ctx do
+    test "with transaction_step, can handle StaleEntryError so the multi step returns a Multi.failure()", ctx do
       %{transaction: trx} = create_transaction(ctx, :pending)
 
       DoubleEntryLedger.MockRepo
@@ -261,7 +257,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
                Multi.new()
                |> Multi.run(:create_event_trx, fn _repo, _changes -> {:ok, trx} end)
-               |> TransactionStore.build_update2(:transaction, :create_event_trx, %{status: :posted}, DoubleEntryLedger.MockRepo)
+               |> TransactionStore.build_update(:transaction, :create_event_trx, %{status: :posted}, DoubleEntryLedger.MockRepo)
                |> Repo.transaction()
     end
   end

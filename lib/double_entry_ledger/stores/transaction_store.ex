@@ -111,28 +111,15 @@ defmodule DoubleEntryLedger.TransactionStore do
 
     - An `Ecto.Multi` struct with the update operation added.
   """
-  @spec build_update(Multi.t(), atom(), Transaction.t(), map(), Ecto.Repo.t()) :: Multi.t()
-  def build_update(multi, step, transaction, attrs, repo \\ Repo) do
-    transition = update_transition(transaction, attrs)
+  @spec build_update(Multi.t(), atom(), Transaction.t() | atom(), map(), Ecto.Repo.t()) :: Multi.t()
+  def build_update(multi, step, transaction_or_step, attrs, repo \\ Repo) do
 
     multi
-    |> Multi.run(step, fn _, _ ->
-      try do
-        Transaction.changeset(transaction, attrs, transition)
-        |> repo.update()
-      rescue
-        e in Ecto.StaleEntryError ->
-          {:error, e}
+    |> Multi.run(step, fn _, changes ->
+      transaction = cond do
+        is_struct(transaction_or_step, Transaction) -> transaction_or_step
+        is_atom(transaction_or_step) -> Map.fetch!(changes, transaction_or_step)
       end
-    end)
-  end
-
-  @spec build_update2(Multi.t(), atom(), atom(), map(), Ecto.Repo.t()) :: Multi.t()
-  def build_update2(multi, step, transaction_step, attrs, repo \\ Repo) do
-
-    multi
-    |> Multi.run(step, fn _, results ->
-      transaction = Map.fetch!(results, transaction_step)
       transition = update_transition(transaction, attrs)
       try do
         Transaction.changeset(transaction, attrs, transition)

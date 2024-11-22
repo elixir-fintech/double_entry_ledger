@@ -62,10 +62,15 @@ defmodule DoubleEntryLedger.EventStore do
     end
   end
 
-  @spec build_get_create_event_transaction(Ecto.Multi.t(), atom(), Event.t()) :: Ecto.Multi.t()
-  def build_get_create_event_transaction(multi, step, event) do
+  @spec build_get_create_event_transaction(Ecto.Multi.t(), atom(), Event.t() | atom()) :: Ecto.Multi.t()
+  def build_get_create_event_transaction(multi, step, event_or_step) do
     multi
-    |> Multi.run(step, fn _, _ ->
+    |> Multi.run(step, fn _, changes ->
+      event = cond do
+        is_struct(event_or_step, Event) -> event_or_step
+        is_atom(event_or_step) -> Map.fetch!(changes, event_or_step)
+      end
+
       try do
         {:ok, {transaction, _}} = get_create_event_transaction(event)
         {:ok, transaction}

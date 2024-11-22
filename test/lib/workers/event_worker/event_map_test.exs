@@ -5,6 +5,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
   use ExUnit.Case
   import Mox
 
+      alias DoubleEntryLedger.EventStore
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -45,6 +46,14 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       assert processed_event.processed_transaction_id == pending_transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :posted
+    end
+
+    test "update event for event_map, when create event not yet processed", ctx do
+      %{event: pending_event} = create_event(ctx, :pending)
+      update_event = update_event_map(ctx, pending_event, :posted)
+
+      {:error, error} = EventMap.process_map(update_event)
+      assert match?(error, "Create event (id: #{pending_event.id}) has not yet been processed for Update Even.*")
     end
   end
 

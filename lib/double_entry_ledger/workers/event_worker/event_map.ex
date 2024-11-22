@@ -9,17 +9,12 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     Transaction,
     TransactionStore,
     Repo,
-    UpdateEvent,
     OccRetry
   }
 
-  alias DoubleEntryLedger.EventWorker.{
-    EventTransformer,
-    UpdateEvent
-  }
-
+  alias DoubleEntryLedger.EventWorker.EventTransformer
+  alias DoubleEntryLedger.EventStore.CreateEventError
   alias Ecto.Multi
-  import UpdateEvent, only: [process_update_event: 1]
   import OccRetry
   import EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
@@ -74,14 +69,20 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
                max_retries(),
                repo
              ) do
-          {:ok, %{process_event: %{transaction: transaction}, update_event: event}} ->
-            {:ok, transaction, event}
 
           {:ok, %{transaction: transaction, event: event}} ->
             {:ok, transaction, event}
 
           {:error, :transaction, :occ_final_timeout, _event} ->
             {:error, occ_final_error_message()}
+
+          {:error, _step, %CreateEventError{reason: :create_event_pending} = error, _steps_so_far} ->
+            # Todo: Create event as pending
+            {:error, error.message}
+
+          {:error, _step, %CreateEventError{} = error, _step_so_far} ->
+            # Todo: Create event as failed
+            {:error, error.message}
 
           {:error, step, error, _steps_so_far} ->
             {:error, "#{step} failed: #{error}"}
@@ -92,21 +93,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     end
   end
 
-  @spec process_map_with_retry(
-          Event.event_map(),
-          map(),
-          event_error_map(),
-          integer(),
-          Ecto.Repo.t()
-        ) ::
-          {:ok, %{create_event: Event.t(), transaction: Transaction.t(), event: Event.t()}}
-          | {:ok,
-             %{
-               create_event: Event.t(),
-               process_event: %{transaction: Transaction.t(), event: Event.t()},
-               update_event: Event.t()
-             }}
-          | {:ok, %{transaction: Transaction.t(), event: Event.t()}}
+  @spec process_map_with_retry(Event.event_map(), map(), event_error_map(), integer(), Ecto.Repo.t()) ::
+          {:ok, %{transaction: Transaction.t(), event: Event.t()}}
           | {:error, String.t()}
           | Ecto.Multi.failure()
   def process_map_with_retry(event_map, transaction_map, error_map, attempts, repo)
@@ -155,18 +143,14 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     end)
   end
 
-  defp build_process_event_map(%{action: :update} = event_map, _transaction_map, _repo) do
+  defp build_process_event_map(%{action: :update} = event_map, transaction_map, repo) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
     |> Multi.insert(:create_event, EventStore.build_insert_event(new_event_map))
-    |> Multi.run(:process_event, fn _repo, %{create_event: new_event} ->
-      case process_update_event(new_event) do
-        {:ok, {transaction, event}} -> {:ok, %{transaction: transaction, event: event}}
-        {:error, reason} -> {:error, reason}
-      end
-    end)
-    |> Multi.update(:update_event, fn %{process_event: %{transaction: transaction, event: event}} ->
+    |> EventStore.build_get_create_event_transaction(:get_create_event_transaction, :create_event)
+    |> TransactionStore.build_update(:transaction, :get_create_event_transaction, transaction_map, repo)
+    |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
       EventStore.build_mark_as_processed(event, transaction.id)
     end)
   end
