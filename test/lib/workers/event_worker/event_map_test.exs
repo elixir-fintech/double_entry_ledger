@@ -52,8 +52,29 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       %{event: pending_event} = create_event(ctx, :pending)
       update_event = update_event_map(ctx, pending_event, :posted)
 
-      {:error, error} = EventMap.process_map(update_event)
-      assert match?(error, "Create event (id: #{pending_event.id}) has not yet been processed for Update Even.*")
+      {:error, error_message} = EventMap.process_map(update_event)
+      assert error_message =~ "Create event (id: #{pending_event.id}) has not yet been processed for Update Even"
+      saved_update_event = Event
+      |> where([e], e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk))
+      |> Repo.one()
+
+      assert saved_update_event.status == :pending
+      assert saved_update_event.id != pending_event.id
+    end
+
+    test "update event for event_map, when create event failed", ctx do
+      %{event: pending_event} = create_event(ctx, :pending)
+      EventStore.mark_as_failed(pending_event, "Failed to create event")
+      update_event = update_event_map(ctx, pending_event, :posted)
+
+      {:error, error_message} = EventMap.process_map(update_event)
+      assert error_message =~ "Create event (id: #{pending_event.id}) has failed for Update Event"
+      saved_update_event = Event
+      |> where([e], e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk))
+      |> Repo.one()
+
+      assert saved_update_event.status == :failed
+      assert saved_update_event.id != pending_event.id
     end
   end
 

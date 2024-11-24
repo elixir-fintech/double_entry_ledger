@@ -76,12 +76,12 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
           {:error, :transaction, :occ_final_timeout, _event} ->
             {:error, occ_final_error_message()}
 
-          {:error, _step, %CreateEventError{reason: :create_event_pending} = error, _steps_so_far} ->
-            # Todo: Create event as pending
+          {:error, :get_create_event_transaction, %CreateEventError{reason: :create_event_pending} = error, steps_so_far} ->
+            EventStore.create_event_after_failure(steps_so_far.create_event, [build_error(error.message)], 1, :pending)
             {:error, error.message}
 
-          {:error, _step, %CreateEventError{} = error, _step_so_far} ->
-            # Todo: Create event as failed
+          {:error, :get_create_event_transaction, %CreateEventError{} = error, steps_so_far} ->
+            EventStore.create_event_after_failure(steps_so_far.create_event, [build_error(error.message)], 1, :failed)
             {:error, error.message}
 
           {:error, step, error, _steps_so_far} ->
