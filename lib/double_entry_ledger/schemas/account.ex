@@ -67,6 +67,10 @@ defmodule DoubleEntryLedger.Account do
 
     belongs_to :instance, DoubleEntryLedger.Instance
 
+    has_many :entries, DoubleEntryLedger.Entry, foreign_key: :account_id
+    has_many :balance_history_entries, DoubleEntryLedger.BalanceHistoryEntry,
+      foreign_key: :account_id
+
     timestamps(type: :utc_datetime_usec)
   end
 
