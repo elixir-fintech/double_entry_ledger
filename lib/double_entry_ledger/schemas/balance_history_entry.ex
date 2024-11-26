@@ -1,18 +1,19 @@
-defmodule DoubleEntryLedger.Schemas.BalanceHistoryEntry do
+defmodule DoubleEntryLedger.BalanceHistoryEntry do
   @moduledoc """
   Provides the schema for the balance history entry.
   This schema is used to store the balance history of an account.
   """
-
+  require Logger
   use Ecto.Schema
   import Ecto.Changeset
-  alias DoubleEntryLedger.{Account, Entry}
+  alias Ecto.Changeset
+  alias DoubleEntryLedger.{Account, Entry, Balance}
   alias __MODULE__, as: BalanceHistoryEntry
 
   @type t :: %BalanceHistoryEntry{
     id: Ecto.UUID.t(),
-    posted: map(),
-    pending: map(),
+    posted: Balance.t(),
+    pending: Balance.t(),
     available: integer(),
     account: Account.t() | Ecto.Association.NotLoaded.t(),
     account_id: Ecto.UUID.t(),
@@ -37,4 +38,14 @@ defmodule DoubleEntryLedger.Schemas.BalanceHistoryEntry do
     timestamps(type: :utc_datetime_usec)
   end
 
+  @spec build_from_account_changeset(Changeset.t()) :: Changeset.t()
+  def build_from_account_changeset(account_changeset) do
+    %BalanceHistoryEntry{}
+    |> cast(%{
+        account_id: get_field(account_changeset, :id),
+        available: get_field(account_changeset, :available),
+      }, [:available, :account_id])
+    |> put_embed(:posted, Balance.changeset(%Balance{}, Map.from_struct(get_embed(account_changeset, :posted, :struct))))
+    |> put_embed(:pending, Balance.changeset(%Balance{}, Map.from_struct(get_embed(account_changeset, :pending, :struct))))
+  end
 end

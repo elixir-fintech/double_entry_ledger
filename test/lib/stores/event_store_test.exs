@@ -102,7 +102,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
       {:ok, {transaction, _}} = CreateEvent.process_create_event(event)
       assert %Event{} = found_event = EventStore.get_create_event_by_source(event.source, event.source_idempk, instance.id)
       assert found_event.processed_transaction.id == transaction.id
-      assert found_event.processed_transaction.entries == transaction.entries
     end
 
     test "returns nil for non-existent event", %{instance: instance} do

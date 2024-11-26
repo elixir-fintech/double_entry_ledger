@@ -27,7 +27,13 @@ defmodule DoubleEntryLedger.Account do
   """
   use Ecto.Schema
   import Ecto.Changeset
-  alias DoubleEntryLedger.{Balance, Types, Currency, Entry}
+  alias DoubleEntryLedger.{
+    Balance,
+    BalanceHistoryEntry,
+    Currency,
+    Entry,
+    Instance,
+    Types}
   alias __MODULE__, as: Account
 
   @credit_and_debit Types.credit_and_debit()
@@ -65,10 +71,10 @@ defmodule DoubleEntryLedger.Account do
     embeds_one :posted, Balance, on_replace: :delete
     embeds_one :pending, Balance, on_replace: :delete
 
-    belongs_to :instance, DoubleEntryLedger.Instance
+    belongs_to :instance, Instance
 
-    has_many :entries, DoubleEntryLedger.Entry, foreign_key: :account_id
-    has_many :balance_history_entries, DoubleEntryLedger.BalanceHistoryEntry,
+    has_many :entries, Entry, foreign_key: :account_id
+    has_many :balance_history_entries, BalanceHistoryEntry,
       foreign_key: :account_id
 
     timestamps(type: :utc_datetime_usec)
