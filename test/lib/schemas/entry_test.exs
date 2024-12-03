@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EntryTest do
 
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Entry, Repo}
+  alias DoubleEntryLedger.{Account, Entry, Repo, BalanceHistoryEntry, Balance}
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
@@ -64,6 +64,35 @@ defmodule DoubleEntryLedger.EntryTest do
         valid?: false,
         errors: [account: {"currency (EUR) must be equal to entry currency (USD)", []}]
       } = Entry.update_changeset(e0, %{value: Money.new(100, :USD)}, :pending_to_posted)
+    end
+  end
+
+  describe "put_balance_history_entry_assoc/1" do
+    setup [:create_instance, :create_accounts, :create_transaction]
+
+    test "balance history entry is created", %{transaction: %{entries: [e0, _]}} do
+      %{balance_history_entries: [first | _t]} = account = Repo.get!(Account, e0.account_id, preload: [:balance_history_entries])
+      |> Repo.preload([:balance_history_entries])
+      assert first.account_id == e0.account_id
+      assert first.entry_id == e0.id
+      assert first.available == account.available
+      assert first.posted == %Balance{amount: 0, credit: 0, debit: 0}
+      assert first.posted == account.posted
+      assert first.pending == %Balance{amount: -100, credit: 0, debit: 100}
+      assert first.pending == account.pending
+    end
+
+    test "returns changeset with balance history entry", %{transaction: %{entries: [e0, _]}} do
+      changeset = Entry.update_changeset(e0, %{value: Money.new(100, :EUR)}, :pending_to_posted)
+      [h| _t] = balance_history_entries = Ecto.Changeset.get_assoc(changeset, :balance_history_entries, :struct)
+      assert 2 = length(balance_history_entries)
+      assert %BalanceHistoryEntry{
+        available: 100,
+        posted: %Balance{amount: 100, credit: 0, debit: 100},
+        pending: %Balance{amount: 0, credit: 0, debit: 0},
+      } = h
+      assert h.account_id == e0.account_id
+      assert h.entry_id == nil # not yet persisted
     end
   end
 

@@ -54,7 +54,7 @@ defmodule DoubleEntryLedger.Entry do
     field :type, Ecto.Enum, values: @debit_and_credit
     belongs_to :transaction, Transaction
     belongs_to :account, Account
-    has_one :balance_history_entry, BalanceHistoryEntry, on_replace: :delete
+    has_many :balance_history_entries, BalanceHistoryEntry, on_replace: :delete
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.Entry do
   @spec changeset(Entry.t(), map(), Transaction.state()) :: Ecto.Changeset.t()
   def changeset(entry, %{account_id: id} = attrs, transition) when transition in @transaction_states do
     entry
-    |> Repo.preload([:account, :balance_history_entry], force: true)
+    |> Repo.preload([:account, :balance_history_entries], force: true)
     |> cast(attrs, @required_attrs ++ @optional_attrs)
     |> validate_required(@required_attrs)
     |> validate_inclusion(:type, @debit_and_credit)
@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.Entry do
   @spec update_changeset(Entry.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
   def update_changeset(entry, attrs, transition) do
     entry
-    |> Repo.preload([:transaction, :account, :balance_history_entry], force: true)
+    |> Repo.preload([:transaction, :account, :balance_history_entries], force: true)
     |> cast(attrs, [:value])
     |> validate_required([:value])
     |> validate_same_account_currency()
@@ -105,14 +105,17 @@ defmodule DoubleEntryLedger.Entry do
 
   defp put_balance_history_entry_assoc(changeset) do
     account_changeset = get_assoc(changeset, :account, :changeset)
+    balance_history_entries = get_assoc(changeset, :balance_history_entries, :struct)
 
     balance_history_entry_changeset =
       BalanceHistoryEntry.build_from_account_changeset(
         account_changeset
       )
 
+    # generally not right way to do it, but most entries will have only one balance history entry
+    # and this gets around using a multi
     changeset
-    |> put_assoc(:balance_history_entry, balance_history_entry_changeset)
+    |> put_assoc(:balance_history_entries, [balance_history_entry_changeset | balance_history_entries])
   end
 
   defp validate_same_account_currency(changeset) do
