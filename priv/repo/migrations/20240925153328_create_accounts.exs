@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateAccounts do
       add :name, :string
       add :description, :string
       add :currency, :string, null: false
-      add :type, :string, null: false
+      add :normal_balance, :string, null: false
       add :context, :map, default: %{}
       add :posted, :map, default: %{}
       add :pending, :map, default: %{}

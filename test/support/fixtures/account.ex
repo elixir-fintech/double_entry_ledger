@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.AccountFixtures do
         available: 0,
         context: %{},
         name: "some name",
-        type: :debit,
+        normal_balance: :debit,
       })
 
     {:ok, account} =
@@ -33,10 +33,10 @@ defmodule DoubleEntryLedger.AccountFixtures do
 
   def create_accounts(%{instance: instance}) do
     %{instance: instance, accounts: [
-      account_fixture(instance_id: instance.id, type: :debit) ,
-      account_fixture(instance_id: instance.id, type: :credit),
-      account_fixture(instance_id: instance.id, type: :debit, allowed_negative: false),
-      account_fixture(instance_id: instance.id, type: :credit, allowed_negative: false)
+      account_fixture(instance_id: instance.id, normal_balance: :debit) ,
+      account_fixture(instance_id: instance.id, normal_balance: :credit),
+      account_fixture(instance_id: instance.id, normal_balance: :debit, allowed_negative: false),
+      account_fixture(instance_id: instance.id, normal_balance: :credit, allowed_negative: false)
     ]}
   end
 

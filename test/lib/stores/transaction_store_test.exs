@@ -20,14 +20,14 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
                pending: %Balance{amount: -100, credit: 0, debit: 100},
                posted: %Balance{amount: 0, credit: 0, debit: 0},
                available: 0,
-               type: :debit
+               normal_balance: :debit
              } = Repo.get!(Account, a1.id)
 
       assert %{
                pending: %Balance{amount: -100, credit: 100, debit: 0},
                posted: %Balance{amount: 0, credit: 0, debit: 0},
                available: 0,
-               type: :credit
+               normal_balance: :credit
              } = Repo.get!(Account, a2.id)
     end
 
@@ -49,21 +49,21 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
                posted: %Balance{amount: 50, credit: 0, debit: 50},
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                available: 50,
-               type: :debit
+               normal_balance: :debit
              } = Repo.get!(Account, a1.id)
 
       assert %{
                posted: %Balance{amount: 50, credit: 0, debit: 50},
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                available: 50,
-               type: :debit
+               normal_balance: :debit
              } = Repo.get!(Account, a3.id)
 
       assert %{
                posted: %Balance{amount: 100, credit: 100, debit: 0},
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                available: 100,
-               type: :credit
+               normal_balance: :credit
              } = Repo.get!(Account, a2.id)
     end
   end
@@ -81,14 +81,14 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                posted: %Balance{amount: 100, credit: 0, debit: 100},
                available: 100,
-               type: :debit
+               normal_balance: :debit
              } = Repo.get!(Account, a1.id)
 
       assert %{
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                posted: %Balance{amount: 100, credit: 100, debit: 0},
                available: 100,
-               type: :credit
+               normal_balance: :credit
              } = Repo.get!(Account, a2.id)
     end
 
@@ -109,14 +109,14 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                posted: %Balance{amount: 50, credit: 0, debit: 50},
                available: 50,
-               type: :debit
+               normal_balance: :debit
              } = Repo.get!(Account, a1.id)
 
       assert %{
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                posted: %Balance{amount: 50, credit: 50, debit: 0},
                available: 50,
-               type: :credit
+               normal_balance: :credit
              } = Repo.get!(Account, a2.id)
     end
 
@@ -167,14 +167,14 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
                pending: %Balance{amount: 50, credit: 50, debit: 0},
                posted: %Balance{amount: 100, credit: 0, debit: 100},
                available: 50,
-               type: :debit
+               normal_balance: :debit
              } = Repo.get!(Account, a1.id)
 
       assert %{
                pending: %Balance{amount: 50, credit: 0, debit: 50},
                posted: %Balance{amount: 100, credit: 100, debit: 0},
                available: 50,
-               type: :credit
+               normal_balance: :credit
              } = Repo.get!(Account, a2.id)
     end
 
@@ -188,14 +188,14 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                posted: %Balance{amount: 0, credit: 0, debit: 0},
                available: 0,
-               type: :debit
+               normal_balance: :debit
              } = Repo.get!(Account, a1.id)
 
       assert %{
                pending: %Balance{amount: 0, credit: 0, debit: 0},
                posted: %Balance{amount: 0, credit: 0, debit: 0},
                available: 0,
-               type: :credit
+               normal_balance: :credit
              } = Repo.get!(Account, a2.id)
     end
   end
