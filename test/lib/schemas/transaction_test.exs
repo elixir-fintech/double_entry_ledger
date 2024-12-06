@@ -26,8 +26,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "one account on a different ledgers", ctx do
       instance2 = instance_fixture()
-      a1 = account_fixture(instance_id: ctx.instance.id, type: :debit)
-      a2 = account_fixture(instance_id: instance2.id, type: :credit)
+      a1 = account_fixture(instance_id: ctx.instance.id, type: :asset)
+      a2 = account_fixture(instance_id: instance2.id, type: :liability, normal_balance: :credit)
       attr = transaction_attr(instance_id: ctx.instance.id, entries: [
         %{type: :debit, value: Money.new(100, :EUR), account_id:  a1.id},
         %{type: :credit, value: Money.new(100, :EUR), account_id:  a2.id}
@@ -41,8 +41,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
     test "all accounts on different ledgers", ctx do
       instance2 = instance_fixture()
-      a1 = account_fixture(instance_id: ctx.instance.id, type: :debit)
-      a2 = account_fixture(instance_id: ctx.instance.id, type: :credit)
+      a1 = account_fixture(instance_id: ctx.instance.id, type: :asset)
+      a2 = account_fixture(instance_id: ctx.instance.id, type: :liability, normal_balance: :credit)
       attr = transaction_attr(instance_id: instance2.id, entries: [
         %{type: :debit, value: Money.new(100, :EUR), account_id: a1.id},
         %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id}
@@ -133,8 +133,8 @@ defmodule DoubleEntryLedger.TransactionTest do
     setup [:create_instance, :create_accounts]
 
     test "same amount but different currency", %{instance: inst } do
-      acc1 = account_fixture(instance_id: inst.id, type: :debit, currency: :EUR)
-      acc2 = account_fixture(instance_id: inst.id, type: :credit, currency: :USD)
+      acc1 = account_fixture(instance_id: inst.id, type: :asset, currency: :EUR)
+      acc2 = account_fixture(instance_id: inst.id, type: :liability, normal_balance: :credit, currency: :USD)
       attr = transaction_attr(instance_id: inst.id, entries: [
         %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
         %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
@@ -148,10 +148,10 @@ defmodule DoubleEntryLedger.TransactionTest do
 
 
     test "same amounts in different currencies", %{instance: inst } do
-      acc1 = account_fixture(instance_id: inst.id, type: :debit, currency: :EUR)
-      acc2 = account_fixture(instance_id: inst.id, type: :credit, currency: :USD)
-      acc3 = account_fixture(instance_id: inst.id, type: :debit, currency: :EUR)
-      acc4 = account_fixture(instance_id: inst.id, type: :credit, currency: :USD)
+      acc1 = account_fixture(instance_id: inst.id, type: :asset, currency: :EUR)
+      acc2 = account_fixture(instance_id: inst.id, type: :liability, normal_balance: :credit, currency: :USD)
+      acc3 = account_fixture(instance_id: inst.id, type: :liability, normal_balance: :credit, currency: :EUR)
+      acc4 = account_fixture(instance_id: inst.id, type: :asset, currency: :USD)
       attr = transaction_attr(instance_id: inst.id, entries: [
          %{type: :debit, value: Money.new(50, :EUR), account_id:  acc1.id},
          %{type: :credit, value: Money.new(100, :USD), account_id:  acc2.id},

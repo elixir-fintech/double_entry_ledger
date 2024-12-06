@@ -12,7 +12,7 @@ defmodule BalanceHistoryEntryTest do
     setup [:create_instance]
 
     test "builds a balance history entry from an account changeset", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, type: :debit)
+      account = account_fixture(instance_id: id, type: :asset)
       entry = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :debit }
       account_changeset = Account.update_balances(account, %{entry: entry, trx: :posted})
 

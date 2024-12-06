@@ -20,7 +20,6 @@ defmodule DoubleEntryLedger.AccountTest do
         valid?: false,
         errors: [
           name: {"can't be blank", [validation: :required]},
-          normal_balance: {"can't be blank", [validation: :required]},
           instance_id: {"can't be blank", [validation: :required]}
         ]
       } = Account.changeset(%Account{}, %{})
@@ -32,6 +31,7 @@ defmodule DoubleEntryLedger.AccountTest do
         name: "some name",
         description: "some description",
         currency: :EUR,
+        type: :asset,
         normal_balance: :debit,
         context: %{},
         posted: %Balance{amount: 0, debit: 0, credit: 0},

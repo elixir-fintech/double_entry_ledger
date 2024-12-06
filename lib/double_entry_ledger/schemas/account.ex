@@ -37,6 +37,7 @@ defmodule DoubleEntryLedger.Account do
   alias __MODULE__, as: Account
 
   @credit_and_debit Types.credit_and_debit()
+  @account_types Types.account_types()
 
   @type t :: %Account{
     id: binary() | nil,
@@ -45,6 +46,7 @@ defmodule DoubleEntryLedger.Account do
     context: map() | nil,
     name: String.t() | nil,
     normal_balance: Types.credit_or_debit() | nil,
+    type: Types.account_type() | nil,
     available: integer(),
     allowed_negative: boolean(),
     posted: Balance.t() | nil,
@@ -64,6 +66,7 @@ defmodule DoubleEntryLedger.Account do
     field :context, :map
     field :name, :string
     field :normal_balance, Ecto.Enum, values: @credit_and_debit
+    field :type, Ecto.Enum, values: @account_types
     field :available, :integer, default: 0
     field :allowed_negative, :boolean, default: true
     field :lock_version, :integer, default: 1
@@ -92,8 +95,8 @@ defmodule DoubleEntryLedger.Account do
   @spec changeset(Account.t(), map()) :: Ecto.Changeset.t()
   def changeset(account, attrs) do
     account
-    |> cast(attrs, [:name, :description, :currency, :normal_balance, :context, :allowed_negative, :instance_id])
-    |> validate_required([:name, :currency, :normal_balance, :instance_id])
+    |> cast(attrs, [:name, :description, :currency, :normal_balance, :type, :context, :allowed_negative, :instance_id])
+    |> validate_required([:name, :currency, :instance_id])
     |> validate_inclusion(:normal_balance, @credit_and_debit)
     |> validate_inclusion(:currency, @currency_atoms)
     |> cast_embed(:posted, with: &Balance.changeset/2)
