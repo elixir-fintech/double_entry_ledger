@@ -96,7 +96,9 @@ defmodule DoubleEntryLedger.Account do
   def changeset(account, attrs) do
     account
     |> cast(attrs, [:name, :description, :currency, :normal_balance, :type, :context, :allowed_negative, :instance_id])
-    |> validate_required([:name, :currency, :instance_id])
+    |> validate_required([:name, :currency, :instance_id, :type])
+    |> validate_inclusion(:type, @account_types)
+    |> set_normal_balance_based_on_type()
     |> validate_inclusion(:normal_balance, @credit_and_debit)
     |> validate_inclusion(:currency, @currency_atoms)
     |> cast_embed(:posted, with: &Balance.changeset/2)
@@ -117,6 +119,30 @@ defmodule DoubleEntryLedger.Account do
     |> update(entry_changeset, entry_type, trx)
     |> update_available()
     |> optimistic_lock(:lock_version)
+  end
+
+  # if the normal_balance is already set, do nothing. This allows for the setup of accounts with a specific normal_balance
+  # such as contra accounts and similar
+  defp set_normal_balance_based_on_type(%{changes: %{normal_balance: nb}} = changeset) when nb in @credit_and_debit do
+    changeset
+  end
+
+  defp set_normal_balance_based_on_type(changeset) do
+    type = get_field(changeset, :type)
+    normal_balance = case type do
+      :asset -> :debit
+      :expense -> :debit
+      :liability -> :credit
+      :equity -> :credit
+      :revenue -> :credit
+      _ -> nil
+    end
+
+    if normal_balance != nil do
+      put_change(changeset, :normal_balance, normal_balance)
+    else
+      add_error(changeset, :type, "invalid account type: #{type}")
+    end
   end
 
   defp validate_entry_changeset(%{data: %{id: account_id, currency: currency}} = changeset, entry_changeset) do

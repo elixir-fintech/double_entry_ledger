@@ -12,17 +12,54 @@ defmodule DoubleEntryLedger.AccountTest do
 
   doctest Account
 
-  describe "accounts" do
+  describe "changeset/2" do
     setup [:create_instance]
 
     test "returns error changeset for missing fields", _ctx do
       assert %Ecto.Changeset{
         valid?: false,
         errors: [
+          type: {"invalid account type: ", []},
           name: {"can't be blank", [validation: :required]},
-          instance_id: {"can't be blank", [validation: :required]}
+          instance_id: {"can't be blank", [validation: :required]},
+          type: {"can't be blank", [validation: :required]}
         ]
       } = Account.changeset(%Account{}, %{})
+    end
+
+    test "returns error changeset for invalid type and normal_balance", %{instance: %{id: id}} do
+      assert %Ecto.Changeset{
+        valid?: false,
+        errors: [
+          type: {"invalid account type: ", []},
+          normal_balance: {"is invalid", _},
+          type: {"is invalid", _}
+        ]
+      } = Account.changeset(%Account{}, %{name: "some name", type: :debit, normal_balance: :asset, instance_id: id})
+    end
+
+    test "sets the normal balance based on the account type", %{instance: %{id: id}} do
+      assert %Ecto.Changeset{
+        valid?: true, changes: %{type: :asset, normal_balance: :debit}
+      } = Account.changeset(%Account{}, %{name: "some name", type: :asset, instance_id: id})
+      assert %Ecto.Changeset{
+        valid?: true, changes: %{type: :liability, normal_balance: :credit}
+      } = Account.changeset(%Account{}, %{name: "some name", type: :liability, instance_id: id})
+      assert %Ecto.Changeset{
+        valid?: true, changes: %{type: :equity, normal_balance: :credit}
+      } = Account.changeset(%Account{}, %{name: "some name", type: :equity, instance_id: id})
+      assert %Ecto.Changeset{
+        valid?: true, changes: %{type: :expense, normal_balance: :debit}
+      } = Account.changeset(%Account{}, %{name: "some name", type: :expense, instance_id: id})
+      assert %Ecto.Changeset{
+        valid?: true, changes: %{type: :revenue, normal_balance: :credit}
+      } = Account.changeset(%Account{}, %{name: "some name", type: :revenue, instance_id: id})
+    end
+
+    test "sets the normal balance if it was passed as an attribute", %{instance: %{id: id}} do
+      assert %Ecto.Changeset{
+        valid?: true, changes: %{type: :asset, normal_balance: :credit}
+      } = Account.changeset(%Account{}, %{name: "some name", type: :asset, normal_balance: :credit, instance_id: id})
     end
 
     test "fixture", %{instance: inst} do
