@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateAccounts do
       add :pending, :map, default: %{}
       add :available, :integer, null: false, default: 0
       add :allowed_negative, :boolean, default: true
-      add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
+      add :instance_id, references(:instances, on_delete: :restrict, type: :binary_id), null: false
       add :lock_version, :integer, default: 1 # Optimistic locking
 
       timestamps(type: :utc_datetime_usec)

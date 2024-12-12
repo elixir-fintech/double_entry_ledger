@@ -57,6 +57,14 @@ defmodule DoubleEntryLedger.Instance do
     |> validate_required([:name])
   end
 
+  @spec delete_changeset(Instance.t()) :: Ecto.Changeset.t()
+  def delete_changeset(instance) do
+    instance
+    |> change()
+    |> no_assoc_constraint(:transactions)
+    |> no_assoc_constraint(:accounts)
+  end
+
   @doc """
   Validates that the total debit and credit balances of all accounts in the ledger instance are equal.
 

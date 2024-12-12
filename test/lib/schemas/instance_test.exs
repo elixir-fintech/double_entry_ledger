@@ -12,9 +12,9 @@ defmodule DoubleEntryLedger.InstanceTest do
 
   doctest Instance
 
-  describe "instances" do
+  describe "changeset/2" do
 
-    test "Name is only required field", _ctx do
+    test "Name is only required field" do
       assert %Ecto.Changeset{
         valid?: false,
         errors: [
@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.InstanceTest do
       } = Instance.changeset(%Instance{}, %{})
     end
 
-    test "sets the config and metadata to empty maps at insert", _ctx do
+    test "sets the config and metadata to empty maps at insert" do
       {:ok, instance } = Repo.insert(
         Instance.changeset(%Instance{}, %{name: "some name" }),
         returning: true
@@ -31,6 +31,28 @@ defmodule DoubleEntryLedger.InstanceTest do
       assert %Instance{
         config: %{},
       } = instance
+    end
+  end
+
+  describe "delete_changeset/1" do
+    setup [:create_instance]
+
+    test "it works for an instance with no accounts or transactions", %{instance: inst} do
+      assert %Ecto.Changeset{
+        valid?: true,
+        changes: %{}
+      } = Instance.delete_changeset(inst)
+    end
+
+    test "it can't be deleted for instance with accounts", %{instance: inst} do
+      account_fixture(instance_id: inst.id)
+      assert {:error, changeset} = Repo.delete(Instance.delete_changeset(inst))
+      assert %Ecto.Changeset{
+        valid?: false,
+        errors: [
+          accounts: {"are still associated with this entry", [constraint: :no_assoc, constraint_name: _]}
+        ]
+      } = changeset
     end
   end
 
