@@ -17,6 +17,7 @@ defmodule DoubleEntryLedger.Instance do
   ## Functions
 
     - `changeset/2`: Creates a changeset for the ledger instance based on the given attributes.
+    - `delete_changeset/1`: Creates a changeset for safely deleting a ledger instance.
     - `validate_account_balances/1`: Validates that the total debit and credit balances of all accounts in the ledger instance are equal.
     - `ledger_value/1`: Calculates the total posted and pending debit and credit balances for all accounts in the ledger instance.
   """
@@ -49,7 +50,31 @@ defmodule DoubleEntryLedger.Instance do
     timestamps(type: :utc_datetime_usec)
   end
 
-  @doc false
+  @doc """
+  Creates a changeset for the ledger instance based on the given attributes.
+
+  ## Parameters
+
+    - `instance` (Instance.t()): The ledger instance struct.
+    - `attrs` (map): The attributes to cast.
+
+  ## Returns
+
+    - `changeset`: An Ecto changeset for the ledger instance.
+
+  ## Examples
+
+      iex> instance = %DoubleEntryLedger.Instance{}
+      iex> changeset = DoubleEntryLedger.Instance.changeset(instance, %{name: "New Ledger"})
+      iex> changeset.valid?
+      true
+
+      iex> instance = %DoubleEntryLedger.Instance{}
+      iex> changeset = DoubleEntryLedger.Instance.changeset(instance, %{})
+      iex> changeset.valid?
+      false
+
+  """
   @spec changeset(Instance.t(), map()) :: Ecto.Changeset.t()
   def changeset(instance, attrs) do
     instance
@@ -57,6 +82,27 @@ defmodule DoubleEntryLedger.Instance do
     |> validate_required([:name])
   end
 
+  @doc """
+  Creates a changeset for safely deleting a ledger instance.
+
+  Ensures that there are no associated transactions or accounts before deletion.
+
+  ## Parameters
+
+    - `instance` (Instance.t()): The ledger instance struct.
+
+  ## Returns
+
+    - `changeset`: An Ecto changeset for the ledger instance.
+
+  ## Examples
+
+      iex> instance = %DoubleEntryLedger.Instance{}
+      iex> changeset = DoubleEntryLedger.Instance.delete_changeset(instance)
+      iex> changeset.valid?
+      true
+
+  """
   @spec delete_changeset(Instance.t()) :: Ecto.Changeset.t()
   def delete_changeset(instance) do
     instance
@@ -110,14 +156,13 @@ defmodule DoubleEntryLedger.Instance do
       |> Map.update!(:pending_debit, &(&1 + account.pending.debit))
       |> Map.update!(:pending_credit, &(&1 + account.pending.credit))
     end)
-
   end
 
   defp validate_equality(%{posted_debit: pod, posted_credit: poc, pending_debit: pdd, pending_credit: pdc} = value) do
     if pod == poc and pdd == pdc do
         {:ok, value }
     else
-        {:error, "Debit and Credit are not equal"}
+        {:error, "Debit and Credit are not equal #{value}"}
     end
   end
 end
