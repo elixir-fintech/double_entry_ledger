@@ -19,7 +19,6 @@ end
 You will need to add the necessary migrations to your own project to create the required database tables. You can generate a migration file and define the schema for `instances`, `accounts`, and other related tables. Copy the migration files from this project to your own project's `priv/repo/migrations` directory and then run the migrations:
 
 ```sh
-mix ecto.gen.migration add_double_entry_ledger_tables
 # Copy the migration content from this project to the generated migration file
 mix ecto.migrate
 ```
