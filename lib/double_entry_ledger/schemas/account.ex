@@ -11,7 +11,8 @@ defmodule DoubleEntryLedger.Account do
     - `description` (string): An optional description of the account.
     - `context` (map): Optional additional context information about the account.
     - `name` (string): The name of the account.
-    - `type` (Types.c_or_d()): The type of the account, either `:credit` or `:debit`.
+    - `type` (Types.account_type()): The type of the account.
+    - `normal_balance` (Types.credit_or_debit()): The normal balance of the account.
     - `available` (integer): The available balance in the account.
     - `allowed_negative` (boolean): Whether the account can have a negative balance.
     - `posted` (Balance.t()): The posted balance details of the account.
@@ -23,6 +24,8 @@ defmodule DoubleEntryLedger.Account do
   ## Functions
 
     - `changeset/2`: Creates a changeset for the account based on the given attributes.
+    - `update_changeset/2`: Creates a changeset for updating the account based on the given attributes.
+    - `delete_changeset/1`: Creates a changeset for safely deleting an account.
     - `update_balances/2`: Updates the balances of the account based on the given entry and transaction type.
   """
   use Ecto.Schema
@@ -91,6 +94,22 @@ defmodule DoubleEntryLedger.Account do
     - `account` (Account.t()): The account struct.
     - `attrs` (map): The attributes to be cast to the account.
 
+  ## Returns
+
+    - `changeset`: An Ecto changeset for the account.
+
+  ## Examples
+
+      iex> account = %DoubleEntryLedger.Account{}
+      iex> changeset = DoubleEntryLedger.Account.changeset(account, %{name: "New Account", currency: :USD, instance_id: "some-instance-id", type: :asset})
+      iex> changeset.valid?
+      true
+
+      iex> account = %DoubleEntryLedger.Account{}
+      iex> changeset = DoubleEntryLedger.Account.changeset(account, %{})
+      iex> changeset.valid?
+      false
+
   """
   @spec changeset(Account.t(), map()) :: Ecto.Changeset.t()
   def changeset(account, attrs) do
@@ -105,6 +124,77 @@ defmodule DoubleEntryLedger.Account do
     |> cast_embed(:pending, with: &Balance.changeset/2)
   end
 
+  @doc """
+  Creates a changeset for updating the account based on the given attributes.
+  Only the `name`, `description`, and `context` fields can be updated.
+
+  ## Parameters
+
+    - `changeset` (Ecto.Changeset.t()): The existing changeset for the account.
+    - `attrs` (map): The attributes to be cast to the account.
+
+  ## Returns
+
+    - `changeset`: An Ecto changeset for the account.
+
+  ## Examples
+
+      iex> account = %DoubleEntryLedger.Account{}
+      iex> changeset = DoubleEntryLedger.Account.changeset(account, %{name: "New Account", currency: :USD, instance_id: "some-instance-id", type: :asset})
+      iex> updated_changeset = DoubleEntryLedger.Account.update_changeset(changeset, %{description: "Updated description"})
+      iex> updated_changeset.valid?
+      true
+
+  """
+  @spec update_changeset(Account.t(), map()) :: Ecto.Changeset.t()
+  def update_changeset(changeset, attrs) do
+    changeset
+    |> cast(attrs, [:name, :description, :context])
+    |> validate_required([:name])
+  end
+
+  @doc """
+  Creates a changeset for safely deleting an account.
+
+  Ensures that there are no associated entries before deletion.
+
+  ## Parameters
+
+    - `account` (Account.t()): The account struct.
+
+  ## Returns
+
+    - `changeset`: An Ecto changeset for the account.
+
+  ## Examples
+
+      iex> account = %DoubleEntryLedger.Account{}
+      iex> changeset = DoubleEntryLedger.Account.delete_changeset(account)
+      iex> changeset.valid?
+      true
+
+  """
+  @spec delete_changeset(Account.t()) :: Ecto.Changeset.t()
+  def delete_changeset(account) do
+    account
+    |> change()
+    |> no_assoc_constraint(:entries)
+  end
+
+  @doc """
+  Updates the balances of the account based on the given entry and transaction type.
+
+  ## Parameters
+
+    - `account` (Account.t()): The account struct.
+    - `entry` (Entry.t() | Ecto.Changeset.t()): The entry or entry changeset.
+    - `trx` (Types.trx_types()): The transaction type.
+
+  ## Returns
+
+    - `changeset`: An Ecto changeset for the account with updated balances.
+
+  """
   @spec update_balances(Account.t(), %{entry: (Entry.t() | Ecto.Changeset.t()), trx: Types.trx_types()}) :: Ecto.Changeset.t()
   def update_balances(account, %{entry: entry, trx: trx}) when is_struct(entry, Entry)  do
     entry_changeset = Entry.changeset(entry, %{})

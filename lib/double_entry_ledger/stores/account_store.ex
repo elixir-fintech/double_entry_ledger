@@ -90,6 +90,35 @@ defmodule DoubleEntryLedger.AccountStore do
   end
 
   @doc """
+  Deletes an account by its ID.
+
+  ## Parameters
+
+    - `id` (Ecto.UUID.t()): The ID of the account to delete.
+
+  ## Returns
+
+    - `{:ok, account}`: On success.
+    - `{:error, changeset}`: If there was an error during deletion.
+
+  ## Examples
+
+      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{name: "Sample Instance"})
+      iex> attrs = %{name: "Test Account", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
+      iex> {:ok, _} = DoubleEntryLedger.AccountStore.delete(account.id)
+      iex> DoubleEntryLedger.AccountStore.get_by_id(account.id) == nil
+      true
+
+  """
+  @spec delete(Ecto.UUID.t()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
+  def delete(id) do
+    get_by_id(id)
+    |> Account.delete_changeset()
+    |> Repo.delete()
+  end
+
+  @doc """
   Retrieves accounts by instance ID and a list of account IDs.
 
   ## Parameters
