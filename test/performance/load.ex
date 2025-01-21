@@ -101,7 +101,8 @@ defmodule DoubleEntryLedger.LoadTesting do
     |> Enum.map(fn _ ->
       %Account{
         instance_id: instance.id,
-        type: :debit,
+        type: :asset,
+        normal_balance: :debit,
         posted: %Balance{amount: debit_sum, debit: debit_sum, credit: 0},
         available: debit_sum
       } |> Repo.insert!()
@@ -116,7 +117,8 @@ defmodule DoubleEntryLedger.LoadTesting do
       |> Enum.map(fn _ ->
         %Account{
           instance_id: instance.id,
-          type: :debit,
+          type: :asset,
+          normal_balance: :debit,
           posted: %Balance{amount: 0, debit: 0, credit: 0},
           available: 0
         } |> Repo.insert!()
@@ -129,7 +131,8 @@ defmodule DoubleEntryLedger.LoadTesting do
   defp create_balancing_credit_account(instance, credit_sum) do
     %Account{
       instance_id: instance.id,
-      type: :credit,
+      type: :liability,
+      normal_balance: :credit,
       posted: %Balance{amount: credit_sum, debit: 0, credit: credit_sum},
       available: credit_sum
     } |> Repo.insert()
