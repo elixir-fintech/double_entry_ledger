@@ -1,3 +1,5 @@
+**[![Elixir CI](https://github.com/csommerauer/double_entry_ledger/actions/workflows/elixir.yml/badge.svg)](https://github.com/csommerauer/double_entry_ledger/actions/workflows/elixir.yml)**
+
 # DoubleEntryLedger
 
 DoubleEntryLedger is an Elixir library for managing a double-entry accounting ledger. A double-entry ledger ensures that every financial transaction is recorded in at least two accounts, with debits equaling credits, to maintain the accounting equation: Assets = Liabilities + Equity.
