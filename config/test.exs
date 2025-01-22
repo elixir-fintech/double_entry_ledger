@@ -7,6 +7,6 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  port: "5433",
+  port: "5432",
   pool: Ecto.Adapters.SQL.Sandbox,
   stacktrace: true

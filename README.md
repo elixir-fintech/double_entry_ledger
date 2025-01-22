@@ -38,4 +38,3 @@ mix docs
 ## Note
 
 This library is still under development and is not yet ready for primetime. Use it at your own risk and feel free to contribute to its development.
-

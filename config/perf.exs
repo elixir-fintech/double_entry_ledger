@@ -5,7 +5,7 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  port: "5433",
+  port: "5432",
   stacktrace: false,
   show_sensitive_data_on_connection_error: false,
   pool_size: 10
