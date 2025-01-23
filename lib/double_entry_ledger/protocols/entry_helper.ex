@@ -56,7 +56,7 @@ defimpl EntryHelper, for: Ecto.Changeset do
   Retrieves the UUID from the `Ecto.Changeset`.
   """
   @spec uuid(Ecto.Changeset.t()) :: String.t()
-  def uuid(%{changes: %{account_id: id}}), do: Ecto.UUID.dump!(id)
+  def uuid(%{changes: %{account_id: id}}), do: id
 
   @doc """
   Retrieves the currency from the `Ecto.Changeset`.
@@ -90,7 +90,8 @@ defimpl EntryHelper, for: Entry do
   Retrieves the UUID from the `Entry`.
   """
   @spec uuid(Entry.t()) :: String.t()
-  def uuid(%{account_id: id}), do: Ecto.UUID.dump!(id)
+  # def uuid(%{account_id: id}), do: Ecto.UUID.dump!(id)
+  def uuid(%{account_id: id}), do: id
 
   @doc """
   Retrieves the currency from the `Entry`.

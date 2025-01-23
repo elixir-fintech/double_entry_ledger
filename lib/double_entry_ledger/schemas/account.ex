@@ -28,8 +28,8 @@ defmodule DoubleEntryLedger.Account do
     - `delete_changeset/1`: Creates a changeset for safely deleting an account.
     - `update_balances/2`: Updates the balances of the account based on the given entry and transaction type.
   """
-  use Ecto.Schema
-  import Ecto.Changeset
+  use DoubleEntryLedger.BaseSchema
+
   alias DoubleEntryLedger.{
     Balance,
     BalanceHistoryEntry,
@@ -59,8 +59,6 @@ defmodule DoubleEntryLedger.Account do
     updated_at: DateTime.t() | nil
   }
 
-  @primary_key {:id, :binary_id, autogenerate: true}
-  @foreign_key_type :binary_id
   @currency_atoms Currency.currency_atoms()
 
   schema "accounts" do

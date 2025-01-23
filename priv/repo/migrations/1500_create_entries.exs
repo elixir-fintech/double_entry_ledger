@@ -2,7 +2,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEntries do
   use Ecto.Migration
 
   def change do
-    create table(:entries, primary_key: false) do
+    create table(:entries, primary_key: false, prefix: "double_entry_ledger") do
       add :id, :binary_id, primary_key: true
       add :type, :string, null: false
       add :value, :money_with_currency, null: false
@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEntries do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create index(:entries, [:transaction_id])
-    create index(:entries, [:account_id])
+    create index(:entries, [:transaction_id], prefix: "double_entry_ledger")
+    create index(:entries, [:account_id], prefix: "double_entry_ledger")
   end
 end

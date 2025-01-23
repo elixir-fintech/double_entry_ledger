@@ -2,8 +2,7 @@ defmodule DoubleEntryLedger.Event do
   @moduledoc """
   This module defines the Event schema.
   """
-  use Ecto.Schema
-  import Ecto.Changeset
+  use DoubleEntryLedger.BaseSchema
 
   alias DoubleEntryLedger.{Transaction, Instance}
   alias DoubleEntryLedger.Event.TransactionData
@@ -51,7 +50,6 @@ defmodule DoubleEntryLedger.Event do
           transaction_data: TransactionData.t()
         }
 
-  @primary_key {:id, :binary_id, autogenerate: true}
   schema "events" do
     field(:status, Ecto.Enum, values: @states, default: :pending)
     field(:action, Ecto.Enum, values: @actions)

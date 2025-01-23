@@ -3,7 +3,7 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Elixir CI
+name: CI
 
 on:
   push:
@@ -55,11 +55,11 @@ jobs:
           echo "Waiting for PostgreSQL to be ready..."
           sleep 1
         done
-    - name: Create database abd run migrations
+    - name: Build code and create db and migrations
       run: |
         mix ecto.create
         mix ecto.migrate
       env:
         MIX_ENV: test
-    - name: Build code, create database and run migrations 
+    - name: Run tests
       run: mix test

@@ -19,8 +19,7 @@ defmodule DoubleEntryLedger.Entry do
 
     - `changeset/2`: Creates a changeset for the entry based on the given attribute
   """
-  use Ecto.Schema
-  import Ecto.Changeset
+  use DoubleEntryLedger.BaseSchema
   alias DoubleEntryLedger.{
     Account,
     BalanceHistoryEntry,
@@ -47,8 +46,6 @@ defmodule DoubleEntryLedger.Entry do
   @required_attrs ~w(type value account_id)a
   @optional_attrs ~w(transaction_id)a
 
-  @primary_key {:id, :binary_id, autogenerate: true}
-  @foreign_key_type :binary_id
   schema "entries" do
     field :value, Money.Ecto.Composite.Type
     field :type, Ecto.Enum, values: @debit_and_credit

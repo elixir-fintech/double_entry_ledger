@@ -21,8 +21,7 @@ defmodule DoubleEntryLedger.Instance do
     - `validate_account_balances/1`: Validates that the total debit and credit balances of all accounts in the ledger instance are equal.
     - `ledger_value/1`: Calculates the total posted and pending debit and credit balances for all accounts in the ledger instance.
   """
-  use Ecto.Schema
-  import Ecto.Changeset
+  use DoubleEntryLedger.BaseSchema
 
   alias DoubleEntryLedger.{Account, Repo, Transaction}
   alias __MODULE__, as: Instance
@@ -38,8 +37,6 @@ defmodule DoubleEntryLedger.Instance do
     updated_at: DateTime.t() | nil
   }
 
-  @primary_key {:id, :binary_id, autogenerate: true}
-  @foreign_key_type :binary_id
   schema "instances" do
     field :config, :map
     field :description, :string

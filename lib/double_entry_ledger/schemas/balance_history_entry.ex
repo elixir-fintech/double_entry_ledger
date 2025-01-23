@@ -4,9 +4,7 @@ defmodule DoubleEntryLedger.BalanceHistoryEntry do
   This schema is used to store the balance history of an account.
   """
   require Logger
-  use Ecto.Schema
-  import Ecto.Changeset
-  alias Ecto.Changeset
+  use DoubleEntryLedger.BaseSchema
   alias DoubleEntryLedger.{Account, Entry, Balance}
   alias __MODULE__, as: BalanceHistoryEntry
 
@@ -22,9 +20,6 @@ defmodule DoubleEntryLedger.BalanceHistoryEntry do
     inserted_at: DateTime.t(),
     updated_at: DateTime.t()
   }
-
-  @primary_key {:id, :binary_id, autogenerate: true}
-  @foreign_key_type :binary_id
 
   schema "balance_history_entries" do
     field :available, :integer, default: 0

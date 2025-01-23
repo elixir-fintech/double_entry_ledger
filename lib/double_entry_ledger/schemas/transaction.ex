@@ -19,12 +19,10 @@ defmodule DoubleEntryLedger.Transaction do
     - `states/0`: Returns the list of transaction states.
     - `changeset/2`: Creates and validates the changeset.
   """
-  use Ecto.Schema
-  import Ecto.Changeset
+  use DoubleEntryLedger.BaseSchema
   import Ecto.Query, only: [from: 2]
 
-  alias Ecto.UUID
-  alias DoubleEntryLedger.{Entry, Instance, Repo, Types}
+  alias DoubleEntryLedger.{Account, Entry, Instance, Repo, Types}
   alias EntryHelper
   alias __MODULE__, as: Transaction
 
@@ -44,9 +42,6 @@ defmodule DoubleEntryLedger.Transaction do
   }
 
   @required_attrs ~w(status instance_id)a
-
-  @primary_key {:id, :binary_id, autogenerate: true}
-  @foreign_key_type :binary_id
 
   schema "transactions" do
     field :posted_at, :utc_datetime_usec
@@ -108,8 +103,7 @@ defmodule DoubleEntryLedger.Transaction do
 
   defp validate_accounts(changeset) do
     entries = get_assoc(changeset, :entries, :struct) || []
-    ledger_ids = Repo.all(from a in "accounts", where: a.id in ^account_ids(entries), select: a.instance_id)
-      |> Enum.map(&UUID.cast!(&1))
+    ledger_ids = Repo.all(from a in Account, where: a.id in ^account_ids(entries), select: a.instance_id)
     cond do
       ledger_ids == [] -> add_error(changeset, :entries, "no accounts found")
       Enum.all?(ledger_ids, &(&1 == get_field(changeset, :instance_id))) -> changeset
@@ -119,13 +113,14 @@ defmodule DoubleEntryLedger.Transaction do
 
   defp validate_currency(changeset) do
     entries = get_assoc(changeset, :entries, :struct) || []
+    account_ids = account_ids(entries)
     accounts =
-      Repo.all(from a in "accounts",
-        where: a.id in ^account_ids(entries),
+      Repo.all(from a in Account,
+        where: a.id in ^account_ids,
         select: [a.id, a.currency ])
       |> Enum.reduce(
           %{},
-          fn [id, currency], acc -> Map.put(acc, UUID.cast!(id), String.to_atom(currency)) end
+          fn [id, currency], acc -> Map.put(acc, id, currency) end
         )
     # credo:disable-for-next-line Credo.Check.Refactor.CondStatements
     cond do

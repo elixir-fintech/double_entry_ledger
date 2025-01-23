@@ -2,7 +2,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
   use Ecto.Migration
 
   def change do
-    create table(:events, primary_key: false) do
+    create table(:events, primary_key: false, prefix: "double_entry_ledger") do
       add :id, :binary_id, primary_key: true
 
       # Enum fields stored as strings
@@ -27,19 +27,21 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     end
 
     # Optionally, add indexes for performance optimization
-    create index(:events, [:inserted_at])
-    create index(:events, [:processed_at])
-    create index(:events, [:source])
-    create index(:events, [:source_idempk])
-    create index(:events, [:instance_id])
-    create index(:events, [:processed_transaction_id])
-    create index(:events, [:instance_id, :status])
-    create index(:events, [:instance_id, :action])
+    create index(:events, [:inserted_at], prefix: "double_entry_ledger")
+    create index(:events, [:processed_at], prefix: "double_entry_ledger")
+    create index(:events, [:source], prefix: "double_entry_ledger")
+    create index(:events, [:source_idempk], prefix: "double_entry_ledger")
+    create index(:events, [:instance_id], prefix: "double_entry_ledger")
+    create index(:events, [:processed_transaction_id], prefix: "double_entry_ledger")
+    create index(:events, [:instance_id, :status], prefix: "double_entry_ledger")
+    create index(:events, [:instance_id, :action], prefix: "double_entry_ledger")
     create unique_index(:events, [:instance_id, :source, :source_idempk],
+      prefix: "double_entry_ledger",
       name: "unique_instance_source_source_idempk",
       where: "action = 'create'"
     )
     create unique_index(:events, [:instance_id, :source, :source_idempk, :update_idempk],
+      prefix: "double_entry_ledger",
       name: "unique_instance_source_source_idempk_update_idempk",
       where: "action = 'update'"
     )
