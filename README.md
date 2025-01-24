@@ -1,6 +1,7 @@
-**[![Elixir CI](https://github.com/csommerauer/double_entry_ledger/actions/workflows/elixir.yml/badge.svg)](https://github.com/csommerauer/double_entry_ledger/actions/workflows/elixir.yml)**
 
 # DoubleEntryLedger
+
+**[![Elixir CI](https://github.com/csommerauer/double_entry_ledger/actions/workflows/elixir.yml/badge.svg)](https://github.com/csommerauer/double_entry_ledger/actions/workflows/elixir.yml)**
 
 DoubleEntryLedger is an Elixir library for managing a double-entry accounting ledger. A double-entry ledger ensures that every financial transaction is recorded in at least two accounts, with debits equaling credits, to maintain the accounting equation: Assets = Liabilities + Equity.
 
@@ -18,12 +19,9 @@ end
 
 ## Migrations
 
-You will need to add the necessary migrations to your own project to create the required database tables. You can generate a migration file and define the schema for `instances`, `accounts`, and other related tables. Copy the migration files from this project to your own project's `priv/repo/migrations` directory and then run the migrations:
+You will need to add the necessary migrations to your own project to create the required database tables. Copy the migration files from this project to your own project's `priv/repo/migrations` directory. You will have to adjust the timestamps to fit your project and then run the migrations:
 
-```sh
-# Copy the migration content from this project to the generated migration file
-mix ecto.migrate
-```
+The migrations create a `double_entry_ledger` schema and all tables and indexes are created within that schema. This guarantees that there are no table naming clashes.
 
 ## Usage
 
