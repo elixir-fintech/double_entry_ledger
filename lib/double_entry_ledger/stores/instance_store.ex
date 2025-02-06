@@ -34,6 +34,10 @@ defmodule DoubleEntryLedger.InstanceStore do
     |> Repo.insert()
   end
 
+  def list_all do
+    Repo.all(Instance)
+  end
+
   @doc """
   Retrieves a ledger instance by its ID.
 

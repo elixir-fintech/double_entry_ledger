@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.AccountStore do
   @spec update(Ecto.UUID.t(), map()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
   def update(id, attrs) do
     get_by_id(id)
-    |> Account.changeset(attrs)
+    |> Account.update_changeset(attrs)
     |> Repo.update()
   end
 
