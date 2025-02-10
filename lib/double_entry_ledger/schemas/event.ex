@@ -40,16 +40,6 @@ defmodule DoubleEntryLedger.Event do
           updated_at: DateTime.t()
         }
 
-  @type event_map() :: %{
-          action: action(),
-          instance_id: Ecto.UUID.t() | nil,
-          source: String.t(),
-          source_data: map(),
-          source_idempk: String.t(),
-          update_idempk: String.t() | nil,
-          transaction_data: TransactionData.t()
-        }
-
   schema "events" do
     field(:status, Ecto.Enum, values: @states, default: :pending)
     field(:action, Ecto.Enum, values: @actions)
