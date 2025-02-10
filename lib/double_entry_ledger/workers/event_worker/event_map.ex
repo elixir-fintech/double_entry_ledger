@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     - `{:ok, transaction, event}` on success.
     - `{:error, reason}` on failure.
   """
-  @spec process_map(Event.event_map()) ::
+  @spec process_map(Event.EventMap.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_map(event_map) do
     process_map(event_map, Repo)
@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     - `{:ok, transaction, event}` on success.
     - `{:error, reason}` on failure.
   """
-  @spec process_map(Event.event_map(), Ecto.Repo.t()) ::
+  @spec process_map(Event.EventMap.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_map(%{transaction_data: transaction_data, instance_id: id} = event_map, repo) do
     case transaction_data_to_transaction_map(transaction_data, id) do
@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     end
   end
 
-  @spec process_map_with_retry(Event.event_map(), map(), event_error_map(), integer(), Ecto.Repo.t()) ::
+  @spec process_map_with_retry(Event.EventMap.t(), map(), event_error_map(), integer(), Ecto.Repo.t()) ::
           {:ok, %{transaction: Transaction.t(), event: Event.t()}}
           | {:error, String.t()}
           | Ecto.Multi.failure()
@@ -130,7 +130,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     end
   end
 
-  @spec build_process_event_map(Event.event_map(), map(), Ecto.Repo.t()) ::
+  @spec build_process_event_map(Event.EventMap.t(), map(), Ecto.Repo.t()) ::
           Ecto.Multi.t()
   defp build_process_event_map(%{action: :create} = event_map, transaction_map, repo) do
     new_event_map = Map.put_new(event_map, :status, :pending)

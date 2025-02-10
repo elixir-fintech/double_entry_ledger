@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.EventWorker do
     - `{:ok, transaction, event}` on success.
     - `{:error, reason}` on failure.
   """
-  @spec process_new_event(Event.event_map()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
+  @spec process_new_event(Event.EventMap.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_new_event(%{} = event_map)  do
     process_event_map(event_map)
   end
