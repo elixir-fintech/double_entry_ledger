@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Event.EntryDataTest do
   @moduledoc """
-  Tests for the event payload
+  Tests for the Entry Data payload
   """
   use ExUnit.Case
 
@@ -8,6 +8,8 @@ defmodule DoubleEntryLedger.Event.EntryDataTest do
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.Event.EntryData
+
+  doctest EntryData
 
   describe "Event.EntryData" do
     test "changeset not valid for empty entry data" do

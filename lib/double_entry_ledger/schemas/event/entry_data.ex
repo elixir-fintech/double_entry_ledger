@@ -30,4 +30,24 @@ defmodule DoubleEntryLedger.Event.EntryData do
     |> validate_required([:account_id, :amount, :currency])
     |> validate_inclusion(:currency, @currency_atoms)
   end
+
+  @doc """
+  Converts the given `EntryData.t` struct to a map.
+
+  ## Examples
+
+      iex> alias DoubleEntryLedger.Event.EntryData
+      iex> entry_data = %EntryData{}
+      iex> EntryData.to_map(entry_data)
+      %{account_id: nil, amount: nil, currency: nil}
+
+  """
+  @spec to_map(t) :: map()
+  def to_map(entry_data) do
+    %{
+      account_id: entry_data.account_id,
+      amount: entry_data.amount,
+      currency: entry_data.currency
+    }
+  end
 end

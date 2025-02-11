@@ -5,15 +5,14 @@ defmodule DoubleEntryLedger.Event.EventMap do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias DoubleEntryLedger.{Event, Instance}
+  alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Event.TransactionData
 
   alias __MODULE__, as: EventMap
 
-
   @type t :: %EventMap{
     action: Event.action(),
-    instance_id: Ecto.UUID.t() | nil,
+    instance_id: String.t(),
     source: String.t(),
     source_data: map(),
     source_idempk: String.t(),
@@ -24,7 +23,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   @primary_key false
   embedded_schema do
     field :action, Ecto.Enum, values: Event.actions
-    belongs_to :instance, Instance, type: Ecto.UUID
+    field :instance_id, :string
     field :source, :string
     field :source_data, :map, default: %{}
     field :source_idempk, :string
@@ -38,5 +37,33 @@ defmodule DoubleEntryLedger.Event.EventMap do
     |> validate_required([:action, :instance_id, :source, :source_idempk])
     |> validate_inclusion(:action, Event.actions)
     |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
+  end
+
+  @doc """
+  Converts an event struct (of type t) into its map representation.
+  It also converts the nested transaction data into its map representation.
+
+  This function is useful for transforming the event structure into a plain map,
+  which can be easily serialized, inspected, or manipulated further.
+
+  ## Example
+
+    iex> alias DoubleEntryLedger.Event.TransactionData
+    iex> alias DoubleEntryLedger.Event.EventMap
+    iex> event = %EventMap{transaction_data: %TransactionData{}}
+    iex> is_map(EventMap.to_map(event))
+    true
+  """
+  @spec to_map(t) :: map()
+  def to_map(event_map) do
+    %{
+      action: event_map.action,
+      instance_id: event_map.instance_id,
+      source: event_map.source,
+      source_data: event_map.source_data,
+      source_idempk: event_map.source_idempk,
+      update_idempk: event_map.update_idempk,
+      transaction_data: TransactionData.to_map(event_map.transaction_data)
+    }
   end
 end

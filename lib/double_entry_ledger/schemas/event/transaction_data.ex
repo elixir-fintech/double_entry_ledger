@@ -55,6 +55,25 @@ defmodule DoubleEntryLedger.Event.TransactionData do
     changeset(transaction_data, attrs)
   end
 
+  @doc """
+  Converts the given `TransactionData.t` struct to a map.
+
+  ## Examples
+
+      iex> alias DoubleEntryLedger.Event.TransactionData
+      iex> transaction_data = %TransactionData{}
+      iex> TransactionData.to_map(transaction_data)
+      %{status: nil, entries: []}
+
+  """
+  @spec to_map(t) :: map()
+  def to_map(transaction_data) do
+    %{
+      status: transaction_data.status,
+      entries: Enum.map(transaction_data.entries, &EntryData.to_map/1)
+    }
+  end
+
   defp validate_entries_count(changeset) do
     entries = get_field(changeset, :entries, [])
     if length(entries) < 2 do

@@ -10,6 +10,8 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
 
   alias DoubleEntryLedger.Event.TransactionData
 
+  doctest TransactionData
+
   describe "changeset/2" do
     test "not valid for empty transaction data" do
       assert %Changeset{errors: [
