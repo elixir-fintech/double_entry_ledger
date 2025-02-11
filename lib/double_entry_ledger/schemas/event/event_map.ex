@@ -5,10 +5,13 @@ defmodule DoubleEntryLedger.Event.EventMap do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias Ecto.Changeset
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Event.TransactionData
 
   alias __MODULE__, as: EventMap
+
+  @update_actions [:update, "update"]
 
   @type t :: %EventMap{
     action: Event.action(),
@@ -31,7 +34,52 @@ defmodule DoubleEntryLedger.Event.EventMap do
     embeds_one :transaction_data, TransactionData
   end
 
+  @doc """
+  Builds a validated EventMap or returns a changeset with errors.
+
+  ## Parameters
+    - `attrs`: A map containing the event data.
+
+  ## Returns
+    - `{:ok, event_map}` on success.
+    - `{:error, changeset}` on failure.
+
+  ## Example
+
+    iex> alias DoubleEntryLedger.Event.EventMap
+    iex> {:ok, em} = EventMap.create(%{action: "create", instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9", source: "source", source_idempk: "source_idempk",
+    ...>   transaction_data: %{status: "pending", entries: [
+    ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
+    ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
+    ...>   ]}})
+    iex> is_struct(em, EventMap)
+
+  """
+  @spec create(map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
+  def create(attrs) do
+    %EventMap{}
+    |> changeset(attrs)
+    |> Changeset.apply_action(:insert)
+  end
+
+  def changeset(event_map, %{"action" => action} = attrs) when action in @update_actions do
+    update_changeset(event_map, attrs)
+  end
+
+  def changeset(event_map, %{action: action} = attrs) when action in @update_actions do
+    update_changeset(event_map, attrs)
+  end
+
   def changeset(event_map, attrs) do
+    base_changeset(event_map, attrs)
+  end
+
+  defp update_changeset(event_map,attrs) do
+    base_changeset(event_map, attrs)
+    |> validate_required([:update_idempk])
+  end
+
+  defp base_changeset(event_map, attrs) do
     event_map
     |> cast(attrs, [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk])
     |> validate_required([:action, :instance_id, :source, :source_idempk])
