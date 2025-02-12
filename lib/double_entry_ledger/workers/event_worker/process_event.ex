@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   Provides functions to process ledger events and handle transactions accordingly.
   """
 
+  alias Ecto.Changeset
   alias DoubleEntryLedger.{
     CreateEvent, Event, Transaction, UpdateEvent
   }
@@ -53,7 +54,8 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     - `{:ok, transaction, event}` on success.
     - `{:error, reason}` on failure.
   """
-  @spec process_event_map(Event.EventMap.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
+  @spec process_event_map(Event.EventMap.t()) ::
+    {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
   def process_event_map(%{action: action} = event_map) when action in @actions  do
     process_map(event_map)
   end

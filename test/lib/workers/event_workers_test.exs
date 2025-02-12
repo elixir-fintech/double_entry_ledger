@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
   This module tests the EventWorker.
   """
   use ExUnit.Case
+  alias DoubleEntryLedger.Event.EventMap
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -59,7 +60,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
   describe "process_event_map/1" do
     setup [:create_instance, :create_accounts]
     test "create event for event_map, which must also create the event", %{instance: inst, accounts: [a1, a2, _, _]} do
-      event_map = %{
+      {:ok, event_map} = %{
         action: :create,
         instance_id: inst.id,
         source: "source",
@@ -73,7 +74,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
             %{account_id: a2.id, amount: 100, currency: "EUR"}
           ]
         }
-      }
+      } |> EventMap.create()
 
       {:ok, transaction, processed_event } = EventWorker.process_new_event(event_map)
       assert processed_event.status == :processed

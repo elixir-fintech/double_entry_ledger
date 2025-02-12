@@ -74,7 +74,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
     base_changeset(event_map, attrs)
   end
 
-  defp update_changeset(event_map,attrs) do
+  defp update_changeset(event_map, attrs) do
     base_changeset(event_map, attrs)
     |> validate_required([:update_idempk])
   end

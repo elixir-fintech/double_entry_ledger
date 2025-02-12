@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
 
   alias DoubleEntryLedger.EventWorker.EventTransformer
   alias DoubleEntryLedger.EventStore.CreateEventError
-  alias Ecto.Multi
+  alias Ecto.{Multi, Changeset}
   import OccRetry
   import EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     - `{:error, reason}` on failure.
   """
   @spec process_map(Event.EventMap.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
   def process_map(event_map) do
     process_map(event_map, Repo)
   end
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     - `{:error, reason}` on failure.
   """
   @spec process_map(Event.EventMap.t(), Ecto.Repo.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
   def process_map(%{transaction_data: transaction_data, instance_id: id} = event_map, repo) do
 
     case transaction_data_to_transaction_map(transaction_data, id) do
@@ -85,8 +85,11 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
             EventStore.create_event_after_failure(steps_so_far.create_event, [build_error(error.message)], 1, :failed)
             {:error, error.message}
 
+          {:error, _step, %Changeset{} = changeset, _steps_so_far} ->
+            {:error, changeset}
+
           {:error, step, error, _steps_so_far} ->
-            {:error, "#{step} failed: #{error}"}
+            {:error, "#{step} failed: #{inspect(error)}"}
 
           {:error, reason} ->
             {:error, reason}

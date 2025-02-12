@@ -8,6 +8,7 @@ defmodule DoubleEntryLedger.EventWorker do
 
   Existing events must be in the `:pending` state to be processed.
   """
+  alias Ecto.Changeset
   alias DoubleEntryLedger.{
     Event, EventStore, Transaction
   }
@@ -32,8 +33,9 @@ defmodule DoubleEntryLedger.EventWorker do
     - `{:ok, transaction, event}` on success.
     - `{:error, reason}` on failure.
   """
-  @spec process_new_event(Event.EventMap.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
-  def process_new_event(%{} = event_map)  do
+  @spec process_new_event(Event.EventMap.t()) ::
+    {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
+  def process_new_event(%Event.EventMap{} = event_map)  do
     process_event_map(event_map)
   end
 
