@@ -3,12 +3,29 @@ defmodule DoubleEntryLedger.TransactionStore do
   This module defines the TransactionStore behaviour.
   """
   alias Ecto.Multi
+  import Ecto.Query
 
   alias DoubleEntryLedger.{
     Repo,
     Transaction,
     Types
   }
+
+  def list_all_for_instance(instance_id) do
+    Repo.all(from t in Transaction,
+      where: t.instance_id == ^instance_id,
+      select: t
+    )
+  end
+
+  def list_all_for_instance_and_account(instance_id, account_id) do
+    Repo.all(from t in Transaction,
+      join: e in assoc(t, :entries),
+      join: a in assoc(e, :account),
+      where: e.account_id == ^account_id and t.instance_id == ^instance_id,
+      select: {t, a, e }
+    )
+  end
 
   @doc """
   Builds an `Ecto.Multi` to create a new transaction. This is used as a building block for more complex
