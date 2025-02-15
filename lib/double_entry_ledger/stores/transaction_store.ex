@@ -13,6 +13,22 @@ defmodule DoubleEntryLedger.TransactionStore do
   }
 
   @doc """
+  Retrieves a transaction by its ID.
+
+  ## Parameters
+
+    - `id` (Ecto.UUID.t()): The ID of the transaction.
+
+  ## Returns
+
+    - `transaction`: The transaction struct, or `nil` if not found.
+  """
+  @spec get_by_id(Ecto.UUID.t()) :: Transaction.t() | nil
+  def get_by_id(id) do
+    Repo.get(Transaction, id)
+  end
+
+  @doc """
   Lists all transactions for a given instance.
   The output is paginated.
 
