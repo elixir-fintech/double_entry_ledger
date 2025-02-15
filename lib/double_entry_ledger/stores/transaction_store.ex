@@ -8,22 +8,77 @@ defmodule DoubleEntryLedger.TransactionStore do
   alias DoubleEntryLedger.{
     Repo,
     Transaction,
-    Types
+    Types,
+    BalanceHistoryEntry
   }
 
-  def list_all_for_instance(instance_id) do
+  @doc """
+  Lists all transactions for a given instance.
+  The output is paginated.
+
+  ## Parameters
+
+    - `instance_id` - The UUID of the instance.
+    - `page` - The page number (defaults to 1).
+    - `per_page` - The number of transactions per page (defaults to 40).
+
+  ## Returns
+
+    - A list of transactions.
+  """
+  @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) :: list(Transaction.t())
+  def list_all_for_instance(instance_id, page \\ 1, per_page \\ 40) do
+    offset = (page - 1) * per_page
+
     Repo.all(from t in Transaction,
       where: t.instance_id == ^instance_id,
+      order_by: [desc: t.inserted_at],
+      limit: ^per_page,
+      offset: ^offset,
       select: t
     )
   end
 
-  def list_all_for_instance_and_account(instance_id, account_id) do
-    Repo.all(from t in Transaction,
-      join: e in assoc(t, :entries),
-      join: a in assoc(e, :account),
-      where: e.account_id == ^account_id and t.instance_id == ^instance_id,
-      select: {t, a, e }
+  @doc """
+  Lists all transactions for a given instance and account. This function joins the transactions
+  with their associated entries, accounts, and the latest balance history entry for each entry.
+  The output is paginated.
+
+  ## Parameters
+
+    - `instance_id` - The UUID of the instance.
+    - `account_id` - The UUID of the account
+    - `page` - The page number (defaults to 1).
+    - `per_page` - The number of transactions per page (defaults to 40).
+
+  ## Returns
+
+    - A list of tuples containing the transaction, account, entry, and the latest balance history entry.
+  """
+  @spec list_all_for_instance_and_account(Ecto.UUID.t(), Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
+    list({Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()})
+  def list_all_for_instance_and_account(instance_id, account_id, page \\ 1, per_page \\ 40) do
+    offset = (page - 1) * per_page
+
+    Repo.all(from transaction in Transaction,
+      join: entry in assoc(transaction, :entries),
+        on: entry.transaction_id == transaction.id,
+        as: :entry,
+      join: account in assoc(entry, :account),
+        on: account.id == entry.account_id,
+      left_lateral_join: latest_balance_history in subquery(
+        from balance_history in BalanceHistoryEntry,
+        where: balance_history.entry_id == parent_as(:entry).id,
+        order_by: [desc: balance_history.inserted_at],
+        limit: 1,
+        select: balance_history
+      ),
+        on: latest_balance_history.entry_id == entry.id,
+      order_by: [desc: transaction.inserted_at],
+      limit: ^per_page,
+      offset: ^offset,
+      where: entry.account_id == ^account_id and transaction.instance_id == ^instance_id,
+      select: {transaction, account, entry, latest_balance_history}
     )
   end
 
