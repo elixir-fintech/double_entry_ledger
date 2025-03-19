@@ -10,6 +10,7 @@ defmodule DoubleEntryLedger.AccountFixtures do
   Generate a account.
   """
   def account_fixture(attrs \\ %{}) do
+    random_name = "account_#{:crypto.strong_rand_bytes(4) |> Base.encode64 |> binary_part(0, 8)}"
     attrs =
       attrs
       |> Enum.into(%{
@@ -19,7 +20,7 @@ defmodule DoubleEntryLedger.AccountFixtures do
         pending: Map.from_struct(%Balance{}),
         available: 0,
         context: %{},
-        name: "some name",
+        name: random_name,
         type: :asset,
         normal_balance: :debit,
       })

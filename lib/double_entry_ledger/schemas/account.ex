@@ -120,6 +120,8 @@ defmodule DoubleEntryLedger.Account do
     |> validate_inclusion(:currency, @currency_atoms)
     |> cast_embed(:posted, with: &Balance.changeset/2)
     |> cast_embed(:pending, with: &Balance.changeset/2)
+    |> trim_name()
+    |> unique_constraint(:name, name: "unique_instance_name")
   end
 
   @doc """
@@ -149,9 +151,11 @@ defmodule DoubleEntryLedger.Account do
     changeset
     |> cast(attrs, [:name, :description, :context])
     |> validate_required([:name])
+    |> trim_name()
+    |> unique_constraint(:name, name: "unique_instance_name")
   end
 
-  @doc """
+  @doc"""
   Creates a changeset for safely deleting an account.
 
   Ensures that there are no associated entries before deletion.
@@ -301,5 +305,9 @@ defmodule DoubleEntryLedger.Account do
   @spec opposite_direction(Types.credit_or_debit()) :: Types.credit_or_debit()
   defp opposite_direction(direction) do
     if direction == :debit, do: :credit, else: :debit
+  end
+
+  defp trim_name(changeset) do
+    update_change(changeset, :name, &String.trim/1)
   end
 end

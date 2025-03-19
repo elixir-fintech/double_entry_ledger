@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.AccountTest do
         pending: %Balance{amount: 0, debit: 0, credit: 0},
         available: 0,
         instance_id: ^inst_id,
-      } = account_fixture(instance_id: inst.id)
+      } = account_fixture(instance_id: inst.id, name: " some name ")
     end
   end
 
