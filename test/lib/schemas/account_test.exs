@@ -97,7 +97,7 @@ defmodule DoubleEntryLedger.AccountTest do
     end
 
     test "credit entry", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :debit)
+      account = account_fixture(instance_id: id, normal_balance: :debit, allowed_negative: true)
       entry = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :credit }
 
       assert %Ecto.Changeset{
@@ -127,7 +127,7 @@ defmodule DoubleEntryLedger.AccountTest do
     end
 
     test "credit entry", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :debit)
+      account = account_fixture(instance_id: id, normal_balance: :debit, allowed_negative: true)
       entry = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :credit }
 
       assert %Ecto.Changeset{
@@ -182,7 +182,7 @@ defmodule DoubleEntryLedger.AccountTest do
     end
 
     test "debit entry", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :credit)
+      account = account_fixture(instance_id: id, normal_balance: :credit, allowed_negative: true)
       entry = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :debit }
 
       assert %Ecto.Changeset{
@@ -199,7 +199,7 @@ defmodule DoubleEntryLedger.AccountTest do
     setup [:create_instance]
 
     test "debit entry", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :credit)
+      account = account_fixture(instance_id: id, normal_balance: :credit, allowed_negative: true)
       entry = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :debit }
 
       assert %Ecto.Changeset{

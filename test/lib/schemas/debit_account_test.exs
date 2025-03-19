@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
     end
 
     test "first credit entry", %{instance: inst} do
-      account = account_fixture(normal_balance: :debit, instance_id: inst.id)
+      account = account_fixture(normal_balance: :debit, instance_id: inst.id, allowed_negative: true)
       entry = %Entry{account_id: account.id, type: :credit, value: Money.new(200, :EUR) }
       assert %Ecto.Changeset{
         valid?: true,
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
     end
 
     test "first credit entry", %{instance: inst} do
-      account = account_fixture(normal_balance: :debit, instance_id: inst.id)
+      account = account_fixture(normal_balance: :debit, instance_id: inst.id, allowed_negative: true)
       entry = %Entry{account_id: account.id, type: :credit, value: Money.new(200, :EUR) }
       assert %Ecto.Changeset{
         valid?: true,

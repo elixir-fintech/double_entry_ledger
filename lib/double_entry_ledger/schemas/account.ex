@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.Account do
     field :normal_balance, Ecto.Enum, values: @credit_and_debit
     field :type, Ecto.Enum, values: @account_types
     field :available, :integer, default: 0
-    field :allowed_negative, :boolean, default: true
+    field :allowed_negative, :boolean, default: false
     field :lock_version, :integer, default: 1
 
     embeds_one :posted, Balance, on_replace: :delete
