@@ -23,6 +23,10 @@ defmodule DoubleEntryLedger.Event.EventMap do
     transaction_data: TransactionData.t()
   }
 
+  @derive {Jason.Encoder, only:
+    [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk, :transaction_data]
+  }
+
   @primary_key false
   embedded_schema do
     field :action, Ecto.Enum, values: Event.actions

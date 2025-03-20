@@ -11,6 +11,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
   alias DoubleEntryLedger.Event.EntryData
   alias __MODULE__, as: TransactionData
 
+  @derive {Jason.Encoder, only: [:status, :entries]}
 
   @type t :: %TransactionData{
     status: Transaction.state(),

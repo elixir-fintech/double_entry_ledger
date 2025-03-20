@@ -2,9 +2,25 @@ defmodule DoubleEntryLedger.EventStore do
   @moduledoc """
   This module defines the EventStore behaviour.
   """
+  import Ecto.Query
+
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.{Repo, Event, Transaction}
   alias DoubleEntryLedger.EventStore.CreateEventError
+
+
+  @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) :: list(Event.t())
+  def list_all_for_instance(instance_id, page \\ 1, per_page \\ 40) do
+    offset = (page - 1) * per_page
+
+    Repo.all(from e in Event,
+      where: e.instance_id == ^instance_id,
+      order_by: [desc: e.inserted_at],
+      limit: ^per_page,
+      offset: ^offset,
+      select: e
+    )
+  end
 
   @spec insert_event(map()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
   def insert_event(attrs) do
