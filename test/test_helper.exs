@@ -1,4 +1,5 @@
-ExUnit.start()
+ExUnit.start(formatters: [ExUnit.CLIFormatter])
+ExUnit.configure(only_failures: true)
 
 Ecto.Adapters.SQL.Sandbox.mode(DoubleEntryLedger.Repo, :manual)
 

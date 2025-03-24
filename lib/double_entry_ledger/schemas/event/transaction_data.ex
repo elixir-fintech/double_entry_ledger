@@ -7,6 +7,9 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
   @states DoubleEntryLedger.Transaction.states
 
+  @posted ["posted", :posted]
+  @archived ["archived", :archived]
+
   alias DoubleEntryLedger.Transaction
   alias DoubleEntryLedger.Event.EntryData
   alias __MODULE__, as: TransactionData
@@ -21,7 +24,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
   @primary_key false
   embedded_schema do
     field :status, Ecto.Enum, values: @states
-    embeds_many :entries, EntryData
+    embeds_many :entries, EntryData, on_replace: :delete
   end
 
   @doc false
@@ -34,26 +37,21 @@ defmodule DoubleEntryLedger.Event.TransactionData do
     |> validate_entries_count()
   end
 
-  def update_event_changeset(transaction_data, %{status: :posted, entries: e}) when e in [[], nil] do
-    update_event_changeset(transaction_data, %{status: :posted})
-  end
-
-  def update_event_changeset(transaction_data, %{status: :posted, entries: _entries} = attrs) do
-    changeset(transaction_data, attrs)
-  end
-
-  def update_event_changeset(transaction_data, %{status: :posted} = attrs) do
-    transaction_data
-    |> cast(attrs, [:status])
-  end
-
-  def update_event_changeset(transaction_data, %{status: :archived} = attrs) do
-    transaction_data
-    |> cast(attrs, [:status])
-  end
-
   def update_event_changeset(transaction_data, attrs) do
-    changeset(transaction_data, attrs)
+    # Extract status and entries from attrs regardless of key type.
+    status = Map.get(attrs, "status") || Map.get(attrs, :status)
+    entries = Map.get(attrs, "entries") || Map.get(attrs, :entries)
+
+    cond do
+      (entries in [[], nil]) and (status in @posted) ->
+        cast(transaction_data, attrs, [:status])
+
+      status in @archived ->
+        cast(transaction_data, attrs, [:status])
+
+      true ->
+        changeset(transaction_data, attrs)
+    end
   end
 
   @doc """

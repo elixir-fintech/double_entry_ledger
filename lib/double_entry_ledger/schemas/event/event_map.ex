@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
     field :source_data, :map, default: %{}
     field :source_idempk, :string
     field :update_idempk, :string
-    embeds_one :transaction_data, TransactionData
+    embeds_one :transaction_data, TransactionData, on_replace: :delete
   end
 
   @doc """
@@ -76,11 +76,13 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   def changeset(event_map, attrs) do
     base_changeset(event_map, attrs)
+    |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
   end
 
   defp update_changeset(event_map, attrs) do
     base_changeset(event_map, attrs)
     |> validate_required([:update_idempk])
+    |> cast_embed(:transaction_data, with: &TransactionData.update_event_changeset/2, required: true)
   end
 
   defp base_changeset(event_map, attrs) do
@@ -88,7 +90,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
     |> cast(attrs, [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk])
     |> validate_required([:action, :instance_id, :source, :source_idempk])
     |> validate_inclusion(:action, Event.actions)
-    |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
   end
 
   @doc """
