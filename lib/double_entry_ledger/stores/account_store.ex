@@ -3,7 +3,14 @@ defmodule DoubleEntryLedger.AccountStore do
   This module defines the AccountStore behaviour.
   """
   import Ecto.Query, only: [from: 2]
-  alias DoubleEntryLedger.{Repo, Account, Types}
+
+  alias DoubleEntryLedger.{
+    Repo,
+    Account,
+    Types,
+    BalanceHistoryEntry,
+    Entry
+  }
 
   @doc """
   Creates a new account with the given attributes.
@@ -116,6 +123,56 @@ defmodule DoubleEntryLedger.AccountStore do
     get_by_id(id)
     |> Account.delete_changeset()
     |> Repo.delete()
+  end
+
+  @doc """
+  Retrieves an account's balance_history by its ID.
+
+  ## Parameters
+
+    - `id` (Ecto.UUID.t()): The ID of the account.
+    - `page` (non_neg_integer()): The page number for pagination (default: 1).
+    - `per_page` (non_neg_integer()): The number of entries per page (default: 40).
+
+  ## Returns
+
+    - `{:ok, list(BalanceHistoryEntry)}`: A list of balance history entries on success.
+    - `{:error, message}`: If the account is not found.
+
+  ## Examples
+
+      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{name: "Sample Instance"})
+      iex> attrs = %{name: "Test Account", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
+      iex> {:ok, balance_history} = DoubleEntryLedger.AccountStore.get_balance_history(account.id)
+      iex> is_list(balance_history)
+      true
+
+      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{name: "Sample Instance"})
+      iex> {:error, _} = DoubleEntryLedger.AccountStore.get_balance_history(instance_id)
+
+  """
+  @spec get_balance_history(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
+    {:ok, list(BalanceHistoryEntry.t())} | {:error, String.t()}
+  def get_balance_history(id, page \\ 1, per_page \\ 40) do
+    offset = (page - 1) * per_page
+    case get_by_id(id) do
+      nil ->
+        {:error, "Account not found"}
+      _ ->
+        {:ok, Repo.all(
+          from b in BalanceHistoryEntry,
+            where: b.account_id == ^id,
+            left_join: e in Entry, on: b.entry_id == e.id,
+            select: merge(
+              map(b, [:id, :account_id, :entry_id, :available, :posted, :pending, :inserted_at, :updated_at]),
+              %{transaction_id: e.transaction_id}
+            ),
+            order_by: [desc: b.inserted_at],
+            limit: ^per_page,
+            offset: ^offset
+        )}
+    end
   end
 
   @doc """
