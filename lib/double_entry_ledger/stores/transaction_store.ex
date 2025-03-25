@@ -23,9 +23,14 @@ defmodule DoubleEntryLedger.TransactionStore do
 
     - `transaction`: The transaction struct, or `nil` if not found.
   """
-  @spec get_by_id(Ecto.UUID.t()) :: Transaction.t() | nil
-  def get_by_id(id) do
-    Repo.get(Transaction, id)
+  @spec get_by_id(Ecto.UUID.t(), list()) :: Transaction.t() | nil
+  def get_by_id(id, preload \\ []) do
+    transaction = Repo.get(Transaction, id)
+    if transaction != nil and preload != [] do
+      Repo.preload(transaction, preload)
+    else
+      transaction
+    end
   end
 
   @doc """
