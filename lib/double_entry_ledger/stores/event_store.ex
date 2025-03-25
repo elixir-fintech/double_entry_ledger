@@ -22,6 +22,15 @@ defmodule DoubleEntryLedger.EventStore do
     )
   end
 
+  @spec list_all_for_transaction(Ecto.UUID.t()) :: list(Event.t())
+  def list_all_for_transaction(transaction_id) do
+    Repo.all(from e in Event,
+      where: e.processed_transaction_id == ^transaction_id,
+      select: e,
+      order_by: [desc: e.inserted_at]
+    )
+  end
+
   @spec insert_event(map()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
   def insert_event(attrs) do
     build_insert_event(attrs)
