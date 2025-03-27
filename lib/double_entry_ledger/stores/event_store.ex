@@ -8,6 +8,10 @@ defmodule DoubleEntryLedger.EventStore do
   alias DoubleEntryLedger.{Repo, Event, Transaction}
   alias DoubleEntryLedger.EventStore.CreateEventError
 
+  @spec get_by_id(Ecto.UUID.t()) :: Event.t() | nil
+  def get_by_id(id) do
+    Repo.get(Event, id)
+  end
 
   @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) :: list(Event.t())
   def list_all_for_instance(instance_id, page \\ 1, per_page \\ 40) do
@@ -51,10 +55,6 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.insert()
   end
 
-  @spec get_by_id(Ecto.UUID.t()) :: Event.t() | nil
-  def get_by_id(id) do
-    Repo.get(Event, id)
-  end
 
   def get_event(id) do
     case Repo.get(Event, id) do
