@@ -51,6 +51,11 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.insert()
   end
 
+  @spec get_by_id(Ecto.UUID.t()) :: Event.t() | nil
+  def get_by_id(id) do
+    Repo.get(Event, id)
+  end
+
   def get_event(id) do
     case Repo.get(Event, id) do
       nil -> {:error, "Event not found"}
