@@ -5,7 +5,8 @@ defmodule DoubleEntryLedger.InstanceStore do
   This module includes functions for creating, retrieving, updating, and deleting ledger instances.
   It respects the constraints and validations defined in `DoubleEntryLedger.Instance`.
   """
-  alias DoubleEntryLedger.{Instance, Repo}
+  import  Ecto.Query, only: [from: 2]
+  alias DoubleEntryLedger.{Instance, Repo, Account}
 
   @doc """
   Creates a new ledger instance with the given attributes.
@@ -117,5 +118,43 @@ defmodule DoubleEntryLedger.InstanceStore do
     get_by_id(id)
     |> Instance.delete_changeset()
     |> Repo.delete()
+  end
+
+  @doc """
+  Calculates the sum of debits and credits for all accounts in a ledger instance, grouped by currency.
+
+  This function runs a database query in a transaction with REPEATABLE READ isolation level to ensure
+  consistent results even if accounts are being updated concurrently.
+
+  ## Parameters
+
+    - `instance_id` (Ecto.UUID.t()): The ID of the ledger instance.
+
+  ## Returns
+
+    - `{:ok, list(map)}`: On success, returns a list of maps containing currency, posted_debit,
+      posted_credit, pending_debit, and pending_credit sums.
+    - `{:error, reason}`: If there was an error during the transaction.
+
+  """
+  @spec sum_accounts_debits_and_credits_by_currency(Ecto.UUID.t()) ::
+       {:ok, list(map())} | {:error, Ecto.Changeset.t()}
+  def sum_accounts_debits_and_credits_by_currency(instance_id) do
+    Repo.transaction(fn ->
+     query =
+        from a in Account,
+        where: a.instance_id == ^instance_id,
+        group_by: a.currency,
+        select: %{
+          currency: a.currency,
+          posted_debit: type(sum(fragment("(posted->>'debit')::integer")), :integer),
+          posted_credit: type(sum(fragment("(posted->>'credit')::integer")), :integer),
+          pending_debit: type(sum(fragment("(pending->>'debit')::integer")), :integer),
+          pending_credit: type(sum(fragment("(pending->>'credit')::integer")), :integer)
+        }
+      Repo.all(query)
+    end,
+    isolation: :repeatable_read
+    )
   end
 end
