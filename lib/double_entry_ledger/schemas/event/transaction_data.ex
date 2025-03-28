@@ -35,6 +35,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
     |> validate_inclusion(:status, @states)
     |> cast_embed(:entries, with: &EntryData.changeset/2, required: true)
     |> validate_entries_count()
+    |> validate_distinct_account_ids()
   end
 
   def update_event_changeset(transaction_data, attrs) do
@@ -77,6 +78,17 @@ defmodule DoubleEntryLedger.Event.TransactionData do
     entries = get_field(changeset, :entries, [])
     if length(entries) < 2 do
       add_error(changeset, :entries, "must have at least 2 entries")
+    else
+      changeset
+    end
+  end
+
+  defp validate_distinct_account_ids(changeset) do
+    entries = get_field(changeset, :entries, [])
+    account_ids = Enum.map(entries, & &1.account_id)
+
+    if length(account_ids) != length(Enum.uniq(account_ids)) do
+      add_error(changeset, :entries, "account IDs must be distinct")
     else
       changeset
     end

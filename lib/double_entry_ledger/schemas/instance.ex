@@ -121,7 +121,9 @@ defmodule DoubleEntryLedger.Instance do
     - `{:error, String.t()}`: If the debit and credit balances are not equal.
 
   """
-  @spec validate_account_balances(Instance.t()) :: {:ok, map()} | {:error, String.t()}
+  @spec validate_account_balances(Instance.t()) ::
+    {:ok, %{posted_debits: integer(), posted_credits: integer(), pending_debits: integer(), pending_credits: integer()}}
+    | {:error, String.t()}
   def validate_account_balances(instance) do
     instance
     |> ledger_value()

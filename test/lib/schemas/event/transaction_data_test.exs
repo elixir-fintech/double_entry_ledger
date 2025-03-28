@@ -55,6 +55,19 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
       ]} = TransactionData.changeset(%TransactionData{}, attrs)
     end
 
+    test "not valid for 2 entries with same account" do
+      id = Ecto.UUID.generate()
+      assert %Changeset{errors: [
+        entries: {"account IDs must be distinct", []}
+      ]} = TransactionData.changeset(%TransactionData{}, %{
+        status: :pending,
+        entries: [
+          %{account_id: id, amount: 100, currency: :EUR},
+          %{account_id: id, amount: -100, currency: :EUR}
+        ]
+      })
+    end
+
     test "valid for valid transaction data" do
       attrs = %{
         status: :pending,
