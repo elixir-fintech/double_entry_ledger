@@ -279,7 +279,11 @@ defmodule DoubleEntryLedger.AccountStore do
   """
   @spec get_all_accounts_by_instance_id(Ecto.UUID.t()) :: {:error, String.t()} | {:ok, list(Account.t())}
   def get_all_accounts_by_instance_id(instance_id) do
-    accounts = Repo.all(from a in Account, where: a.instance_id == ^instance_id)
+    accounts = Repo.all(
+      from a in Account,
+      where: a.instance_id == ^instance_id,
+      order_by: [asc: a.name]
+      )
     if length(accounts) > 0 do
       {:ok, accounts}
     else
