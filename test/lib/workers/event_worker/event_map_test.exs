@@ -5,7 +5,9 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
   use ExUnit.Case
   import Mox
 
-      alias DoubleEntryLedger.EventStore
+  alias Ecto.Changeset
+  alias DoubleEntryLedger.EventStore
+  alias DoubleEntryLedger.Event.EventMap, as: EventMapSchema
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -32,6 +34,29 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :pending
+    end
+
+    test "return EventMap changeset for duplicate source_idempk", ctx do
+      #successfully create event
+      event_map = event_map(ctx)
+      EventMap.process_map(event_map)
+
+      # process same event_map again which should fail
+      {:error, changeset} = EventMap.process_map(event_map)
+      assert %Changeset{data: %EventMapSchema{}} = changeset
+      assert Keyword.has_key?(changeset.errors, :source_idempk)
+    end
+
+    test "return EventMap changeset for duplicate update_idempk", ctx do
+      #successfully create event
+      %{event: pending_event} = create_event(ctx, :pending)
+      update_event = update_event_map(ctx, pending_event, :posted)
+      EventMap.process_map(update_event)
+
+      # process same update_event again which should fail
+      {:error, changeset} = EventMap.process_map(update_event)
+      assert %Changeset{data: %EventMapSchema{}} = changeset
+      assert Keyword.has_key?(changeset.errors, :update_idempk)
     end
 
     test "update event for event_map, which should also create the event", ctx do
