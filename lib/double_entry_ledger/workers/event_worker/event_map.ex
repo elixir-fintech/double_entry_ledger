@@ -58,7 +58,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
   """
   @spec process_map(EventMap.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
-  def process_map(%{transaction_data: transaction_data, instance_id: id} = event_map, repo) do
+  def process_map(%EventMap{transaction_data: transaction_data, instance_id: id} = event_map, repo) do
 
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
@@ -88,7 +88,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
 
           {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
             event_map_changeset =
-              Changeset.change(%EventMap{}, event_map)
+              Changeset.change(event_map, %{})
               |> transfer_errors_from_event_to_event_map(event_changeset)
             {:error, event_map_changeset}
 

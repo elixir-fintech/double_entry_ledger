@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     setup [:create_instance, :create_accounts]
 
     test "create event for event_map, which must also create the event", ctx do
-      event_map = event_map(ctx)
+      event_map = struct(EventMapSchema, event_map(ctx))
 
       {:ok, transaction, processed_event} = EventMap.process_map(event_map)
       assert processed_event.status == :processed
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
     test "return EventMap changeset for duplicate source_idempk", ctx do
       #successfully create event
-      event_map = event_map(ctx)
+      event_map = struct(EventMapSchema, event_map(ctx))
       EventMap.process_map(event_map)
 
       # process same event_map again which should fail
@@ -50,7 +50,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     test "return EventMap changeset for duplicate update_idempk", ctx do
       #successfully create event
       %{event: pending_event} = create_event(ctx, :pending)
-      update_event = update_event_map(ctx, pending_event, :posted)
+      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
       EventMap.process_map(update_event)
 
       # process same update_event again which should fail
@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       %{event: pending_event} = create_event(ctx, :pending)
       {:ok, {pending_transaction, _}} =
         CreateEvent.process_create_event(pending_event)
-      update_event = update_event_map(ctx, pending_event, :posted)
+      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       {:ok, transaction, processed_event } = EventMap.process_map(update_event)
       assert processed_event.status == :processed
@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
     test "update event for event_map, when create event not yet processed", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      update_event = update_event_map(ctx, pending_event, :posted)
+      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       {:error, error_message} = EventMap.process_map(update_event)
       assert error_message =~ "Create event (id: #{pending_event.id}) has not yet been processed for Update Even"
@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     test "update event for event_map, when create event failed", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
       EventStore.mark_as_failed(pending_event, "Failed to create event")
-      update_event = update_event_map(ctx, pending_event, :posted)
+      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       {:error, error_message} = EventMap.process_map(update_event)
       assert error_message =~ "Create event (id: #{pending_event.id}) has failed for Update Event"
