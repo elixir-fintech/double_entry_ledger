@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.EntryTest do
     test "returns error changeset for different currency", %{transaction: %{entries: [e0, _]}} do
       assert %Ecto.Changeset{
         valid?: false,
-        errors: [account: {"currency (EUR) must be equal to entry currency (USD)", []}]
+        errors: [currency: {"account (EUR) must be equal to entry (USD)", []}]
       } = Entry.update_changeset(e0, %{value: Money.new(100, :USD)}, :pending_to_posted)
     end
   end

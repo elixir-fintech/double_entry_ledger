@@ -11,7 +11,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     Repo,
     OccRetry
   }
-
+  alias DoubleEntryLedger.Event.EntryData
+  alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker.EventTransformer
   alias DoubleEntryLedger.EventStore.CreateEventError
@@ -88,8 +89,13 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
 
           {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
             event_map_changeset =
-              EventMap.changeset(%EventMap{}, EventMap.to_map(event_map))
-              |> transfer_errors_from_event_to_event_map(event_changeset)
+              transfer_errors_from_event_to_event_map(event_map, event_changeset)
+            {:error, event_map_changeset}
+
+          {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
+            event_map_changeset =
+              transfer_errors_from_trx_to_event_map(event_map, trx_changeset)
+            IO.puts("EventMapCS: #{inspect(event_map_changeset, pretty: true)}")
             {:error, event_map_changeset}
 
           {:error, step, error, _steps_so_far} ->
@@ -176,11 +182,41 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     }
   end
 
-  @spec transfer_errors_from_event_to_event_map(Changeset.t(), Changeset.t()) :: Changeset.t()
-  defp transfer_errors_from_event_to_event_map(event_map_changeset, event_changeset) do
-    errors = get_all_errors(event_changeset)
+  defp transfer_errors_from_trx_to_event_map(event_map, trx_changeset) do
+    errors = get_all_errors(trx_changeset)
+    IO.puts("Transaction ERRORS: #{inspect(errors, pretty: true)}")
+    entry_errors = Map.get(errors, :entries, [])
+    transaction_data = event_map.transaction_data
+    entries = transaction_data.entries
 
-    event_map_changeset
+    entry_changesets = entries
+    |> Enum.with_index()
+    |> Enum.map(fn {entry, index} ->
+      EntryData.changeset(%EntryData{}, EntryData.to_map(entry))
+      |> add_entry_data_errors(Enum.at(entry_errors, index))
+      |> Map.put(:action, :insert)
+    end)
+
+    transaction_data_changeset =
+      TransactionData.changeset(%TransactionData{}, TransactionData.to_map(transaction_data))
+      |> Changeset.put_embed(:entries, entry_changesets)
+      |> Map.put(:action, :insert)
+
+    EventMap.changeset(%EventMap{}, EventMap.to_map(event_map))
+    |> Changeset.put_embed(:transaction_data, transaction_data_changeset)
+    |> Map.put(:action, :insert)
+  end
+
+  defp add_entry_data_errors(changeset, entry_errors) do
+    [:currency, :amount]
+    |> Enum.reduce(changeset, &add_errors_to_changeset(&2, &1, entry_errors))
+  end
+
+  @spec transfer_errors_from_event_to_event_map(EventMap.t(), Changeset.t()) :: Changeset.t()
+  defp transfer_errors_from_event_to_event_map(event_map, event_changeset) do
+    errors = get_all_errors(event_changeset)
+    IO.puts("Event ERRORS: #{inspect(errors, pretty: true)}")
+    EventMap.changeset(%EventMap{}, EventMap.to_map(event_map))
     |> add_event_errors(errors)
     |> Map.put(:action, :insert)
   end

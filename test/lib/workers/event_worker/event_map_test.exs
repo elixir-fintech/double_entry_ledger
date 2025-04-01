@@ -59,6 +59,16 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       assert Keyword.has_key?(changeset.errors, :update_idempk)
     end
 
+    test "return EventMap changeset for other errors", ctx do
+      #successfully create event
+      event_map = event_map(ctx, :pending)
+      updated_event_map = update_in(event_map, [:transaction_data, :entries, Access.at(1), :currency], fn _ -> "USD" end)
+
+      # process same update_event again which should fail
+      {:error, changeset} = EventMap.process_map(struct(EventMapSchema, updated_event_map))
+      assert %Changeset{data: %EventMapSchema{}} = changeset
+    end
+
     test "update event for event_map, which should also create the event", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
       {:ok, {pending_transaction, _}} =

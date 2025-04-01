@@ -64,6 +64,7 @@ defmodule DoubleEntryLedger.Entry do
     |> validate_required(@required_attrs)
     |> validate_inclusion(:type, @debit_and_credit)
     |> put_assoc(:account, Repo.get!(Account, id))
+    |> validate_same_account_currency()
     |> put_account_assoc(transition)
     |> put_balance_history_entry_assoc()
   end
@@ -121,8 +122,8 @@ defmodule DoubleEntryLedger.Entry do
     if account.currency != currency do
       add_error(
         changeset,
-        :account,
-        "currency (#{account.currency}) must be equal to entry currency (#{currency})"
+        :currency,
+        "account (#{account.currency}) must be equal to entry (#{currency})"
       )
     else
       changeset
