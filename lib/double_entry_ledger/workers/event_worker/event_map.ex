@@ -88,7 +88,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
 
           {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
             event_map_changeset =
-              Changeset.change(event_map, %{})
+              EventMap.changeset(%EventMap{}, EventMap.to_map(event_map))
               |> transfer_errors_from_event_to_event_map(event_changeset)
             {:error, event_map_changeset}
 
@@ -182,6 +182,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
 
     event_map_changeset
     |> add_event_errors(errors)
+    |> Map.put(:action, :insert)
   end
 
   @spec add_event_errors(Changeset.t(), map()) :: Changeset.t()
