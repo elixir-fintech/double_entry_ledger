@@ -77,20 +77,38 @@ defmodule DoubleEntryLedger.Event.TransactionData do
   defp validate_entries_count(changeset) do
     entries = get_field(changeset, :entries, [])
     if length(entries) < 2 do
-      add_error(changeset, :entries, "must have at least 2 entries")
+      add_error(changeset, :entry_count, "must have at least 2 entries")
     else
       changeset
     end
   end
 
   defp validate_distinct_account_ids(changeset) do
-    entries = get_field(changeset, :entries, [])
-    account_ids = Enum.map(entries, & &1.account_id)
+    duplicate_ids =
+      (get_embed(changeset, :entries, :struct) || [])
+      |> Enum.map(& &1.account_id)
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_, count} -> count > 1 end)
+      |> Enum.map(fn {id, _} -> id end)
 
-    if length(account_ids) != length(Enum.uniq(account_ids)) do
-      add_error(changeset, :entries, "account IDs must be distinct")
+    if duplicate_ids != [] do
+      add_errors_to_entries(changeset, :account_id, "account IDs must be distinct", duplicate_ids)
     else
       changeset
     end
+  end
+
+  @spec add_errors_to_entries(Ecto.Changeset.t(), atom(), String.t(), list(Ecto.UUID.t())) :: Ecto.Changeset.t()
+  defp add_errors_to_entries(changeset, field, error, account_ids) do
+      (get_embed(changeset, :entries, :changeset) || [])
+      |> Enum.map(fn entry_changeset ->
+        account_id = get_field(entry_changeset, :account_id)
+        if account_id in account_ids do
+          add_error(entry_changeset, field, error)
+        else
+          entry_changeset
+        end
+      end)
+      |> then(&put_embed(changeset, :entries, &1))
   end
 end

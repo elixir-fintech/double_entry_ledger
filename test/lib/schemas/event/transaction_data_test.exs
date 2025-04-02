@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
   describe "changeset/2" do
     test "not valid for empty transaction data" do
       assert %Changeset{errors: [
-        entries: {"must have at least 2 entries", []},
+        entry_count: {"must have at least 2 entries", []},
         entries: {"can't be blank", [validation: :required]},
         status: {"can't be blank", [validation: :required]}
       ]} = TransactionData.changeset(%TransactionData{}, %{})
@@ -51,21 +51,22 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         entries: tail
       }
       assert %Changeset{errors: [
-        entries: {"must have at least 2 entries", []}
+        entry_count: {"must have at least 2 entries", []}
       ]} = TransactionData.changeset(%TransactionData{}, attrs)
     end
 
     test "not valid for 2 entries with same account" do
       id = Ecto.UUID.generate()
-      assert %Changeset{errors: [
-        entries: {"account IDs must be distinct", []}
-      ]} = TransactionData.changeset(%TransactionData{}, %{
+      attr = %{
         status: :pending,
         entries: [
           %{account_id: id, amount: 100, currency: :EUR},
           %{account_id: id, amount: -100, currency: :EUR}
         ]
-      })
+      }
+      TransactionData.changeset(%TransactionData{}, attr)
+      |> get_embed(:entries, :changeset)
+      |> Enum.each(& assert {"account IDs must be distinct", []} = &1.errors[:account_id])
     end
 
     test "valid for valid transaction data" do
@@ -108,7 +109,7 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         entries: tail
       }
       assert %Changeset{errors: [
-        entries: {"must have at least 2 entries", []}
+        entry_count: {"must have at least 2 entries", []}
       ]} = TransactionData.update_event_changeset(%TransactionData{}, attrs)
     end
 
