@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.TransactionTest do
         valid?: false,
         errors: [
           entries: {"no accounts found", []},
-          entries: {"must have at least 2 entries", []},
+          entry_count: {"must have at least 2 entries", []},
         ]
       } = Transaction.changeset(%Transaction{}, attr)
     end
@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.TransactionTest do
         valid?: false,
         errors: [
           entries: {"no accounts found", []},
-          entries: {"must have at least 2 entries", []},
+          entry_count: {"must have at least 2 entries", []},
         ]
       } = Transaction.changeset(%Transaction{}, attr)
     end
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.TransactionTest do
       assert %Ecto.Changeset{
         valid?: false,
         errors: [
-          entries: {"must have at least 2 entries", []}]
+          entry_count: {"must have at least 2 entries", []}]
       } = Transaction.changeset(%Transaction{}, attr)
     end
 
@@ -86,11 +86,12 @@ defmodule DoubleEntryLedger.TransactionTest do
         %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
         %{type: :debit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
-      assert %Ecto.Changeset{
-        valid?: false,
-        errors: [
-          entries: {"must have equal debit and credit", []}]
-      } = Transaction.changeset(%Transaction{}, attr)
+      entries_changeset =
+        get_assoc(Transaction.changeset(%Transaction{}, attr), :entries, :changeset)
+
+      Enum.each(entries_changeset, fn changeset ->
+        assert {"must have equal debit and credit", []} = Keyword.get(changeset.errors, :value)
+      end)
     end
 
     test "both credit entries", %{instance: inst, accounts: [acc1, acc2, _, _] } do
@@ -98,11 +99,11 @@ defmodule DoubleEntryLedger.TransactionTest do
         %{type: :credit, value: Money.new(100, :EUR), account_id:  acc1.id},
         %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
-      assert %Ecto.Changeset{
-        valid?: false,
-        errors: [
-          entries: {"must have equal debit and credit", []}]
-      } = Transaction.changeset(%Transaction{}, attr)
+
+      get_assoc(Transaction.changeset(%Transaction{}, attr), :entries, :changeset)
+      |> Enum.each(fn changeset ->
+        assert {"must have equal debit and credit", []} = Keyword.get(changeset.errors, :value)
+      end)
     end
 
     test "amount different", %{instance: inst, accounts: [acc1, acc2, _, _] } do
@@ -110,11 +111,23 @@ defmodule DoubleEntryLedger.TransactionTest do
         %{type: :debit, value: Money.new(101, :EUR), account_id:  acc1.id},
         %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
-      assert %Ecto.Changeset{
-        valid?: false,
-        errors: [
-          entries: {"must have equal debit and credit", []}]
-      } = Transaction.changeset(%Transaction{}, attr)
+
+      get_assoc(Transaction.changeset(%Transaction{}, attr), :entries, :changeset)
+      |> Enum.each(fn changeset ->
+        assert {"must have equal debit and credit", []} = Keyword.get(changeset.errors, :value)
+      end)
+    end
+
+    test "amount different, also add :amount error for EventMap use", %{instance: inst, accounts: [acc1, acc2, _, _] } do
+      attr = transaction_attr(instance_id: inst.id, entries: [
+        %{type: :debit, value: Money.new(101, :EUR), account_id:  acc1.id},
+        %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
+      ])
+
+      get_assoc(Transaction.changeset(%Transaction{}, attr), :entries, :changeset)
+      |> Enum.each(fn changeset ->
+        assert {"must have equal debit and credit", []} = Keyword.get(changeset.errors, :amount)
+      end)
     end
 
     test "same amount", %{instance: inst, accounts: [acc1, acc2, _, _] } do
@@ -122,10 +135,7 @@ defmodule DoubleEntryLedger.TransactionTest do
         %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
         %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
-      assert %Ecto.Changeset{
-        valid?: true,
-        errors: []
-      } = Transaction.changeset(%Transaction{}, attr)
+      assert Transaction.changeset(%Transaction{}, attr).valid?
     end
   end
 
@@ -139,11 +149,14 @@ defmodule DoubleEntryLedger.TransactionTest do
         %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
         %{type: :credit, value: Money.new(100, :EUR), account_id:  acc2.id}
       ])
-      assert %Ecto.Changeset{
-        valid?: false,
-        errors: [
-          entries: {"currency must be the same as account", []}]
-     } = Transaction.changeset(%Transaction{}, attr)
+      changeset = Transaction.changeset(%Transaction{}, attr)
+      assert changeset.valid? == false
+
+      invalid_entry_changeset = get_assoc(changeset, :entries, :changeset)
+      |> Enum.find(& &1.valid? == false)
+
+      assert {"account (USD) must be equal to entry (EUR)", []} =
+        Keyword.get(invalid_entry_changeset.errors, :currency)
     end
 
 
@@ -169,11 +182,17 @@ defmodule DoubleEntryLedger.TransactionTest do
         %{type: :debit, value: Money.new(100, :USD), account_id: acc1.id},
         %{type: :credit, value: Money.new(100, :USD), account_id: acc2.id}
       ])
-      assert %Ecto.Changeset{
-        valid?: false,
-        errors: [
-          entries: {"currency must be the same as account", []}]
-      } = Transaction.changeset(%Transaction{}, attr)
+      entries_changeset =
+        get_assoc(Transaction.changeset(%Transaction{}, attr), :entries, :changeset)
+
+      Enum.each(entries_changeset, fn changeset ->
+        assert %Ecto.Changeset{
+          valid?: false,
+          errors: [
+            currency: {"account (EUR) must be equal to entry (USD)", []}
+          ]
+        } = changeset
+      end)
     end
   end
 

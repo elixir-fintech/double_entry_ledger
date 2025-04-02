@@ -64,7 +64,6 @@ defmodule DoubleEntryLedger.Transaction do
   def changeset(transaction, %{status: status} = attrs) do
     transaction_changeset(transaction, attrs)
     |> cast_assoc(:entries, with: &Entry.changeset(&1, &2, status))
-    |> validate_currency()
     |> validate_entries()
     |> validate_accounts()
   end
@@ -95,10 +94,19 @@ defmodule DoubleEntryLedger.Transaction do
   defp validate_entries(changeset) do
     entries = get_assoc(changeset, :entries, :struct) || []
     cond do
-      Enum.count(entries) < 2 -> add_error(changeset, :entries, "must have at least 2 entries")
-      !debit_equals_credit_per_currency(entries) -> add_error(changeset, :entries, "must have equal debit and credit")
+      entries == [] -> add_error(changeset, :entry_count, "must have at least 2 entries")
+      Enum.count(entries) == 1 -> add_error(changeset, :entry_count, "must have at least 2 entries")
+      !debit_equals_credit_per_currency(entries) ->
+        add_errors_to_entries(changeset, :value, "must have equal debit and credit")
+        |> add_errors_to_entries(:amount, "must have equal debit and credit") # added for transfer to EventMap
       true -> changeset
     end
+  end
+
+  defp add_errors_to_entries(changeset, field, error) do
+      (get_assoc(changeset, :entries, :changeset) || [])
+      |> Enum.map(&add_error(&1, field, error))
+      |> then(&put_assoc(changeset, :entries, &1))
   end
 
   defp validate_accounts(changeset) do
@@ -111,29 +119,11 @@ defmodule DoubleEntryLedger.Transaction do
     end
   end
 
-  defp validate_currency(changeset) do
-    entries = get_assoc(changeset, :entries, :struct) || []
-    account_ids = account_ids(entries)
-    accounts =
-      Repo.all(from a in Account,
-        where: a.id in ^account_ids,
-        select: [a.id, a.currency ])
-      |> Enum.reduce(
-          %{},
-          fn [id, currency], acc -> Map.put(acc, id, currency) end
-        )
-    # credo:disable-for-next-line Credo.Check.Refactor.CondStatements
-    cond do
-      Enum.all?(entries, &(&1.value.currency == accounts[&1.account_id])) -> changeset
-      true -> add_error(changeset, :entries, "currency must be the same as account")
-    end
-  end
-
   @spec map_ids_to_entries(Ecto.Changeset.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
   defp map_ids_to_entries(%{data: %{entries: entries}} = changeset, %{entries: new_entries}, transition) do
     # credo:disable-for-next-line Credo.Check.Refactor.CondStatements
     cond do
-      length(new_entries) != length(entries) -> add_error(changeset, :entries, "cannot change number of entries")
+      length(new_entries) != length(entries) -> add_error(changeset, :entry_count, "cannot change number of entries")
       true ->
         updated_entries = match_on_account_id(entries, new_entries, transition)
         put_assoc(changeset, :entries, updated_entries)
