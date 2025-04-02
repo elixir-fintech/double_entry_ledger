@@ -82,6 +82,7 @@ defmodule DoubleEntryLedger.Transaction do
   @spec states() :: states()
   def states, do: @states
 
+  @spec validate_state_transition(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp validate_state_transition(%{data: %{status: now}} = changeset) do
     change = get_change(changeset, :status)
     cond do
@@ -91,6 +92,7 @@ defmodule DoubleEntryLedger.Transaction do
     end
   end
 
+  @spec validate_entries(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp validate_entries(changeset) do
     entries = get_assoc(changeset, :entries, :struct) || []
     cond do
@@ -103,19 +105,21 @@ defmodule DoubleEntryLedger.Transaction do
     end
   end
 
+  @spec add_errors_to_entries(Ecto.Changeset.t(), atom(), String.t()) :: Ecto.Changeset.t()
   defp add_errors_to_entries(changeset, field, error) do
       (get_assoc(changeset, :entries, :changeset) || [])
       |> Enum.map(&add_error(&1, field, error))
       |> then(&put_assoc(changeset, :entries, &1))
   end
 
+  @spec validate_accounts(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp validate_accounts(changeset) do
     entries = get_assoc(changeset, :entries, :struct) || []
     ledger_ids = Repo.all(from a in Account, where: a.id in ^account_ids(entries), select: a.instance_id)
     cond do
-      ledger_ids == [] -> add_error(changeset, :entries, "no accounts found")
+      ledger_ids == [] -> add_errors_to_entries(changeset, :account_id, "no accounts found")
       Enum.all?(ledger_ids, &(&1 == get_field(changeset, :instance_id))) -> changeset
-      true -> add_error(changeset, :entries, "accounts must be on same ledger")
+      true -> add_errors_to_entries(changeset, :account_id, "accounts must be on same ledger")
     end
   end
 
@@ -143,6 +147,7 @@ defmodule DoubleEntryLedger.Transaction do
     end)
   end
 
+  @spec update_posted_at(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp update_posted_at(changeset) do
     status = get_field(changeset, :status)
     if status == :posted do
@@ -152,6 +157,7 @@ defmodule DoubleEntryLedger.Transaction do
     end
   end
 
+  @spec debit_equals_credit_per_currency([Entry.t()]) :: boolean()
   defp debit_equals_credit_per_currency(entries) do
     Enum.group_by(entries, &EntryHelper.currency(&1))
         |> Enum.map(fn {_currency, entries} -> debit_sum(entries) == credit_sum(entries) end)
