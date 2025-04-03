@@ -57,15 +57,17 @@ defmodule DoubleEntryLedger.Transaction do
   def changeset(%{status: status} = transaction, attrs, transition) when status == :pending do
     transaction_changeset(transaction, attrs)
     |> map_ids_to_entries(attrs, transition)
-    |> validate_entries()
+    |> validate_entry_count()
     |> validate_accounts()
+    |> validate_debit_equals_credit_per_currency()
   end
 
   def changeset(transaction, %{status: status} = attrs) do
     transaction_changeset(transaction, attrs)
     |> cast_assoc(:entries, with: &Entry.changeset(&1, &2, status))
-    |> validate_entries()
+    |> validate_entry_count()
     |> validate_accounts()
+    |> validate_debit_equals_credit_per_currency()
   end
 
   @spec transaction_changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
@@ -92,24 +94,28 @@ defmodule DoubleEntryLedger.Transaction do
     end
   end
 
-  @spec validate_entries(Ecto.Changeset.t()) :: Ecto.Changeset.t()
-  defp validate_entries(changeset) do
+  @spec validate_entry_count(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp validate_entry_count(changeset) do
     entries = get_assoc(changeset, :entries, :struct) || []
     cond do
-      entries == [] -> add_error(changeset, :entry_count, "must have at least 2 entries")
-      Enum.count(entries) == 1 -> add_error(changeset, :entry_count, "must have at least 2 entries")
-      !debit_equals_credit_per_currency(entries) ->
-        add_errors_to_entries(changeset, :value, "must have equal debit and credit")
-        |> add_errors_to_entries(:amount, "must have equal debit and credit") # added for transfer to EventMap
+      entries == [] ->
+        add_error(changeset, :entry_count, "must have at least 2 entries")
+      Enum.count(entries) == 1 ->
+        add_error(changeset, :entry_count, "must have at least 2 entries")
+        |> add_errors_to_entries(:account_id, "at least 2 accounts are required") # added for transfer to EventMap
       true -> changeset
     end
   end
 
-  @spec add_errors_to_entries(Ecto.Changeset.t(), atom(), String.t()) :: Ecto.Changeset.t()
-  defp add_errors_to_entries(changeset, field, error) do
-      (get_assoc(changeset, :entries, :changeset) || [])
-      |> Enum.map(&add_error(&1, field, error))
-      |> then(&put_assoc(changeset, :entries, &1))
+  @spec validate_debit_equals_credit_per_currency(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp validate_debit_equals_credit_per_currency(changeset) do
+    entries = get_assoc(changeset, :entries, :struct) || []
+    if debit_equals_credit_per_currency(entries) == false do
+      add_errors_to_entries(changeset, :value, "must have equal debit and credit")
+      |> add_errors_to_entries(:amount, "must have equal debit and credit") # added for transfer to EventMap
+    else
+      changeset
+    end
   end
 
   @spec validate_accounts(Ecto.Changeset.t()) :: Ecto.Changeset.t()
@@ -117,20 +123,22 @@ defmodule DoubleEntryLedger.Transaction do
     entries = get_assoc(changeset, :entries, :struct) || []
     ledger_ids = Repo.all(from a in Account, where: a.id in ^account_ids(entries), select: a.instance_id)
     cond do
-      ledger_ids == [] -> add_errors_to_entries(changeset, :account_id, "no accounts found")
-      Enum.all?(ledger_ids, &(&1 == get_field(changeset, :instance_id))) -> changeset
-      true -> add_errors_to_entries(changeset, :account_id, "accounts must be on same ledger")
+      ledger_ids == [] ->
+        add_errors_to_entries(changeset, :account_id, "no accounts found")
+      Enum.all?(ledger_ids, &(&1 == get_field(changeset, :instance_id))) ->
+        changeset
+      true ->
+        add_errors_to_entries(changeset, :account_id, "accounts must be on same ledger")
     end
   end
 
   @spec map_ids_to_entries(Ecto.Changeset.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
   defp map_ids_to_entries(%{data: %{entries: entries}} = changeset, %{entries: new_entries}, transition) do
-    # credo:disable-for-next-line Credo.Check.Refactor.CondStatements
-    cond do
-      length(new_entries) != length(entries) -> add_error(changeset, :entry_count, "cannot change number of entries")
-      true ->
-        updated_entries = match_on_account_id(entries, new_entries, transition)
-        put_assoc(changeset, :entries, updated_entries)
+    if length(new_entries) != length(entries) do
+      add_error(changeset, :entry_count, "cannot change number of entries")
+    else
+      updated_entries = match_on_account_id(entries, new_entries, transition)
+      put_assoc(changeset, :entries, updated_entries)
     end
   end
 
@@ -162,6 +170,13 @@ defmodule DoubleEntryLedger.Transaction do
     Enum.group_by(entries, &EntryHelper.currency(&1))
         |> Enum.map(fn {_currency, entries} -> debit_sum(entries) == credit_sum(entries) end)
         |> Enum.all?(& &1)
+  end
+
+  @spec add_errors_to_entries(Ecto.Changeset.t(), atom(), String.t()) :: Ecto.Changeset.t()
+  defp add_errors_to_entries(changeset, field, error) do
+      (get_assoc(changeset, :entries, :changeset) || [])
+      |> Enum.map(&add_error(&1, field, error))
+      |> then(&put_assoc(changeset, :entries, &1))
   end
 
   defp account_ids(entries), do: Enum.map(entries, &EntryHelper.uuid(&1))

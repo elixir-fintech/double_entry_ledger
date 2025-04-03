@@ -17,10 +17,6 @@ defmodule DoubleEntryLedger.TransactionTest do
       attr = transaction_attr(instance_id: inst.id)
       changeset = Transaction.changeset(%Transaction{}, attr)
       assert {"must have at least 2 entries", []} = Keyword.get(changeset.errors, :entry_count)
-
-      changeset
-      |> get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"accounts must be on same ledger", []} = Keyword.get(&1.errors, :account_id))
     end
 
     test "one account on a different ledgers", ctx do
@@ -34,7 +30,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
       Transaction.changeset(%Transaction{}, attr)
       |>get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"accounts must be on same ledger", []} = Keyword.get(&1.errors, :account_id))
+      |> Enum.map(& assert {"accounts must be on same ledger", []} = Keyword.get(&1.errors, :account_id))
+      |> then(& assert length(&1) == 2)
     end
 
     test "all accounts on different ledgers", ctx do
@@ -48,11 +45,12 @@ defmodule DoubleEntryLedger.TransactionTest do
 
       Transaction.changeset(%Transaction{}, attr)
       |>get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"accounts must be on same ledger", []} = Keyword.get(&1.errors, :account_id))
+      |> Enum.map(& assert {"accounts must be on same ledger", []} = Keyword.get(&1.errors, :account_id))
+      |> then(& assert length(&1) == 2)
     end
   end
 
-  describe "validate_entries/1" do
+  describe "validate_entry_count/1" do
 
     setup [:create_instance, :create_accounts]
 
@@ -60,10 +58,6 @@ defmodule DoubleEntryLedger.TransactionTest do
       attr = transaction_attr(instance_id: ctx.instance.id, entries: [])
       changeset = Transaction.changeset(%Transaction{}, attr)
       assert {"must have at least 2 entries", []} = Keyword.get(changeset.errors, :entry_count)
-
-      changeset
-      |> get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"accounts must be on same ledger", []} = Keyword.get(&1.errors, :account_id))
     end
 
     test "one entry", %{instance: inst, accounts: [acc1, _, _, _]} do
@@ -77,6 +71,20 @@ defmodule DoubleEntryLedger.TransactionTest do
       } = Transaction.changeset(%Transaction{}, attr)
     end
 
+    test "one entry also adds error to entry account id", %{instance: inst, accounts: [acc1, _, _, _]} do
+      attr = transaction_attr(instance_id: inst.id, entries: [
+        %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id}
+      ])
+
+      Transaction.changeset(%Transaction{}, attr)
+      |> get_assoc(:entries, :changeset)
+      |> Enum.map(& assert {"at least 2 accounts are required", []} = Keyword.get(&1.errors, :account_id))
+      |> then(& assert length(&1) == 1)
+    end
+  end
+
+  describe "validate_debit_equals_credit_per_currency/1" do
+    setup [:create_instance, :create_accounts]
     test "both debit entries", %{instance: inst, accounts: [acc1, acc2, _, _] } do
       attr = transaction_attr(instance_id: inst.id, entries: [
         %{type: :debit, value: Money.new(100, :EUR), account_id:  acc1.id},
@@ -85,7 +93,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
       Transaction.changeset(%Transaction{}, attr)
       |> get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"must have equal debit and credit", []} = Keyword.get(&1.errors, :value))
+      |> Enum.map(& assert {"must have equal debit and credit", []} = Keyword.get(&1.errors, :value))
+      |> then(& assert length(&1) == 2)
     end
 
     test "both credit entries", %{instance: inst, accounts: [acc1, acc2, _, _] } do
@@ -96,7 +105,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
       Transaction.changeset(%Transaction{}, attr)
       |> get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"must have equal debit and credit", []} = Keyword.get(&1.errors, :value))
+      |> Enum.map(& assert {"must have equal debit and credit", []} = Keyword.get(&1.errors, :value))
+      |> then(& assert length(&1) == 2)
     end
 
     test "amount different", %{instance: inst, accounts: [acc1, acc2, _, _] } do
@@ -107,7 +117,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
       Transaction.changeset(%Transaction{}, attr)
       |> get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"must have equal debit and credit", []} = Keyword.get(&1.errors, :value))
+      |> Enum.map(& assert {"must have equal debit and credit", []} = Keyword.get(&1.errors, :value))
+      |> then(& assert length(&1) == 2)
     end
 
     test "amount different, also add :amount error for EventMap use", %{instance: inst, accounts: [acc1, acc2, _, _] } do
@@ -118,7 +129,8 @@ defmodule DoubleEntryLedger.TransactionTest do
 
       Transaction.changeset(%Transaction{}, attr)
       |>get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"must have equal debit and credit", []} = Keyword.get(&1.errors, :amount))
+      |> Enum.map(& assert {"must have equal debit and credit", []} = Keyword.get(&1.errors, :amount))
+      |> then(& assert length(&1) == 2)
     end
 
     test "same amount", %{instance: inst, accounts: [acc1, acc2, _, _] } do
@@ -175,7 +187,8 @@ defmodule DoubleEntryLedger.TransactionTest do
       ])
       Transaction.changeset(%Transaction{}, attr)
       |> get_assoc(:entries, :changeset)
-      |> Enum.each(& assert {"account (EUR) must be equal to entry (USD)", []} = Keyword.get(&1.errors, :currency))
+      |> Enum.map(& assert {"account (EUR) must be equal to entry (USD)", []} = Keyword.get(&1.errors, :currency))
+      |> then(& assert length(&1) == 2)
     end
   end
 

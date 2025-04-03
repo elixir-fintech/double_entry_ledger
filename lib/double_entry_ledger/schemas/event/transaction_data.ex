@@ -76,10 +76,14 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
   defp validate_entries_count(changeset) do
     entries = get_field(changeset, :entries, [])
-    if length(entries) < 2 do
-      add_error(changeset, :entry_count, "must have at least 2 entries")
-    else
-      changeset
+    cond do
+      entries == [] ->
+        add_error(changeset, :entry_count, "must have at least 2 entries")
+      length(entries) == 1 ->
+        add_error(changeset, :entry_count, "must have at least 2 entries")
+        |> add_errors_to_entries(:account_id, "at least 2 accounts are required")
+      true ->
+        changeset
     end
   end
 
@@ -98,12 +102,19 @@ defmodule DoubleEntryLedger.Event.TransactionData do
     end
   end
 
+  @spec add_errors_to_entries(Ecto.Changeset.t(), atom(), String.t()) :: Ecto.Changeset.t()
+  defp add_errors_to_entries(changeset, field, error) do
+      (get_embed(changeset, :entries, :changeset) || [])
+      |> Enum.map(&add_error(&1, field, error))
+      |> then(&put_embed(changeset, :entries, &1))
+  end
+
   @spec add_errors_to_entries(Ecto.Changeset.t(), atom(), String.t(), list(Ecto.UUID.t())) :: Ecto.Changeset.t()
-  defp add_errors_to_entries(changeset, field, error, account_ids) do
+  defp add_errors_to_entries(changeset, field, error, ids) do
       (get_embed(changeset, :entries, :changeset) || [])
       |> Enum.map(fn entry_changeset ->
-        account_id = get_field(entry_changeset, :account_id)
-        if account_id in account_ids do
+        id = get_field(entry_changeset, field)
+        if id in ids do
           add_error(entry_changeset, field, error)
         else
           entry_changeset
