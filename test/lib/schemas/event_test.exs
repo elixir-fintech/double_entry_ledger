@@ -46,9 +46,9 @@ defmodule DoubleEntryLedger.EventTest do
         transaction_data: pending_payload()
       }
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
-      assert {:ok, _event} = EventStore.insert_event(attrs)
+      assert {:ok, _event} = EventStore.create(attrs)
       assert {:error, %{errors: [source_idempk: {_, [{:constraint, :unique}, _]}]}} =
-        EventStore.insert_event(attrs)
+        EventStore.create(attrs)
     end
   end
 
@@ -81,17 +81,17 @@ defmodule DoubleEntryLedger.EventTest do
         transaction_data: pending_payload()
       }
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
-      assert {:ok, _event} = EventStore.insert_event(attrs)
+      assert {:ok, _event} = EventStore.create(attrs)
       assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
-        EventStore.insert_event(attrs)
+        EventStore.create(attrs)
 
       # check it's true for posted and archived status as well
       posted_payload = put_in(attrs, [:transaction_data, :status], :posted)
       archived_payload = put_in(attrs, [:transaction_data, :status], :archived)
       assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
-        EventStore.insert_event(posted_payload)
+        EventStore.create(posted_payload)
       assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
-        EventStore.insert_event(archived_payload)
+        EventStore.create(archived_payload)
     end
   end
 end

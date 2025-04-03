@@ -5,7 +5,6 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
   use ExUnit.Case
   import DoubleEntryLedger.Event.TransactionDataFixtures
 
-  alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.Event.TransactionData

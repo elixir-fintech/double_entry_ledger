@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.EventFixtures do
 
   def create_event(%{instance: inst, accounts: [a1, a2, _, _]} = ctx, trx_status \\ :posted) do
     {:ok, event} =
-      EventStore.insert_event(
+      EventStore.create(
         event_attrs(
           instance_id: inst.id,
           transaction_data: %{
@@ -54,7 +54,7 @@ defmodule DoubleEntryLedger.EventFixtures do
         entries: entries
       }
     })
-    |> EventStore.insert_event()
+    |> EventStore.create()
   end
 
   def event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}, trx_status \\ :pending) do

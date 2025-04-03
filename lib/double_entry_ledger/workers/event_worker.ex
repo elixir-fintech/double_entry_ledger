@@ -56,9 +56,9 @@ defmodule DoubleEntryLedger.EventWorker do
   """
   @spec process_event_with_id(Ecto.UUID.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_event_with_id(uuid) do
-    case EventStore.get_event(uuid) do
-      {:ok, event} -> process_event(event)
-      {:error, reason} -> {:error, reason}
+    case EventStore.get_by_id(uuid) do
+      %Event{} = event -> process_event(event)
+      nil -> {:error, "Event not found"}
     end
   end
 

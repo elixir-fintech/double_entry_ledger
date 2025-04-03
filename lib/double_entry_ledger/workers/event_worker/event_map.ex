@@ -9,7 +9,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     Transaction,
     TransactionStore,
     Repo,
-    OccRetry
+    OccRetry,
+    EventStoreHelper
   }
   alias DoubleEntryLedger.Event.EntryData
   alias DoubleEntryLedger.Event.TransactionData
@@ -149,10 +150,10 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.insert(:create_event, EventStore.build_insert_event(new_event_map))
+    |> Multi.insert(:create_event, EventStoreHelper.build_create(new_event_map))
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
     |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
-      EventStore.build_mark_as_processed(event, transaction.id)
+      EventStoreHelper.build_mark_as_processed(event, transaction.id)
     end)
   end
 
@@ -160,11 +161,11 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.insert(:create_event, EventStore.build_insert_event(new_event_map))
-    |> EventStore.build_get_create_event_transaction(:get_create_event_transaction, :create_event)
+    |> Multi.insert(:create_event, EventStoreHelper.build_create(new_event_map))
+    |> EventStoreHelper.build_get_create_event_transaction(:get_create_event_transaction, :create_event)
     |> TransactionStore.build_update(:transaction, :get_create_event_transaction, transaction_map, repo)
     |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
-      EventStore.build_mark_as_processed(event, transaction.id)
+      EventStoreHelper.build_mark_as_processed(event, transaction.id)
     end)
   end
 
