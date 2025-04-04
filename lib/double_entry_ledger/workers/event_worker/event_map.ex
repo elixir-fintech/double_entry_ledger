@@ -54,7 +54,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     - `{:error, reason}` on failure.
   """
   @spec process_map(EventMap.t(), Ecto.Repo.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_map(%EventMap{transaction_data: transaction_data, instance_id: id} = event_map, repo) do
 
     case transaction_data_to_transaction_map(transaction_data, id) do
@@ -75,13 +75,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
           {:error, :transaction, :occ_final_timeout, _event} ->
             {:error, occ_final_error_message()}
 
-          {:error, :get_create_event_transaction, %AddUpdateEvent{reason: :create_event_pending} = error, steps_so_far} ->
-            EventStore.create_event_after_failure(steps_so_far.create_event, [build_error(error.message)], 1, :pending)
-            {:error, error.message}
-
           {:error, :get_create_event_transaction, %AddUpdateEvent{} = error, steps_so_far} ->
-            EventStore.create_event_after_failure(steps_so_far.create_event, [build_error(error.message)], 1, :failed)
-            {:error, error.message}
+            {:error, handle_add_update_event_error(error, steps_so_far, event_map)}
 
           {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
             {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
@@ -96,6 +91,24 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
             {:error, reason}
         end
     end
+  end
+
+  @spec handle_add_update_event_error(AddUpdateEvent.t(), map(), EventMap.t()) :: Event.t() | Changeset.t()
+  def handle_add_update_event_error(%AddUpdateEvent{reason: :create_event_pending, message: msg}, steps_so_far, event_map) do
+    case EventStore.create_event_after_failure(steps_so_far[:create_event], [build_error(msg)], 1, :pending) do
+      {:ok, event} ->
+        event
+
+      {:error, changeset} ->
+        transfer_errors_from_event_to_event_map(event_map, changeset)
+      end
+  end
+
+  def handle_add_update_event_error(%AddUpdateEvent{message: msg}, steps_so_far, event_map) do
+    steps_so_far[:create_event]
+    |> Changeset.change()
+    |> Changeset.add_error(:source_idempk, "#{msg}")
+    |> then(&transfer_errors_from_event_to_event_map(event_map, &1))
   end
 
   @spec process_map_with_retry(map(), map(), ErrorHandler.event_error_map(), integer(), Ecto.Repo.t()) ::

@@ -87,8 +87,9 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       %{event: pending_event} = create_event(ctx, :pending)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
-      {:error, error_message} = EventMap.process_map(update_event)
-      assert error_message =~ "Create event (id: #{pending_event.id}) has not yet been processed for Update Even"
+      {:error, event_map} = EventMap.process_map(update_event)
+      assert is_struct(event_map, Event)
+
       saved_update_event = Event
       |> where([e], e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk))
       |> Repo.one()
@@ -102,14 +103,15 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       EventStore.mark_as_failed(pending_event, "Failed to create event")
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
-      {:error, error_message} = EventMap.process_map(update_event)
-      assert error_message =~ "Create event (id: #{pending_event.id}) has failed for Update Event"
-      saved_update_event = Event
-      |> where([e], e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk))
-      |> Repo.one()
+      {:error, event_map} = EventMap.process_map(update_event)
 
-      assert saved_update_event.status == :failed
-      assert saved_update_event.id != pending_event.id
+      assert is_struct(event_map, Changeset)
+      {error_message, _} = Keyword.get(event_map.errors, :source_idempk)
+      assert error_message =~ "Create event (id: #{pending_event.id}) has failed"
+
+      assert is_nil(Event
+      |> where([e], e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk))
+      |> Repo.one())
     end
   end
 
