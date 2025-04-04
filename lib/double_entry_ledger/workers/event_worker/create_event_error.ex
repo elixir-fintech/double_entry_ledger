@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventStore.CreateEventError do
+defmodule DoubleEntryLedger.EventWorker.CreateEventError do
   defexception [:message, :create_event, :update_event, :reason]
 
   alias DoubleEntryLedger.Event

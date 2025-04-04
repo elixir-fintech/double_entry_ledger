@@ -12,24 +12,19 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     OccRetry,
     EventStoreHelper
   }
-  alias DoubleEntryLedger.Event.EntryData
-  alias DoubleEntryLedger.Event.TransactionData
+
   alias DoubleEntryLedger.Event.EventMap
-  alias DoubleEntryLedger.EventWorker.EventTransformer
-  alias DoubleEntryLedger.EventStore.CreateEventError
+
+  alias DoubleEntryLedger.EventWorker.{
+    EventTransformer,
+    CreateEventError,
+    ErrorHandler
+  }
   alias Ecto.{Multi, Changeset}
   import OccRetry
   import EventTransformer, only: [transaction_data_to_transaction_map: 2]
+  import DoubleEntryLedger.EventWorker.ErrorHandler
 
-  @type event_error_map :: %{
-          errors:
-            list(%{
-              message: String.t(),
-              inserted_at: DateTime.t()
-            }),
-          steps_so_far: map(),
-          retries: integer()
-        }
 
   @doc """
   Processes an event map using the default repository.
@@ -89,14 +84,10 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
             {:error, error.message}
 
           {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
-            event_map_changeset =
-              transfer_errors_from_event_to_event_map(event_map, event_changeset)
-            {:error, event_map_changeset}
+            {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
 
           {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
-            event_map_changeset =
-              transfer_errors_from_trx_to_event_map(event_map, trx_changeset)
-            {:error, event_map_changeset}
+            {:error, transfer_errors_from_trx_to_event_map(event_map, trx_changeset)}
 
           {:error, step, error, _steps_so_far} ->
             {:error, "#{step} failed: #{inspect(error)}"}
@@ -107,7 +98,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     end
   end
 
-  @spec process_map_with_retry(map(), map(), event_error_map(), integer(), Ecto.Repo.t()) ::
+  @spec process_map_with_retry(map(), map(), ErrorHandler.event_error_map(), integer(), Ecto.Repo.t()) ::
           {:ok, %{transaction: Transaction.t(), event: Event.t()}}
           | {:error, String.t()}
           | Ecto.Multi.failure()
@@ -167,80 +158,5 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
     |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
       EventStoreHelper.build_mark_as_processed(event, transaction.id)
     end)
-  end
-
-  @spec build_errors(String.t(), list()) :: list()
-  defp build_errors(error_message, errors) do
-    [build_error(error_message) | errors]
-  end
-
-  @spec build_error(String.t()) :: %{message: String.t(), inserted_at: DateTime.t()}
-  defp build_error(error) do
-    %{
-      message: error,
-      inserted_at: DateTime.utc_now(:microsecond)
-    }
-  end
-
-  defp transfer_errors_from_trx_to_event_map(event_map, trx_changeset) do
-    errors = get_all_errors(trx_changeset)
-    entry_errors = Map.get(errors, :entries, [])
-    transaction_data = event_map.transaction_data
-    entries = transaction_data.entries
-
-    entry_changesets = entries
-    |> Enum.with_index()
-    |> Enum.map(fn {entry, index} ->
-      EntryData.changeset(%EntryData{}, EntryData.to_map(entry))
-      |> add_entry_data_errors(Enum.at(entry_errors, index))
-      |> Map.put(:action, :insert)
-    end)
-
-    transaction_data_changeset =
-      TransactionData.changeset(%TransactionData{}, TransactionData.to_map(transaction_data))
-      |> Changeset.put_embed(:entries, entry_changesets)
-      |> Map.put(:action, :insert)
-
-    EventMap.changeset(%EventMap{}, EventMap.to_map(event_map))
-    |> Changeset.put_embed(:transaction_data, transaction_data_changeset)
-    |> Map.put(:action, :insert)
-  end
-
-  defp add_entry_data_errors(changeset, entry_errors) do
-    [:currency, :amount, :account_id]
-    |> Enum.reduce(changeset, &add_errors_to_changeset(&2, &1, entry_errors))
-  end
-
-  @spec transfer_errors_from_event_to_event_map(EventMap.t(), Changeset.t()) :: Changeset.t()
-  defp transfer_errors_from_event_to_event_map(event_map, event_changeset) do
-    errors = get_all_errors(event_changeset)
-    EventMap.changeset(%EventMap{}, EventMap.to_map(event_map))
-    |> add_event_errors(errors)
-    |> Map.put(:action, :insert)
-  end
-
-  @spec add_event_errors(Changeset.t(), map()) :: Changeset.t()
-  defp add_event_errors(event_map_changeset, errors) do
-    [:update_idempk, :source_idempk]
-    |> Enum.reduce(event_map_changeset, &add_errors_to_changeset(&2, &1, errors))
-  end
-
-  @spec get_all_errors(Changeset.t()) :: map()
-  defp get_all_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
-    end)
-  end
-
-  @spec add_errors_to_changeset(Changeset.t(), atom(), map()) :: Changeset.t()
-  defp add_errors_to_changeset(changeset, field, errors) do
-    if Map.has_key?(errors, field) do
-      Map.get(errors, field)
-      |> Enum.reduce(changeset, &Changeset.add_error(&2, field, &1))
-    else
-      changeset
-    end
   end
 end

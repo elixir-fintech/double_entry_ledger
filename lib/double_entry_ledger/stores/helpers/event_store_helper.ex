@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   alias Ecto.Changeset
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.{Repo, Event, Transaction}
-  alias DoubleEntryLedger.EventStore.CreateEventError
+  alias DoubleEntryLedger.EventWorker.CreateEventError
 
   @spec build_create(map()) :: Changeset.t()
   def build_create(attrs) do

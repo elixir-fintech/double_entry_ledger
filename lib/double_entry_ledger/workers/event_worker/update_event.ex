@@ -21,12 +21,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     TransactionStore,
     Repo
   }
-  alias DoubleEntryLedger.EventStore.CreateEventError
+  alias DoubleEntryLedger.EventWorker.CreateEventError
 
   import DoubleEntryLedger.OccRetry
-
-  import DoubleEntryLedger.EventWorker.EventTransformer,
-    only: [transaction_data_to_transaction_map: 2]
+  import DoubleEntryLedger.EventWorker.EventTransformer, only: [transaction_data_to_transaction_map: 2]
 
   @doc """
   Processes an update event by fetching the corresponding transaction and applying updates.
