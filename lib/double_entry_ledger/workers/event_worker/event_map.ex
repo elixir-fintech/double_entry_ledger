@@ -72,8 +72,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
           {:ok, %{transaction: transaction, event: event}} ->
             {:ok, transaction, event}
 
-          {:error, :transaction, :occ_final_timeout, _event} ->
-            {:error, occ_final_error_message()}
+          {:error, :transaction, :occ_final_timeout, event} ->
+            {:error, event}
 
           {:error, :get_create_event_transaction, %AddUpdateEvent{} = error, steps_so_far} ->
             {:error, handle_add_update_event_error(error, steps_so_far, event_map)}
