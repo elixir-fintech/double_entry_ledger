@@ -135,7 +135,9 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
       {:error, message} = UpdateEvent.process_update_event(event)
-      assert message == "Create event (id: #{e_id}) has not yet been processed for Update Event (id: #{event.id})"
+
+      assert message ==
+               "Create event (id: #{e_id}) has not yet been processed for Update Event (id: #{event.id})"
     end
 
     test "fails when update event failed", %{instance: inst} = ctx do
@@ -144,7 +146,9 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
       {:error, message} = UpdateEvent.process_update_event(event)
-      assert message == "Create event (id: #{pending_event.id}) has failed for Update Event (id: #{event.id})"
+
+      assert message ==
+               "Create event (id: #{pending_event.id}) has failed for Update Event (id: #{event.id})"
     end
   end
 

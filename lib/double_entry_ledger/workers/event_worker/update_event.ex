@@ -21,10 +21,13 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     TransactionStore,
     Repo
   }
+
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
   import DoubleEntryLedger.OccRetry
-  import DoubleEntryLedger.EventWorker.EventTransformer, only: [transaction_data_to_transaction_map: 2]
+
+  import DoubleEntryLedger.EventWorker.EventTransformer,
+    only: [transaction_data_to_transaction_map: 2]
 
   @doc """
   Processes an update event by fetching the corresponding transaction and applying updates.
@@ -67,8 +70,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     end
   end
 
-  @spec process_update_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()
-        ) :: {:ok, %{transaction: Transaction.t(), event: Event.t()}}
+  @spec process_update_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()) ::
+          {:ok, %{transaction: Transaction.t(), event: Event.t()}}
           | {:error, String.t()}
           | Multi.failure()
   def process_update_event_with_retry(event, transaction_map, attempts, repo \\ Repo)

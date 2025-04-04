@@ -153,25 +153,40 @@ defmodule DoubleEntryLedger.AccountStore do
 
   """
   @spec get_balance_history(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-    {:ok, list(BalanceHistoryEntry.t())} | {:error, String.t()}
+          {:ok, list(BalanceHistoryEntry.t())} | {:error, String.t()}
   def get_balance_history(id, page \\ 1, per_page \\ 40) do
     offset = (page - 1) * per_page
+
     case get_by_id(id) do
       nil ->
         {:error, "Account not found"}
+
       _ ->
-        {:ok, Repo.all(
-          from b in BalanceHistoryEntry,
-            where: b.account_id == ^id,
-            left_join: e in Entry, on: b.entry_id == e.id,
-            select: merge(
-              map(b, [:id, :account_id, :entry_id, :available, :posted, :pending, :inserted_at, :updated_at]),
-              %{transaction_id: e.transaction_id}
-            ),
-            order_by: [desc: b.inserted_at],
-            limit: ^per_page,
-            offset: ^offset
-        )}
+        {:ok,
+         Repo.all(
+           from(b in BalanceHistoryEntry,
+             where: b.account_id == ^id,
+             left_join: e in Entry,
+             on: b.entry_id == e.id,
+             select:
+               merge(
+                 map(b, [
+                   :id,
+                   :account_id,
+                   :entry_id,
+                   :available,
+                   :posted,
+                   :pending,
+                   :inserted_at,
+                   :updated_at
+                 ]),
+                 %{transaction_id: e.transaction_id}
+               ),
+             order_by: [desc: b.inserted_at],
+             limit: ^per_page,
+             offset: ^offset
+           )
+         )}
     end
   end
 
@@ -200,12 +215,16 @@ defmodule DoubleEntryLedger.AccountStore do
       2
 
   """
-  @spec get_accounts_by_instance_id(Ecto.UUID.t(), list(String.t())) :: {:error, String.t()} | {:ok, list(Account.t())}
+  @spec get_accounts_by_instance_id(Ecto.UUID.t(), list(String.t())) ::
+          {:error, String.t()} | {:ok, list(Account.t())}
   def get_accounts_by_instance_id(instance_id, account_ids) do
-    accounts = Repo.all(
-      from a in Account,
-      where: a.instance_id == ^instance_id and a.id in ^account_ids
-    )
+    accounts =
+      Repo.all(
+        from(a in Account,
+          where: a.instance_id == ^instance_id and a.id in ^account_ids
+        )
+      )
+
     if length(accounts) == length(account_ids) do
       {:ok, accounts}
     else
@@ -238,12 +257,16 @@ defmodule DoubleEntryLedger.AccountStore do
       2
 
   """
-  @spec get_accounts_by_instance_id_and_type(Ecto.UUID.t(), Types.account_type()) :: {:error, String.t()} | {:ok, list(Account.t())}
+  @spec get_accounts_by_instance_id_and_type(Ecto.UUID.t(), Types.account_type()) ::
+          {:error, String.t()} | {:ok, list(Account.t())}
   def get_accounts_by_instance_id_and_type(instance_id, type) do
-    accounts = Repo.all(
-      from a in Account,
-      where: a.instance_id == ^instance_id and a.type == ^type
-    )
+    accounts =
+      Repo.all(
+        from(a in Account,
+          where: a.instance_id == ^instance_id and a.type == ^type
+        )
+      )
+
     if length(accounts) > 0 do
       {:ok, accounts}
     else
@@ -277,13 +300,17 @@ defmodule DoubleEntryLedger.AccountStore do
       3
 
   """
-  @spec get_all_accounts_by_instance_id(Ecto.UUID.t()) :: {:error, String.t()} | {:ok, list(Account.t())}
+  @spec get_all_accounts_by_instance_id(Ecto.UUID.t()) ::
+          {:error, String.t()} | {:ok, list(Account.t())}
   def get_all_accounts_by_instance_id(instance_id) do
-    accounts = Repo.all(
-      from a in Account,
-      where: a.instance_id == ^instance_id,
-      order_by: [asc: a.name]
+    accounts =
+      Repo.all(
+        from(a in Account,
+          where: a.instance_id == ^instance_id,
+          order_by: [asc: a.name]
+        )
       )
+
     if length(accounts) > 0 do
       {:ok, accounts}
     else

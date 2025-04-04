@@ -20,11 +20,11 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     AddUpdateEventError,
     ErrorHandler
   }
+
   alias Ecto.{Multi, Changeset}
   import OccRetry
   import EventTransformer, only: [transaction_data_to_transaction_map: 2]
   import DoubleEntryLedger.EventWorker.ErrorHandler
-
 
   @doc """
   Processes an event map using the default repository.
@@ -55,8 +55,10 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   """
   @spec process_map(EventMap.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_map(%EventMap{transaction_data: transaction_data, instance_id: id} = event_map, repo) do
-
+  def process_map(
+        %EventMap{transaction_data: transaction_data, instance_id: id} = event_map,
+        repo
+      ) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
         event_error_map = %{errors: [], steps_so_far: %{}, retries: 1}
@@ -68,7 +70,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
                max_retries(),
                repo
              ) do
-
           {:ok, %{transaction: transaction, event: event}} ->
             {:ok, transaction, event}
 
@@ -93,7 +94,13 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     end
   end
 
-  @spec process_map_with_retry(map(), map(), ErrorHandler.event_error_map(), integer(), Ecto.Repo.t()) ::
+  @spec process_map_with_retry(
+          map(),
+          map(),
+          ErrorHandler.event_error_map(),
+          integer(),
+          Ecto.Repo.t()
+        ) ::
           {:ok, %{transaction: Transaction.t(), event: Event.t()}}
           | {:error, String.t()}
           | Ecto.Multi.failure()
@@ -148,8 +155,16 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
     Multi.new()
     |> Multi.insert(:create_event, EventStoreHelper.build_create(new_event_map))
-    |> EventStoreHelper.build_get_create_event_transaction(:get_create_event_transaction, :create_event)
-    |> TransactionStore.build_update(:transaction, :get_create_event_transaction, transaction_map, repo)
+    |> EventStoreHelper.build_get_create_event_transaction(
+      :get_create_event_transaction,
+      :create_event
+    )
+    |> TransactionStore.build_update(
+      :transaction,
+      :get_create_event_transaction,
+      transaction_map,
+      repo
+    )
     |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
       EventStoreHelper.build_mark_as_processed(event, transaction.id)
     end)

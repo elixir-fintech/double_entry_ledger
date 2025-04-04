@@ -16,43 +16,46 @@ defmodule DoubleEntryLedger.EntryTest do
 
     test "returns error changeset for missing fields", _ctx do
       assert %Ecto.Changeset{
-        valid?: false,
-        errors: [
-          type: {"can't be blank", [validation: :required]},
-          value: {"can't be blank", [validation: :required]},
-          account_id: {"can't be blank", [validation: :required]}
-        ]
-      } = Entry.changeset(%Entry{}, %{}, :pending)
+               valid?: false,
+               errors: [
+                 type: {"can't be blank", [validation: :required]},
+                 value: {"can't be blank", [validation: :required]},
+                 account_id: {"can't be blank", [validation: :required]}
+               ]
+             } = Entry.changeset(%Entry{}, %{}, :pending)
     end
 
     # validation allows empty transaction_id, but must be present in db
     # Entries must have a transaction_id, and transaction must have at least 2 entries
     test "raises not-null constraint error for missing transaction_id", ctx do
       attr = entry_attr(account_id: ctx.account.id)
+
       assert_raise Postgrex.Error,
-        ~r/"transaction_id" of relation "entries" violates not-null constraint/,
-        fn -> Repo.insert(Entry.changeset(%Entry{}, attr, :pending)) end
+                   ~r/"transaction_id" of relation "entries" violates not-null constraint/,
+                   fn -> Repo.insert(Entry.changeset(%Entry{}, attr, :pending)) end
     end
   end
 
   describe "update_changeset/2" do
     setup [:create_instance, :create_accounts, :create_transaction]
 
-    test "returns valid changeset with update to account", %{transaction: %{entries: [e0, _]}}  do
+    test "returns valid changeset with update to account", %{transaction: %{entries: [e0, _]}} do
       assert %Ecto.Changeset{
-        valid?: true,
-        changes: %{
-          account: _,
-          value: %Money{amount: 50, currency: :EUR},
-        }
-      } = Entry.update_changeset(e0, %{value: Money.new(50, :EUR)}, :pending_to_posted)
+               valid?: true,
+               changes: %{
+                 account: _,
+                 value: %Money{amount: 50, currency: :EUR}
+               }
+             } = Entry.update_changeset(e0, %{value: Money.new(50, :EUR)}, :pending_to_posted)
     end
 
     test "returns error changeset for missing value", %{transaction: %{entries: [e0, _]}} do
       assert %Ecto.Changeset{
-        valid?: false,
-        errors: [value: {"is invalid", [type: Money.Ecto.Composite.Type, validation: :cast]}]
-      } = Entry.update_changeset(e0, %{value: %{}}, :pending_to_posted)
+               valid?: false,
+               errors: [
+                 value: {"is invalid", [type: Money.Ecto.Composite.Type, validation: :cast]}
+               ]
+             } = Entry.update_changeset(e0, %{value: %{}}, :pending_to_posted)
     end
   end
 
@@ -61,9 +64,9 @@ defmodule DoubleEntryLedger.EntryTest do
 
     test "returns error changeset for different currency", %{transaction: %{entries: [e0, _]}} do
       assert %Ecto.Changeset{
-        valid?: false,
-        errors: [currency: {"account (EUR) must be equal to entry (USD)", []}]
-      } = Entry.update_changeset(e0, %{value: Money.new(100, :USD)}, :pending_to_posted)
+               valid?: false,
+               errors: [currency: {"account (EUR) must be equal to entry (USD)", []}]
+             } = Entry.update_changeset(e0, %{value: Money.new(100, :USD)}, :pending_to_posted)
     end
   end
 
@@ -71,8 +74,11 @@ defmodule DoubleEntryLedger.EntryTest do
     setup [:create_instance, :create_accounts, :create_transaction]
 
     test "balance history entry is created", %{transaction: %{entries: [e0, _]}} do
-      %{balance_history_entries: [first | _t]} = account = Repo.get!(Account, e0.account_id, preload: [:balance_history_entries])
-      |> Repo.preload([:balance_history_entries])
+      %{balance_history_entries: [first | _t]} =
+        account =
+        Repo.get!(Account, e0.account_id, preload: [:balance_history_entries])
+        |> Repo.preload([:balance_history_entries])
+
       assert first.account_id == e0.account_id
       assert first.entry_id == e0.id
       assert first.available == account.available
@@ -84,15 +90,22 @@ defmodule DoubleEntryLedger.EntryTest do
 
     test "returns changeset with balance history entry", %{transaction: %{entries: [e0, _]}} do
       changeset = Entry.update_changeset(e0, %{value: Money.new(100, :EUR)}, :pending_to_posted)
-      [h| _t] = balance_history_entries = Ecto.Changeset.get_assoc(changeset, :balance_history_entries, :struct)
+
+      [h | _t] =
+        balance_history_entries =
+        Ecto.Changeset.get_assoc(changeset, :balance_history_entries, :struct)
+
       assert 2 = length(balance_history_entries)
+
       assert %BalanceHistoryEntry{
-        available: 100,
-        posted: %Balance{amount: 100, credit: 0, debit: 100},
-        pending: %Balance{amount: 0, credit: 0, debit: 0},
-      } = h
+               available: 100,
+               posted: %Balance{amount: 100, credit: 0, debit: 100},
+               pending: %Balance{amount: 0, credit: 0, debit: 0}
+             } = h
+
       assert h.account_id == e0.account_id
-      assert h.entry_id == nil # not yet persisted
+      # not yet persisted
+      assert h.entry_id == nil
     end
   end
 
@@ -101,10 +114,10 @@ defmodule DoubleEntryLedger.EntryTest do
   end
 
   defp entry_attr(attrs) do
-      attrs
-      |> Enum.into(%{
-        value: Money.new(100, :EUR),
-        type: :debit
-      })
+    attrs
+    |> Enum.into(%{
+      value: Money.new(100, :EUR),
+      type: :debit
+    })
   end
 end

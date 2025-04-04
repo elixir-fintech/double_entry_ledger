@@ -9,12 +9,14 @@ defmodule DoubleEntryLedger.EventWorker do
   Existing events must be in the `:pending` state to be processed.
   """
   alias Ecto.Changeset
+
   alias DoubleEntryLedger.{
-    Event, EventStore, Transaction
+    Event,
+    EventStore,
+    Transaction
   }
 
   alias DoubleEntryLedger.EventWorker.ProcessEvent
-
 
   import ProcessEvent, only: [process_event: 1, process_event_map: 1]
 
@@ -34,8 +36,8 @@ defmodule DoubleEntryLedger.EventWorker do
     - `{:error, reason}` on failure.
   """
   @spec process_new_event(Event.EventMap.t()) ::
-    {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
-  def process_new_event(%Event.EventMap{} = event_map)  do
+          {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
+  def process_new_event(%Event.EventMap{} = event_map) do
     process_event_map(event_map)
   end
 
@@ -54,12 +56,12 @@ defmodule DoubleEntryLedger.EventWorker do
     - `{:ok, transaction, event}` on success.
     - `{:error, reason}` if the event is not found or processing fails.
   """
-  @spec process_event_with_id(Ecto.UUID.t()) :: {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
+  @spec process_event_with_id(Ecto.UUID.t()) ::
+          {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
   def process_event_with_id(uuid) do
     case EventStore.get_by_id(uuid) do
       %Event{} = event -> process_event(event)
       nil -> {:error, "Event not found"}
     end
   end
-
 end

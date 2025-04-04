@@ -10,7 +10,9 @@ defmodule DoubleEntryLedger.AccountFixtures do
   Generate a account.
   """
   def account_fixture(attrs \\ %{}) do
-    random_name = "account_#{:crypto.strong_rand_bytes(4) |> Base.encode64 |> binary_part(0, 8)}"
+    random_name =
+      "account_#{:crypto.strong_rand_bytes(4) |> Base.encode64() |> binary_part(0, 8)}"
+
     attrs =
       attrs
       |> Enum.into(%{
@@ -22,7 +24,7 @@ defmodule DoubleEntryLedger.AccountFixtures do
         context: %{},
         name: random_name,
         type: :asset,
-        normal_balance: :debit,
+        normal_balance: :debit
       })
 
     {:ok, account} =
@@ -34,12 +36,25 @@ defmodule DoubleEntryLedger.AccountFixtures do
   end
 
   def create_accounts(%{instance: instance}) do
-    %{instance: instance, accounts: [
-      account_fixture(instance_id: instance.id, type: :asset, normal_balance: :debit) ,
-      account_fixture(instance_id: instance.id, normal_balance: :credit, type: :liability),
-      account_fixture(instance_id: instance.id, normal_balance: :debit, type: :asset, allowed_negative: false),
-      account_fixture(instance_id: instance.id, normal_balance: :credit, type: :liability, allowed_negative: false)
-    ]}
+    %{
+      instance: instance,
+      accounts: [
+        account_fixture(instance_id: instance.id, type: :asset, normal_balance: :debit),
+        account_fixture(instance_id: instance.id, normal_balance: :credit, type: :liability),
+        account_fixture(
+          instance_id: instance.id,
+          normal_balance: :debit,
+          type: :asset,
+          allowed_negative: false
+        ),
+        account_fixture(
+          instance_id: instance.id,
+          normal_balance: :credit,
+          type: :liability,
+          allowed_negative: false
+        )
+      ]
+    }
   end
 
   def return_available_balances(ctx, items \\ 2) do

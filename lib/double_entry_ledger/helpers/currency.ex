@@ -5,16 +5,17 @@ defmodule DoubleEntryLedger.Currency do
   This module facilitates currency operations such as converting amounts to `Money` structs
   and retrieving supported currency atoms.
   """
-  @currency_atoms Money.Currency.all
+  @currency_atoms Money.Currency.all()
                   |> Enum.map(fn {k, _v} -> k end)
                   |> Enum.uniq()
 
-  @type currency_atom :: unquote(
-    Enum.reduce(
-      @currency_atoms, fn state, acc -> quote do: unquote(state) | unquote(acc)
-      end
-      )
-    )
+  @type currency_atom ::
+          unquote(
+            Enum.reduce(
+              @currency_atoms,
+              fn state, acc -> quote do: unquote(state) | unquote(acc) end
+            )
+          )
 
   @doc """
   Returns a list of all supported currency atoms.
@@ -60,7 +61,6 @@ defmodule DoubleEntryLedger.Currency do
 
   def to_abs_money(_amount, _currency), do: {:error, "Invalid amount or currency"}
 
-
   @doc """
   Converts an amount and a currency to a `Money` struct.
 
@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.Currency do
 
     - A `Money.t()` struct with an absolute value of the amount.
   """
-  @spec to_money(integer(), currency_atom() | binary()) :: Money.t()| {:error, String.t()}
+  @spec to_money(integer(), currency_atom() | binary()) :: Money.t() | {:error, String.t()}
   def to_money(amount, currency) when is_integer(amount) and currency in @currency_atoms do
     Money.new(amount, currency)
   end
@@ -95,8 +95,9 @@ defmodule DoubleEntryLedger.Currency do
   def to_money(amount, currency) when is_integer(amount) and is_binary(currency) do
     try do
       to_money(amount, String.to_existing_atom(currency))
-    rescue ArgumentError ->
-      {:error, "Invalid currency"}
+    rescue
+      ArgumentError ->
+        {:error, "Invalid currency"}
     end
   end
 

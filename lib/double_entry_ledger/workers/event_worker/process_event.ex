@@ -4,11 +4,18 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   """
 
   alias Ecto.Changeset
+
   alias DoubleEntryLedger.{
-    CreateEvent, Event, Transaction, UpdateEvent
+    CreateEvent,
+    Event,
+    Transaction,
+    UpdateEvent
   }
+
   alias DoubleEntryLedger.EventWorker.{
-    ProcessEventMap, UpdateEvent, CreateEvent
+    ProcessEventMap,
+    UpdateEvent,
+    CreateEvent
   }
 
   import ProcessEventMap, only: [process_map: 1]
@@ -55,8 +62,8 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     - `{:error, reason}` on failure.
   """
   @spec process_event_map(Event.EventMap.t()) ::
-    {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
-  def process_event_map(%{action: action} = event_map) when action in @actions  do
+          {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
+  def process_event_map(%{action: action} = event_map) when action in @actions do
     process_map(event_map)
   end
 

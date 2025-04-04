@@ -19,7 +19,10 @@ defmodule DoubleEntryLedger.AccountStoreTest do
         account_fixture(instance_id: instance.id),
         account_fixture(instance_id: instance.id)
       ]
-      {:ok, returned_accounts} = AccountStore.get_accounts_by_instance_id(instance.id, Enum.map(accounts, &(&1.id)))
+
+      {:ok, returned_accounts} =
+        AccountStore.get_accounts_by_instance_id(instance.id, Enum.map(accounts, & &1.id))
+
       assert MapSet.new(accounts) == MapSet.new(returned_accounts)
     end
 
@@ -28,8 +31,11 @@ defmodule DoubleEntryLedger.AccountStoreTest do
         account_fixture(instance_id: instance.id),
         account_fixture(instance_id: instance.id)
       ]
-      account_ids = [instance.id | Enum.map(accounts, &(&1.id))]
-      assert {:error, "Some accounts were not found"} == AccountStore.get_accounts_by_instance_id(instance.id, account_ids)
+
+      account_ids = [instance.id | Enum.map(accounts, & &1.id)]
+
+      assert {:error, "Some accounts were not found"} ==
+               AccountStore.get_accounts_by_instance_id(instance.id, account_ids)
     end
   end
 
@@ -41,12 +47,14 @@ defmodule DoubleEntryLedger.AccountStoreTest do
         account_fixture(instance_id: instance.id),
         account_fixture(instance_id: instance.id)
       ]
+
       {:ok, returned_accounts} = AccountStore.get_all_accounts_by_instance_id(instance.id)
       assert MapSet.new(accounts) == MapSet.new(returned_accounts)
     end
 
     test "returns error when no accounts are found", %{instance: instance} do
-      assert {:error, "No accounts were found"} == AccountStore.get_all_accounts_by_instance_id(instance.id)
+      assert {:error, "No accounts were found"} ==
+               AccountStore.get_all_accounts_by_instance_id(instance.id)
     end
   end
 end

@@ -14,28 +14,35 @@ defmodule DoubleEntryLedger.Event.EventMap do
   @update_actions [:update, "update"]
 
   @type t :: %EventMap{
-    action: Event.action(),
-    instance_id: String.t(),
-    source: String.t(),
-    source_data: map(),
-    source_idempk: String.t(),
-    update_idempk: String.t() | nil,
-    transaction_data: TransactionData.t()
-  }
+          action: Event.action(),
+          instance_id: String.t(),
+          source: String.t(),
+          source_data: map(),
+          source_idempk: String.t(),
+          update_idempk: String.t() | nil,
+          transaction_data: TransactionData.t()
+        }
 
-  @derive {Jason.Encoder, only:
-    [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk, :transaction_data]
-  }
+  @derive {Jason.Encoder,
+           only: [
+             :action,
+             :instance_id,
+             :source,
+             :source_data,
+             :source_idempk,
+             :update_idempk,
+             :transaction_data
+           ]}
 
   @primary_key false
   embedded_schema do
-    field :action, Ecto.Enum, values: Event.actions
-    field :instance_id, :string
-    field :source, :string
-    field :source_data, :map, default: %{}
-    field :source_idempk, :string
-    field :update_idempk, :string
-    embeds_one :transaction_data, TransactionData, on_replace: :delete
+    field(:action, Ecto.Enum, values: Event.actions())
+    field(:instance_id, :string)
+    field(:source, :string)
+    field(:source_data, :map, default: %{})
+    field(:source_idempk, :string)
+    field(:update_idempk, :string)
+    embeds_one(:transaction_data, TransactionData, on_replace: :delete)
   end
 
   @doc """
@@ -82,14 +89,17 @@ defmodule DoubleEntryLedger.Event.EventMap do
   defp update_changeset(event_map, attrs) do
     base_changeset(event_map, attrs)
     |> validate_required([:update_idempk])
-    |> cast_embed(:transaction_data, with: &TransactionData.update_event_changeset/2, required: true)
+    |> cast_embed(:transaction_data,
+      with: &TransactionData.update_event_changeset/2,
+      required: true
+    )
   end
 
   defp base_changeset(event_map, attrs) do
     event_map
     |> cast(attrs, [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk])
     |> validate_required([:action, :instance_id, :source, :source_idempk])
-    |> validate_inclusion(:action, Event.actions)
+    |> validate_inclusion(:action, Event.actions())
   end
 
   @doc """

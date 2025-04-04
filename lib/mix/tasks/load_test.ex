@@ -10,10 +10,13 @@ defmodule Mix.Tasks.LoadTest do
   @compile {:no_warn_undefined, DoubleEntryLedger.LoadTesting}
 
   def run(args) do
-    if Mix.env != :perf do
-      #halt the task if the environment is not perf
-      Mix.raise("This task can only be run in the :perf environment, please run `MIX_ENV=perf mix load_test`")
+    if Mix.env() != :perf do
+      # halt the task if the environment is not perf
+      Mix.raise(
+        "This task can only be run in the :perf environment, please run `MIX_ENV=perf mix load_test`"
+      )
     end
+
     Mix.Task.run("ecto.drop", ["--quiet"])
     Mix.Task.run("ecto.create", ["--quiet"])
     Mix.Task.run("ecto.migrate", ["--quiet"])
@@ -25,7 +28,7 @@ defmodule Mix.Tasks.LoadTest do
     DoubleEntryLedger.LoadTesting.run_load_test(concurrency)
   end
 
-  defp parse_concurrency([concurrency_str |_]) do
+  defp parse_concurrency([concurrency_str | _]) do
     case Integer.parse(concurrency_str) do
       {concurrency, _} -> concurrency
       :error -> 1

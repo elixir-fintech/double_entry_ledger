@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     end
 
     test "return EventMap changeset for duplicate source_idempk", ctx do
-      #successfully create event
+      # successfully create event
       event_map = struct(EventMapSchema, event_map(ctx))
       ProcessEventMap.process_map(event_map)
 
@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     end
 
     test "return EventMap changeset for duplicate update_idempk", ctx do
-      #successfully create event
+      # successfully create event
       %{event: pending_event} = create_event(ctx, :pending)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
       ProcessEventMap.process_map(update_event)
@@ -60,9 +60,13 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     end
 
     test "return EventMap changeset for other errors", ctx do
-      #successfully create event
+      # successfully create event
       event_map = event_map(ctx, :pending)
-      updated_event_map = update_in(event_map, [:transaction_data, :entries, Access.at(1), :currency], fn _ -> "USD" end)
+
+      updated_event_map =
+        update_in(event_map, [:transaction_data, :entries, Access.at(1), :currency], fn _ ->
+          "USD"
+        end)
 
       # process same update_event again which should fail
       {:error, changeset} = ProcessEventMap.process_map(struct(EventMapSchema, updated_event_map))
@@ -71,11 +75,13 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
     test "update event for event_map, which should also create the event", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
+
       {:ok, {pending_transaction, _}} =
         CreateEvent.process_create_event(pending_event)
+
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
-      {:ok, transaction, processed_event } = ProcessEventMap.process_map(update_event)
+      {:ok, transaction, processed_event} = ProcessEventMap.process_map(update_event)
       assert processed_event.status == :processed
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_transaction_id == pending_transaction.id
@@ -90,9 +96,14 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       {:error, event_map} = ProcessEventMap.process_map(update_event)
       assert is_struct(event_map, Event)
 
-      saved_update_event = Event
-      |> where([e], e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk))
-      |> Repo.one()
+      saved_update_event =
+        Event
+        |> where(
+          [e],
+          e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and
+            not is_nil(e.update_idempk)
+        )
+        |> Repo.one()
 
       assert saved_update_event.status == :pending
       assert saved_update_event.id != pending_event.id
@@ -109,9 +120,15 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       {error_message, _} = Keyword.get(event_map.errors, :source_idempk)
       assert error_message =~ "Create event (id: #{pending_event.id}) has failed"
 
-      assert is_nil(Event
-      |> where([e], e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk))
-      |> Repo.one())
+      assert is_nil(
+               Event
+               |> where(
+                 [e],
+                 e.source == ^pending_event.source and
+                   e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk)
+               )
+               |> Repo.one()
+             )
     end
   end
 
@@ -138,7 +155,6 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       assert %Event{status: :occ_timeout, tries: 6} = Repo.get(Event, id)
     end
   end
-
 
   describe "process_map_with_retry/2" do
     setup [:create_instance, :create_accounts, :verify_on_exit!]

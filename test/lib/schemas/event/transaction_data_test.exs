@@ -24,7 +24,9 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         status: "invalid",
         entries: create_2_entries()
       }
-      assert {"is invalid", _} = Keyword.get(TransactionData.changeset(%TransactionData{}, attrs).errors, :status)
+
+      assert {"is invalid", _} =
+               Keyword.get(TransactionData.changeset(%TransactionData{}, attrs).errors, :status)
     end
 
     test "not valid for empty entries" do
@@ -32,36 +34,42 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         status: :pending,
         entries: [%{}]
       }
+
       TransactionData.changeset(%TransactionData{}, attrs)
       |> get_embed(:entries, :changeset)
-      |> Enum.map(& assert &1.valid? == false)
-      |> then(& assert length(&1) == 1)
+      |> Enum.map(&assert &1.valid? == false)
+      |> then(&assert length(&1) == 1)
     end
 
     test "not valid for less than 2 entries" do
       [_ | tail] = create_2_entries()
+
       attrs = %{
         status: :pending,
         entries: tail
       }
+
       changeset = TransactionData.changeset(%TransactionData{}, attrs)
       assert {"must have at least 2 entries", []} = Keyword.get(changeset.errors, :entry_count)
     end
 
     test "adds error to single entry" do
       [_ | tail] = create_2_entries()
+
       attrs = %{
         status: :pending,
         entries: tail
       }
+
       TransactionData.changeset(%TransactionData{}, attrs)
       |> get_embed(:entries, :changeset)
-      |> Enum.map(& assert {"at least 2 accounts are required", []} = &1.errors[:account_id])
-      |> then(& assert length(&1) == 1)
+      |> Enum.map(&assert {"at least 2 accounts are required", []} = &1.errors[:account_id])
+      |> then(&assert length(&1) == 1)
     end
 
     test "not valid for 2 entries with same account" do
       id = Ecto.UUID.generate()
+
       attr = %{
         status: :pending,
         entries: [
@@ -69,10 +77,11 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
           %{account_id: id, amount: -100, currency: :EUR}
         ]
       }
+
       TransactionData.changeset(%TransactionData{}, attr)
       |> get_embed(:entries, :changeset)
-      |> Enum.map(& assert {"account IDs must be distinct", []} = &1.errors[:account_id])
-      |> then(& assert length(&1) == 2)
+      |> Enum.map(&assert {"account IDs must be distinct", []} = &1.errors[:account_id])
+      |> then(&assert length(&1) == 2)
     end
 
     test "valid for valid transaction data" do
@@ -80,6 +89,7 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         status: :pending,
         entries: create_2_entries()
       }
+
       assert TransactionData.changeset(%TransactionData{}, attrs).valid?
     end
   end
@@ -90,8 +100,9 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         status: "invalid",
         entries: create_2_entries()
       }
+
       assert {"is invalid", _} =
-        Keyword.get(TransactionData.changeset(%TransactionData{}, attrs).errors, :status)
+               Keyword.get(TransactionData.changeset(%TransactionData{}, attrs).errors, :status)
     end
 
     test "not valid for empty entries" do
@@ -99,26 +110,33 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         status: :pending,
         entries: [%{}]
       }
+
       TransactionData.update_event_changeset(%TransactionData{}, attrs)
       |> get_embed(:entries, :changeset)
-      |> Enum.map(& assert &1.valid? == false)
-      |> then(& assert length(&1) == 1)
+      |> Enum.map(&assert &1.valid? == false)
+      |> then(&assert length(&1) == 1)
     end
 
     test "not valid for less than 2 entries" do
       [_ | tail] = create_2_entries()
+
       attrs = %{
         status: :pending,
         entries: tail
       }
+
       assert {"must have at least 2 entries", []} =
-        Keyword.get(TransactionData.changeset(%TransactionData{}, attrs).errors, :entry_count)
+               Keyword.get(
+                 TransactionData.changeset(%TransactionData{}, attrs).errors,
+                 :entry_count
+               )
     end
 
     test "valid for simple update to :posted, without entries" do
       attrs = %{
         status: :posted
       }
+
       assert TransactionData.update_event_changeset(%TransactionData{}, attrs).valid?
     end
 
@@ -127,6 +145,7 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         status: :posted,
         entries: create_2_entries()
       }
+
       assert TransactionData.update_event_changeset(%TransactionData{}, attrs).valid?
     end
 
@@ -135,7 +154,10 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
         status: :archived,
         entries: []
       }
-      %{valid?: true, changes: changes} = TransactionData.update_event_changeset(%TransactionData{}, attrs)
+
+      %{valid?: true, changes: changes} =
+        TransactionData.update_event_changeset(%TransactionData{}, attrs)
+
       assert ^changes = %{status: :archived}
     end
   end

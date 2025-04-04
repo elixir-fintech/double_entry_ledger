@@ -32,17 +32,21 @@ defmodule DoubleEntryLedger.LoadTesting do
     {:ok, instance} = %Instance{} |> Repo.insert()
     sources = create_debit_sources(concurrency, instance, debit_sum)
     destination_arrays = create_debit_destinations(concurrency, instance)
-    create_balancing_credit_account(instance, debit_sum * concurrency) # Necessary to balance the ledger
+    # Necessary to balance the ledger
+    create_balancing_credit_account(instance, debit_sum * concurrency)
 
     transaction_lists = create_transaction_lists(sources, destination_arrays)
 
     IO.puts("Running load test with #{bold(to_string(concurrency))} concurrent transaction(s)")
     IO.puts("#{bold("Before:")} #{validate_instance_balance(instance)}")
     start_time = System.monotonic_time(:millisecond)
-    end_time = start_time + 1000 * @seconds_to_run  # Run time in milliseconds
+    # Run time in milliseconds
+    end_time = start_time + 1000 * @seconds_to_run
 
     # Use a counter to keep track of successful transactions
-    successful_transactions = run_transactions(concurrency, end_time, 0, instance, 0, transaction_lists)
+    successful_transactions =
+      run_transactions(concurrency, end_time, 0, instance, 0, transaction_lists)
+
     IO.puts("Transactions processed in #{@seconds_to_run} second(s): #{successful_transactions}")
     IO.puts("Transactions per second: #{successful_transactions / @seconds_to_run} tps")
     validate_instance_balance(instance)
@@ -62,20 +66,29 @@ defmodule DoubleEntryLedger.LoadTesting do
       results = Enum.map(tasks, &Task.await/1)
 
       # Count how many were successful
-      successes = Enum.count(results, fn
-        {:ok, _, _} -> true
-        _ -> false
-      end)
+      successes =
+        Enum.count(results, fn
+          {:ok, _, _} -> true
+          _ -> false
+        end)
 
       # Calculate the next index to use or loop back to the beginning
-      new_index = if index == @destination_accounts - 1 do
-        0
-      else
-        index + 1
-      end
+      new_index =
+        if index == @destination_accounts - 1 do
+          0
+        else
+          index + 1
+        end
 
       # Recur with updated time and count
-      run_transactions(concurrency, end_time, counter + successes, instance, new_index, transaction_lists)
+      run_transactions(
+        concurrency,
+        end_time,
+        counter + successes,
+        instance,
+        new_index,
+        transaction_lists
+      )
     else
       # Return the total count after time runs out
       counter
@@ -83,14 +96,17 @@ defmodule DoubleEntryLedger.LoadTesting do
   end
 
   # insert a single event and then create the transaction from it
-  defp run_transaction(instance, params ) do
-    {:ok, event_map} = EventMap.create(%{
+  defp run_transaction(instance, params) do
+    {:ok, event_map} =
+      EventMap.create(%{
         action: :create,
         status: :pending,
         source: "source",
         source_idempk: Ecto.UUID.generate(),
-        transaction_data: params, instance_id: instance.id
+        transaction_data: params,
+        instance_id: instance.id
       })
+
     EventWorker.process_new_event(event_map)
   end
 
@@ -105,7 +121,8 @@ defmodule DoubleEntryLedger.LoadTesting do
         normal_balance: :debit,
         posted: %Balance{amount: debit_sum, debit: debit_sum, credit: 0},
         available: debit_sum
-      } |> Repo.insert!()
+      }
+      |> Repo.insert!()
     end)
   end
 
@@ -121,7 +138,8 @@ defmodule DoubleEntryLedger.LoadTesting do
           normal_balance: :debit,
           posted: %Balance{amount: 0, debit: 0, credit: 0},
           available: 0
-        } |> Repo.insert!()
+        }
+        |> Repo.insert!()
       end)
     end)
   end
@@ -135,7 +153,8 @@ defmodule DoubleEntryLedger.LoadTesting do
       normal_balance: :credit,
       posted: %Balance{amount: credit_sum, debit: 0, credit: credit_sum},
       available: credit_sum
-    } |> Repo.insert()
+    }
+    |> Repo.insert()
   end
 
   # create a list of transactions for each source account to each destination account per concurrency
@@ -144,17 +163,20 @@ defmodule DoubleEntryLedger.LoadTesting do
     destination_arrays
     |> Enum.zip()
     |> Enum.map(fn sub_list ->
-        Enum.zip(sources, Tuple.to_list(sub_list))
-        |> Enum.map(fn {source, destination} ->
-          %{status: :posted, entries: [
+      Enum.zip(sources, Tuple.to_list(sub_list))
+      |> Enum.map(fn {source, destination} ->
+        %{
+          status: :posted,
+          entries: [
             %{currency: :EUR, amount: -10, account_id: source.id},
-            %{currency: :EUR, amount: 10, account_id: destination.id}]
-          }
-        end)
+            %{currency: :EUR, amount: 10, account_id: destination.id}
+          ]
+        }
+      end)
     end)
   end
 
-  #create a single async task to run an event/transaction
+  # create a single async task to run an event/transaction
   defp create_task(instance, trx_params) do
     Task.async(fn ->
       run_transaction(instance, trx_params)

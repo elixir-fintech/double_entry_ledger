@@ -27,22 +27,22 @@ defmodule DoubleEntryLedger.Instance do
   alias __MODULE__, as: Instance
 
   @type t :: %Instance{
-    id: binary() | nil,
-    config: map() | nil,
-    description: String.t() | nil,
-    name: String.t() | nil,
-    accounts: [Account.t()]| Ecto.Association.NotLoaded.t(),
-    transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
-    inserted_at: DateTime.t() | nil,
-    updated_at: DateTime.t() | nil
-  }
+          id: binary() | nil,
+          config: map() | nil,
+          description: String.t() | nil,
+          name: String.t() | nil,
+          accounts: [Account.t()] | Ecto.Association.NotLoaded.t(),
+          transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
+          inserted_at: DateTime.t() | nil,
+          updated_at: DateTime.t() | nil
+        }
 
   schema "instances" do
-    field :config, :map
-    field :description, :string
-    field :name, :string
-    has_many :accounts, Account, foreign_key: :instance_id
-    has_many :transactions, Transaction, foreign_key: :instance_id
+    field(:config, :map)
+    field(:description, :string)
+    field(:name, :string)
+    has_many(:accounts, Account, foreign_key: :instance_id)
+    has_many(:transactions, Transaction, foreign_key: :instance_id)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -122,8 +122,14 @@ defmodule DoubleEntryLedger.Instance do
 
   """
   @spec validate_account_balances(Instance.t()) ::
-    {:ok, %{posted_debits: integer(), posted_credits: integer(), pending_debits: integer(), pending_credits: integer()}}
-    | {:error, String.t()}
+          {:ok,
+           %{
+             posted_debits: integer(),
+             posted_credits: integer(),
+             pending_debits: integer(),
+             pending_credits: integer()
+           }}
+          | {:error, String.t()}
   def validate_account_balances(instance) do
     instance
     |> ledger_value()
@@ -145,6 +151,7 @@ defmodule DoubleEntryLedger.Instance do
   @spec ledger_value(Instance.t()) :: map()
   def ledger_value(instance) do
     acc = %{posted_debit: 0, posted_credit: 0, pending_debit: 0, pending_credit: 0}
+
     instance
     |> Repo.preload([:accounts])
     |> Map.get(:accounts)
@@ -157,11 +164,13 @@ defmodule DoubleEntryLedger.Instance do
     end)
   end
 
-  defp validate_equality(%{posted_debit: pod, posted_credit: poc, pending_debit: pdd, pending_credit: pdc} = value) do
+  defp validate_equality(
+         %{posted_debit: pod, posted_credit: poc, pending_debit: pdd, pending_credit: pdc} = value
+       ) do
     if pod == poc and pdd == pdc do
-        {:ok, value }
+      {:ok, value}
     else
-        {:error, "Debit and Credit are not equal #{value}"}
+      {:error, "Debit and Credit are not equal #{value}"}
     end
   end
 end

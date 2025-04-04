@@ -9,16 +9,16 @@ defmodule DoubleEntryLedger.Balance do
 
   @primary_key false
   embedded_schema do
-    field :amount, :integer, default: 0
-    field :debit, :integer, default: 0
-    field :credit, :integer, default: 0
+    field(:amount, :integer, default: 0)
+    field(:debit, :integer, default: 0)
+    field(:credit, :integer, default: 0)
   end
 
   @type t :: %Balance{
-    amount: integer(),
-    credit: integer(),
-    debit: integer()
-  }
+          amount: integer(),
+          credit: integer(),
+          debit: integer()
+        }
 
   @doc """
   Creates a new balance struct with default values.
@@ -92,14 +92,14 @@ defmodule DoubleEntryLedger.Balance do
 
   """
   @spec update_balance(Balance.t(), integer(), atom(), atom()) :: Ecto.Changeset.t()
-  def update_balance(%{amount: amt } = balance, amount, e_type, a_type) when e_type == a_type do
+  def update_balance(%{amount: amt} = balance, amount, e_type, a_type) when e_type == a_type do
     balance
     |> change()
     |> put_change(:amount, amt + amount)
     |> put_change(e_type, Map.get(balance, e_type) + amount)
   end
 
-  def update_balance(%{amount: amt } = balance, amount, e_type, a_type) when e_type != a_type do
+  def update_balance(%{amount: amt} = balance, amount, e_type, a_type) when e_type != a_type do
     balance
     |> change()
     |> put_change(:amount, amt - amount)
@@ -136,29 +136,44 @@ defmodule DoubleEntryLedger.Balance do
 
   """
   @spec reverse_pending(Balance.t(), integer(), atom(), atom()) :: Ecto.Changeset.t()
-  def reverse_pending(%{amount: amt } = balance, amount, e_type, a_type) when e_type == a_type do
+  def reverse_pending(%{amount: amt} = balance, amount, e_type, a_type) when e_type == a_type do
     balance
     |> change()
     |> put_change(:amount, amt + amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount)
   end
 
-  def reverse_pending(%{amount: amt } = balance, amount, e_type, a_type) when e_type != a_type do
+  def reverse_pending(%{amount: amt} = balance, amount, e_type, a_type) when e_type != a_type do
     balance
     |> change()
     |> put_change(:amount, amt - amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount)
   end
 
-  @spec reverse_and_update_pending(Balance.t(), integer(), integer(), atom(), atom()) :: Ecto.Changeset.t()
-  def reverse_and_update_pending(%{amount: amt } = balance, amount_to_reverse, new_amount, e_type, a_type) when e_type == a_type do
+  @spec reverse_and_update_pending(Balance.t(), integer(), integer(), atom(), atom()) ::
+          Ecto.Changeset.t()
+  def reverse_and_update_pending(
+        %{amount: amt} = balance,
+        amount_to_reverse,
+        new_amount,
+        e_type,
+        a_type
+      )
+      when e_type == a_type do
     balance
     |> change()
     |> put_change(:amount, amt + amount_to_reverse - new_amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount_to_reverse + new_amount)
   end
 
-  def reverse_and_update_pending(%{amount: amt } = balance, amount_to_reverse, new_amount, e_type, a_type) when e_type != a_type do
+  def reverse_and_update_pending(
+        %{amount: amt} = balance,
+        amount_to_reverse,
+        new_amount,
+        e_type,
+        a_type
+      )
+      when e_type != a_type do
     balance
     |> change()
     |> put_change(:amount, amt - amount_to_reverse + new_amount)

@@ -19,25 +19,30 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.insert()
   end
 
-  @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) :: list(Event.t())
+  @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
+          list(Event.t())
   def list_all_for_instance(instance_id, page \\ 1, per_page \\ 40) do
     offset = (page - 1) * per_page
 
-    Repo.all(from e in Event,
-      where: e.instance_id == ^instance_id,
-      order_by: [desc: e.inserted_at],
-      limit: ^per_page,
-      offset: ^offset,
-      select: e
+    Repo.all(
+      from(e in Event,
+        where: e.instance_id == ^instance_id,
+        order_by: [desc: e.inserted_at],
+        limit: ^per_page,
+        offset: ^offset,
+        select: e
+      )
     )
   end
 
   @spec list_all_for_transaction(Ecto.UUID.t()) :: list(Event.t())
   def list_all_for_transaction(transaction_id) do
-    Repo.all(from e in Event,
-      where: e.processed_transaction_id == ^transaction_id,
-      select: e,
-      order_by: [desc: e.inserted_at]
+    Repo.all(
+      from(e in Event,
+        where: e.processed_transaction_id == ^transaction_id,
+        select: e,
+        order_by: [desc: e.inserted_at]
+      )
     )
   end
 

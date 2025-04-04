@@ -74,7 +74,8 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
   end
 
   @spec entry_data_to_entry_map({Account.t(), EntryData.t()}) :: map()
-  defp entry_data_to_entry_map({%{normal_balance: :debit} = acc, %{amount: amt} = ed}) when amt > 0 do
+  defp entry_data_to_entry_map({%{normal_balance: :debit} = acc, %{amount: amt} = ed})
+       when amt > 0 do
     %{account_id: acc.id, value: to_abs_money(amt, ed.currency), type: :debit}
   end
 
@@ -82,7 +83,8 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
     %{account_id: acc.id, value: to_abs_money(ed.amount, ed.currency), type: :credit}
   end
 
-  defp entry_data_to_entry_map({%{normal_balance: :credit} = acc, %{amount: amt} = ed}) when amt > 0 do
+  defp entry_data_to_entry_map({%{normal_balance: :credit} = acc, %{amount: amt} = ed})
+       when amt > 0 do
     %{account_id: acc.id, value: to_abs_money(amt, ed.currency), type: :credit}
   end
 

@@ -17,11 +17,13 @@ defmodule DoubleEntryLedger.Event.EntryDataTest do
     end
 
     test "changeset not valid for missing amount, account_id and type" do
-      assert %Changeset{errors: [
-        account_id: {"can't be blank", [validation: :required]},
-        amount: {"can't be blank", [validation: :required]},
-        currency: {"can't be blank", [validation: :required]}
-      ]} = EntryData.changeset(%EntryData{}, %{})
+      assert %Changeset{
+               errors: [
+                 account_id: {"can't be blank", [validation: :required]},
+                 amount: {"can't be blank", [validation: :required]},
+                 currency: {"can't be blank", [validation: :required]}
+               ]
+             } = EntryData.changeset(%EntryData{}, %{})
     end
 
     test "changeset not valid for invalid account_id and currency" do
@@ -30,10 +32,13 @@ defmodule DoubleEntryLedger.Event.EntryDataTest do
         amount: 100,
         currency: "invalid"
       }
-      assert %Changeset{errors: [
-        account_id: {"is invalid", _},
-        currency: {"is invalid", _}
-      ]} = EntryData.changeset(%EntryData{}, attrs)
+
+      assert %Changeset{
+               errors: [
+                 account_id: {"is invalid", _},
+                 currency: {"is invalid", _}
+               ]
+             } = EntryData.changeset(%EntryData{}, attrs)
     end
 
     test "changeset valid for valid entry data" do
@@ -42,6 +47,7 @@ defmodule DoubleEntryLedger.Event.EntryDataTest do
         amount: 100,
         currency: :EUR
       }
+
       assert %Changeset{valid?: true} = EntryData.changeset(%EntryData{}, attrs)
     end
   end

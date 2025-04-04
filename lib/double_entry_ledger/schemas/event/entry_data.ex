@@ -11,18 +11,18 @@ defmodule DoubleEntryLedger.Event.EntryData do
   @currency_atoms Currency.currency_atoms()
 
   @type t :: %EntryData{
-    account_id: Ecto.UUID.t(),
-    amount: integer(),
-    currency: Currency.currency_atom()
-  }
+          account_id: Ecto.UUID.t(),
+          amount: integer(),
+          currency: Currency.currency_atom()
+        }
 
   @derive {Jason.Encoder, only: [:account_id, :amount, :currency]}
 
   @primary_key false
   embedded_schema do
-    field :account_id, Ecto.UUID
-    field :amount, :integer
-    field :currency, Ecto.Enum, values: @currency_atoms
+    field(:account_id, Ecto.UUID)
+    field(:amount, :integer)
+    field(:currency, Ecto.Enum, values: @currency_atoms)
   end
 
   @doc false

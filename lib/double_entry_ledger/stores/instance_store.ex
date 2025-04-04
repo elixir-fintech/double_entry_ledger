@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.InstanceStore do
   This module includes functions for creating, retrieving, updating, and deleting ledger instances.
   It respects the constraints and validations defined in `DoubleEntryLedger.Instance`.
   """
-  import  Ecto.Query, only: [from: 2]
+  import Ecto.Query, only: [from: 2]
   alias DoubleEntryLedger.{Instance, Repo, Account}
 
   @doc """
@@ -138,23 +138,26 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   """
   @spec sum_accounts_debits_and_credits_by_currency(Ecto.UUID.t()) ::
-       {:ok, list(map())} | {:error, Ecto.Changeset.t()}
+          {:ok, list(map())} | {:error, Ecto.Changeset.t()}
   def sum_accounts_debits_and_credits_by_currency(instance_id) do
-    Repo.transaction(fn ->
-     query =
-        from a in Account,
-        where: a.instance_id == ^instance_id,
-        group_by: a.currency,
-        select: %{
-          currency: a.currency,
-          posted_debit: type(sum(fragment("(posted->>'debit')::integer")), :integer),
-          posted_credit: type(sum(fragment("(posted->>'credit')::integer")), :integer),
-          pending_debit: type(sum(fragment("(pending->>'debit')::integer")), :integer),
-          pending_credit: type(sum(fragment("(pending->>'credit')::integer")), :integer)
-        }
-      Repo.all(query)
-    end,
-    isolation: :repeatable_read
+    Repo.transaction(
+      fn ->
+        query =
+          from(a in Account,
+            where: a.instance_id == ^instance_id,
+            group_by: a.currency,
+            select: %{
+              currency: a.currency,
+              posted_debit: type(sum(fragment("(posted->>'debit')::integer")), :integer),
+              posted_credit: type(sum(fragment("(posted->>'credit')::integer")), :integer),
+              pending_debit: type(sum(fragment("(pending->>'debit')::integer")), :integer),
+              pending_credit: type(sum(fragment("(pending->>'credit')::integer")), :integer)
+            }
+          )
+
+        Repo.all(query)
+      end,
+      isolation: :repeatable_read
     )
   end
 end

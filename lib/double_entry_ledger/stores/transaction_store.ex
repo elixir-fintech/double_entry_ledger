@@ -26,6 +26,7 @@ defmodule DoubleEntryLedger.TransactionStore do
   @spec get_by_id(Ecto.UUID.t(), list()) :: Transaction.t() | nil
   def get_by_id(id, preload \\ []) do
     transaction = Repo.get(Transaction, id)
+
     if transaction != nil and preload != [] do
       Repo.preload(transaction, preload)
     else
@@ -47,16 +48,19 @@ defmodule DoubleEntryLedger.TransactionStore do
 
     - A list of transactions.
   """
-  @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) :: list(Transaction.t())
+  @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
+          list(Transaction.t())
   def list_all_for_instance(instance_id, page \\ 1, per_page \\ 40) do
     offset = (page - 1) * per_page
 
-    Repo.all(from t in Transaction,
-      where: t.instance_id == ^instance_id,
-      order_by: [desc: t.inserted_at],
-      limit: ^per_page,
-      offset: ^offset,
-      select: t
+    Repo.all(
+      from(t in Transaction,
+        where: t.instance_id == ^instance_id,
+        order_by: [desc: t.inserted_at],
+        limit: ^per_page,
+        offset: ^offset,
+        select: t
+      )
     )
   end
 
@@ -76,30 +80,39 @@ defmodule DoubleEntryLedger.TransactionStore do
 
     - A list of tuples containing the transaction, account, entry, and the latest balance history entry.
   """
-  @spec list_all_for_instance_and_account(Ecto.UUID.t(), Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-    list({Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()})
+  @spec list_all_for_instance_and_account(
+          Ecto.UUID.t(),
+          Ecto.UUID.t(),
+          non_neg_integer(),
+          non_neg_integer()
+        ) ::
+          list({Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()})
   def list_all_for_instance_and_account(instance_id, account_id, page \\ 1, per_page \\ 40) do
     offset = (page - 1) * per_page
 
-    Repo.all(from transaction in Transaction,
-      join: entry in assoc(transaction, :entries),
+    Repo.all(
+      from(transaction in Transaction,
+        join: entry in assoc(transaction, :entries),
         on: entry.transaction_id == transaction.id,
         as: :entry,
-      join: account in assoc(entry, :account),
+        join: account in assoc(entry, :account),
         on: account.id == entry.account_id,
-      left_lateral_join: latest_balance_history in subquery(
-        from balance_history in BalanceHistoryEntry,
-        where: balance_history.entry_id == parent_as(:entry).id,
-        order_by: [desc: balance_history.inserted_at],
-        limit: 1,
-        select: balance_history
-      ),
+        left_lateral_join:
+          latest_balance_history in subquery(
+            from(balance_history in BalanceHistoryEntry,
+              where: balance_history.entry_id == parent_as(:entry).id,
+              order_by: [desc: balance_history.inserted_at],
+              limit: 1,
+              select: balance_history
+            )
+          ),
         on: latest_balance_history.entry_id == entry.id,
-      order_by: [desc: transaction.inserted_at],
-      limit: ^per_page,
-      offset: ^offset,
-      where: entry.account_id == ^account_id and transaction.instance_id == ^instance_id,
-      select: {transaction, account, entry, latest_balance_history}
+        order_by: [desc: transaction.inserted_at],
+        limit: ^per_page,
+        offset: ^offset,
+        where: entry.account_id == ^account_id and transaction.instance_id == ^instance_id,
+        select: {transaction, account, entry, latest_balance_history}
+      )
     )
   end
 
@@ -204,16 +217,19 @@ defmodule DoubleEntryLedger.TransactionStore do
 
     - An `Ecto.Multi` struct with the update operation added.
   """
-  @spec build_update(Multi.t(), atom(), Transaction.t() | atom(), map(), Ecto.Repo.t()) :: Multi.t()
+  @spec build_update(Multi.t(), atom(), Transaction.t() | atom(), map(), Ecto.Repo.t()) ::
+          Multi.t()
   def build_update(multi, step, transaction_or_step, attrs, repo \\ Repo) do
-
     multi
     |> Multi.run(step, fn _, changes ->
-      transaction = cond do
-        is_struct(transaction_or_step, Transaction) -> transaction_or_step
-        is_atom(transaction_or_step) -> Map.fetch!(changes, transaction_or_step)
-      end
+      transaction =
+        cond do
+          is_struct(transaction_or_step, Transaction) -> transaction_or_step
+          is_atom(transaction_or_step) -> Map.fetch!(changes, transaction_or_step)
+        end
+
       transition = update_transition(transaction, attrs)
+
       try do
         Transaction.changeset(transaction, attrs, transition)
         |> repo.update()
