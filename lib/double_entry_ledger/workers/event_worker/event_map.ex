@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
 
   alias DoubleEntryLedger.EventWorker.{
     EventTransformer,
-    AddUpdateEvent,
+    AddUpdateEventError,
     ErrorHandler
   }
   alias Ecto.{Multi, Changeset}
@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
           {:error, :transaction, :occ_final_timeout, event} ->
             {:error, event}
 
-          {:error, :get_create_event_transaction, %AddUpdateEvent{} = error, steps_so_far} ->
+          {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, steps_so_far} ->
             {:error, handle_add_update_event_error(error, steps_so_far, event_map)}
 
           {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->

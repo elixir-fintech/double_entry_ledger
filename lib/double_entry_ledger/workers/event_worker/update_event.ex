@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     TransactionStore,
     Repo
   }
-  alias DoubleEntryLedger.EventWorker.AddUpdateEvent
+  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
   import DoubleEntryLedger.OccRetry
   import DoubleEntryLedger.EventWorker.EventTransformer, only: [transaction_data_to_transaction_map: 2]
@@ -48,11 +48,11 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
           {:ok, %{transaction: transaction, event: update_event}} ->
             {:ok, {transaction, update_event}}
 
-          {:error, _step, %AddUpdateEvent{reason: :create_event_pending} = error, _} ->
+          {:error, _step, %AddUpdateEventError{reason: :create_event_pending} = error, _} ->
             EventStore.add_error(event, error.message)
             {:error, error.message}
 
-          {:error, _step, %AddUpdateEvent{} = error, _} ->
+          {:error, _step, %AddUpdateEventError{} = error, _} ->
             handle_error(event, error.message)
 
           {:error, step, error, _} ->
