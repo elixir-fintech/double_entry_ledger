@@ -87,28 +87,10 @@ defmodule DoubleEntryLedger.EventWorker.EventMap do
           {:error, step, error, _steps_so_far} ->
             {:error, "#{step} failed: #{inspect(error)}"}
 
-          {:error, reason} ->
-            {:error, reason}
+          {:error, error} ->
+            {:error, "#{inspect(error)}"}
         end
     end
-  end
-
-  @spec handle_add_update_event_error(AddUpdateEvent.t(), map(), EventMap.t()) :: Event.t() | Changeset.t()
-  def handle_add_update_event_error(%AddUpdateEvent{reason: :create_event_pending, message: msg}, steps_so_far, event_map) do
-    case EventStore.create_event_after_failure(steps_so_far[:create_event], [build_error(msg)], 1, :pending) do
-      {:ok, event} ->
-        event
-
-      {:error, changeset} ->
-        transfer_errors_from_event_to_event_map(event_map, changeset)
-      end
-  end
-
-  def handle_add_update_event_error(%AddUpdateEvent{message: msg}, steps_so_far, event_map) do
-    steps_so_far[:create_event]
-    |> Changeset.change()
-    |> Changeset.add_error(:source_idempk, "#{msg}")
-    |> then(&transfer_errors_from_event_to_event_map(event_map, &1))
   end
 
   @spec process_map_with_retry(map(), map(), ErrorHandler.event_error_map(), integer(), Ecto.Repo.t()) ::

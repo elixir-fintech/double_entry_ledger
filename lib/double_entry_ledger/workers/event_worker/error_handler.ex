@@ -4,10 +4,16 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   """
 
   alias Ecto.Changeset
+  alias DoubleEntryLedger.EventStore
+
   alias DoubleEntryLedger.Event.{
     EntryData,
     TransactionData,
     EventMap
+  }
+
+  alias DoubleEntryLedger.EventWorker.{
+    AddUpdateEvent
   }
 
   @type event_error_map :: %{
@@ -62,6 +68,24 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> TransactionData.changeset(TransactionData.to_map(transaction_data))
     |> Changeset.put_embed(:entries, get_entry_changesets_with_errors(transaction_data, trx_changeset))
     |> Map.put(:action, :insert)
+  end
+
+  @spec handle_add_update_event_error(AddUpdateEvent.t(), map(), EventMap.t()) :: Event.t() | Changeset.t()
+  def handle_add_update_event_error(%AddUpdateEvent{reason: :create_event_pending, message: msg}, steps_so_far, event_map) do
+    case EventStore.create_event_after_failure(steps_so_far[:create_event], [build_error(msg)], 1, :pending) do
+      {:ok, event} ->
+        event
+
+      {:error, changeset} ->
+        transfer_errors_from_event_to_event_map(event_map, changeset)
+      end
+  end
+
+  def handle_add_update_event_error(%AddUpdateEvent{message: msg}, steps_so_far, event_map) do
+    steps_so_far[:create_event]
+    |> Changeset.change()
+    |> Changeset.add_error(:source_idempk, "#{msg}")
+    |> then(&transfer_errors_from_event_to_event_map(event_map, &1))
   end
 
   @spec add_entry_data_errors(Changeset.t(), map()) :: Changeset.t()
