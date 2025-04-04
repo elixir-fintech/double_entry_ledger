@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.EventMap do
+defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   @moduledoc """
   Provides functions to process event maps by creating event records and handling associated transactions.
   """

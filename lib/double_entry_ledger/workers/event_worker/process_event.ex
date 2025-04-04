@@ -8,10 +8,10 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     CreateEvent, Event, Transaction, UpdateEvent
   }
   alias DoubleEntryLedger.EventWorker.{
-    EventMap, UpdateEvent, CreateEvent
+    ProcessEventMap, UpdateEvent, CreateEvent
   }
 
-  import EventMap, only: [process_map: 1]
+  import ProcessEventMap, only: [process_map: 1]
   import CreateEvent, only: [process_create_event: 1]
   import UpdateEvent, only: [process_update_event: 1]
 
