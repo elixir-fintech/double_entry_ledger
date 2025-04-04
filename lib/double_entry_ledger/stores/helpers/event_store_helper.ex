@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   alias Ecto.Changeset
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.{Repo, Event, Transaction}
-  alias DoubleEntryLedger.EventWorker.CreateEventError
+  alias DoubleEntryLedger.EventWorker.AddUpdateEvent
 
   @spec build_create(map()) :: Changeset.t()
   def build_create(attrs) do
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         {:ok, {transaction, create_event}}
 
       create_event ->
-        raise CreateEventError, create_event: create_event, update_event: event
+        raise AddUpdateEvent, create_event: create_event, update_event: event
     end
   end
 
@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         {:ok, {transaction, _}} = get_create_event_transaction(event)
         {:ok, transaction}
       rescue
-        e in CreateEventError ->
+        e in AddUpdateEvent ->
           {:error, e}
       end
     end)

@@ -1,8 +1,8 @@
-defmodule DoubleEntryLedger.EventWorker.CreateEventError do
+defmodule DoubleEntryLedger.EventWorker.AddUpdateEvent do
   defexception [:message, :create_event, :update_event, :reason]
 
   alias DoubleEntryLedger.Event
-  alias __MODULE__, as: CreateEventError
+  alias __MODULE__, as: AddUpdateEvent
 
   @impl true
   def exception(opts) do
@@ -10,20 +10,20 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventError do
     create_event = Keyword.get(opts, :create_event)
     case create_event do
       %Event{status: :pending} ->
-        %CreateEventError{
+        %AddUpdateEvent{
           message: "Create event (id: #{create_event.id}) has not yet been processed for Update Event (id: #{update_event.id})",
           create_event: create_event,
           update_event: update_event,
           reason: :create_event_pending}
       %Event{status: :failed} ->
-        %CreateEventError{
+        %AddUpdateEvent{
           message: "Create event (id: #{create_event.id}) has failed for Update Event (id: #{update_event.id})",
           create_event: create_event,
           update_event: update_event,
           reason: :create_event_failed
         }
       nil ->
-        %CreateEventError{
+        %AddUpdateEvent{
           message: "Create Event not found for Update Event (id: #{update_event.id})",
           create_event: nil,
           update_event: update_event,
