@@ -7,6 +7,8 @@ defmodule DoubleEntryLedger.EventStore do
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.{Repo, Event}
+  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.EventWorker
 
   @spec get_by_id(Ecto.UUID.t()) :: Event.t() | nil
   def get_by_id(id) do
@@ -17,6 +19,17 @@ defmodule DoubleEntryLedger.EventStore do
   def create(attrs) do
     build_create(attrs)
     |> Repo.insert()
+  end
+
+  @spec process_from_event_params(map()) ::
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Ecto.Changeset.t() | String.t()}
+  def process_from_event_params(event_params) do
+    case EventMap.create(event_params) do
+      {:ok, event_map} ->
+        EventWorker.process_new_event(event_map)
+      {:error, event_map_changeset} ->
+        {:error, event_map_changeset}
+    end
   end
 
   @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::

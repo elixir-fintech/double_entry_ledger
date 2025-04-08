@@ -57,23 +57,6 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Map.put(:action, :insert)
   end
 
-  @spec build_event_map_changeset(EventMap.t()) :: Changeset.t()
-  defp build_event_map_changeset(event_map) do
-    %EventMap{}
-    |> EventMap.changeset(EventMap.to_map(event_map))
-  end
-
-  @spec build_transaction_data_changeset(EventMap.t(), Changeset.t()) :: Changeset.t()
-  defp build_transaction_data_changeset(%{transaction_data: transaction_data}, trx_changeset) do
-    %TransactionData{}
-    |> TransactionData.changeset(TransactionData.to_map(transaction_data))
-    |> Changeset.put_embed(
-      :entries,
-      get_entry_changesets_with_errors(transaction_data, trx_changeset)
-    )
-    |> Map.put(:action, :insert)
-  end
-
   @spec handle_add_update_event_error(AddUpdateEventError.t(), map(), EventMap.t()) ::
           Event.t() | Changeset.t()
   def handle_add_update_event_error(
@@ -100,6 +83,31 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Changeset.change()
     |> Changeset.add_error(:source_idempk, "#{msg}")
     |> then(&transfer_errors_from_event_to_event_map(event_map, &1))
+  end
+
+  @spec build_event_map_changeset(EventMap.t()) :: Changeset.t()
+  defp build_event_map_changeset(event_map) do
+    %EventMap{}
+    |> EventMap.changeset(EventMap.to_map(event_map))
+  end
+
+  @spec build_transaction_data_changeset(EventMap.t(), Changeset.t()) :: Changeset.t()
+  defp build_transaction_data_changeset(%{transaction_data: transaction_data}, trx_changeset) do
+    %TransactionData{}
+    |> TransactionData.changeset(TransactionData.to_map(transaction_data))
+    |> add_transaction_data_errors(trx_changeset)
+    |> Changeset.put_embed(
+      :entries,
+      get_entry_changesets_with_errors(transaction_data, trx_changeset)
+    )
+    |> Map.put(:action, :insert)
+  end
+
+  @spec add_transaction_data_errors(Changeset.t(), Changeset.t()) :: Changeset.t()
+  defp add_transaction_data_errors(changeset, trx_changeset) do
+    errors = get_all_errors(trx_changeset)
+    [:status]
+    |> Enum.reduce(changeset, &add_errors_to_changeset(&2, &1, errors))
   end
 
   @spec add_entry_data_errors(Changeset.t(), map()) :: Changeset.t()

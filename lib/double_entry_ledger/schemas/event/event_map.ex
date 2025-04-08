@@ -15,9 +15,9 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   @type t :: %EventMap{
           action: Event.action(),
-          instance_id: String.t(),
+          instance_id: Ecto.UUID.t(),
           source: String.t(),
-          source_data: map(),
+          source_data: map() | nil,
           source_idempk: String.t(),
           update_idempk: String.t() | nil,
           transaction_data: TransactionData.t()

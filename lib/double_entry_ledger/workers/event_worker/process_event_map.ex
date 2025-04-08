@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     - `{:error, reason}` on failure.
   """
   @spec process_map(EventMap.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, String.t() | Changeset.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_map(event_map) do
     process_map(event_map, Repo)
   end
