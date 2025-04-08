@@ -11,6 +11,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     * `process_update_event_with_retry/5` - Processes the update event with retry logic in case of concurrency conflicts.
 
   """
+  alias Ecto.Changeset
   alias Ecto.{Multi, StaleEntryError}
 
   alias DoubleEntryLedger.{
@@ -43,7 +44,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
   """
   @spec process_update_event(Event.t()) ::
-          {:ok, {Transaction.t(), Event.t()}} | {:error, String.t()}
+          {:ok, {Transaction.t(), Event.t()}} | {:error, Event.t() | Changeset.t()}
   def process_update_event(%{instance_id: id, transaction_data: td} = event) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
@@ -51,9 +52,14 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
           {:ok, %{transaction: transaction, event: update_event}} ->
             {:ok, {transaction, update_event}}
 
-          {:error, _step, %AddUpdateEventError{reason: :create_event_pending} = error, _} ->
-            EventStore.add_error(event, error.message)
-            {:error, error.message}
+          {:error, _step, %AddUpdateEventError{reason: :create_event_pending, message: message}, _} ->
+            case EventStore.add_error(event, message) do
+              {:ok, event} ->
+                {:error, event}
+
+              {:error, changeset} ->
+                {:error, changeset}
+            end
 
           {:error, _step, %AddUpdateEventError{} = error, _} ->
             handle_error(event, error.message)
@@ -107,8 +113,15 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     end)
   end
 
+  @spec handle_error(Event.t(), String.t()) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
   defp handle_error(event, reason) do
-    EventStore.mark_as_failed(event, reason)
-    {:error, reason}
+    case EventStore.mark_as_failed(event, reason) do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 end

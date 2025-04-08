@@ -5,6 +5,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
   use ExUnit.Case
   import Mox
 
+  alias DoubleEntryLedger.Transaction
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -14,6 +15,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
   import DoubleEntryLedger.EventWorker.EventTransformer,
     only: [transaction_data_to_transaction_map: 2]
 
+  alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventWorker.CreateEvent
 
   doctest CreateEvent
@@ -29,6 +31,24 @@ defmodule DoubleEntryLedger.CreateEventTest do
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :posted
+    end
+
+    test "process create event with error when saving transaction", ctx do
+      %{event: event} = create_event(ctx)
+
+      DoubleEntryLedger.MockRepo
+      |> expect(:insert, fn _changeset ->
+        # simulate a conflict when adding the transaction
+        {:error, :conflict}
+      end)
+      |> expect(:transaction, fn multi ->
+        # the transaction has to be handled by the Repo
+        Repo.transaction(multi)
+      end)
+
+      assert {:error, %Event{} = event} =
+               CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+      assert event.status == :failed
     end
   end
 

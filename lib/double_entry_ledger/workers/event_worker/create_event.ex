@@ -42,12 +42,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     - `{:ok, transaction, event}` on successful processing.
     - `{:error, reason}` if processing fails.
   """
-  @spec process_create_event(Event.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, String.t()}
-  def process_create_event(%Event{transaction_data: transaction_data, instance_id: id} = event) do
+  @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
+  def process_create_event(%Event{transaction_data: transaction_data, instance_id: id} = event, repo \\ Repo) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
-        case process_create_event_with_retry(event, transaction_map, max_retries()) do
+        case process_create_event_with_retry(event, transaction_map, max_retries(), repo) do
           {:ok, %{transaction: transaction, event: update_event}} ->
             {:ok, {transaction, update_event}}
 
@@ -59,8 +59,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
         end
 
       {:error, error} ->
-        EventStore.mark_as_failed(event, error)
-        {:error, error}
+        handle_error(event, "Failed to transform transaction data: #{inspect(error)}")
     end
   end
 
@@ -122,8 +121,15 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     end)
   end
 
+  @spec handle_error(Event.t(), String.t()) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
   defp handle_error(event, reason) do
-    EventStore.mark_as_failed(event, reason)
-    {:error, reason}
+    case EventStore.mark_as_failed(event, reason) do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 end

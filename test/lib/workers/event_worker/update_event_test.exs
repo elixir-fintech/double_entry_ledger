@@ -126,17 +126,23 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     test "fails when create event does not exist", %{instance: inst} do
       {:ok, event} = create_update_event("source", "1", inst.id, :posted)
 
-      assert {:error, "Create Event not found for Update Event (id: #{event.id})"} ==
-               UpdateEvent.process_update_event(event)
+      {:error, failed_event} = UpdateEvent.process_update_event(event)
+      assert failed_event.status == :failed
+
+      [error|_] = failed_event.errors
+      assert error.message ==
+        "Create Event not found for Update Event (id: #{event.id})"
     end
 
     test "fails when create event is still pending", %{instance: inst} = ctx do
       %{event: %{id: e_id, source: s, source_idempk: s_id}} = create_event(ctx, :pending)
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      {:error, message} = UpdateEvent.process_update_event(event)
+      {:error, failed_event} = UpdateEvent.process_update_event(event)
+      assert failed_event.status == :pending
 
-      assert message ==
+      [error|_] = failed_event.errors
+      assert error.message ==
                "Create event (id: #{e_id}) has not yet been processed for Update Event (id: #{event.id})"
     end
 
@@ -145,9 +151,11 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       EventStore.mark_as_failed(pending_event, "some reason")
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      {:error, message} = UpdateEvent.process_update_event(event)
+      {:error, failed_event} = UpdateEvent.process_update_event(event)
+      assert failed_event.status == :failed
 
-      assert message ==
+      [error|_] = failed_event.errors
+      assert error.message ==
                "Create event (id: #{pending_event.id}) has failed for Update Event (id: #{event.id})"
     end
   end
