@@ -53,13 +53,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
             {:ok, {transaction, update_event}}
 
           {:error, _step, %AddUpdateEventError{reason: :create_event_pending, message: message}, _} ->
-            case EventStore.add_error(event, message) do
-              {:ok, event} ->
-                {:error, event}
-
-              {:error, changeset} ->
-                {:error, changeset}
-            end
+            add_error(event, message)
 
           {:error, _step, %AddUpdateEventError{} = error, _} ->
             handle_error(event, error.message)
@@ -111,6 +105,18 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     |> Multi.update(:event, fn %{transaction: td} ->
       EventStoreHelper.build_mark_as_processed(event, td.id)
     end)
+  end
+
+  @spec add_error(Event.t(), String.t()) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
+  defp add_error(event, reason) do
+    case EventStore.add_error(event, reason) do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   @spec handle_error(Event.t(), String.t()) ::
