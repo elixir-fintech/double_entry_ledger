@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.EventStore do
   import DoubleEntryLedger.EventStoreHelper
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.{Repo, Event}
+  alias DoubleEntryLedger.{Repo, Event, Transaction}
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker
 
@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.EventStore do
           {:ok, Event.t()} | {:error, Changeset.t()}
   def create_event_after_failure(event, errors, retries, status) do
     event
-    |> Changeset.change(errors: errors, status: status, tries: retries)
+    |> Changeset.change(errors: errors, status: status, occ_retry_count: retries)
     |> Repo.insert()
   end
 

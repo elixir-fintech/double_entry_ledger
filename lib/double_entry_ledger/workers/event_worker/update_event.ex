@@ -44,13 +44,13 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
   """
   @spec process_update_event(Event.t()) ::
-          {:ok, {Transaction.t(), Event.t()}} | {:error, Event.t() | Changeset.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
   def process_update_event(%{instance_id: id, transaction_data: td} = event) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
         case process_update_event_with_retry(event, transaction_map, max_retries()) do
           {:ok, %{transaction: transaction, event: update_event}} ->
-            {:ok, {transaction, update_event}}
+            {:ok, transaction, update_event}
 
           {:error, _step, %AddUpdateEventError{reason: :create_event_pending, message: message}, _} ->
             add_error(event, message)

@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
   @spec increment_tries(Changeset.t()) :: Changeset.t()
   defp increment_tries(changeset) do
-    current_tries = Changeset.get_field(changeset, :tries) || 0
-    Changeset.put_change(changeset, :tries, current_tries + 1)
+    current_tries = Changeset.get_field(changeset, :occ_retry_count) || 0
+    Changeset.put_change(changeset, :occ_retry_count, current_tries + 1)
   end
 end

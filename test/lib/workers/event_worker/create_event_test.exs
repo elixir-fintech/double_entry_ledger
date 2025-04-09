@@ -5,7 +5,6 @@ defmodule DoubleEntryLedger.CreateEventTest do
   use ExUnit.Case
   import Mox
 
-  alias DoubleEntryLedger.Transaction
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -26,7 +25,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
     test "process create event successfully", ctx do
       %{event: event} = create_event(ctx)
 
-      {:ok, {transaction, processed_event}} = CreateEvent.process_create_event(event)
+      {:ok, transaction, processed_event} = CreateEvent.process_create_event(event)
       assert processed_event.status == :processed
       assert processed_event.processed_transaction_id == transaction.id
       assert processed_event.processed_at != nil

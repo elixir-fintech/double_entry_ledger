@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.Event do
           source_data: map(),
           source_idempk: String.t(),
           update_idempk: String.t() | nil,
-          tries: integer(),
+          occ_retry_count: integer(),
           processed_at: DateTime.t() | nil,
           transaction_data: TransactionData.t() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
@@ -37,7 +37,12 @@ defmodule DoubleEntryLedger.Event do
           processed_transaction_id: Ecto.UUID.t() | nil,
           errors: list(map()) | nil,
           inserted_at: DateTime.t(),
-          updated_at: DateTime.t()
+          updated_at: DateTime.t(),
+          # queue related fields
+          processor_id: String.t() | nil,
+          processor_version: integer(),
+          processing_started_at: DateTime.t(),
+          processing_completed_at: DateTime.t()
         }
 
   schema "events" do
@@ -47,13 +52,19 @@ defmodule DoubleEntryLedger.Event do
     field(:source_data, :map, default: %{})
     field(:source_idempk, :string)
     field(:update_idempk, :string)
-    field(:tries, :integer, default: 0)
+    field(:occ_retry_count, :integer, default: 0)
     field(:processed_at, :utc_datetime_usec)
     field(:errors, {:array, :map}, default: [])
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     belongs_to(:processed_transaction, Transaction, type: Ecto.UUID)
     embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData)
+
+    # queue related fields
+    field(:processor_id, :string)
+    field(:processor_version, :integer, default: 1)
+    field(:processing_started_at, :utc_datetime_usec)
+    field(:processing_completed_at, :utc_datetime_usec)
 
     timestamps(type: :utc_datetime_usec)
   end

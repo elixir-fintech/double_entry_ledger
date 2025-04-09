@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
       {:ok, transaction_map} ->
         case process_create_event_with_retry(event, transaction_map, max_retries(), repo) do
           {:ok, %{transaction: transaction, event: update_event}} ->
-            {:ok, {transaction, update_event}}
+            {:ok, transaction, update_event}
 
           {:error, step, error, _} ->
             handle_error(event, "#{step} step failed: #{inspect(error)}")

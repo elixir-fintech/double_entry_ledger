@@ -76,7 +76,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     test "update event for event_map, which should also create the event", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
 
-      {:ok, {pending_transaction, _}} =
+      {:ok, pending_transaction, _} =
         CreateEvent.process_create_event(pending_event)
 
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
@@ -152,7 +152,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
                  DoubleEntryLedger.MockRepo
                )
 
-      assert %Event{status: :occ_timeout, tries: 6} = Repo.get(Event, id)
+      assert %Event{status: :occ_timeout, occ_retry_count: 6} = Repo.get(Event, id)
     end
   end
 
@@ -182,7 +182,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
                  DoubleEntryLedger.MockRepo
                )
 
-      assert %Event{status: :occ_timeout, tries: 2} = Repo.get(Event, id)
+      assert %Event{status: :occ_timeout, occ_retry_count: 2} = Repo.get(Event, id)
     end
   end
 end

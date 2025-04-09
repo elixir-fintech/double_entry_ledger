@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
       assert {:ok, %Event{} = event} = EventStore.create(event_attrs(instance_id: instance.id))
       assert event.status == :pending
       assert event.processed_at == nil
-      assert event.tries == 0
+      assert event.occ_retry_count == 0
     end
   end
 
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
       assert updated_event.status == :processed
       assert updated_event.processed_at != nil
       assert updated_event.processed_transaction_id == transaction.id
-      assert updated_event.tries == 1
+      assert updated_event.occ_retry_count == 1
     end
   end
 
@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
       assert updated_event.status == :failed
       assert updated_event.processed_at == nil
-      assert updated_event.tries == 1
+      assert updated_event.occ_retry_count == 1
 
       assert [%{message: "some reason"} | _] = updated_event.errors
     end
@@ -68,7 +68,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
       assert updated_event.status == :pending
       assert updated_event.processed_at == nil
-      assert updated_event.tries == 1
+      assert updated_event.occ_retry_count == 1
       assert [%{message: "some reason"} | _] = updated_event.errors
     end
   end
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
       {:ok, updated_event} = EventStore.add_error(event1, "reason2")
       assert updated_event.status == :pending
       assert updated_event.processed_at == nil
-      assert updated_event.tries == 2
+      assert updated_event.occ_retry_count == 2
       assert [%{message: "reason2"}, %{message: "reason1"}] = updated_event.errors
     end
   end
@@ -98,7 +98,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
       assert updated_event.status == :occ_timeout
       assert updated_event.processed_at == nil
-      assert updated_event.tries == 1
+      assert updated_event.occ_retry_count == 1
       assert [%{message: "some reason"} | _] = updated_event.errors
     end
   end
@@ -122,7 +122,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "returns processed_transaction", %{instance: instance} = ctx do
       %{event: event} = create_event(ctx, :pending)
-      {:ok, {transaction, _}} = CreateEvent.process_create_event(event)
+      {:ok, transaction, _} = CreateEvent.process_create_event(event)
 
       assert %Event{} =
                found_event =
