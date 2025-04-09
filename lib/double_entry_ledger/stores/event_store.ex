@@ -15,29 +15,27 @@ defmodule DoubleEntryLedger.EventStore do
     Repo.get(Event, id)
   end
 
-  @spec claim_event_for_processing(Ecto.UUID.t()) :: {:ok, Event.t()} | {:error, Changeset.t() | atom()}
-  def claim_event_for_processing(id) do
+  @spec claim_event_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
+          {:ok, Event.t()} | {:error, atom()}
+  def claim_event_for_processing(id, processor_id \\ "manual", repo \\ Repo) do
     case get_by_id(id) do
       nil ->
         {:error, :event_not_found}
+
       event ->
         if event.status in [:pending, :occ_timeout] do
-          event
-          |> Changeset.change(%{
-            status: :processing,
-            processing_started_at: DateTime.utc_now(),
-            processing_completed_at: nil,
-            retry_count: event.retry_count + 1,
-            next_retry_at: nil
-            })
-          |> Changeset.optimistic_lock(:processor_version)
-          |> Repo.update()
+          try do
+            Event.processing_start_changeset(event, processor_id)
+            |> repo.update()
+          rescue
+            Ecto.StaleEntryError ->
+              {:error, :event_not_claimable}
+          end
         else
           {:error, :event_not_claimable}
         end
     end
   end
-
 
   @spec create(map()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) do

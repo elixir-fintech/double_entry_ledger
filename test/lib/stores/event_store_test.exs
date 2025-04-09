@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
   This module tests the EventStore module.
   """
   use ExUnit.Case, async: true
+  import Mox
   alias DoubleEntryLedger.CreateEvent
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
@@ -138,6 +139,50 @@ defmodule DoubleEntryLedger.EventStoreTest do
     test "returns nil for non-existent event", %{instance: instance} do
       assert nil ==
                EventStoreHelper.get_create_event_by_source("source", "source_idempk", instance.id)
+    end
+  end
+
+  describe "claim_event_for_processing/2" do
+    setup [:create_instance, :create_accounts]
+
+    test "returns error when event not found" do
+      assert {:error, :event_not_found} =
+               EventStore.claim_event_for_processing(Ecto.UUID.generate())
+    end
+
+    test "returns error when event not claimable", %{instance: instance} do
+      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+
+      EventStore.mark_as_failed(event, "some reason")
+
+      assert {:error, :event_not_claimable} =
+               EventStore.claim_event_for_processing(event.id)
+    end
+
+    test "claims an event for processing", %{instance: instance} do
+      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+
+      assert {:ok, %Event{} = claimed_event} =
+               EventStore.claim_event_for_processing(event.id)
+
+      assert claimed_event.status == :processing
+      assert claimed_event.processor_id == "manual"
+    end
+
+    test "returns an error when stale entry error occurs", %{instance: instance} do
+      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+
+      DoubleEntryLedger.MockRepo
+      |> expect(:update, fn _changeset ->
+        raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
+      end)
+
+      assert {:error, :event_not_claimable} =
+               EventStore.claim_event_for_processing(
+                 event.id,
+                 "manual",
+                 DoubleEntryLedger.MockRepo
+               )
     end
   end
 end

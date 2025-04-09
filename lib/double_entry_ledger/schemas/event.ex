@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Event do
   alias DoubleEntryLedger.{Transaction, Instance}
   alias DoubleEntryLedger.Event.TransactionData
 
-  @states [:pending, :processed, :failed, :occ_timeout]
+  @states [:pending, :processed, :failed, :occ_timeout, :processing]
   @actions [:create, :update]
   @type state ::
           unquote(
@@ -97,6 +97,19 @@ defmodule DoubleEntryLedger.Event do
     event
     |> base_changeset(attrs)
     |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
+  end
+
+  def processing_start_changeset(event, processor_id) do
+    event
+    |> change(%{
+      status: :processing,
+      processor_id: processor_id,
+      processing_started_at: DateTime.utc_now(),
+      processing_completed_at: nil,
+      retry_count: event.retry_count + 1,
+      next_retry_after: nil
+    })
+    |> optimistic_lock(:processor_version)
   end
 
   defp base_changeset(event, attrs) do
