@@ -45,7 +45,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     - `{:error, reason}` if processing fails.
   """
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_create_event(
         %Event{transaction_data: transaction_data, instance_id: id} = event,
         repo \\ Repo

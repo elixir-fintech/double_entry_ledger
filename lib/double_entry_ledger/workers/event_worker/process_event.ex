@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     - `{:error, reason}` on failure.
   """
   @spec process_event(Event.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_event(%Event{status: :pending, action: :create} = event) do
     process_create_event(event)
   end

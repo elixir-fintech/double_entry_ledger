@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
   """
   @spec process_update_event(Event.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_update_event(%{instance_id: id, transaction_data: td} = event) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
