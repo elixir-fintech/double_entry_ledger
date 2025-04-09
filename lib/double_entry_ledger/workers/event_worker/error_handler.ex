@@ -4,7 +4,11 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   """
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.EventStore
+
+  alias DoubleEntryLedger.{
+    Event,
+    EventStore
+  }
 
   alias DoubleEntryLedger.Event.{
     EntryData,
@@ -106,6 +110,7 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   @spec add_transaction_data_errors(Changeset.t(), Changeset.t()) :: Changeset.t()
   defp add_transaction_data_errors(changeset, trx_changeset) do
     errors = get_all_errors(trx_changeset)
+
     [:status]
     |> Enum.reduce(changeset, &add_errors_to_changeset(&2, &1, errors))
   end

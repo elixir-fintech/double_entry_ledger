@@ -3,8 +3,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   Provides helper functions for handling events with the `action: :create` attribute
   in the double-entry ledger system.
   """
-
-  alias Ecto.Multi
+  alias Ecto.{
+    Changeset,
+    Multi
+  }
 
   alias DoubleEntryLedger.{
     Event,
@@ -44,7 +46,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   """
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
-  def process_create_event(%Event{transaction_data: transaction_data, instance_id: id} = event, repo \\ Repo) do
+  def process_create_event(
+        %Event{transaction_data: transaction_data, instance_id: id} = event,
+        repo \\ Repo
+      ) do
     case transaction_data_to_transaction_map(transaction_data, id) do
       {:ok, transaction_map} ->
         case process_create_event_with_retry(event, transaction_map, max_retries(), repo) do

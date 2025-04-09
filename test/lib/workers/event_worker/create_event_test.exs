@@ -47,6 +47,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
 
       assert {:error, %Event{} = event} =
                CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+
       assert event.status == :failed
     end
   end

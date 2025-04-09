@@ -22,11 +22,13 @@ defmodule DoubleEntryLedger.EventStore do
   end
 
   @spec process_from_event_params(map()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Ecto.Changeset.t() | String.t()}
+          {:ok, Transaction.t(), Event.t()}
+          | {:error, Event.t() | Ecto.Changeset.t() | String.t()}
   def process_from_event_params(event_params) do
     case EventMap.create(event_params) do
       {:ok, event_map} ->
         EventWorker.process_new_event(event_map)
+
       {:error, event_map_changeset} ->
         {:error, event_map_changeset}
     end

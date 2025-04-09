@@ -4,6 +4,13 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
   alias DoubleEntryLedger.Event
   alias __MODULE__, as: AddUpdateEventError
 
+  @type t :: %__MODULE__{
+          message: String.t(),
+          create_event: Event.t() | nil,
+          update_event: Event.t(),
+          reason: atom()
+        }
+
   @impl true
   def exception(opts) do
     update_event = Keyword.get(opts, :update_event)

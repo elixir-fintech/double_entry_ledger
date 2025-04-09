@@ -3,8 +3,8 @@ defmodule DoubleEntryLedger.BalanceHistoryEntry do
   Provides the schema for the balance history entry.
   This schema is used to store the balance history of an account.
   """
-  require Logger
   use DoubleEntryLedger.BaseSchema
+  alias Ecto.Changeset
   alias DoubleEntryLedger.{Account, Entry, Balance}
   alias __MODULE__, as: BalanceHistoryEntry
 

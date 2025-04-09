@@ -6,6 +6,8 @@ defmodule DoubleEntryLedger.TransactionStore do
   import Ecto.Query
 
   alias DoubleEntryLedger.{
+    Account,
+    Entry,
     Repo,
     Transaction,
     Types,
