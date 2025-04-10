@@ -3,6 +3,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   Provides helper functions for handling events with the `action: :create` attribute
   in the double-entry ledger system.
   """
+
+  use DoubleEntryLedger.OccProcessor
+
   alias Ecto.{
     Changeset,
     Multi
@@ -92,38 +95,23 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     - `{:ok, {transaction, event}}` if the transaction is successfully created.
     - `{:error, reason}` if the operation fails after all retries.
   """
-  @spec process_create_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()) ::
-          {:ok, %{transaction: Transaction.t(), event: Event.t()}}
-          | {:error, String.t()}
-          | Multi.failure()
-  def process_create_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
-
-  def process_create_event_with_retry(event, transaction_map, attempts, repo) when attempts > 0 do
-    case build_create_transaction_and_update_event(event, transaction_map, repo)
-         |> repo.transaction() do
-      {:error, :transaction, %Ecto.StaleEntryError{}, %{}} ->
-        {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
-        set_delay_timer(attempts)
-        process_create_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
-
-      result ->
-        result
-    end
+  def process_create_event_with_retry(event, transaction_map, attempts, repo \\ Repo) do
+    process_with_retry(event, transaction_map, attempts, repo)
   end
 
-  def process_create_event_with_retry(event, _transaction_map, 0, _repo) do
-    EventStore.mark_as_occ_timeout(event, occ_final_error_message())
-    {:error, occ_final_error_message()}
-  end
-
-  @spec build_create_transaction_and_update_event(Event.t(), map(), Ecto.Repo.t()) ::
-          Ecto.Multi.t()
-  defp build_create_transaction_and_update_event(event, transaction_map, repo) do
+  @impl true
+  def build_transaction(event, transaction_map, repo) do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
     |> Multi.update(:event, fn %{transaction: td} ->
       EventStoreHelper.build_mark_as_processed(event, td.id)
     end)
+  end
+
+  @impl true
+  def final_retry(event) do
+    EventStore.mark_as_occ_timeout(event, occ_final_error_message())
+    {:error, occ_final_error_message()}
   end
 
   @spec handle_error(Event.t(), String.t()) ::
