@@ -20,8 +20,6 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     Repo
   }
 
-  import DoubleEntryLedger.OccRetry
-
   import DoubleEntryLedger.EventWorker.EventTransformer,
     only: [transaction_data_to_transaction_map: 2]
 
@@ -95,7 +93,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     - `{:ok, {transaction, event}}` if the transaction is successfully created.
     - `{:error, reason}` if the operation fails after all retries.
   """
-  def process_create_event_with_retry(event, transaction_map, attempts, repo \\ Repo) do
+  def process_create_event_with_retry(event, transaction_map, attempts, repo) do
     process_with_retry(event, transaction_map, attempts, repo)
   end
 

@@ -68,7 +68,7 @@ defmodule DoubleEntryLedger.OccProcessor do
   defmacro __using__(_opts) do
    quote do
       @behaviour DoubleEntryLedger.OccProcessor
-      import DoubleEntryLedger.OccProcessor
+      import DoubleEntryLedger.OccRetry
 
       @max_retries max_retries()
       @retry_interval retry_interval()

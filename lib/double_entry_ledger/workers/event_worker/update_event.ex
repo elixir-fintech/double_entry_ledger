@@ -11,8 +11,11 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     * `process_update_event_with_retry/5` - Processes the update event with retry logic in case of concurrency conflicts.
 
   """
+
+  use DoubleEntryLedger.OccProcessor
+
   alias Ecto.Changeset
-  alias Ecto.{Multi, StaleEntryError}
+  alias Ecto.Multi
 
   alias DoubleEntryLedger.{
     Event,
@@ -24,8 +27,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   }
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
-
-  import DoubleEntryLedger.OccRetry
 
   import DoubleEntryLedger.EventWorker.EventTransformer,
     only: [transaction_data_to_transaction_map: 2]
@@ -43,12 +44,12 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     - `{:error, reason}` on failure.
 
   """
-  @spec process_update_event(Event.t()) ::
+  @spec process_update_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_update_event(%{instance_id: id, transaction_data: td} = event) do
+  def process_update_event(%{instance_id: id, transaction_data: td} = event, repo \\ Repo) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
-        case process_update_event_with_retry(event, transaction_map, max_retries()) do
+        case process_update_event_with_retry(event, transaction_map, max_retries(), repo) do
           {:ok, %{transaction: transaction, event: update_event}} ->
             {:ok, transaction, update_event}
 
@@ -71,41 +72,24 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     end
   end
 
-  @spec process_update_event_with_retry(Event.t(), map(), integer(), Ecto.Repo.t()) ::
-          {:ok, %{transaction: Transaction.t(), event: Event.t()}}
-          | {:error, String.t()}
-          | Multi.failure()
-  def process_update_event_with_retry(event, transaction_map, attempts, repo \\ Repo)
-
-  def process_update_event_with_retry(event, transaction_map, attempts, repo)
-      when attempts > 0 do
-    case build_update_transaction_and_event(event, transaction_map, repo)
-         |> repo.transaction() do
-      {:error, :transaction, %StaleEntryError{}, _} ->
-        {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
-        set_delay_timer(attempts)
-
-        process_update_event_with_retry(updated_event, transaction_map, attempts - 1, repo)
-
-      result ->
-        result
-    end
+  def process_update_event_with_retry(event, transaction_map, attempts, repo) do
+    process_with_retry(event, transaction_map, attempts, repo)
   end
 
-  def process_update_event_with_retry(event, _transaction_map, 0, _repo) do
-    EventStore.mark_as_occ_timeout(event, occ_final_error_message())
-    {:error, occ_final_error_message()}
-  end
-
-  @spec build_update_transaction_and_event(Event.t(), map(), Ecto.Repo.t()) ::
-          Multi.t()
-  defp build_update_transaction_and_event(event, attr, repo) do
+  @impl true
+  def build_transaction(event, attr, repo) do
     Multi.new()
     |> EventStoreHelper.build_get_create_event_transaction(:get_create_event_transaction, event)
     |> TransactionStore.build_update(:transaction, :get_create_event_transaction, attr, repo)
     |> Multi.update(:event, fn %{transaction: td} ->
       EventStoreHelper.build_mark_as_processed(event, td.id)
     end)
+  end
+
+  @impl true
+  def final_retry(event) do
+    EventStore.mark_as_occ_timeout(event, occ_final_error_message())
+    {:error, occ_final_error_message()}
   end
 
   @spec add_error(Event.t(), String.t()) ::
