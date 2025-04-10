@@ -64,7 +64,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
         case process_with_retry(
                EventMap.to_map(event_map),
                transaction_map,
-               max_retries(),
                repo
              ) do
           {:ok, %{transaction: transaction, event: event}} ->

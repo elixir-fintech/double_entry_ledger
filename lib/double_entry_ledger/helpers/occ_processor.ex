@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.OccProcessor do
 
   This callback has a default implementation through the __using__ macro.
   """
-  @callback process_with_retry(Event.t(), map(), integer(), Repo.t()) ::
+  @callback process_with_retry(Event.t(), map(), Repo.t()) ::
     {:ok, %{transaction: Transaction.t(), event: Event.t()}} |
     {:error, any()} |
     Multi.failure()
@@ -96,9 +96,9 @@ defmodule DoubleEntryLedger.OccProcessor do
       @retry_interval retry_interval()
 
       @impl true
-      def process_with_retry(event, transaction_map, attempts, repo \\ DoubleEntryLedger.Repo) do
+      def process_with_retry(event, transaction_map, repo \\ DoubleEntryLedger.Repo) do
         error_map = OccProcessor.create_error_map()
-        OccProcessor.retry(__MODULE__, event, transaction_map, error_map, attempts, repo)
+        OccProcessor.retry(__MODULE__, event, transaction_map, error_map, max_retries(), repo)
       end
 
       @impl true
@@ -117,7 +117,7 @@ defmodule DoubleEntryLedger.OccProcessor do
         raise "final retry/1 not implemented"
       end
 
-      defoverridable [process_with_retry: 4, stale_error_handler: 3, build_transaction: 3, finally: 2]
+      defoverridable [stale_error_handler: 3, build_transaction: 3, finally: 2]
     end
   end
 end

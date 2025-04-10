@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   def process_update_event(%{instance_id: id, transaction_data: td} = event, repo \\ Repo) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
-        case process_with_retry(event, transaction_map, max_retries(), repo) do
+        case process_with_retry(event, transaction_map, repo) do
           {:ok, %{transaction: transaction, event: update_event}} ->
             {:ok, transaction, update_event}
 
