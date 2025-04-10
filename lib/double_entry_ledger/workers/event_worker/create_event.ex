@@ -73,6 +73,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   end
 
   @impl true
+  def stale_error_handler(event, attempts, _error_map) do
+    {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
+    updated_event
+  end
+
+  @impl true
   def build_transaction(event, transaction_map, repo) do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
@@ -82,7 +88,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   end
 
   @impl true
-  def final_retry(event) do
+  def finally(event, _) do
     {:ok, updated_event} = EventStore.mark_as_occ_timeout(event, occ_final_error_message())
     {:error, :transaction, :occ_final_timeout, updated_event}
   end
