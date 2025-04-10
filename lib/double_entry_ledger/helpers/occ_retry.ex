@@ -58,6 +58,18 @@ defmodule DoubleEntryLedger.OccRetry do
   def max_retries(), do: @max_retries
 
   @doc """
+  Returns the retry interval in milliseconds.
+  Can be configured via the `:retry_interval` application environment.
+
+  ## Examples
+
+      iex> DoubleEntryLedger.OccRetry.retry_interval()
+      10
+  """
+  @spec retry_interval() :: integer()
+  def retry_interval(), do: @retry_interval
+
+  @doc """
   Generates an error message for an OCC conflict with retries remaining.
 
   ## Parameters

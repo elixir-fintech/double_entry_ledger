@@ -4,11 +4,14 @@ defmodule DoubleEntryLedger.EventStore do
   """
   import Ecto.Query
   import DoubleEntryLedger.EventStoreHelper
+  import DoubleEntryLedger.OccRetry, only: [retry_interval: 0]
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.{Repo, Event, Transaction}
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker
+
+  @retry_interval retry_interval()
 
   @spec get_by_id(Ecto.UUID.t()) :: Event.t() | nil
   def get_by_id(id) do
@@ -98,11 +101,17 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.update()
   end
 
-  @spec mark_as_occ_timeout(Event.t(), String.t()) :: {:ok, Event.t()} | {:error, Changeset.t()}
-  def mark_as_occ_timeout(event, reason) do
+  @spec mark_as_occ_timeout(Event.t(), String.t(), non_neg_integer()) :: {:ok, Event.t()} | {:error, Changeset.t()}
+  def mark_as_occ_timeout(event, reason, time_interval \\ @retry_interval) do
+    now = DateTime.utc_now()
+    next_retry_after = DateTime.add(now, time_interval, :millisecond)
     event
     |> build_add_error(reason)
-    |> Changeset.change(status: :occ_timeout)
+    |> Changeset.change(
+      status: :occ_timeout,
+      processing_completed_at: now,
+      next_retry_after: next_retry_after
+      )
     |> Repo.update()
   end
 
