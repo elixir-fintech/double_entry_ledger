@@ -11,11 +11,8 @@ defmodule DoubleEntryLedger.UpdateEventTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventStore
+  alias DoubleEntryLedger.{Event, EventStore}
   alias DoubleEntryLedger.EventWorker.{UpdateEvent, CreateEvent}
-
-  import DoubleEntryLedger.EventWorker.EventTransformer,
-    only: [transaction_data_to_transaction_map: 2]
 
   doctest UpdateEvent
 
@@ -161,10 +158,6 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert error.message ==
                "Create event (id: #{pending_event.id}) has failed for Update Event (id: #{event.id})"
     end
-  end
-
-  describe "process_update_event_with_retry/4" do
-    setup [:create_instance, :create_accounts, :verify_on_exit!]
 
     test "update event with last retry that fails", %{instance: inst} = ctx do
       %{event: pending_event} = create_event(ctx, :pending)
@@ -172,28 +165,23 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       {:ok, _pending_transaction, %{source: s, source_idempk: s_id}} =
         CreateEvent.process_create_event(pending_event)
 
-      {:ok, %{transaction_data: transaction_data} = event} =
-        create_update_event(s, s_id, inst.id, :posted)
+      {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      {:ok, transaction_map} = transaction_data_to_transaction_map(transaction_data, inst.id)
 
       DoubleEntryLedger.MockRepo
-      |> expect(:update, fn _changeset ->
+      |> expect(:update, 5, fn _changeset ->
         # simulate a conflict when adding the transaction
         raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
       end)
-      |> expect(:transaction, fn multi ->
+      |> expect(:transaction, 5, fn multi ->
         # the transaction has to be handled by the Repo
         Repo.transaction(multi)
       end)
 
-      assert {:error, "OCC conflict: Max number of 5 retries reached"} =
-               UpdateEvent.process_update_event_with_retry(
-                 event,
-                 transaction_map,
-                 1,
-                 DoubleEntryLedger.MockRepo
-               )
+      {:error, updated_event} = UpdateEvent.process_update_event(event, DoubleEntryLedger.MockRepo)
+      assert updated_event.status == :occ_timeout
+      assert updated_event.occ_retry_count == 6
+      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] = updated_event.errors
     end
 
     test "when transaction can't be created for other reasons", %{instance: inst} = ctx do
@@ -202,10 +190,8 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       {:ok, _pending_transaction, %{source: s, source_idempk: s_id}} =
         CreateEvent.process_create_event(pending_event)
 
-      {:ok, %{transaction_data: transaction_data} = event} =
+      {:ok, event} =
         create_update_event(s, s_id, inst.id, :posted)
-
-      {:ok, transaction_map} = transaction_data_to_transaction_map(transaction_data, inst.id)
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, fn changeset ->
@@ -217,13 +203,13 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         Repo.transaction(multi)
       end)
 
-      assert {:error, :transaction, %Ecto.Changeset{}, %{}} =
-               UpdateEvent.process_update_event_with_retry(
+      assert {:error, %Event{} = event} =
+               UpdateEvent.process_update_event(
                  event,
-                 transaction_map,
-                 1,
                  DoubleEntryLedger.MockRepo
                )
+
+      assert event.status == :failed
     end
   end
 

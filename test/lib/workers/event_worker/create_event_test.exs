@@ -11,9 +11,6 @@ defmodule DoubleEntryLedger.CreateEventTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  import DoubleEntryLedger.EventWorker.EventTransformer,
-    only: [transaction_data_to_transaction_map: 2]
-
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventWorker.CreateEvent
 
@@ -50,55 +47,24 @@ defmodule DoubleEntryLedger.CreateEventTest do
 
       assert event.status == :failed
     end
-  end
 
-  describe "process_create_event_with_retry/4" do
-    setup [:create_instance, :create_accounts, :verify_on_exit!]
-
-    test "create event with last retry that fails", ctx do
-      %{event: %{transaction_data: transaction_data, instance_id: id} = event} = create_event(ctx)
-      {:ok, transaction_map} = transaction_data_to_transaction_map(transaction_data, id)
+    test "process event with occ timeout", ctx do
+      %{event: event} = create_event(ctx)
 
       DoubleEntryLedger.MockRepo
-      |> expect(:insert, fn _changeset ->
+      |> expect(:insert, 5, fn _changeset ->
         # simulate a conflict when adding the transaction
         raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
       end)
-      |> expect(:transaction, fn multi ->
+      |> expect(:transaction, 5, fn multi ->
         # the transaction has to be handled by the Repo
         Repo.transaction(multi)
       end)
 
-      assert {:error, "OCC conflict: Max number of 5 retries reached"} =
-               CreateEvent.process_create_event_with_retry(
-                 event,
-                 transaction_map,
-                 1,
-                 DoubleEntryLedger.MockRepo
-               )
-    end
-
-    test "when transaction can't be created for other reasons", ctx do
-      %{event: %{transaction_data: transaction_data, instance_id: id} = event} = create_event(ctx)
-      {:ok, transaction_map} = transaction_data_to_transaction_map(transaction_data, id)
-
-      DoubleEntryLedger.MockRepo
-      |> expect(:insert, fn changeset ->
-        # simulate a conflict when adding the transaction
-        {:error, changeset}
-      end)
-      |> expect(:transaction, fn multi ->
-        # the transaction has to be handled by the Repo
-        Repo.transaction(multi)
-      end)
-
-      assert {:error, :transaction, %Ecto.Changeset{}, %{}} =
-               CreateEvent.process_create_event_with_retry(
-                 event,
-                 transaction_map,
-                 1,
-                 DoubleEntryLedger.MockRepo
-               )
+      {:error, updated_event} = CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+      assert updated_event.status == :occ_timeout
+      assert updated_event.occ_retry_count == 6
+      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] = updated_event.errors
     end
   end
 end

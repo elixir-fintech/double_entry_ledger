@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   def process_update_event(%{instance_id: id, transaction_data: td} = event, repo \\ Repo) do
     case transaction_data_to_transaction_map(td, id) do
       {:ok, transaction_map} ->
-        case process_update_event_with_retry(event, transaction_map, max_retries(), repo) do
+        case process_with_retry(event, transaction_map, max_retries(), repo) do
           {:ok, %{transaction: transaction, event: update_event}} ->
             {:ok, transaction, update_event}
 
@@ -59,6 +59,9 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
           {:error, _step, %AddUpdateEventError{} = error, _} ->
             handle_error(event, error.message)
+
+          {:error, :transaction, :occ_final_timeout, event} ->
+            {:error, event}
 
           {:error, step, error, _} ->
             handle_error(event, "#{step} step failed: #{inspect(error)}")
@@ -70,10 +73,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
       {:error, error} ->
         handle_error(event, inspect(error))
     end
-  end
-
-  def process_update_event_with_retry(event, transaction_map, attempts, repo) do
-    process_with_retry(event, transaction_map, attempts, repo)
   end
 
   @impl true
@@ -88,8 +87,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
   @impl true
   def final_retry(event) do
-    EventStore.mark_as_occ_timeout(event, occ_final_error_message())
-    {:error, occ_final_error_message()}
+    {:ok, updated_event} = EventStore.mark_as_occ_timeout(event, occ_final_error_message())
+    {:error, :transaction, :occ_final_timeout, updated_event}
   end
 
   @spec add_error(Event.t(), String.t()) ::

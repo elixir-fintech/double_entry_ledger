@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.OccProcessor do
     {:error, any()} |
     Multi.failure()
 
-  @callback final_retry(Event.t()) :: {:error, String.t()}
+  @callback final_retry(Event.t()) :: {:error, String.t()} | {:error, atom(), atom(), Event.t()}
 
 
   # --- Retry Logic ---
