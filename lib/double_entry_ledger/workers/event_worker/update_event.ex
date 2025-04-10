@@ -28,9 +28,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
-  import DoubleEntryLedger.EventWorker.EventTransformer,
-    only: [transaction_data_to_transaction_map: 2]
-
   @doc """
   Processes an update event by fetching the corresponding transaction and applying updates.
 
@@ -46,29 +43,26 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   """
   @spec process_update_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_update_event(%{instance_id: id, transaction_data: td} = event, repo \\ Repo) do
-    case transaction_data_to_transaction_map(td, id) do
-      {:ok, transaction_map} ->
-        case process_with_retry(event, transaction_map, repo) do
-          {:ok, %{transaction: transaction, event: update_event}} ->
-            {:ok, transaction, update_event}
+  def process_update_event(event, repo \\ Repo) do
+    case process_with_retry(event, repo) do
+      {:ok, %{transaction: transaction, event: update_event}} ->
+        {:ok, transaction, update_event}
 
-          {:error, _step, %AddUpdateEventError{reason: :create_event_pending, message: message},
-           _} ->
-            add_error(event, message)
+      {:error, :transaction_map, error, event} ->
+        handle_error(event, error)
 
-          {:error, _step, %AddUpdateEventError{} = error, _} ->
-            handle_error(event, error.message)
+      {:error, _step, %AddUpdateEventError{reason: :create_event_pending, message: message},
+        _} ->
+        add_error(event, message)
 
-          {:error, :transaction, :occ_final_timeout, event} ->
-            {:error, event}
+      {:error, _step, %AddUpdateEventError{} = error, _} ->
+        handle_error(event, error.message)
 
-          {:error, step, error, _} ->
-            handle_error(event, "#{step} step failed: #{inspect(error)}")
+      {:error, :transaction, :occ_final_timeout, event} ->
+        {:error, event}
 
-          {:error, error} ->
-            handle_error(event, inspect(error))
-        end
+      {:error, step, error, _} ->
+        handle_error(event, "#{step} step failed: #{inspect(error)}")
 
       {:error, error} ->
         handle_error(event, inspect(error))

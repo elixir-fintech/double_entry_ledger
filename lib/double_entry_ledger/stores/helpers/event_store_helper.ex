@@ -2,12 +2,19 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   @moduledoc """
   This module provides helper functions for working with events in the Double Entry Ledger system.
   """
+  alias DoubleEntryLedger.Event.EventMap
   alias Ecto.Changeset
   alias Ecto.{Changeset, Multi}
+  alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.{Repo, Event, Transaction}
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
-  @spec build_create(map()) :: Changeset.t()
+  @spec build_create(EventMap.t() | map()) :: Changeset.t()
+  def build_create(%EventMap{} = event_map) do
+    %Event{}
+    |> Event.changeset(EventMap.to_map(event_map))
+  end
+
   def build_create(attrs) do
     %Event{}
     |> Event.changeset(attrs)

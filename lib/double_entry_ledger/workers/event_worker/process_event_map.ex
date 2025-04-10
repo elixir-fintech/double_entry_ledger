@@ -15,31 +15,11 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
   alias DoubleEntryLedger.Event.EventMap
 
-  alias DoubleEntryLedger.EventWorker.{
-    EventTransformer,
-    AddUpdateEventError,
-  }
+  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
   alias Ecto.{Multi, Changeset}
   import OccRetry
-  import EventTransformer, only: [transaction_data_to_transaction_map: 2]
   import DoubleEntryLedger.EventWorker.ErrorHandler
-
-  @doc """
-  Processes an event map using the default repository.
-
-  ## Parameters
-    - `event_map`: A map representing the event data.
-
-  ## Returns
-    - `{:ok, transaction, event}` on success.
-    - `{:error, reason}` on failure.
-  """
-  @spec process_map(EventMap.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_map(event_map) do
-    process_map(event_map, Repo)
-  end
 
   @doc """
   Processes an event map by creating an event record and handling the associated transaction using the specified repository.
@@ -54,39 +34,31 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   """
   @spec process_map(EventMap.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_map(
-        %EventMap{transaction_data: transaction_data, instance_id: id} = event_map,
-        repo
-      ) do
-    case transaction_data_to_transaction_map(transaction_data, id) do
-      {:ok, transaction_map} ->
+  def process_map(event_map, repo \\ Repo) do
+    case process_with_retry(event_map, repo) do
+      {:ok, %{transaction: transaction, event: event}} ->
+        {:ok, transaction, event}
 
-        case process_with_retry(
-               EventMap.to_map(event_map),
-               transaction_map,
-               repo
-             ) do
-          {:ok, %{transaction: transaction, event: event}} ->
-            {:ok, transaction, event}
+      {:error, :transaction_map, error, _event} ->
+        {:error, "#{inspect(error)}"}
 
-          {:error, :transaction, :occ_final_timeout, event} ->
-            {:error, event}
+      {:error, :transaction, :occ_final_timeout, event} ->
+        {:error, event}
 
-          {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, steps_so_far} ->
-            {:error, handle_add_update_event_error(error, steps_so_far, event_map)}
+      {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, steps_so_far} ->
+        {:error, handle_add_update_event_error(error, steps_so_far, event_map)}
 
-          {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
-            {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
+      {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
+        {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
 
-          {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
-            {:error, transfer_errors_from_trx_to_event_map(event_map, trx_changeset)}
+      {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
+        {:error, transfer_errors_from_trx_to_event_map(event_map, trx_changeset)}
 
-          {:error, step, error, _steps_so_far} ->
-            {:error, "#{step} failed: #{inspect(error)}"}
+      {:error, step, error, _steps_so_far} ->
+        {:error, "#{step} failed: #{inspect(error)}"}
 
-          {:error, error} ->
-            {:error, "#{inspect(error)}"}
-        end
+      {:error, error} ->
+        {:error, "#{inspect(error)}"}
     end
   end
 

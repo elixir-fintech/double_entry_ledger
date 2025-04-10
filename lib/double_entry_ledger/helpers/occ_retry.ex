@@ -98,4 +98,14 @@ defmodule DoubleEntryLedger.OccRetry do
   def occ_final_error_message() do
     "OCC conflict: Max number of #{@max_retries} retries reached"
   end
+
+  @spec build_occ_errors(String.t(), list()) :: list()
+  def build_occ_errors(message, errors) do
+    [%{
+        message: message,
+        inserted_at: DateTime.utc_now(:microsecond)
+      }
+      | errors
+    ]
+  end
 end

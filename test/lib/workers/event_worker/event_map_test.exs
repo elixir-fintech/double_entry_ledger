@@ -14,9 +14,6 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  import DoubleEntryLedger.EventWorker.EventTransformer,
-    only: [transaction_data_to_transaction_map: 2]
-
   alias DoubleEntryLedger.EventWorker.ProcessEventMap
   alias DoubleEntryLedger.EventWorker.CreateEvent
   alias DoubleEntryLedger.Event

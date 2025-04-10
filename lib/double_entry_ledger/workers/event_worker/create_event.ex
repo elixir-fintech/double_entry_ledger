@@ -20,9 +20,6 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     Repo
   }
 
-  import DoubleEntryLedger.EventWorker.EventTransformer,
-    only: [transaction_data_to_transaction_map: 2]
-
   @doc """
   Processes the event by transforming transaction data and creating a transaction.
 
@@ -47,28 +44,21 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   """
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_create_event(
-        %Event{transaction_data: transaction_data, instance_id: id} = event,
-        repo \\ Repo
-      ) do
-    case transaction_data_to_transaction_map(transaction_data, id) do
-      {:ok, transaction_map} ->
-        case process_with_retry(event, transaction_map, repo) do
-          {:ok, %{transaction: transaction, event: update_event}} ->
-            {:ok, transaction, update_event}
+  def process_create_event(event, repo \\ Repo) do
+    case process_with_retry(event, repo) do
+      {:ok, %{transaction: transaction, event: update_event}} ->
+        {:ok, transaction, update_event}
 
-          {:error, :transaction, :occ_final_timeout, event} ->
-            {:error, event}
+      {:error, :transaction, :occ_final_timeout, event} ->
+        {:error, event}
+      {:error, :transaction_map, error, event} ->
+        handle_error(event, "Failed to transform transaction data: #{inspect(error)}")
 
-          {:error, step, error, _} ->
-            handle_error(event, "#{step} step failed: #{inspect(error)}")
-
-          {:error, error} ->
-            handle_error(event, "#{inspect(error)}")
-        end
+      {:error, step, error, _} ->
+        handle_error(event, "#{step} step failed: #{inspect(error)}")
 
       {:error, error} ->
-        handle_error(event, "Failed to transform transaction data: #{inspect(error)}")
+        handle_error(event, "#{inspect(error)}")
     end
   end
 

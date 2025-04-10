@@ -5,11 +5,9 @@ defmodule DoubleEntryLedger.OccProcessor do
   with retry logic.
   """
 
-  alias DoubleEntryLedger.OccProcessor
   alias Ecto.{Multi, Repo}
   alias DoubleEntryLedger.{Event, Transaction}
-  import DoubleEntryLedger.EventWorker.ErrorHandler
-  import DoubleEntryLedger.OccRetry
+  alias DoubleEntryLedger.Event.EventMap
 
   @doc """
   Builds a transaction for the given event and data.
@@ -23,82 +21,40 @@ defmodule DoubleEntryLedger.OccProcessor do
 
   This callback has a default implementation through the __using__ macro.
   """
-  @callback process_with_retry(Event.t(), map(), Repo.t()) ::
+  @callback process_with_retry(Event.t() | EventMap.t(), Repo.t()) ::
     {:ok, %{transaction: Transaction.t(), event: Event.t()}} |
     {:error, any()} |
     Multi.failure()
 
-  @callback stale_error_handler(Event.t() | map(), non_neg_integer(), map()) :: Even.t() | map()
+  @callback stale_error_handler(Event.t() | map(), non_neg_integer(), map()) :: Event.t() | map()
 
   @callback finally(Event.t(), map()) :: {:error, String.t()} | {:error, atom(), atom(), Event.t()}
 
 
-  # --- Retry Logic ---
-
-  @doc """
-  Process with retry for modules implementing OccProcessor behavior.
-
-  This function handles retrying a transaction when StaleEntryError occurs,
-  with exponential backoff and error tracking.
-
-  ## Parameters
-    - `module`: The module implementing the OccProcessor behavior
-    - `event`: The event being processed
-    - `transaction_map`: Transaction data
-    - `attempts`: Number of remaining retry attempts
-    - `repo`: Ecto repository
-  """
-  def retry(module, event, transaction_map, error_map, attempts, repo)
-
-  def retry(module, event, transaction_map, error_map, attempts, repo) when attempts > 0 do
-    case module.build_transaction(event, transaction_map, repo)
-         |> repo.transaction() do
-      {:error, :transaction, %Ecto.StaleEntryError{}, steps_so_far} ->
-        new_error_map = update_error_map(error_map, attempts, steps_so_far)
-        updated_event = module.stale_error_handler(event, attempts, new_error_map)
-        set_delay_timer(attempts)
-        retry(module, updated_event, transaction_map, new_error_map, attempts - 1, repo)
-
-      result ->
-        result
-    end
-  end
-
-  def retry(module, event, _transaction_map, error_map, 0, _repo) do
-    module.finally(event, error_map)
-  end
-
-  def create_error_map do
-    %{
-      errors: [],
-      steps_so_far: %{},
-      retries: 0,
-      attempts: max_retries()
-    }
-  end
-
-  defp update_error_map(error_map, attempts, steps_so_far) do
-    %{
-      errors: build_errors(occ_error_message(attempts), error_map.errors),
-      steps_so_far: steps_so_far,
-      retries: error_map.retries + 1,
-    }
-  end
 
    # --- Use Macro for Default Implementations ---
 
   defmacro __using__(_opts) do
    quote do
       @behaviour DoubleEntryLedger.OccProcessor
+      alias DoubleEntryLedger.Repo
       import DoubleEntryLedger.OccRetry
+      import DoubleEntryLedger.EventWorker.EventTransformer,
+        only: [transaction_data_to_transaction_map: 2]
 
       @max_retries max_retries()
       @retry_interval retry_interval()
 
       @impl true
-      def process_with_retry(event, transaction_map, repo \\ DoubleEntryLedger.Repo) do
-        error_map = OccProcessor.create_error_map()
-        OccProcessor.retry(__MODULE__, event, transaction_map, error_map, max_retries(), repo)
+      def process_with_retry(%{instance_id: id, transaction_data: td} = event, repo \\ Repo) do
+        error_map = create_error_map(event)
+        case transaction_data_to_transaction_map(td, id) do
+          {:ok, transaction_map} ->
+            retry(__MODULE__, event, transaction_map, error_map, max_retries(), repo)
+
+          {:error, error} ->
+            {:error, :transaction_map, error, event}
+        end
       end
 
       @impl true
@@ -115,6 +71,57 @@ defmodule DoubleEntryLedger.OccProcessor do
       @impl true
       def finally(_event, _error_map) do
         raise "final retry/1 not implemented"
+      end
+
+      # --- Retry Logic ---
+
+      @doc """
+      Process with retry for modules implementing OccProcessor behavior.
+
+      This function handles retrying a transaction when StaleEntryError occurs,
+      with exponential backoff and error tracking.
+
+      ## Parameters
+        - `module`: The module implementing the OccProcessor behavior
+        - `event`: The event being processed
+        - `transaction_map`: Transaction data
+        - `attempts`: Number of remaining retry attempts
+        - `repo`: Ecto repository
+      """
+      def retry(module, event, transaction_map, error_map, attempts, repo)
+
+      def retry(module, event, transaction_map, error_map, attempts, repo) when attempts > 0 do
+        case module.build_transaction(event, transaction_map, repo)
+            |> repo.transaction() do
+          {:error, :transaction, %Ecto.StaleEntryError{}, steps_so_far} ->
+            new_error_map = update_error_map(error_map, attempts, steps_so_far)
+            updated_event = module.stale_error_handler(event, attempts, new_error_map)
+            set_delay_timer(attempts)
+            retry(module, updated_event, transaction_map, new_error_map, attempts - 1, repo)
+
+          result ->
+            result
+        end
+      end
+
+      def retry(module, event, _transaction_map, error_map, 0, _repo) do
+        module.finally(event, error_map)
+      end
+
+      defp update_error_map(error_map, attempts, steps_so_far) do
+        %{
+          errors: build_occ_errors(occ_error_message(attempts), error_map.errors),
+          steps_so_far: steps_so_far,
+          retries: error_map.retries + 1,
+        }
+      end
+
+      defp create_error_map(event) do
+        %{
+          errors: Map.get(event, :errors, []),
+          steps_so_far: %{},
+          retries: 0
+        }
       end
 
       defoverridable [stale_error_handler: 3, build_transaction: 3, finally: 2]

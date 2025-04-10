@@ -11,6 +11,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     Transaction,
     UpdateEvent
   }
+  alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.{
     ProcessEventMap,
@@ -62,7 +63,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     - `{:ok, transaction, event}` on success.
     - `{:error, reason}` on failure.
   """
-  @spec process_event_map(Event.EventMap.t()) ::
+  @spec process_event_map(EventMap.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_event_map(%{action: action} = event_map) when action in @actions do
     process_map(event_map)
