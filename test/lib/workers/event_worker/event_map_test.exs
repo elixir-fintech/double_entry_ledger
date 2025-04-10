@@ -152,37 +152,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
                  DoubleEntryLedger.MockRepo
                )
 
-      assert %Event{status: :occ_timeout, occ_retry_count: 6} = Repo.get(Event, id)
-    end
-  end
-
-  describe "process_map_with_retry/2" do
-    setup [:create_instance, :create_accounts, :verify_on_exit!]
-
-    test "with last retry that fails", ctx do
-      %{transaction_data: td, instance_id: id} = event_map = event_map(ctx)
-      {:ok, transaction_map} = transaction_data_to_transaction_map(td, id)
-
-      DoubleEntryLedger.MockRepo
-      |> expect(:insert, fn changeset ->
-        # simulate a conflict when adding the transaction
-        raise Ecto.StaleEntryError, action: :update, changeset: changeset
-      end)
-      |> expect(:transaction, fn multi ->
-        # the transaction has to be handled by the Repo
-        Repo.transaction(multi)
-      end)
-
-      assert {:error, :transaction, :occ_final_timeout, %Event{id: id}} =
-               ProcessEventMap.process_map_with_retry(
-                 event_map,
-                 transaction_map,
-                 %{errors: [], steps_so_far: %{}, retries: 1},
-                 1,
-                 DoubleEntryLedger.MockRepo
-               )
-
-      assert %Event{status: :occ_timeout, occ_retry_count: 2} = Repo.get(Event, id)
+      assert %Event{status: :occ_timeout, occ_retry_count: 5} = updated_event = Repo.get(Event, id)
+      assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] = updated_event.errors
     end
   end
 end
