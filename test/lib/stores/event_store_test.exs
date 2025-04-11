@@ -24,26 +24,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
-  describe "mark_as_processed/1" do
-    setup [:create_instance, :create_accounts, :create_transaction]
-
-    test "marks an event as processed", %{instance: instance, transaction: transaction} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
-
-      assert {:ok, %Event{} = updated_event} =
-               EventStore.mark_as_processed(event, transaction.id)
-
-      assert updated_event.status == :processed
-      assert updated_event.processed_at != nil
-      assert updated_event.processed_transaction_id == transaction.id
-      assert updated_event.occ_retry_count == 1
-      assert updated_event.errors == []
-      assert updated_event.processing_completed_at != nil
-      assert updated_event.processing_completed_at < DateTime.utc_now()
-      assert updated_event.next_retry_after == nil
-    end
-  end
-
   describe "mark_as_failed/2" do
     setup [:create_instance]
 

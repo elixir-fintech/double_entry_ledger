@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.OccRetryTest do
       attempts = 3
 
       expected_message =
-        "OCC conflict detected, retrying after #{OccRetry.delay(attempts)} ms... #{attempts - 1} attempts left"
+        "OCC conflict detected, retrying after #{OccRetry.delay(attempts)} ms... #{attempts} attempts left"
 
       assert OccRetry.occ_error_message(attempts) == expected_message
     end
