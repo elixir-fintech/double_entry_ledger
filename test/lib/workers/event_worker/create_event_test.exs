@@ -56,6 +56,10 @@ defmodule DoubleEntryLedger.CreateEventTest do
         # simulate a conflict when adding the transaction
         raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
       end)
+      |> expect(:update!, 5, fn changeset ->
+        Repo.update!(changeset)
+        # simulate a conflict when adding the transaction
+      end)
       |> expect(:transaction, 5, fn multi ->
         # the transaction has to be handled by the Repo
         Repo.transaction(multi)

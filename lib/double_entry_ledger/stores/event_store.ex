@@ -117,6 +117,13 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.update()
   end
 
+  @spec update_errors!(Event.t(), list()) :: Event.t()
+  def update_errors!(event, errors) do
+    event
+    |> Changeset.change(errors: errors)
+    |> Repo.update!()
+  end
+
   @spec mark_as_failed(Event.t(), String.t()) :: {:ok, Event.t()} | {:error, Changeset.t()}
   def mark_as_failed(event, reason) do
     event

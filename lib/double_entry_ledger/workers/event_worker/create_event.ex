@@ -64,9 +64,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   end
 
   @impl true
-  def stale_error_handler(event, attempts, _error_map) do
-    {:ok, updated_event} = EventStore.add_error(event, occ_error_message(attempts))
-    updated_event
+  def stale_error_handler(event, _attempts, error_map) do
+    EventStore.update_errors!(event, error_map.errors)
   end
 
   @impl true
