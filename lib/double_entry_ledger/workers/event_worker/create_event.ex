@@ -64,11 +64,6 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   end
 
   @impl true
-  def stale_error_handler(event, _attempts, error_map) do
-    EventStore.update_errors!(event, error_map.errors)
-  end
-
-  @impl true
   def build_transaction(event, transaction_map, repo) do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)

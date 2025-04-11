@@ -25,8 +25,6 @@ defmodule DoubleEntryLedger.OccProcessor do
               | {:error, any()}
               | Ecto.Multi.failure()
 
-  @callback stale_error_handler(Event.t() | map(), non_neg_integer(), map()) :: Event.t() | map()
-
   @callback finally(Event.t(), map()) ::
               {:error, String.t()} | {:error, atom(), atom(), Event.t()}
 
@@ -55,12 +53,6 @@ defmodule DoubleEntryLedger.OccProcessor do
           {:error, error} ->
             {:error, :transaction_map, error, event_or_map}
         end
-      end
-
-      @impl true
-      def stale_error_handler(event_or_map, _attempts, _error_map) do
-        # Default implementation: just return the event or map
-        event_or_map
       end
 
       @impl true
@@ -94,12 +86,11 @@ defmodule DoubleEntryLedger.OccProcessor do
         case module.build_transaction(event_or_map, transaction_map, repo)
              |> repo.transaction() do
           {:error, :transaction, %Ecto.StaleEntryError{}, steps_so_far} ->
-            new_error_map = update_error_map(error_map, attempts, steps_so_far)
+            new_error_map = update_error_map(error_map, occ_error_message(attempts), steps_so_far)
 
             updated_event_or_map =
               event_or_map
-              |> update_occ_tries(new_error_map, repo)
-              |> module.stale_error_handler(attempts, new_error_map)
+              |> update_event!(new_error_map, repo)
 
             set_delay_timer(attempts)
 
@@ -110,25 +101,33 @@ defmodule DoubleEntryLedger.OccProcessor do
         end
       end
 
-      def retry(module, event, _transaction_map, error_map, 0, _repo) do
-        module.finally(event, error_map)
+      def retry(module, event_or_map, _transaction_map, error_map, 0, repo) do
+        # Final retry attempt
+        new_error_map =
+          update_error_map(error_map, occ_final_error_message(), error_map.steps_so_far, false)
+        event_or_map
+        |> update_event!(new_error_map, repo)
+        |> module.finally(new_error_map)
       end
 
-      defp update_occ_tries(event_or_map, error_map, repo) do
+      defp update_event!(event_or_map, %{errors: errors, retries: retries}, repo) do
         if is_struct(event_or_map, Event) do
           event_or_map
-          |> Ecto.Changeset.change(occ_retry_count: error_map.retries)
+          |> Ecto.Changeset.change(
+              occ_retry_count: retries,
+              errors: errors
+            )
           |> repo.update!()
         else
           event_or_map
         end
       end
 
-      defp update_error_map(error_map, attempts, steps_so_far) do
+      defp update_error_map(error_map, message, steps_so_far, update_tries \\ true) do
         %{
-          errors: build_occ_errors(occ_error_message(attempts), error_map.errors),
+          errors: build_occ_errors(message, error_map.errors),
           steps_so_far: steps_so_far,
-          retries: error_map.retries + 1
+          retries: (update_tries && error_map.retries + 1) || error_map.retries
         }
       end
 
@@ -140,7 +139,7 @@ defmodule DoubleEntryLedger.OccProcessor do
         }
       end
 
-      defoverridable stale_error_handler: 3, build_transaction: 3, finally: 2
+      defoverridable build_transaction: 3, finally: 2
     end
   end
 end

@@ -79,11 +79,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   end
 
   @impl true
-  def stale_error_handler(event, _attempts, error_map) do
-    EventStore.update_errors!(event, error_map.errors)
-  end
-
-  @impl true
   def finally(event, _) do
     {:ok, updated_event} = EventStore.mark_as_occ_timeout(event, occ_final_error_message())
     {:error, :transaction, :occ_final_timeout, updated_event}
