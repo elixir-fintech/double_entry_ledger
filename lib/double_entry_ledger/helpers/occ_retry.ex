@@ -101,7 +101,8 @@ defmodule DoubleEntryLedger.OccRetry do
 
   @spec build_occ_errors(String.t(), list()) :: list()
   def build_occ_errors(message, errors) do
-    [%{
+    [
+      %{
         message: message,
         inserted_at: DateTime.utc_now(:microsecond)
       }

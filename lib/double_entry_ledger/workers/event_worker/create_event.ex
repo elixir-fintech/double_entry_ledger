@@ -51,6 +51,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
 
       {:error, :transaction, :occ_final_timeout, event} ->
         {:error, event}
+
       {:error, :transaction_map, error, event} ->
         handle_error(event, "Failed to transform transaction data: #{inspect(error)}")
 

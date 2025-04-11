@@ -61,11 +61,15 @@ defmodule DoubleEntryLedger.CreateEventTest do
         Repo.transaction(multi)
       end)
 
-      {:error, updated_event} = CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+      {:error, updated_event} =
+        CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+
       assert updated_event.status == :occ_timeout
       assert updated_event.occ_retry_count == 6
       IO.puts("ERROR: #{inspect(updated_event.errors)}")
-      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] = updated_event.errors
+
+      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
+               updated_event.errors
     end
   end
 end

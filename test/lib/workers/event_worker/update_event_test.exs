@@ -167,7 +167,6 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-
       DoubleEntryLedger.MockRepo
       |> expect(:update, 5, fn _changeset ->
         # simulate a conflict when adding the transaction
@@ -178,10 +177,14 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         Repo.transaction(multi)
       end)
 
-      {:error, updated_event} = UpdateEvent.process_update_event(event, DoubleEntryLedger.MockRepo)
+      {:error, updated_event} =
+        UpdateEvent.process_update_event(event, DoubleEntryLedger.MockRepo)
+
       assert updated_event.status == :occ_timeout
       assert updated_event.occ_retry_count == 6
-      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] = updated_event.errors
+
+      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
+               updated_event.errors
     end
 
     test "when transaction can't be created for other reasons", %{instance: inst} = ctx do

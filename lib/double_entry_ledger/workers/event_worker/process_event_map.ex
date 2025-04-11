@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   Provides functions to process event maps by creating event records and handling associated transactions.
   """
   use DoubleEntryLedger.OccProcessor
+
   alias DoubleEntryLedger.{
     Event,
     EventStore,

@@ -22,23 +22,23 @@ defmodule DoubleEntryLedger.OccProcessor do
   This callback has a default implementation through the __using__ macro.
   """
   @callback process_with_retry(Event.t() | EventMap.t(), Repo.t()) ::
-    {:ok, %{transaction: Transaction.t(), event: Event.t()}} |
-    {:error, any()} |
-    Multi.failure()
+              {:ok, %{transaction: Transaction.t(), event: Event.t()}}
+              | {:error, any()}
+              | Multi.failure()
 
   @callback stale_error_handler(Event.t() | map(), non_neg_integer(), map()) :: Event.t() | map()
 
-  @callback finally(Event.t(), map()) :: {:error, String.t()} | {:error, atom(), atom(), Event.t()}
+  @callback finally(Event.t(), map()) ::
+              {:error, String.t()} | {:error, atom(), atom(), Event.t()}
 
-
-
-   # --- Use Macro for Default Implementations ---
+  # --- Use Macro for Default Implementations ---
 
   defmacro __using__(_opts) do
-   quote do
+    quote do
       @behaviour DoubleEntryLedger.OccProcessor
       alias DoubleEntryLedger.Repo
       import DoubleEntryLedger.OccRetry
+
       import DoubleEntryLedger.EventWorker.EventTransformer,
         only: [transaction_data_to_transaction_map: 2]
 
@@ -48,6 +48,7 @@ defmodule DoubleEntryLedger.OccProcessor do
       @impl true
       def process_with_retry(%{instance_id: id, transaction_data: td} = event, repo \\ Repo) do
         error_map = create_error_map(event)
+
         case transaction_data_to_transaction_map(td, id) do
           {:ok, transaction_map} ->
             retry(__MODULE__, event, transaction_map, error_map, max_retries(), repo)
@@ -92,7 +93,7 @@ defmodule DoubleEntryLedger.OccProcessor do
 
       def retry(module, event, transaction_map, error_map, attempts, repo) when attempts > 0 do
         case module.build_transaction(event, transaction_map, repo)
-            |> repo.transaction() do
+             |> repo.transaction() do
           {:error, :transaction, %Ecto.StaleEntryError{}, steps_so_far} ->
             new_error_map = update_error_map(error_map, attempts, steps_so_far)
             updated_event = module.stale_error_handler(event, attempts, new_error_map)
@@ -112,7 +113,7 @@ defmodule DoubleEntryLedger.OccProcessor do
         %{
           errors: build_occ_errors(occ_error_message(attempts), error_map.errors),
           steps_so_far: steps_so_far,
-          retries: error_map.retries + 1,
+          retries: error_map.retries + 1
         }
       end
 
@@ -124,7 +125,7 @@ defmodule DoubleEntryLedger.OccProcessor do
         }
       end
 
-      defoverridable [stale_error_handler: 3, build_transaction: 3, finally: 2]
+      defoverridable stale_error_handler: 3, build_transaction: 3, finally: 2
     end
   end
 end

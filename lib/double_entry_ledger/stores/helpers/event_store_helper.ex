@@ -75,6 +75,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   @spec build_mark_as_processed(Event.t(), Ecto.UUID.t()) :: Changeset.t()
   def build_mark_as_processed(event, transaction_id) do
     now = DateTime.utc_now()
+
     event
     |> Changeset.change(
       status: :processed,

@@ -149,8 +149,11 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
                  DoubleEntryLedger.MockRepo
                )
 
-      assert %Event{status: :occ_timeout, occ_retry_count: 5} = updated_event = Repo.get(Event, id)
-      assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] = updated_event.errors
+      assert %Event{status: :occ_timeout, occ_retry_count: 5} =
+               updated_event = Repo.get(Event, id)
+
+      assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] =
+               updated_event.errors
     end
   end
 end

@@ -11,6 +11,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     Transaction,
     UpdateEvent
   }
+
   alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.{
