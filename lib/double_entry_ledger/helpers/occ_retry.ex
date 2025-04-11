@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.OccRetry do
   """
   @spec occ_error_message(integer()) :: String.t()
   def occ_error_message(attempts) do
-    "OCC conflict detected, retrying after #{delay(attempts)} ms... #{attempts - 1} attempts left"
+    "OCC conflict detected, retrying after #{delay(attempts)} ms... #{attempts} attempts left"
   end
 
   @doc """

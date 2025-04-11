@@ -11,4 +11,6 @@ defmodule DoubleEntryLedger.RepoBehaviour do
               {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()}
   @callback update!(struct_or_changeset :: Ecto.Changeset.t()) ::
               Ecto.Schema.t()
+  @callback insert!(struct_or_changeset :: Ecto.Changeset.t()) ::
+              Ecto.Schema.t()
 end

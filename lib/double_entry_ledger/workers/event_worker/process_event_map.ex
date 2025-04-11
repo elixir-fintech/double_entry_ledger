@@ -6,7 +6,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
   alias DoubleEntryLedger.{
     Event,
-    EventStore,
     Transaction,
     TransactionStore,
     Repo,
@@ -60,22 +59,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
       {:error, error} ->
         {:error, "#{inspect(error)}"}
-    end
-  end
-
-  @impl true
-  def finally(_event_map, error_map) do
-    case EventStore.create_event_after_failure(
-           error_map.steps_so_far.create_event,
-           [build_error(occ_final_error_message()) | error_map.errors],
-           error_map.retries,
-           :occ_timeout
-         ) do
-      {:ok, event} ->
-        {:error, :transaction, :occ_final_timeout, event}
-
-      {:error, changeset} ->
-        {:error, "Failed to create event after OCC timeout: #{inspect(changeset)}"}
     end
   end
 

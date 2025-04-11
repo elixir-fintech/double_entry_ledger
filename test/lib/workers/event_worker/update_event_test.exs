@@ -172,7 +172,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         # simulate a conflict when adding the transaction
         raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
       end)
-      |> expect(:update!, 6, fn changeset ->
+      |> expect(:update!, 7, fn changeset ->
         # simulate a conflict when adding the transaction
         Repo.update!(changeset)
       end)
@@ -185,7 +185,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         UpdateEvent.process_update_event(event, DoubleEntryLedger.MockRepo)
 
       assert updated_event.status == :occ_timeout
-      assert updated_event.occ_retry_count == 6
+      assert updated_event.occ_retry_count == 5
 
       assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
                updated_event.errors

@@ -91,26 +91,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
-  describe "mark_as_occ_timeout" do
-    setup [:create_instance]
-
-    test "marks an event as occ_timeout", %{instance: instance} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
-
-      assert {:ok, %Event{} = updated_event} =
-               EventStore.mark_as_occ_timeout(event, "some reason")
-
-      assert updated_event.status == :occ_timeout
-      assert updated_event.processed_at == nil
-      assert updated_event.occ_retry_count == 1
-      assert updated_event.processing_completed_at != nil
-      assert updated_event.processing_completed_at < DateTime.utc_now()
-      assert updated_event.next_retry_after != nil
-      assert updated_event.next_retry_after > updated_event.processing_completed_at
-      assert [%{message: "some reason"} | _] = updated_event.errors
-    end
-  end
-
   describe "get_create_event_by_source/3" do
     setup [:create_instance, :create_accounts]
 

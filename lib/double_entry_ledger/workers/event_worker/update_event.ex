@@ -78,12 +78,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     end)
   end
 
-  @impl true
-  def finally(event, _) do
-    {:ok, updated_event} = EventStore.mark_as_occ_timeout(event, occ_final_error_message())
-    {:error, :transaction, :occ_final_timeout, updated_event}
-  end
-
   @spec add_error(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   defp add_error(event, reason) do
