@@ -79,23 +79,14 @@ defmodule DoubleEntryLedger.OccRetry do
   ## Examples
 
       iex> DoubleEntryLedger.OccRetry.occ_error_message(2)
-      "OCC conflict detected, retrying after 40 ms... 2 attempts left"
+      "OCC conflict detected, retrying after 40 ms... 1 attempts left"
   """
   @spec occ_error_message(integer()) :: String.t()
-  def occ_error_message(attempts) do
-    "OCC conflict detected, retrying after #{delay(attempts)} ms... #{attempts} attempts left"
+  def occ_error_message(attempts) when attempts > 1 do
+    "OCC conflict detected, retrying after #{delay(attempts)} ms... #{attempts - 1} attempts left"
   end
 
-  @doc """
-  Generates the final error message when the maximum number of retries is reached.
-
-  ## Examples
-
-      iex> DoubleEntryLedger.OccRetry.occ_final_error_message()
-      "OCC conflict: Max number of 5 retries reached"
-  """
-  @spec occ_final_error_message() :: String.t()
-  def occ_final_error_message() do
+  def occ_error_message(_attempts) do
     "OCC conflict: Max number of #{@max_retries} retries reached"
   end
 
@@ -108,5 +99,23 @@ defmodule DoubleEntryLedger.OccRetry do
       }
       | errors
     ]
+  end
+
+  def update_error_map(error_map, attempts, steps_so_far) do
+    message = occ_error_message(attempts)
+
+    %{
+      errors: build_occ_errors(message, error_map.errors),
+      steps_so_far: steps_so_far,
+      retries: error_map.retries + 1
+    }
+  end
+
+  def create_error_map(event) do
+    %{
+      errors: Map.get(event, :errors, []),
+      steps_so_far: %{},
+      retries: 0
+    }
   end
 end
