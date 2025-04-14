@@ -5,6 +5,7 @@ defmodule DoubleEntryLedger.OccProcessor do
   with retry logic.
   """
 
+  alias DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.{Event, Transaction}
   alias DoubleEntryLedger.Event.EventMap
 
@@ -44,7 +45,8 @@ defmodule DoubleEntryLedger.OccProcessor do
             %{instance_id: id, transaction_data: td} = event_or_map,
             repo \\ Repo
           ) do
-        error_map = create_error_map(event_or_map)
+
+        %ErrorMap{} = error_map = create_error_map(event_or_map)
 
         case transaction_data_to_transaction_map(td, id) do
           {:ok, transaction_map} ->
@@ -79,7 +81,7 @@ defmodule DoubleEntryLedger.OccProcessor do
               module(),
               Event.t() | EventMap.t(),
               map(),
-              map(),
+              ErrorMap.t(),
               non_neg_integer(),
               Ecto.Repo.t()
             ) ::
@@ -121,7 +123,7 @@ defmodule DoubleEntryLedger.OccProcessor do
 
       @spec finally!(
               Event.t() | EventMap.t(),
-              map(),
+              ErrorMap.t(),
               Ecto.Repo.t(),
               non_neg_integer()
             ) ::
@@ -144,7 +146,7 @@ defmodule DoubleEntryLedger.OccProcessor do
         {:error, :transaction, :occ_final_timeout, event}
       end
 
-      @spec occ_timeout_changeset(Event.t(), map(), DateTime.t(), DateTime.t()) ::
+      @spec occ_timeout_changeset(Event.t(), ErrorMap.t(), DateTime.t(), DateTime.t()) ::
               Ecto.Changeset.t()
       defp occ_timeout_changeset(
              event,
@@ -162,7 +164,7 @@ defmodule DoubleEntryLedger.OccProcessor do
         )
       end
 
-      @spec update_event!(Event.t() | EventMap.t(), map(), Ecto.Repo.t()) ::
+      @spec update_event!(Event.t() | EventMap.t(), ErrorMap.t(), Ecto.Repo.t()) ::
               Event.t() | EventMap.t()
       defp update_event!(event_or_map, %{errors: errors, retries: retries}, repo) do
         if is_struct(event_or_map, Event) do

@@ -4,6 +4,7 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   """
 
   alias Ecto.Changeset
+  import DoubleEntryLedger.Event.ErrorMap
 
   alias DoubleEntryLedger.{
     Event,
@@ -19,29 +20,6 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   alias DoubleEntryLedger.EventWorker.{
     AddUpdateEventError
   }
-
-  @type event_error_map :: %{
-          errors:
-            list(%{
-              message: String.t(),
-              inserted_at: DateTime.t()
-            }),
-          steps_so_far: map(),
-          retries: integer()
-        }
-
-  @spec build_errors(String.t(), list()) :: list()
-  def build_errors(error_message, errors) do
-    [build_error(error_message) | errors]
-  end
-
-  @spec build_error(String.t()) :: %{message: String.t(), inserted_at: DateTime.t()}
-  def build_error(error) do
-    %{
-      message: error,
-      inserted_at: DateTime.utc_now(:microsecond)
-    }
-  end
 
   @spec transfer_errors_from_trx_to_event_map(EventMap.t(), Ecto.Changeset.t()) ::
           Ecto.Changeset.t()

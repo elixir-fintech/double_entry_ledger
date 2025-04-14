@@ -2,6 +2,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   @moduledoc """
   This module provides helper functions for working with events in the Double Entry Ledger system.
   """
+  import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
   alias DoubleEntryLedger.Event.EventMap
   alias Ecto.Changeset
   alias Ecto.{Changeset, Multi}
@@ -92,14 +93,6 @@ defmodule DoubleEntryLedger.EventStoreHelper do
     event
     |> Changeset.change(errors: [build_error(error) | event.errors])
     |> increment_tries()
-  end
-
-  @spec build_error(String.t()) :: %{message: String.t(), inserted_at: DateTime.t()}
-  defp build_error(error) do
-    %{
-      message: error,
-      inserted_at: DateTime.utc_now(:microsecond)
-    }
   end
 
   @spec increment_tries(Changeset.t()) :: Changeset.t()
