@@ -85,19 +85,11 @@ defmodule DoubleEntryLedger.EventStoreHelper do
       processing_completed_at: now,
       next_retry_after: nil
     )
-    |> increment_tries()
   end
 
   @spec build_add_error(Event.t(), any()) :: Changeset.t()
   def build_add_error(event, error) do
     event
     |> Changeset.change(errors: [build_error(error) | event.errors])
-    |> increment_tries()
-  end
-
-  @spec increment_tries(Changeset.t()) :: Changeset.t()
-  defp increment_tries(changeset) do
-    current_tries = Changeset.get_field(changeset, :occ_retry_count) || 0
-    Changeset.put_change(changeset, :occ_retry_count, current_tries + 1)
   end
 end

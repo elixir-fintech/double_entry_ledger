@@ -3,7 +3,6 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
   This module defines the ErrorMap schema for the Event.
   """
 
-
   defstruct errors: [],
             steps_so_far: %{},
             retries: 0
@@ -23,15 +22,25 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
           retries: integer()
         }
 
-  @spec build_errors(String.t(), list(error())) :: list(error())
+  @spec build_errors(any(), list(error())) :: list(error())
   def build_errors(error_message, errors) do
     [build_error(error_message) | errors]
   end
 
-  @spec build_error(String.t()) :: error()
-  def build_error(error) do
+  @spec build_error(any()) :: error()
+  def build_error(error) when is_binary(error) do
     %{
       message: error,
+      inserted_at: DateTime.utc_now(:microsecond)
+    }
+  end
+
+  def build_error(error) do
+    # Convert the error to a string representation
+    # This is useful for non-binary errors
+    # that may not have a direct string representation
+    %{
+      message: inspect(error),
       inserted_at: DateTime.utc_now(:microsecond)
     }
   end
