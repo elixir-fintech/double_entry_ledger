@@ -56,9 +56,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
       {:error, step, error, _steps_so_far} ->
         {:error, "#{step} failed: #{inspect(error)}"}
-
-      {:error, error} ->
-        {:error, "#{inspect(error)}"}
     end
   end
 

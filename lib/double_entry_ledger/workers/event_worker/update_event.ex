@@ -62,9 +62,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
       {:error, step, error, _} ->
         handle_error(event, "#{step} step failed: #{inspect(error)}")
-
-      {:error, error} ->
-        handle_error(event, inspect(error))
     end
   end
 

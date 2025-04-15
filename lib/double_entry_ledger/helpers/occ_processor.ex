@@ -23,7 +23,6 @@ defmodule DoubleEntryLedger.OccProcessor do
   """
   @callback process_with_retry(Event.t() | EventMap.t(), Ecto.Repo.t()) ::
               {:ok, %{transaction: Transaction.t(), event: Event.t()}}
-              | {:error, any()}
               | Ecto.Multi.failure()
 
   # --- Use Macro for Default Implementations ---
@@ -86,7 +85,6 @@ defmodule DoubleEntryLedger.OccProcessor do
               Ecto.Repo.t()
             ) ::
               {:ok, %{transaction: Transaction.t(), event: Event.t()}}
-              | {:error, any()}
               | Ecto.Multi.failure()
       def retry(module, event_or_map, transaction_map, error_map, attempts, repo)
           when attempts > 0 do
