@@ -11,7 +11,11 @@ defmodule DoubleEntryLedger.Occ.Helper do
 
   @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
   @retry_interval Application.compile_env(:double_entry_ledger, :retry_interval, 200)
-  @next_retry_after_interval Application.compile_env(:double_entry_ledger, :next_retry_after_interval, @max_retries * @retry_interval)
+  @next_retry_after_interval Application.compile_env(
+                               :double_entry_ledger,
+                               :next_retry_after_interval,
+                               @max_retries * @retry_interval
+                             )
 
   @doc """
   Pauses execution for a calculated delay based on the number of attempts.
@@ -150,5 +154,4 @@ defmodule DoubleEntryLedger.Occ.Helper do
   def occ_error_message(_attempts) do
     "OCC conflict: Max number of #{@max_retries} retries reached"
   end
-
 end

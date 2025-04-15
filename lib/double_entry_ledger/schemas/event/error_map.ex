@@ -1,5 +1,5 @@
 defmodule DoubleEntryLedger.Event.ErrorMap do
-  @moduledoc"""
+  @moduledoc """
   This module defines the ErrorMap schema for the Event.
   """
 

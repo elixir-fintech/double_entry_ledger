@@ -9,12 +9,14 @@ defmodule DoubleEntryLedger.Occ.Processor do
   alias DoubleEntryLedger.{Event, Transaction}
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker.EventTransformer
+
   @doc """
   Builds a transaction for the given event and data.
 
   Implementations should return an Ecto.Multi that includes the transaction logic.
   """
-  @callback build_transaction(Event.t(), EventTransformer.transaction_map(), Ecto.Repo.t()) :: Ecto.Multi.t()
+  @callback build_transaction(Event.t(), EventTransformer.transaction_map(), Ecto.Repo.t()) ::
+              Ecto.Multi.t()
 
   @doc """
   Process the event with retry mechanisms.
@@ -46,7 +48,6 @@ defmodule DoubleEntryLedger.Occ.Processor do
             %{instance_id: id, transaction_data: td} = event_or_map,
             repo \\ Repo
           ) do
-
         %ErrorMap{} = error_map = create_error_map(event_or_map)
 
         case transaction_data_to_transaction_map(td, id) do
@@ -117,7 +118,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
         end
       end
 
-      def retry(module, event_or_map, _transaction_map, error_map, 0, repo) do #Clean up when attempts are exhausted
+      # Clean up when attempts are exhausted
+      def retry(module, event_or_map, _transaction_map, error_map, 0, repo) do
         event_or_map
         |> finally!(error_map, repo)
       end
@@ -128,14 +130,14 @@ defmodule DoubleEntryLedger.Occ.Processor do
         event
         |> occ_timeout_changeset(error_map)
         |> repo.update!()
-        |> then(& {:error, :transaction, :occ_final_timeout, &1})
+        |> then(&{:error, :transaction, :occ_final_timeout, &1})
       end
 
       defp finally!(event_map, error_map, repo) when is_struct(event_map, EventMap) do
         error_map.steps_so_far.create_event
         |> occ_timeout_changeset(error_map)
         |> repo.insert!()
-        |> then(& {:error, :transaction, :occ_final_timeout, &1})
+        |> then(&{:error, :transaction, :occ_final_timeout, &1})
       end
 
       @spec occ_timeout_changeset(Event.t(), ErrorMap.t()) ::
@@ -158,10 +160,11 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       @spec update_event!(Event.t() | EventMap.t(), ErrorMap.t(), Ecto.Repo.t()) ::
               Event.t() | EventMap.t()
-      defp update_event!(event, %{errors: errors, retries: retries}, repo) when is_struct(event, Event) do
-          event
-          |> Ecto.Changeset.change(occ_retry_count: retries, errors: errors)
-          |> repo.update!()
+      defp update_event!(event, %{errors: errors, retries: retries}, repo)
+           when is_struct(event, Event) do
+        event
+        |> Ecto.Changeset.change(occ_retry_count: retries, errors: errors)
+        |> repo.update!()
       end
 
       defp update_event!(event_map, _, _) when is_struct(event_map, EventMap), do: event_map

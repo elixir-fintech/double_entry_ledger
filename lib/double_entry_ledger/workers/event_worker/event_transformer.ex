@@ -11,7 +11,6 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
 
   import DoubleEntryLedger.Currency
 
-
   @type entry_map() :: %{
           account_id: Ecto.UUID.t(),
           value: Money.t(),

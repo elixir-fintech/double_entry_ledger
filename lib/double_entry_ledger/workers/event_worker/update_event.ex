@@ -51,7 +51,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
       {:error, :transaction_map, error, event} ->
         handle_error(event, error)
 
-      {:error, :get_create_event_transaction, %AddUpdateEventError{reason: :create_event_pending, message: message}, _} ->
+      {:error, :get_create_event_transaction,
+       %AddUpdateEventError{reason: :create_event_pending, message: message}, _} ->
         add_error(event, message)
 
       {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, _} ->
