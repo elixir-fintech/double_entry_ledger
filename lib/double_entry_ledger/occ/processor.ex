@@ -1,8 +1,45 @@
 defmodule DoubleEntryLedger.Occ.Processor do
   @moduledoc """
-  This module defines the behaviour for processing events with optimistic concurrency control (OCC).
-  It provides a callback for building transactions and a default implementation for processing events
-  with retry logic.
+  Behavior definition for implementing Optimistic Concurrency Control (OCC) in event processing.
+
+  This module provides a comprehensive framework for handling event processing with
+  optimistic concurrency control, including automatic retries with exponential backoff,
+  error tracking, and standardized transaction handling.
+
+  ## Key Features
+
+  * **Behavior Definition**: Defines a standard interface for OCC-aware event processors
+  * **Default Implementations**: Provides sensible defaults for retry logic and error handling
+  * **Exponential Backoff**: Implements intelligent retry timing to reduce contention
+  * **Error Tracking**: Maintains detailed error history through the retry process
+  * **Consistent API**: Enforces a consistent approach to transaction processing across the system
+
+  ## Usage
+
+  Modules that need OCC capabilities can simply use this behavior:
+
+  ```elixir
+  defmodule MyEventProcessor do
+    use DoubleEntryLedger.Occ.Processor
+
+    @impl true
+    def build_transaction(event, transaction_map, repo) do
+      # Your specific transaction building logic here
+      Ecto.Multi.new()
+      |> Ecto.Multi.insert(:event, event_changeset)
+      |> Ecto.Multi.insert(:transaction, transaction_changeset)
+    end
+  end
+  ```
+
+  The processor will automatically handle:
+  * Converting event data to transaction maps
+  * Retrying on StaleEntryError
+  * Tracking retry attempts
+  * Managing timeouts and backoff
+  * Preserving error contexts
+
+  Implementing modules only need to define how to build the transaction - all OCC handling is managed by this behavior. "
   """
 
   alias DoubleEntryLedger.Event.ErrorMap
@@ -10,12 +47,39 @@ defmodule DoubleEntryLedger.Occ.Processor do
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker.EventTransformer
 
-  @doc """
-  Builds a transaction for the given event and data.
+@doc """
+Builds an Ecto.Multi transaction for processing an event.
 
-  Implementations should return an Ecto.Multi that includes the transaction logic.
-  """
-  @callback build_transaction(Event.t(), EventTransformer.transaction_map(), Ecto.Repo.t()) ::
+This callback must be implemented by modules using the OccProcessor behavior.
+It defines how to construct the database transaction operations needed to process
+the event and its associated transaction data.
+
+## Required Transaction Steps
+
+The Multi must include specific named steps depending on the input type:
+
+* `:create_event` (required for EventMap) - Must return the created Event struct when processing the EventMap
+* `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
+* `:event`(required) - Must return the saved Event struct when processing the Event
+
+## Parameters
+
+* `event_or_map`: An Event struct or EventMap containing the event details to process
+* `transaction_map`: A map of transaction data derived from the event
+* `repo`: The Ecto repository to use for database operations
+
+## Returns
+
+* An `Ecto.Multi` struct containing all the operations to execute atomically
+
+## Implementation Examples
+
+See implementations in:
+* `DoubleEntryLedger.EventWorker.CreateEvent.build_transaction/3`
+* `DoubleEntryLedger.EventWorker.UpdateEvent.build_transaction/3`
+* `DoubleEntryLedger.EventWorker.ProcessEventMap.build_transaction/3`
+"""
+  @callback build_transaction(Event.t() | EventMap.t(), EventTransformer.transaction_map(), Ecto.Repo.t()) ::
               Ecto.Multi.t()
 
   @doc """
