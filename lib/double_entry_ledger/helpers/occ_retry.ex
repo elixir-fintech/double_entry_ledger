@@ -11,6 +11,7 @@ defmodule DoubleEntryLedger.OccRetry do
 
   @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
   @retry_interval Application.compile_env(:double_entry_ledger, :retry_interval, 200)
+  @next_retry_after_interval Application.compile_env(:double_entry_ledger, :next_retry_after_interval, @max_retries * @retry_interval)
 
   @doc """
   Pauses execution for a calculated delay based on the number of attempts.
@@ -75,29 +76,61 @@ defmodule DoubleEntryLedger.OccRetry do
   def retry_interval(), do: @retry_interval
 
   @doc """
-  Generates an error message for an OCC conflict with retries remaining.
+  Calculates the current UTC datetime (`now`) and the next retry datetime
+  based on the given time interval.
 
   ## Parameters
 
-    - `attempts`: The current attempt number.
+    - `time_interval` (non_neg_integer): The time interval in milliseconds
+      to calculate the next retry datetime. Defaults to the value of
+      `@next_retry_after_interval`.
+
+  ## Returns
+
+    - A tuple `{DateTime.t(), DateTime.t()}` where:
+      - The first element is the current UTC datetime (`now`).
+      - The second element is the next retry datetime, calculated by adding
+        the `time_interval` to `now`.
 
   ## Examples
 
-      iex> DoubleEntryLedger.OccRetry.occ_error_message(2)
-      "OCC conflict detected, retrying after 40 ms... 1 attempts left"
-
-      iex> DoubleEntryLedger.OccRetry.occ_error_message(1)
-      "OCC conflict: Max number of 5 retries reached"
+      iex> {now, next_retry} = DoubleEntryLedger.OccRetry.get_now_and_next_retry_after(1000)
+      iex> next_retry > now
+      true
   """
-  @spec occ_error_message(integer()) :: String.t()
-  def occ_error_message(attempts) when attempts > 1 do
-    "OCC conflict detected, retrying after #{delay(attempts)} ms... #{attempts - 1} attempts left"
+  @spec get_now_and_next_retry_after(non_neg_integer()) :: {DateTime.t(), DateTime.t()}
+  def get_now_and_next_retry_after(time_interval \\ @next_retry_after_interval) do
+    now = DateTime.utc_now()
+    next_retry = DateTime.add(now, div(time_interval, 1000), :second)
+    {now, next_retry}
   end
 
-  def occ_error_message(_attempts) do
-    "OCC conflict: Max number of #{@max_retries} retries reached"
-  end
+  @doc """
+  Updates the given `ErrorMap` with a new error message, incrementing the retry count
+  and updating the steps completed so far.
 
+  ## Parameters
+
+    - `error_map` (`ErrorMap.t()`): The current error map to be updated.
+    - `attempts` (`integer()`): The number of attempts made so far.
+    - `steps_so_far` (`map()`): A map representing the steps completed so far.
+
+  ## Returns
+
+    - `ErrorMap.t()`: The updated error map with the new error message, incremented retry count,
+      and updated steps.
+
+  ## Examples
+
+      iex> error_map = %DoubleEntryLedger.Event.ErrorMap{errors: [], retries: 0, steps_so_far: %{}}
+      iex> updated_error_map = DoubleEntryLedger.OccRetry.update_error_map(error_map, 3, %{step: "processing"})
+      iex> updated_error_map.retries
+      1
+      iex> updated_error_map.steps_so_far
+      %{step: "processing"}
+      iex> length(updated_error_map.errors) > 0
+      true
+  """
   @spec update_error_map(ErrorMap.t(), integer(), map()) :: ErrorMap.t()
   def update_error_map(error_map, attempts, steps_so_far) do
     message = occ_error_message(attempts)
@@ -108,4 +141,14 @@ defmodule DoubleEntryLedger.OccRetry do
       retries: error_map.retries + 1
     }
   end
+
+  @spec occ_error_message(integer()) :: String.t()
+  def occ_error_message(attempts) when attempts > 1 do
+    "OCC conflict detected, retrying after #{delay(attempts)} ms... #{attempts - 1} attempts left"
+  end
+
+  def occ_error_message(_attempts) do
+    "OCC conflict: Max number of #{@max_retries} retries reached"
+  end
+
 end

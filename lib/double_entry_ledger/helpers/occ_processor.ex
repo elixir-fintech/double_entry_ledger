@@ -122,39 +122,30 @@ defmodule DoubleEntryLedger.OccProcessor do
         |> finally!(error_map, repo)
       end
 
-      @spec finally!(
-              Event.t() | EventMap.t(),
-              ErrorMap.t(),
-              Ecto.Repo.t(),
-              non_neg_integer()
-            ) ::
+      @spec finally!(Event.t() | EventMap.t(), ErrorMap.t(), Ecto.Repo.t()) ::
               {:error, :transaction, :occ_final_timeout, Event.t()}
-      defp finally!(event_or_map, error_map, repo, time_interval \\ @retry_interval) do
-        now = DateTime.utc_now()
-        next_retry_after = DateTime.add(now, time_interval, :millisecond)
-
-        event =
-          if is_struct(event_or_map, Event) do
-            event_or_map
-            |> occ_timeout_changeset(error_map, now, next_retry_after)
-            |> repo.update!()
-          else
-            error_map.steps_so_far.create_event
-            |> occ_timeout_changeset(error_map, now, next_retry_after)
-            |> repo.insert!()
-          end
-
-        {:error, :transaction, :occ_final_timeout, event}
+      defp finally!(event, error_map, repo) when is_struct(event, Event) do
+        event
+        |> occ_timeout_changeset(error_map)
+        |> repo.update!()
+        |> then(& {:error, :transaction, :occ_final_timeout, &1})
       end
 
-      @spec occ_timeout_changeset(Event.t(), ErrorMap.t(), DateTime.t(), DateTime.t()) ::
+      defp finally!(event_map, error_map, repo) when is_struct(event_map, EventMap) do
+        error_map.steps_so_far.create_event
+        |> occ_timeout_changeset(error_map)
+        |> repo.insert!()
+        |> then(& {:error, :transaction, :occ_final_timeout, &1})
+      end
+
+      @spec occ_timeout_changeset(Event.t(), ErrorMap.t()) ::
               Ecto.Changeset.t()
       defp occ_timeout_changeset(
              event,
-             %{errors: errors, retries: retries},
-             now,
-             next_retry_after
+             %{errors: errors, retries: retries}
            ) do
+        {now, next_retry_after} = get_now_and_next_retry_after()
+
         event
         |> Ecto.Changeset.change(
           errors: errors,
@@ -167,18 +158,13 @@ defmodule DoubleEntryLedger.OccProcessor do
 
       @spec update_event!(Event.t() | EventMap.t(), ErrorMap.t(), Ecto.Repo.t()) ::
               Event.t() | EventMap.t()
-      defp update_event!(event_or_map, %{errors: errors, retries: retries}, repo) do
-        if is_struct(event_or_map, Event) do
-          event_or_map
-          |> Ecto.Changeset.change(
-            occ_retry_count: retries,
-            errors: errors
-          )
+      defp update_event!(event, %{errors: errors, retries: retries}, repo) when is_struct(event, Event) do
+          event
+          |> Ecto.Changeset.change(occ_retry_count: retries, errors: errors)
           |> repo.update!()
-        else
-          event_or_map
-        end
       end
+
+      defp update_event!(event_map, _, _) when is_struct(event_map, EventMap), do: event_map
 
       defoverridable build_transaction: 3
     end

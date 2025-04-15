@@ -9,7 +9,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
-  import DoubleEntryLedger.TransactionFixtures
   alias DoubleEntryLedger.{EventStore, EventStoreHelper, Event}
   alias DoubleEntryLedger.EventWorker.CreateEvent
 
