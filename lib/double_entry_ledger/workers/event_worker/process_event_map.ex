@@ -38,9 +38,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
       {:ok, %{transaction: transaction, event: event}} ->
         {:ok, transaction, event}
 
-      {:error, :transaction_map, error, _event} ->
-        {:error, "#{inspect(error)}"}
-
       {:error, :transaction, :occ_final_timeout, event} ->
         {:error, event}
 
