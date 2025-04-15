@@ -9,16 +9,16 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     Transaction,
     TransactionStore,
     Repo,
-    OccRetry,
     EventStoreHelper
   }
+  alias DoubleEntryLedger.Occ
 
   alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
   alias Ecto.{Multi, Changeset}
-  import OccRetry
+  import Occ.Helper
   import DoubleEntryLedger.EventWorker.ErrorHandler
 
   @doc """

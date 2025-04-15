@@ -1,11 +1,11 @@
-defmodule DoubleEntryLedger.OccRetryTest do
+defmodule DoubleEntryLedger.Occ.HelperTest do
   @moduledoc """
   This module tests the OccRetry module.
   """
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.OccRetry
+  alias DoubleEntryLedger.Occ.Helper, as: OccRetry
 
   doctest OccRetry
 

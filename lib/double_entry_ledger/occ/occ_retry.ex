@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.OccRetry do
+defmodule DoubleEntryLedger.Occ.Helper do
   @moduledoc """
   Provides helper functions to handle Optimistic Concurrency Control (OCC) retries.
   Retry logic is implemented in the relevant modules.
@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.OccRetry do
 
   ## Examples
 
-      iex> DoubleEntryLedger.OccRetry.set_delay_timer(2)
+      iex> DoubleEntryLedger.Occ.Helper.set_delay_timer(2)
       :ok
   """
   @spec set_delay_timer(integer()) :: :ok
@@ -41,9 +41,9 @@ defmodule DoubleEntryLedger.OccRetry do
     - `attempts`: The current attempt number.
 
   ## Examples
-      iex> DoubleEntryLedger.OccRetry.delay(4)
+      iex> DoubleEntryLedger.Occ.Helper.delay(4)
       20
-      iex> DoubleEntryLedger.OccRetry.delay(2)
+      iex> DoubleEntryLedger.Occ.Helper.delay(2)
       40
   """
   @spec delay(integer()) :: number()
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.OccRetry do
 
   ## Examples
 
-      iex> DoubleEntryLedger.OccRetry.max_retries()
+      iex> DoubleEntryLedger.Occ.Helper.max_retries()
       5
   """
   @spec max_retries() :: integer()
@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.OccRetry do
 
   ## Examples
 
-      iex> DoubleEntryLedger.OccRetry.retry_interval()
+      iex> DoubleEntryLedger.Occ.Helper.retry_interval()
       10
   """
   @spec retry_interval() :: integer()
@@ -94,7 +94,7 @@ defmodule DoubleEntryLedger.OccRetry do
 
   ## Examples
 
-      iex> {now, next_retry} = DoubleEntryLedger.OccRetry.get_now_and_next_retry_after(1000)
+      iex> {now, next_retry} = DoubleEntryLedger.Occ.Helper.get_now_and_next_retry_after(1000)
       iex> next_retry > now
       true
   """
@@ -123,7 +123,7 @@ defmodule DoubleEntryLedger.OccRetry do
   ## Examples
 
       iex> error_map = %DoubleEntryLedger.Event.ErrorMap{errors: [], retries: 0, steps_so_far: %{}}
-      iex> updated_error_map = DoubleEntryLedger.OccRetry.update_error_map(error_map, 3, %{step: "processing"})
+      iex> updated_error_map = DoubleEntryLedger.Occ.Helper.update_error_map(error_map, 3, %{step: "processing"})
       iex> updated_error_map.retries
       1
       iex> updated_error_map.steps_so_far

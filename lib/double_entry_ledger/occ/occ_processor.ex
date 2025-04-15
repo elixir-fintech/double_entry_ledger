@@ -33,7 +33,7 @@ defmodule DoubleEntryLedger.OccProcessor do
     quote do
       @behaviour DoubleEntryLedger.OccProcessor
       alias DoubleEntryLedger.Repo
-      import DoubleEntryLedger.OccRetry
+      import DoubleEntryLedger.Occ.Helper
 
       import DoubleEntryLedger.EventWorker.EventTransformer,
         only: [transaction_data_to_transaction_map: 2]
