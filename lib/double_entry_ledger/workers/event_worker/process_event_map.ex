@@ -2,7 +2,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   @moduledoc """
   Provides functions to process event maps by creating event records and handling associated transactions.
   """
-  use DoubleEntryLedger.OccProcessor
+  use DoubleEntryLedger.Occ.Processor
 
   alias DoubleEntryLedger.{
     Event,
@@ -11,14 +11,13 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     Repo,
     EventStoreHelper
   }
-  alias DoubleEntryLedger.Occ
 
   alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
   alias Ecto.{Multi, Changeset}
-  import Occ.Helper
+  import DoubleEntryLedger.Occ.Helper
   import DoubleEntryLedger.EventWorker.ErrorHandler
 
   @doc """

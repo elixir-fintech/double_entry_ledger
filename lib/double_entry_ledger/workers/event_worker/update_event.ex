@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
   """
 
-  use DoubleEntryLedger.OccProcessor
+  use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.Changeset
   alias Ecto.Multi

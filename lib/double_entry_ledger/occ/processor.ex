@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.OccProcessor do
+defmodule DoubleEntryLedger.Occ.Processor do
   @moduledoc """
   This module defines the behaviour for processing events with optimistic concurrency control (OCC).
   It provides a callback for building transactions and a default implementation for processing events
@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.OccProcessor do
 
   defmacro __using__(_opts) do
     quote do
-      @behaviour DoubleEntryLedger.OccProcessor
+      @behaviour DoubleEntryLedger.Occ.Processor
       alias DoubleEntryLedger.Repo
       import DoubleEntryLedger.Occ.Helper
 
@@ -66,13 +66,13 @@ defmodule DoubleEntryLedger.OccProcessor do
       # --- Retry Logic ---
 
       @doc """
-      Process with retry for modules implementing OccProcessor behavior.
+      Process with retry for modules implementing Occ.Processor behavior.
 
       This function handles retrying a transaction when StaleEntryError occurs,
       with exponential backoff and error tracking.
 
       ## Parameters
-        - `module`: The module implementing the OccProcessor behavior
+        - `module`: The module implementing the Occ.Processor behavior
         - `event`: The event being processed
         - `transaction_map`: Transaction data
         - `attempts`: Number of remaining retry attempts

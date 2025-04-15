@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   in the double-entry ledger system.
   """
 
-  use DoubleEntryLedger.OccProcessor
+  use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.{
     Changeset,
