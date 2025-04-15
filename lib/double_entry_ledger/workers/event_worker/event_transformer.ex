@@ -6,10 +6,23 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
   required by the ledger, handling account retrieval, and mapping entries.
   """
 
-  alias DoubleEntryLedger.{Account, AccountStore}
+  alias DoubleEntryLedger.{Account, AccountStore, Types, Transaction}
   alias DoubleEntryLedger.Event.{EntryData, TransactionData}
 
   import DoubleEntryLedger.Currency
+
+
+  @type entry_map() :: %{
+          account_id: Ecto.UUID.t(),
+          value: Money.t(),
+          type: Types.credit_or_debit()
+        }
+
+  @type transaction_map() :: %{
+          instance_id: Ecto.UUID.t(),
+          status: Transaction.state(),
+          entries: list(entry_map())
+        }
 
   @doc """
   Transforms transaction data into a transaction map suitable for ledger operations.
@@ -25,7 +38,7 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
     - `{:error, reason}` if an error occurs during transformation.
   """
   @spec transaction_data_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) ::
-          {:ok, map()} | {:error, String.t()}
+          {:ok, transaction_map()} | {:error, String.t()}
   def transaction_data_to_transaction_map(%{entries: [], status: status}, instance_id) do
     {:ok, %{instance_id: instance_id, status: status}}
   end

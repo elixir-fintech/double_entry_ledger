@@ -8,13 +8,13 @@ defmodule DoubleEntryLedger.Occ.Processor do
   alias DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.{Event, Transaction}
   alias DoubleEntryLedger.Event.EventMap
-
+  alias DoubleEntryLedger.EventWorker.EventTransformer
   @doc """
   Builds a transaction for the given event and data.
 
   Implementations should return an Ecto.Multi that includes the transaction logic.
   """
-  @callback build_transaction(Event.t(), map(), Ecto.Repo.t()) :: Ecto.Multi.t()
+  @callback build_transaction(Event.t(), EventTransformer.transaction_map(), Ecto.Repo.t()) :: Ecto.Multi.t()
 
   @doc """
   Process the event with retry mechanisms.
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       @spec retry(
               module(),
               Event.t() | EventMap.t(),
-              map(),
+              EventTransformer.transaction_map(),
               ErrorMap.t(),
               non_neg_integer(),
               Ecto.Repo.t()
