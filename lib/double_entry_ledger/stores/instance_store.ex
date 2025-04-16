@@ -1,9 +1,49 @@
 defmodule DoubleEntryLedger.InstanceStore do
   @moduledoc """
-  Provides functions to interact with ledger instances.
+  Provides functions for managing ledger instances in the double-entry ledger system.
 
-  This module includes functions for creating, retrieving, updating, and deleting ledger instances.
-  It respects the constraints and validations defined in `DoubleEntryLedger.Instance`.
+  This module serves as the primary interface for all ledger instance operations, including
+  creating, retrieving, updating, and deleting instances. It also provides specialized
+  queries to verify ledger integrity through balance verification across currencies.
+
+  ## Key Functionality
+
+  * **Instance Management**: Create, retrieve, update, and delete ledger instances
+  * **Instance Queries**: Find and list instances by various criteria
+  * **Balance Verification**: Calculate and verify that total debits equal total credits by currency
+  * **Transaction Safety**: Ensures critical operations use appropriate database isolation levels
+
+  ## Usage Examples
+
+  Creating a new ledger instance:
+
+      {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{
+        name: "Business Ledger",
+        metadata: %{owner: "ACME Corp"}
+      })
+
+  Retrieving and updating an instance:
+
+      instance = DoubleEntryLedger.InstanceStore.get_by_id(instance_id)
+      {:ok, updated_instance} = DoubleEntryLedger.InstanceStore.update(
+        instance.id,
+        %{name: "Updated Ledger Name"}
+      )
+
+  Verifying ledger balance integrity:
+
+      {:ok, currency_balances} = DoubleEntryLedger.InstanceStore.sum_accounts_debits_and_credits_by_currency(instance.id)
+      # Check that for each currency, debits = credits
+
+  ## Implementation Notes
+
+  All functions perform appropriate validation and return standardized results:
+
+  * Success: `{:ok, result}`
+  * Error: `{:error, reason}`
+
+  Balance verification queries run in transactions with REPEATABLE READ isolation
+  to ensure consistency when concurrent operations are taking place.
   """
   import Ecto.Query, only: [from: 2]
   alias DoubleEntryLedger.{Instance, Repo, Account}

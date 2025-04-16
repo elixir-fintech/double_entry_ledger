@@ -14,6 +14,27 @@ defmodule DoubleEntryLedger.MixProject do
         plt_add_deps: [:ecto, :postgrex, :money],
         plt_add_apps: [:mix]
         # flags: [:overspecs]
+      ],
+      docs: [
+        main: "readme",
+        extras: ["README.md"],
+        groups_for_modules: [
+          "Event": [
+            DoubleEntryLedger.EventStore,
+            DoubleEntryLedger.Event,
+            DoubleEntryLedger.Event.EntryData,
+            DoubleEntryLedger.Event.TransactionData
+          ],
+          "Account": [
+            DoubleEntryLedger.AccountStore,
+            DoubleEntryLedger.Account,
+          ],
+          "Instance": [
+            DoubleEntryLedger.InstanceStore,
+            DoubleEntryLedger.Instance
+          ],
+        ],
+        before_closing_head_tag: &before_closing_head_tag/1
       ]
     ]
   end
@@ -50,5 +71,15 @@ defmodule DoubleEntryLedger.MixProject do
     [
       test: ["ecto.create --quiet", "ecto.migrate", "test"]
     ]
+  end
+
+  defp before_closing_head_tag(_) do
+    """
+    <style>
+      .sidebar-header, .sidebar {
+        width: 400px !important;
+      }
+    </style>
+    """
   end
 end

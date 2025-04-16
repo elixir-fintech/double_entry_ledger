@@ -1,6 +1,58 @@
 defmodule DoubleEntryLedger.TransactionStore do
   @moduledoc """
-  This module defines the TransactionStore behaviour.
+  Provides functions for managing transactions in the double-entry ledger system.
+
+  This module serves as the primary interface for all transaction-related operations,
+  including creating, retrieving, updating, and querying transactions. It handles the
+  core financial records of the double-entry ledger, ensuring proper transaction creation
+  and modification with appropriate validations.
+
+  ## Key Functionality
+
+  * **Transaction Management**: Create, retrieve, and update transactions
+  * **Complex Queries**: Find transactions by instance ID and account relationships
+  * **Multi Integration**: Build operations that integrate with Ecto.Multi for atomic operations
+  * **Optimistic Concurrency**: Handle Ecto.StaleEntryError with appropriate error handling
+  * **Status Transitions**: Manage transaction state transitions with validation
+
+  ## Usage Examples
+
+  Retrieving a transaction by ID:
+
+      transaction = DoubleEntryLedger.TransactionStore.get_by_id(transaction_id)
+
+  Getting transactions for an instance:
+
+      transactions = DoubleEntryLedger.TransactionStore.list_all_for_instance(instance.id)
+
+  Creating a transaction (typically via events):
+
+      {:ok, transaction} = DoubleEntryLedger.TransactionStore.create(%{
+        instance_id: instance.id,
+        description: "Monthly invoice",
+        entries: [
+          %{account_id: cash_account.id, amount: 100_00, type: :debit},
+          %{account_id: revenue_account.id, amount: 100_00, type: :credit}
+        ]
+      })
+
+  Using the Multi building blocks:
+
+      multi =
+        Ecto.Multi.new()
+        |> DoubleEntryLedger.TransactionStore.build_create(:transaction, transaction_map)
+        |> Ecto.Multi.run(:after_create, fn _, %{transaction: transaction} ->
+          # Additional operations
+          {:ok, transaction}
+        end)
+
+  ## Implementation Notes
+
+  The module provides both direct operations (create/update) and building blocks for
+  Ecto.Multi operations, allowing for both simple usage and complex atomic operations.
+  **It is advised not to use the `create` and `update` functions, as there is no audit trail
+  for these operations. Instead use an event to create or update a transaction.**
+  It uses optimistic concurrency control to handle concurrent modifications to related accounts.
   """
   alias Ecto.Multi
   import Ecto.Query

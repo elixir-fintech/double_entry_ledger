@@ -12,7 +12,7 @@ Since the package is not yet available on Hex, you can install it by adding `dou
 ```elixir
 def deps do
   [
-    {:double_entry_ledger, git: "https://github.com/your_username/double_entry_ledger.git", branch: "main"}
+    {:double_entry_ledger, git: "https://github.com/csommerauer/double_entry_ledger.git", branch: "main"}
   ]
 end
 ```
