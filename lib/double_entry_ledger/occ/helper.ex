@@ -1,7 +1,50 @@
 defmodule DoubleEntryLedger.Occ.Helper do
   @moduledoc """
-  Provides helper functions to handle Optimistic Concurrency Control (OCC) retries.
-  Retry logic is implemented in the relevant modules.
+  Provides helper functions for managing Optimistic Concurrency Control (OCC) in the Double Entry Ledger system.
+
+  This module contains utilities for implementing OCC retry logic, including backoff timing,
+  error tracking, and retry state management. It offers a consistent framework for handling
+  concurrent modification conflicts across the application.
+
+  ## Key Functionality
+
+  * **Retry Management**: Calculate and apply appropriate backoff delays
+  * **Error Tracking**: Update error maps with retry information and messages
+  * **Configuration**: Access OCC-related configuration settings like max retries
+  * **Timing Utilities**: Calculate next retry times for event scheduling
+
+  ## Configuration
+
+  The module's behavior can be configured through the following application environment variables:
+
+  * `:max_retries` - Maximum number of retry attempts (default: 5)
+  * `:retry_interval` - Base interval for retries in milliseconds (default: 200)
+  * `:next_retry_after_interval` - Time to wait before next retry attempt (default: max_retries * retry_interval)
+
+  ## Usage Examples
+
+  Setting a delay based on current attempt number:
+
+      # Pause execution with exponential backoff
+      DoubleEntryLedger.Occ.Helper.set_delay_timer(attempt_number)
+
+  Updating an error map after an OCC conflict:
+
+      updated_error_map = DoubleEntryLedger.Occ.Helper.update_error_map(
+        existing_error_map,
+        current_attempt_number,
+        %{step_1: result_1, step_2: result_2}
+      )
+
+  Calculating timestamps for retry scheduling:
+
+      {now, next_retry_time} = DoubleEntryLedger.Occ.Helper.get_now_and_next_retry_after()
+
+  ## Implementation Notes
+
+  This module uses a linear backoff strategy where retry intervals increase based on
+  remaining attempts, helping to reduce contention over time while maintaining
+  responsiveness for quick resolutions.
   """
 
   import DoubleEntryLedger.Event.ErrorMap
