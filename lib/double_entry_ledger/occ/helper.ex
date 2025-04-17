@@ -183,7 +183,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
     message = occ_error_message(attempts)
 
     %ErrorMap{
-      errors: build_errors(message, error_map.errors),
+      errors: build_errors(error_map.errors, message),
       steps_so_far: steps_so_far,
       retries: error_map.retries + 1
     }

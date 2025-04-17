@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
       iex> changeset.valid?
       false
   """
-  @spec changeset(t(), map()) :: Ecto.Changeset.t()
+  @spec changeset(map() | EntryData.t(), map()) :: Ecto.Changeset.t()
   def changeset(entry_data, attrs) do
     entry_data
     |> cast(attrs, [:account_id, :amount, :currency])
