@@ -23,7 +23,6 @@ defmodule DoubleEntryLedger.Transaction do
   import Ecto.Query, only: [from: 2]
 
   alias DoubleEntryLedger.{Account, Entry, Instance, Repo, Types}
-  alias EntryHelper
   alias __MODULE__, as: Transaction
 
   @states [:pending, :posted, :archived]
@@ -201,7 +200,7 @@ defmodule DoubleEntryLedger.Transaction do
 
   @spec debit_equals_credit_per_currency([Entry.t()]) :: boolean()
   defp debit_equals_credit_per_currency(entries) do
-    Enum.group_by(entries, &EntryHelper.currency(&1))
+    Enum.group_by(entries, &DoubleEntryLedger.EntryHelper.currency(&1))
     |> Enum.map(fn {_currency, entries} -> debit_sum(entries) == credit_sum(entries) end)
     |> Enum.all?(& &1)
   end
@@ -213,7 +212,7 @@ defmodule DoubleEntryLedger.Transaction do
     |> then(&put_assoc(changeset, :entries, &1))
   end
 
-  defp account_ids(entries), do: Enum.map(entries, &EntryHelper.uuid(&1))
-  defp debit_sum(entries), do: Enum.reduce(entries, 0, &EntryHelper.debit_sum(&1, &2))
-  defp credit_sum(entries), do: Enum.reduce(entries, 0, &EntryHelper.credit_sum(&1, &2))
+  defp account_ids(entries), do: Enum.map(entries, &DoubleEntryLedger.EntryHelper.uuid(&1))
+  defp debit_sum(entries), do: Enum.reduce(entries, 0, &DoubleEntryLedger.EntryHelper.debit_sum(&1, &2))
+  defp credit_sum(entries), do: Enum.reduce(entries, 0, &DoubleEntryLedger.EntryHelper.credit_sum(&1, &2))
 end

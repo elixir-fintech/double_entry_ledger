@@ -19,19 +19,52 @@ defmodule DoubleEntryLedger.MixProject do
         main: "readme",
         extras: ["README.md"],
         groups_for_modules: [
-          "Event": [
-            DoubleEntryLedger.EventStore,
-            DoubleEntryLedger.Event,
-            DoubleEntryLedger.Event.EntryData,
-            DoubleEntryLedger.Event.TransactionData
+          "Instance": [
+            DoubleEntryLedger.InstanceStore,
+            DoubleEntryLedger.Instance
           ],
           "Account": [
             DoubleEntryLedger.AccountStore,
             DoubleEntryLedger.Account,
+            DoubleEntryLedger.Balance,
+            DoubleEntryLedger.BalanceHistoryEntry
           ],
-          "Instance": [
-            DoubleEntryLedger.InstanceStore,
-            DoubleEntryLedger.Instance
+          "Transaction": [
+            DoubleEntryLedger.TransactionStore,
+            DoubleEntryLedger.Transaction,
+            DoubleEntryLedger.Entry
+          ],
+          "Event": [
+            DoubleEntryLedger.EventStore,
+            DoubleEntryLedger.EventStoreHelper,
+            DoubleEntryLedger.Event,
+            DoubleEntryLedger.Event.EventMap,
+            DoubleEntryLedger.Event.EntryData,
+            DoubleEntryLedger.Event.TransactionData,
+            DoubleEntryLedger.Event.ErrorMap,
+          ],
+          "EventWorker": [
+            DoubleEntryLedger.EventWorker,
+            DoubleEntryLedger.EventWorker.ProcessEvent,
+            DoubleEntryLedger.EventWorker.ProcessEventMap,
+            DoubleEntryLedger.EventWorker.CreateEvent,
+            DoubleEntryLedger.EventWorker.UpdateEvent,
+            DoubleEntryLedger.EventWorker.EventTransformer,
+            DoubleEntryLedger.EventWorker.AddUpdateEventError,
+            DoubleEntryLedger.EventWorker.ErrorHandler,
+          ],
+          "Protocols, Types and Constants": [
+            DoubleEntryLedger.EntryHelper,
+            DoubleEntryLedger.Types,
+          ],
+          "Optimistic Concurrency Control": [
+            DoubleEntryLedger.Occ.Processor,
+            DoubleEntryLedger.Occ.Helper,
+          ],
+          "Repo": [
+            DoubleEntryLedger.Repo,
+            DoubleEntryLedger.RepoBehaviour,
+            DoubleEntryLedger.BaseSchema,
           ],
         ],
         before_closing_head_tag: &before_closing_head_tag/1
