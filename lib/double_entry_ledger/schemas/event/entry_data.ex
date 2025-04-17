@@ -29,8 +29,8 @@ defmodule DoubleEntryLedger.Event.EntryData do
       }
 
       transaction_data = %TransactionData{
+        status: :pending,
         entries: [entry_data, other_entry],
-        description: "Monthly invoice payment"
       }
 
   ## Validation
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
       iex> changeset.valid?
       false
   """
-  @spec changeset(map() | EntryData.t(), map()) :: Ecto.Changeset.t()
+  @spec changeset(t() | map(), map()) :: Ecto.Changeset.t()
   def changeset(entry_data, attrs) do
     entry_data
     |> cast(attrs, [:account_id, :amount, :currency])
