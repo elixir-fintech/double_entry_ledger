@@ -21,6 +21,7 @@ defmodule DoubleEntryLedger.AccountTest do
                errors: [
                  type: {"invalid account type: ", []},
                  name: {"can't be blank", [validation: :required]},
+                 currency: {"can't be blank", [validation: :required]},
                  instance_id: {"can't be blank", [validation: :required]},
                  type: {"can't be blank", [validation: :required]}
                ]
@@ -39,6 +40,7 @@ defmodule DoubleEntryLedger.AccountTest do
                Account.changeset(%Account{}, %{
                  name: "some name",
                  type: :debit,
+                 currency: :EUR,
                  normal_balance: :asset,
                  instance_id: id
                })
@@ -49,7 +51,10 @@ defmodule DoubleEntryLedger.AccountTest do
                valid?: true,
                changes: %{type: :asset, normal_balance: :debit}
              } =
-               Account.changeset(%Account{}, %{name: "some name", type: :asset, instance_id: id})
+               Account.changeset(
+                %Account{},
+                %{name: "some name", type: :asset, instance_id: id, currency: :EUR}
+                )
 
       assert %Ecto.Changeset{
                valid?: true,
@@ -58,26 +63,27 @@ defmodule DoubleEntryLedger.AccountTest do
                Account.changeset(%Account{}, %{
                  name: "some name",
                  type: :liability,
-                 instance_id: id
+                 instance_id: id,
+                 currency: :EUR
                })
 
       assert %Ecto.Changeset{
                valid?: true,
                changes: %{type: :equity, normal_balance: :credit}
              } =
-               Account.changeset(%Account{}, %{name: "some name", type: :equity, instance_id: id})
+               Account.changeset(%Account{}, %{name: "some name", type: :equity, instance_id: id, currency: :EUR})
 
       assert %Ecto.Changeset{
                valid?: true,
                changes: %{type: :expense, normal_balance: :debit}
              } =
-               Account.changeset(%Account{}, %{name: "some name", type: :expense, instance_id: id})
+               Account.changeset(%Account{}, %{name: "some name", type: :expense, instance_id: id, currency: :EUR})
 
       assert %Ecto.Changeset{
                valid?: true,
                changes: %{type: :revenue, normal_balance: :credit}
              } =
-               Account.changeset(%Account{}, %{name: "some name", type: :revenue, instance_id: id})
+               Account.changeset(%Account{}, %{name: "some name", type: :revenue, instance_id: id, currency: :EUR})
     end
 
     test "sets the normal balance if it was passed as an attribute", %{instance: %{id: id}} do
@@ -89,6 +95,7 @@ defmodule DoubleEntryLedger.AccountTest do
                  name: "some name",
                  type: :asset,
                  normal_balance: :credit,
+                 currency: :EUR,
                  instance_id: id
                })
     end

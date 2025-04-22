@@ -1,35 +1,53 @@
 defmodule DoubleEntryLedger.Account do
   @moduledoc """
-  The `DoubleEntryLedger.Account` module manages account information and balance updates
-  within a ledger system. It uses `Ecto.Schema` to define the schema for accounts and provides
-  various functions to handle account changesets and balance updates.
+  Manages financial accounts in the Double Entry Ledger system.
+
+  This module defines the Account schema and provides functions for account creation,
+  updates, and balance management following double-entry bookkeeping principles.
+
+  ## Key Concepts
+
+  * **Normal Balance**: Each account has a default balance direction (debit/credit) based on its type.
+    Normal balances are automatically assigned but can be overridden for special cases like contra accounts.
+  * **Balance Types**: Accounts track both posted (finalized) and pending balances separately.
+  * **Available Balance**: The calculated balance that accounts for both posted transactions
+    and pending holds/authorizations.
 
   ## Schema Fields
 
-    - `id` (binary): The unique identifier for the account.
-    - `currency` (Currency.currency_atom()): The currency type for the account.
-    - `description` (string): An optional description of the account.
-    - `context` (map): Optional additional context information about the account.
-    - `name` (string): The name of the account.
-    - `type` (Types.account_type()): The type of the account.
-    - `normal_balance` (Types.credit_or_debit()): The normal balance of the account.
-    - `available` (integer): The available balance in the account.
-    - `allowed_negative` (boolean): Whether the account can have a negative balance.
-    - `posted` (Balance.t()): The posted balance details of the account.
-    - `pending` (Balance.t()): The pending balance details of the account.
-    - `instance_id` (binary): The ID of the associated ledger instance.
-    - `inserted_at` (DateTime): The timestamp when the account was created.
-    - `updated_at` (DateTime): The timestamp when the account was last updated.
+  * `id`: UUID primary key
+  * `name`: Human-readable account name (required)
+  * `description`: Optional text description
+  * `currency`: The currency code as an atom (e.g., `:USD`, `:EUR`)
+  * `type`: Account classification (`:asset`, `:liability`, `:equity`, `:revenue`, `:expense`)
+  * `normal_balance`: Whether the account normally increases with `:debit` or `:credit` entries
+  * `available`: Calculated available balance (posted minus relevant pending)
+  * `allowed_negative`: Whether the account can have a negative available balance
+  * `context`: JSON map for additional metadata
+  * `posted`: Embedded Balance struct for settled transactions
+  * `pending`: Embedded Balance struct for pending transactions
+  * `lock_version`: Integer for optimistic concurrency control
+  * `instance_id`: Foreign key to the ledger instance
+  * `inserted_at`/`updated_at`: Timestamps
 
-  ## Functions
+  ## Transaction Processing
 
-    - `changeset/2`: Creates a changeset for the account based on the given attributes.
-    - `update_changeset/2`: Creates a changeset for updating the account based on the given attributes.
-    - `delete_changeset/1`: Creates a changeset for safely deleting an account.
-    - `update_balances/2`: Updates the balances of the account based on the given entry and transaction type.
+  The module handles various transaction types:
+  * `:posted` - Direct postings to finalized balance
+  * `:pending` - Holds/authorizations for future settlement
+  * `:pending_to_posted` - Converting pending entries to posted
+  * `:pending_to_pending` - Modifying pending entries
+  * `:pending_to_archived` - Removing pending entries
+
+  ## Relationships
+
+  * Belongs to: `instance`
+  * Has many: `entries`
+  * Has many: `balance_history_entries`
   """
   use DoubleEntryLedger.BaseSchema
 
+  alias Ecto.Changeset
   alias DoubleEntryLedger.{
     Balance,
     BalanceHistoryEntry,
@@ -44,6 +62,30 @@ defmodule DoubleEntryLedger.Account do
   @credit_and_debit Types.credit_and_debit()
   @account_types Types.account_types()
 
+  @typedoc """
+  Represents a financial account in the double-entry ledger system.
+
+  An account is the fundamental unit that holds balances and participates in transactions.
+  Each account has a type, normal balance direction, and tracks both pending and posted amounts.
+
+  ## Fields
+
+  * `id`: UUID primary key
+  * `name`: Human-readable account name
+  * `description`: Optional text description
+  * `currency`: Currency code atom (e.g., `:USD`, `:EUR`)
+  * `type`: Account classification
+  * `normal_balance`: Default balance direction
+  * `available`: Calculated available balance
+  * `allowed_negative`: Whether negative balances are allowed
+  * `context`: Additional metadata as a map
+  * `posted`: Balance struct for posted transactions
+  * `pending`: Balance struct for pending transactions
+  * `lock_version`: Version for optimistic concurrency control
+  * `instance_id`: Reference to ledger instance
+  * `inserted_at`: Creation timestamp
+  * `updated_at`: Last update timestamp
+  """
   @type t :: %Account{
           id: binary() | nil,
           currency: Currency.currency_atom() | nil,
@@ -56,6 +98,7 @@ defmodule DoubleEntryLedger.Account do
           allowed_negative: boolean(),
           posted: Balance.t() | nil,
           pending: Balance.t() | nil,
+          lock_version: integer(),
           instance_id: binary() | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
@@ -64,7 +107,7 @@ defmodule DoubleEntryLedger.Account do
   @currency_atoms Currency.currency_atoms()
 
   schema "accounts" do
-    field(:currency, Ecto.Enum, values: @currency_atoms, default: :EUR)
+    field(:currency, Ecto.Enum, values: @currency_atoms)
     field(:description, :string)
     field(:context, :map)
     field(:name, :string)
@@ -86,31 +129,42 @@ defmodule DoubleEntryLedger.Account do
   end
 
   @doc """
-  Creates a changeset for the account based on the given attributes.
+  Creates a changeset for validating and creating a new Account.
+
+  Enforces required fields, validates types, and automatically sets the normal_balance
+  based on the account type if not explicitly provided.
 
   ## Parameters
 
-    - `account` (Account.t()): The account struct.
-    - `attrs` (map): The attributes to be cast to the account.
+  * `account` - The account struct to create a changeset for
+  * `attrs` - Map of attributes to apply to the account
 
   ## Returns
 
-    - `changeset`: An Ecto changeset for the account.
+  * An Ecto.Changeset with validations applied
 
   ## Examples
 
-      iex> account = %DoubleEntryLedger.Account{}
-      iex> changeset = DoubleEntryLedger.Account.changeset(account, %{name: "New Account", currency: :USD, instance_id: "some-instance-id", type: :asset})
+      # Create a valid asset account
+      iex> changeset = Account.changeset(%Account{}, %{
+      ...>   name: "Cash Account",
+      ...>   currency: :USD,
+      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   type: :asset
+      ...> })
       iex> changeset.valid?
       true
+      iex> Ecto.Changeset.get_field(changeset, :normal_balance)
+      :debit
 
-      iex> account = %DoubleEntryLedger.Account{}
-      iex> changeset = DoubleEntryLedger.Account.changeset(account, %{})
+      # Invalid without required fields
+      iex> changeset = Account.changeset(%Account{}, %{})
       iex> changeset.valid?
       false
-
+      iex> MapSet.new(Keyword.keys(changeset.errors))
+      MapSet.new([:name, :currency, :instance_id, :type])
   """
-  @spec changeset(Account.t(), map()) :: Ecto.Changeset.t()
+  @spec changeset(Account.t(), map()) :: Changeset.t()
   def changeset(account, attrs) do
     account
     |> cast(attrs, [
@@ -135,28 +189,34 @@ defmodule DoubleEntryLedger.Account do
   end
 
   @doc """
-  Creates a changeset for updating the account based on the given attributes.
-  Only the `name`, `description`, and `context` fields can be updated.
+  Creates a changeset for updating an existing Account.
+
+  Limited to updating only the `name`, `description`, and `context` fields,
+  protecting critical fields like type and currency from modification.
 
   ## Parameters
 
-    - `changeset` (Ecto.Changeset.t()): The existing changeset for the account.
-    - `attrs` (map): The attributes to be cast to the account.
+  * `account` - The account struct to update
+  * `attrs` - Map of attributes to update
 
   ## Returns
 
-    - `changeset`: An Ecto changeset for the account.
+  * An Ecto.Changeset with validations applied
 
   ## Examples
 
-      iex> account = %DoubleEntryLedger.Account{}
-      iex> changeset = DoubleEntryLedger.Account.changeset(account, %{name: "New Account", currency: :USD, instance_id: "some-instance-id", type: :asset})
-      iex> updated_changeset = DoubleEntryLedger.Account.update_changeset(changeset, %{description: "Updated description"})
-      iex> updated_changeset.valid?
+      # Update account name and description
+      iex> account = %Account{name: "Old Name", instance_id: "inst-123"}
+      iex> changeset = Account.update_changeset(account, %{
+      ...>   name: "New Name",
+      ...>   description: "Updated description"
+      ...> })
+      iex> changeset.valid?
       true
-
+      iex> Ecto.Changeset.get_change(changeset, :name)
+      "New Name"
   """
-  @spec update_changeset(Account.t(), map()) :: Ecto.Changeset.t()
+  @spec update_changeset(Account.t(), map()) :: Changeset.t()
   def update_changeset(changeset, attrs) do
     changeset
     |> cast(attrs, [:name, :description, :context])
@@ -168,25 +228,47 @@ defmodule DoubleEntryLedger.Account do
   @doc """
   Creates a changeset for safely deleting an account.
 
-  Ensures that there are no associated entries before deletion.
+  Validates that there are no associated entries (transactions) before deletion,
+  ensuring accounting integrity is maintained.
 
   ## Parameters
 
-    - `account` (Account.t()): The account struct.
+  * `account` - The account to delete
 
   ## Returns
 
-    - `changeset`: An Ecto changeset for the account.
+  * An Ecto.Changeset that will fail if the account has entries
 
   ## Examples
 
-      iex> account = %DoubleEntryLedger.Account{}
-      iex> changeset = DoubleEntryLedger.Account.delete_changeset(account)
-      iex> changeset.valid?
+      # Attempt to delete an account with no entries
+      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
+      iex> {:ok, account} = AccountStore.create(%{
+      ...>    name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
+      iex> {:ok, %{id: account_id}} = Repo.delete(Account.delete_changeset(account))
+      iex> account.id == account_id
       true
 
+      # Attempt to delete an account with entries
+      # This requires
+      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+      iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
+      iex> {:ok, account1} = AccountStore.create(%{
+      ...>    name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
+      iex> {:ok, account2} = AccountStore.create(%{
+      ...>    name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
+      iex> {:ok, _, _} = EventStore.process_from_event_params(%{instance_id: instance.id,
+      ...>  source: "s1", source_idempk: "1", action: :create,
+      ...>  transaction_data: %{status: :pending, entries: [
+      ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
+      ...>      %{account_id: account2.id, amount: 100, currency: :EUR},
+      ...>  ]}})
+      iex> {:error, changeset} = Account.delete_changeset(account1)
+      ...> |> Repo.delete()
+      iex> [entries: {"are still associated with this entry", _}] = changeset.errors
   """
-  @spec delete_changeset(Account.t()) :: Ecto.Changeset.t()
+  @spec delete_changeset(Account.t()) :: Changeset.t()
   def delete_changeset(account) do
     account
     |> change()
@@ -194,23 +276,41 @@ defmodule DoubleEntryLedger.Account do
   end
 
   @doc """
-  Updates the balances of the account based on the given entry and transaction type.
+  Updates account balances based on an entry and transaction type.
+
+  This function handles all the complex account balance updates for different
+  transaction scenarios like posting, pending holds, and settlement.
 
   ## Parameters
 
-    - `account` (Account.t()): The account struct.
-    - `entry` (Entry.t() | Ecto.Changeset.t()): The entry or entry changeset.
-    - `trx` (Types.trx_types()): The transaction type.
+  * `account` - The account to update
+  * `params` - Map containing:
+    * `entry` - Entry struct or changeset with the transaction details
+    * `trx` - Transaction type (`:posted`, `:pending`, `:pending_to_posted`, etc.)
 
   ## Returns
 
-    - `changeset`: An Ecto changeset for the account with updated balances.
+  * A changeset with updated balance fields and optimistic lock version increment
 
+  ## Implementation Notes
+
+  * Validates that entry and account currencies match
+  * Handles various transaction types with different balance update logic
+  * Enforces non-negative balance if `allowed_negative` is false
+  * Uses optimistic locking to prevent concurrent balance modifications
+
+  ## Transaction Types
+
+  * `:posted` - Direct posting to finalized balance
+  * `:pending` - Holds/authorizations for future settlement
+  * `:pending_to_posted` - Converting pending entries to posted
+  * `:pending_to_pending` - Modifying existing pending entries
+  * `:pending_to_archived` - Removing pending entries without posting
   """
   @spec update_balances(Account.t(), %{
-          entry: Entry.t() | Ecto.Changeset.t(),
+          entry: Entry.t() | Changeset.t(),
           trx: Types.trx_types()
-        }) :: Ecto.Changeset.t()
+        }) :: Changeset.t()
   def update_balances(account, %{entry: entry, trx: trx}) when is_struct(entry, Entry) do
     entry_changeset = Entry.changeset(entry, %{})
     update_balances(account, %{entry: entry_changeset, trx: trx})
@@ -229,6 +329,7 @@ defmodule DoubleEntryLedger.Account do
 
   # if the normal_balance is already set, do nothing. This allows for the setup of accounts with a specific normal_balance
   # such as contra accounts and similar
+  @spec set_normal_balance_based_on_type(Changeset.t()) :: Changeset.t()
   defp set_normal_balance_based_on_type(%{changes: %{normal_balance: nb}} = changeset)
        when nb in @credit_and_debit do
     changeset
@@ -254,6 +355,7 @@ defmodule DoubleEntryLedger.Account do
     end
   end
 
+  @spec validate_entry_changeset(Changeset.t(), Changeset.t()) :: Changeset.t()
   defp validate_entry_changeset(
          %{data: %{id: account_id, currency: currency}} = changeset,
          entry_changeset
@@ -284,7 +386,7 @@ defmodule DoubleEntryLedger.Account do
     end
   end
 
-  @spec update(Ecto.Changeset.t(), Ecto.Changeset.t(), Types.credit_or_debit(), Types.trx_types()) ::
+  @spec update(Changeset.t(), Changeset.t(), Types.credit_or_debit(), Types.trx_types()) ::
           Ecto.Changeset.t()
   defp update(%{data: %{posted: po, normal_balance: nb}} = changeset, entry, entry_type, trx)
        when trx == :posted do
@@ -361,7 +463,7 @@ defmodule DoubleEntryLedger.Account do
   defp update(changeset, _, _, transition),
     do: add_error(changeset, :entry, "invalid transition: #{transition}")
 
-  @spec update_available(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  @spec update_available(Changeset.t()) :: Changeset.t()
   defp update_available(
          %{data: %{allowed_negative: allowed_negative, normal_balance: nb}} = changeset
        ) do
