@@ -8,6 +8,8 @@ defmodule BalanceHistoryEntryTest do
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures}
   alias DoubleEntryLedger.{Account, Entry, BalanceHistoryEntry, Balance}
 
+  doctest BalanceHistoryEntry
+
   describe "build_from_account_changeset/1" do
     setup [:create_instance]
 
