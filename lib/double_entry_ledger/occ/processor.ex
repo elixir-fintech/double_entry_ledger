@@ -47,39 +47,43 @@ defmodule DoubleEntryLedger.Occ.Processor do
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker.EventTransformer
 
-@doc """
-Builds an Ecto.Multi transaction for processing an event.
+  @doc """
+  Builds an Ecto.Multi transaction for processing an event.
 
-This callback must be implemented by modules using the OccProcessor behavior.
-It defines how to construct the database transaction operations needed to process
-the event and its associated transaction data.
+  This callback must be implemented by modules using the OccProcessor behavior.
+  It defines how to construct the database transaction operations needed to process
+  the event and its associated transaction data.
 
-## Required Transaction Steps
+  ## Required Transaction Steps
 
-The Multi must include specific named steps depending on the input type:
+  The Multi must include specific named steps depending on the input type:
 
-* `:create_event` (required for EventMap) - Must return the created Event struct when processing the EventMap
-* `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
-* `:event`(required) - Must return the saved Event struct when processing the Event
+  * `:create_event` (required for EventMap) - Must return the created Event struct when processing the EventMap
+  * `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
+  * `:event`(required) - Must return the saved Event struct when processing the Event
 
-## Parameters
+  ## Parameters
 
-* `event_or_map`: An Event struct or EventMap containing the event details to process
-* `transaction_map`: A map of transaction data derived from the event
-* `repo`: The Ecto repository to use for database operations
+  * `event_or_map`: An Event struct or EventMap containing the event details to process
+  * `transaction_map`: A map of transaction data derived from the event
+  * `repo`: The Ecto repository to use for database operations
 
-## Returns
+  ## Returns
 
-* An `Ecto.Multi` struct containing all the operations to execute atomically
+  * An `Ecto.Multi` struct containing all the operations to execute atomically
 
-## Implementation Examples
+  ## Implementation Examples
 
-See implementations in:
-* `DoubleEntryLedger.EventWorker.CreateEvent.build_transaction/3`
-* `DoubleEntryLedger.EventWorker.UpdateEvent.build_transaction/3`
-* `DoubleEntryLedger.EventWorker.ProcessEventMap.build_transaction/3`
-"""
-  @callback build_transaction(Event.t() | EventMap.t(), EventTransformer.transaction_map(), Ecto.Repo.t()) ::
+  See implementations in:
+  * `DoubleEntryLedger.EventWorker.CreateEvent.build_transaction/3`
+  * `DoubleEntryLedger.EventWorker.UpdateEvent.build_transaction/3`
+  * `DoubleEntryLedger.EventWorker.ProcessEventMap.build_transaction/3`
+  """
+  @callback build_transaction(
+              Event.t() | EventMap.t(),
+              EventTransformer.transaction_map(),
+              Ecto.Repo.t()
+            ) ::
               Ecto.Multi.t()
 
   @doc """

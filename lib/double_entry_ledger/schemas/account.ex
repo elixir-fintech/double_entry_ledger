@@ -48,6 +48,7 @@ defmodule DoubleEntryLedger.Account do
   use DoubleEntryLedger.BaseSchema
 
   alias Ecto.Changeset
+
   alias DoubleEntryLedger.{
     Balance,
     BalanceHistoryEntry,
@@ -251,7 +252,7 @@ defmodule DoubleEntryLedger.Account do
       true
 
       # Attempt to delete an account with entries
-      # This requires
+      # This is a database constraint error, not a changeset error
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
       iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{

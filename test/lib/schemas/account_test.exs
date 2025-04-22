@@ -52,9 +52,9 @@ defmodule DoubleEntryLedger.AccountTest do
                changes: %{type: :asset, normal_balance: :debit}
              } =
                Account.changeset(
-                %Account{},
-                %{name: "some name", type: :asset, instance_id: id, currency: :EUR}
-                )
+                 %Account{},
+                 %{name: "some name", type: :asset, instance_id: id, currency: :EUR}
+               )
 
       assert %Ecto.Changeset{
                valid?: true,
@@ -71,19 +71,34 @@ defmodule DoubleEntryLedger.AccountTest do
                valid?: true,
                changes: %{type: :equity, normal_balance: :credit}
              } =
-               Account.changeset(%Account{}, %{name: "some name", type: :equity, instance_id: id, currency: :EUR})
+               Account.changeset(%Account{}, %{
+                 name: "some name",
+                 type: :equity,
+                 instance_id: id,
+                 currency: :EUR
+               })
 
       assert %Ecto.Changeset{
                valid?: true,
                changes: %{type: :expense, normal_balance: :debit}
              } =
-               Account.changeset(%Account{}, %{name: "some name", type: :expense, instance_id: id, currency: :EUR})
+               Account.changeset(%Account{}, %{
+                 name: "some name",
+                 type: :expense,
+                 instance_id: id,
+                 currency: :EUR
+               })
 
       assert %Ecto.Changeset{
                valid?: true,
                changes: %{type: :revenue, normal_balance: :credit}
              } =
-               Account.changeset(%Account{}, %{name: "some name", type: :revenue, instance_id: id, currency: :EUR})
+               Account.changeset(%Account{}, %{
+                 name: "some name",
+                 type: :revenue,
+                 instance_id: id,
+                 currency: :EUR
+               })
     end
 
     test "sets the normal balance if it was passed as an attribute", %{instance: %{id: id}} do

@@ -213,6 +213,10 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   defp account_ids(entries), do: Enum.map(entries, &DoubleEntryLedger.EntryHelper.uuid(&1))
-  defp debit_sum(entries), do: Enum.reduce(entries, 0, &DoubleEntryLedger.EntryHelper.debit_sum(&1, &2))
-  defp credit_sum(entries), do: Enum.reduce(entries, 0, &DoubleEntryLedger.EntryHelper.credit_sum(&1, &2))
+
+  defp debit_sum(entries),
+    do: Enum.reduce(entries, 0, &DoubleEntryLedger.EntryHelper.debit_sum(&1, &2))
+
+  defp credit_sum(entries),
+    do: Enum.reduce(entries, 0, &DoubleEntryLedger.EntryHelper.credit_sum(&1, &2))
 end

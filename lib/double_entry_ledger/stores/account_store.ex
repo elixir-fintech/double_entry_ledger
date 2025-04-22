@@ -1,47 +1,47 @@
 defmodule DoubleEntryLedger.AccountStore do
-@moduledoc """
-Provides functions for managing and querying accounts in the double-entry ledger system.
+  @moduledoc """
+  Provides functions for managing and querying accounts in the double-entry ledger system.
 
-This module serves as the primary interface for all account-related operations, including
-creating, retrieving, updating, and deleting accounts. It also provides specialized
-query functions to retrieve accounts by various criteria and access account balance history.
+  This module serves as the primary interface for all account-related operations, including
+  creating, retrieving, updating, and deleting accounts. It also provides specialized
+  query functions to retrieve accounts by various criteria and access account balance history.
 
-## Key Functionality
+  ## Key Functionality
 
-* **Account Management**: Create, retrieve, update, and delete accounts
-* **Account Queries**: Find accounts by instance, type, and ID combinations
-* **Balance History**: Access the historical record of account balance changes
+  * **Account Management**: Create, retrieve, update, and delete accounts
+  * **Account Queries**: Find accounts by instance, type, and ID combinations
+  * **Balance History**: Access the historical record of account balance changes
 
-## Usage Examples
+  ## Usage Examples
 
-Creating a new account:
+  Creating a new account:
 
-    {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{name: "Business Ledger"})
-    {:ok, account} = DoubleEntryLedger.AccountStore.create(%{
-      name: "Cash",
-      instance_id: instance.id,
-      currency: :USD,
-      type: :asset
-    })
+      {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{name: "Business Ledger"})
+      {:ok, account} = DoubleEntryLedger.AccountStore.create(%{
+        name: "Cash",
+        instance_id: instance.id,
+        currency: :USD,
+        type: :asset
+      })
 
-Retrieving accounts for an instance:
+  Retrieving accounts for an instance:
 
-    {:ok, accounts} = DoubleEntryLedger.AccountStore.get_all_accounts_by_instance_id(instance.id)
+      {:ok, accounts} = DoubleEntryLedger.AccountStore.get_all_accounts_by_instance_id(instance.id)
 
-Accessing an account's balance history:
+  Accessing an account's balance history:
 
-    {:ok, history} = DoubleEntryLedger.AccountStore.get_balance_history(account.id)
+      {:ok, history} = DoubleEntryLedger.AccountStore.get_balance_history(account.id)
 
-## Implementation Notes
+  ## Implementation Notes
 
-All functions perform appropriate validation and return standardized results:
+  All functions perform appropriate validation and return standardized results:
 
-* Success: `{:ok, result}`
-* Error: `{:error, reason}`
+  * Success: `{:ok, result}`
+  * Error: `{:error, reason}`
 
-The module integrates with the ledger's validation system to ensure account integrity
-and enforce business rules for the double-entry accounting system.
-"""
+  The module integrates with the ledger's validation system to ensure account integrity
+  and enforce business rules for the double-entry accounting system.
+  """
   import Ecto.Query, only: [from: 2]
 
   alias DoubleEntryLedger.{

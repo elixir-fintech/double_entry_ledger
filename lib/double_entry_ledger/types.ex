@@ -59,7 +59,6 @@ defmodule DoubleEntryLedger.Types do
             end)
           )
 
-
   @typedoc """
   A list containing both credit and debit types.
   """
