@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
         EventWorker.process_event_with_id(pending_event.id)
 
       assert return_available_balances(ctx) == [0, 0]
-      assert return_pending_balances(ctx) == [-100, -100]
+      assert return_pending_balances(ctx) == [100, 100]
 
       {:ok, event} =
         create_update_event(s, s_id, inst.id, :posted, [
@@ -52,6 +52,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       assert transaction.id == pending_transaction.id
       assert processed_event.processed_at != nil
       assert return_available_balances(ctx) == [50, 50]
+      assert return_pending_balances(ctx) == [0, 0]
       assert transaction.status == :posted
     end
 

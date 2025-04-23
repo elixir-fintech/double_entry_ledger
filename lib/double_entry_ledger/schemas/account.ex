@@ -398,24 +398,13 @@ defmodule DoubleEntryLedger.Account do
   end
 
   defp update(%{data: %{pending: pe, normal_balance: nb}} = changeset, entry, entry_type, trx)
-       when trx == :pending and entry_type == nb do
+       when trx == :pending do
     entry_value = get_field(entry, :value)
 
     changeset
     |> put_embed(
       :pending,
-      Balance.update_balance(pe, entry_value.amount, entry_type, opposite_direction(entry_type))
-    )
-  end
-
-  defp update(%{data: %{pending: pe, normal_balance: nb}} = changeset, entry, entry_type, trx)
-       when trx == :pending and entry_type != nb do
-    entry_value = get_field(entry, :value)
-
-    changeset
-    |> put_change(
-      :pending,
-      Balance.update_balance(pe, entry_value.amount, entry_type, entry_type)
+      Balance.update_balance(pe, entry_value.amount, entry_type, nb)
     )
   end
 

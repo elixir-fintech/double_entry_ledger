@@ -17,14 +17,14 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       create_transaction(ctx)
 
       assert %{
-               pending: %Balance{amount: -100, credit: 0, debit: 100},
+               pending: %Balance{amount: 100, credit: 0, debit: 100},
                posted: %Balance{amount: 0, credit: 0, debit: 0},
                available: 0,
                normal_balance: :debit
              } = Repo.get!(Account, a1.id)
 
       assert %{
-               pending: %Balance{amount: -100, credit: 100, debit: 0},
+               pending: %Balance{amount: 100, credit: 100, debit: 0},
                posted: %Balance{amount: 0, credit: 0, debit: 0},
                available: 0,
                normal_balance: :credit
@@ -164,14 +164,14 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       assert %{status: :pending} = Repo.reload(trx)
       # accounts should have the original values from the pending transaction
       assert %{
-               pending: %Balance{amount: 50, credit: 50, debit: 0},
+               pending: %Balance{amount: -50, credit: 50, debit: 0},
                posted: %Balance{amount: 100, credit: 0, debit: 100},
                available: 50,
                normal_balance: :debit
              } = Repo.get!(Account, a1.id)
 
       assert %{
-               pending: %Balance{amount: 50, credit: 0, debit: 50},
+               pending: %Balance{amount: -50, credit: 0, debit: 50},
                posted: %Balance{amount: 100, credit: 100, debit: 0},
                available: 50,
                normal_balance: :credit

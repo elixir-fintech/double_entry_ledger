@@ -84,7 +84,8 @@ defmodule DoubleEntryLedger.EntryTest do
       assert first.available == account.available
       assert first.posted == %Balance{amount: 0, credit: 0, debit: 0}
       assert first.posted == account.posted
-      assert first.pending == %Balance{amount: -100, credit: 0, debit: 100}
+      assert account.normal_balance == :debit
+      assert first.pending == %Balance{amount: 100, credit: 0, debit: 100}
       assert first.pending == account.pending
     end
 

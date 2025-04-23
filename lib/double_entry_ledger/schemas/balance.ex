@@ -196,25 +196,25 @@ defmodule DoubleEntryLedger.Balance do
       iex> balance = DoubleEntryLedger.Balance.new()
       iex> %Ecto.Changeset{valid?: true, changes: changes} = DoubleEntryLedger.Balance.reverse_pending(balance, 50, :debit, :debit)
       iex> changes
-      %{amount: 50, debit: -50}
+      %{amount: -50, debit: -50}
 
       iex> balance = DoubleEntryLedger.Balance.new()
       iex> %Ecto.Changeset{valid?: true, changes: changes} = DoubleEntryLedger.Balance.reverse_pending(balance, 50, :credit, :debit)
       iex> changes
-      %{amount: -50, credit: -50}
+      %{amount: 50, credit: -50}
   """
   @spec reverse_pending(Balance.t(), integer(), atom(), atom()) :: Ecto.Changeset.t()
   def reverse_pending(%{amount: amt} = balance, amount, e_type, a_type) when e_type == a_type do
     balance
     |> change()
-    |> put_change(:amount, amt + amount)
+    |> put_change(:amount, amt - amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount)
   end
 
   def reverse_pending(%{amount: amt} = balance, amount, e_type, a_type) when e_type != a_type do
     balance
     |> change()
-    |> put_change(:amount, amt - amount)
+    |> put_change(:amount, amt + amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount)
   end
 
@@ -242,12 +242,12 @@ defmodule DoubleEntryLedger.Balance do
       iex> balance = %DoubleEntryLedger.Balance{amount: 50, debit: 50, credit: 0}
       iex> %Ecto.Changeset{changes: changes} = DoubleEntryLedger.Balance.reverse_and_update_pending(balance, 50, 75, :debit, :debit)
       iex> changes
-      %{amount: 25, debit: 75}
+      %{amount: 75, debit: 75}
 
       iex> balance = %DoubleEntryLedger.Balance{amount: -50, credit: 50, debit: 0}
       iex> %Ecto.Changeset{changes: changes} = DoubleEntryLedger.Balance.reverse_and_update_pending(balance, 50, 75, :credit, :debit)
       iex> changes
-      %{amount: -25, credit: 75}
+      %{amount: -75, credit: 75}
   """
   @spec reverse_and_update_pending(Balance.t(), integer(), integer(), atom(), atom()) ::
           Ecto.Changeset.t()
@@ -261,7 +261,7 @@ defmodule DoubleEntryLedger.Balance do
       when e_type == a_type do
     balance
     |> change()
-    |> put_change(:amount, amt + amount_to_reverse - new_amount)
+    |> put_change(:amount, amt - amount_to_reverse + new_amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount_to_reverse + new_amount)
   end
 
@@ -275,7 +275,7 @@ defmodule DoubleEntryLedger.Balance do
       when e_type != a_type do
     balance
     |> change()
-    |> put_change(:amount, amt - amount_to_reverse + new_amount)
+    |> put_change(:amount, amt + amount_to_reverse - new_amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount_to_reverse + new_amount)
   end
 end

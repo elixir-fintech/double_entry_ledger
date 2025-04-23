@@ -109,7 +109,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: -200, debit: 200}
+                   changes: %{amount: 200, debit: 200}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending})
@@ -121,7 +121,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
           normal_balance: :debit,
           instance_id: inst.id,
           posted: %{amount: 100, debit: 100, credit: 0},
-          pending: %{amount: -50, debit: 50, credit: 0},
+          pending: %{amount: 50, debit: 50, credit: 0},
           available: 100
         )
 
@@ -134,7 +134,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: -75, debit: 75}
+                   changes: %{amount: 75, debit: 75}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending})
@@ -152,7 +152,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: 200, credit: 200}
+                   changes: %{amount: -200, credit: 200}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending})
@@ -164,7 +164,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
           normal_balance: :debit,
           instance_id: inst.id,
           posted: %{amount: 100, debit: 100, credit: 0},
-          pending: %{amount: 50, debit: 0, credit: 50},
+          pending: %{amount: -50, debit: 0, credit: 50},
           available: 50
         )
 
@@ -177,7 +177,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: 75, credit: 75}
+                   changes: %{amount: -75, credit: 75}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending})
@@ -193,7 +193,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
           normal_balance: :debit,
           instance_id: inst.id,
           posted: %{amount: 100, debit: 100, credit: 0},
-          pending: %{amount: -50, debit: 50, credit: 0},
+          pending: %{amount: 50, debit: 50, credit: 0},
           available: 100
         )
 
@@ -206,7 +206,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: -25, debit: 25}
+                   changes: %{amount: 25, debit: 25}
                  },
                  posted: %Ecto.Changeset{
                    action: :insert,
@@ -223,7 +223,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
           normal_balance: :debit,
           instance_id: inst.id,
           posted: %{amount: 100, debit: 100, credit: 0},
-          pending: %{amount: 50, debit: 0, credit: 50},
+          pending: %{amount: -50, debit: 0, credit: 50},
           available: 50
         )
 
@@ -236,7 +236,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: 25, credit: 25}
+                   changes: %{amount: -25, credit: 25}
                  },
                  posted: %Ecto.Changeset{
                    action: :insert,
@@ -257,7 +257,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
           normal_balance: :debit,
           instance_id: inst.id,
           posted: %{amount: 100, debit: 100, credit: 0},
-          pending: %{amount: -50, debit: 50, credit: 0},
+          pending: %{amount: 50, debit: 50, credit: 0},
           available: 100
         )
 
@@ -274,7 +274,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: -35, debit: 35}
+                   changes: %{amount: 35, debit: 35}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending_to_pending})
@@ -286,7 +286,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
           normal_balance: :debit,
           instance_id: inst.id,
           posted: %{amount: 100, debit: 100, credit: 0},
-          pending: %{amount: 50, debit: 0, credit: 50},
+          pending: %{amount: -50, debit: 0, credit: 50},
           available: 50
         )
 
@@ -303,7 +303,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: 35, credit: 35}
+                   changes: %{amount: -35, credit: 35}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending_to_pending})
@@ -319,7 +319,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
           normal_balance: :debit,
           instance_id: inst.id,
           posted: %{amount: 100, debit: 100, credit: 0},
-          pending: %{amount: -50, debit: 50, credit: 0},
+          pending: %{amount: 50, debit: 50, credit: 0},
           available: 100
         )
 
@@ -332,7 +332,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: -25, debit: 25}
+                   changes: %{amount: 25, debit: 25}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending_to_archived})
@@ -344,7 +344,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
           normal_balance: :debit,
           instance_id: inst.id,
           posted: %{amount: 100, debit: 100, credit: 0},
-          pending: %{amount: 50, debit: 0, credit: 50},
+          pending: %{amount: -50, debit: 0, credit: 50},
           available: 50
         )
 
@@ -357,7 +357,7 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                  pending: %Ecto.Changeset{
                    action: :insert,
                    valid?: true,
-                   changes: %{amount: 25, credit: 25}
+                   changes: %{amount: -25, credit: 25}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending_to_archived})

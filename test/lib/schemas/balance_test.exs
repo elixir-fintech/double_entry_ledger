@@ -19,9 +19,9 @@ defmodule DoubleEntryLedger.BalanceTest do
 
   describe "Debit accounts balance: " do
     test "reverse_pending debit" do
-      assert %Ecto.Changeset{valid?: true, changes: %{amount: -50, debit: 50}} =
+      assert %Ecto.Changeset{valid?: true, changes: %{amount: 50, debit: 50}} =
                Balance.reverse_pending(
-                 %Balance{amount: -100, debit: 100, credit: 0},
+                 %Balance{amount: 100, debit: 100, credit: 0},
                  50,
                  :debit,
                  :debit
@@ -29,9 +29,9 @@ defmodule DoubleEntryLedger.BalanceTest do
     end
 
     test "reverse_pending credit" do
-      assert %Ecto.Changeset{valid?: true, changes: %{amount: 50, credit: 50}} =
+      assert %Ecto.Changeset{valid?: true, changes: %{amount: -50, credit: 50}} =
                Balance.reverse_pending(
-                 %Balance{amount: 100, debit: 0, credit: 100},
+                 %Balance{amount: -100, debit: 0, credit: 100},
                  50,
                  :credit,
                  :debit
@@ -101,9 +101,9 @@ defmodule DoubleEntryLedger.BalanceTest do
     end
 
     test "reverse_pending credit" do
-      assert %Ecto.Changeset{valid?: true, changes: %{amount: -50, credit: 50}} =
+      assert %Ecto.Changeset{valid?: true, changes: %{amount: 50, credit: 50}} =
                Balance.reverse_pending(
-                 %Balance{amount: -100, debit: 0, credit: 100},
+                 %Balance{amount: 100, debit: 0, credit: 100},
                  50,
                  :credit,
                  :credit
@@ -111,9 +111,9 @@ defmodule DoubleEntryLedger.BalanceTest do
     end
 
     test "reverse_pending debit" do
-      assert %Ecto.Changeset{valid?: true, changes: %{amount: 50, debit: 50}} =
+      assert %Ecto.Changeset{valid?: true, changes: %{amount: -50, debit: 50}} =
                Balance.reverse_pending(
-                 %Balance{amount: 100, debit: 100, credit: 0},
+                 %Balance{amount: -100, debit: 100, credit: 0},
                  50,
                  :debit,
                  :credit

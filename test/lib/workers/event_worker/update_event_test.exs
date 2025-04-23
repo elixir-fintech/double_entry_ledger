@@ -27,12 +27,13 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         CreateEvent.process_create_event(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
-      assert return_pending_balances(ctx) == [-100, -100]
+      assert return_pending_balances(ctx) == [100, 100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
       {:ok, transaction, processed_event} = UpdateEvent.process_update_event(event)
       shared_event_asserts(transaction, processed_event, pending_transaction)
       assert return_available_balances(ctx) == [100, 100]
+      assert return_pending_balances(ctx) == [0, 0]
       assert transaction.status == :posted
     end
 
@@ -44,7 +45,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         CreateEvent.process_create_event(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
-      assert return_pending_balances(ctx) == [-100, -100]
+      assert return_pending_balances(ctx) == [100, 100]
       {:ok, event} = create_update_event(s, s_id, inst.id, :archived)
 
       {:ok, transaction, processed_event} = UpdateEvent.process_update_event(event)
@@ -62,7 +63,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         CreateEvent.process_create_event(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
-      assert return_pending_balances(ctx) == [-100, -100]
+      assert return_pending_balances(ctx) == [100, 100]
 
       {:ok, event} =
         create_update_event(s, s_id, inst.id, :posted, [
@@ -73,6 +74,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       {:ok, transaction, processed_event} = UpdateEvent.process_update_event(event)
       shared_event_asserts(transaction, processed_event, pending_transaction)
       assert return_available_balances(ctx) == [50, 50]
+      assert return_pending_balances(ctx) == [0, 0]
       assert transaction.status == :posted
     end
 
@@ -84,7 +86,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         CreateEvent.process_create_event(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
-      assert return_pending_balances(ctx) == [-100, -100]
+      assert return_pending_balances(ctx) == [100, 100]
 
       {:ok, event} =
         create_update_event(s, s_id, inst.id, :pending, [
@@ -94,7 +96,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
       {:ok, transaction, processed_event} = UpdateEvent.process_update_event(event)
       shared_event_asserts(transaction, processed_event, pending_transaction)
-      assert return_pending_balances(ctx) == [-50, -50]
+      assert return_pending_balances(ctx) == [50, 50]
       assert transaction.status == :pending
     end
 
@@ -106,7 +108,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         CreateEvent.process_create_event(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
-      assert return_pending_balances(ctx) == [-100, -100]
+      assert return_pending_balances(ctx) == [100, 100]
 
       {:ok, event} =
         create_update_event(s, s_id, inst.id, :archived, [

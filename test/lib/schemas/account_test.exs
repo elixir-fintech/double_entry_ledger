@@ -195,7 +195,7 @@ defmodule DoubleEntryLedger.AccountTest do
                changes: %{
                  pending: %Ecto.Changeset{
                    valid?: true,
-                   changes: %{amount: -100, debit: 100}
+                   changes: %{amount: 100, debit: 100}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending})
@@ -215,7 +215,7 @@ defmodule DoubleEntryLedger.AccountTest do
                changes: %{
                  pending: %Ecto.Changeset{
                    valid?: true,
-                   changes: %{amount: 100, credit: 100}
+                   changes: %{amount: -100, credit: 100}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending})
@@ -318,7 +318,7 @@ defmodule DoubleEntryLedger.AccountTest do
                changes: %{
                  pending: %Ecto.Changeset{
                    valid?: true,
-                   changes: %{amount: 100, debit: 100}
+                   changes: %{amount: -100, debit: 100}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending})
@@ -338,7 +338,7 @@ defmodule DoubleEntryLedger.AccountTest do
                changes: %{
                  pending: %Ecto.Changeset{
                    valid?: true,
-                   changes: %{amount: -100, credit: 100}
+                   changes: %{amount: 100, credit: 100}
                  }
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending})
