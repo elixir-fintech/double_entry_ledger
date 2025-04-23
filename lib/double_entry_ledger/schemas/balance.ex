@@ -191,6 +191,11 @@ defmodule DoubleEntryLedger.Balance do
 
   * An Ecto.Changeset with updated balance values
 
+  ## Error Handling
+
+  Returns an invalid changeset if attempting to reverse more than the current
+  balance of the specific type (debit/credit).
+
   ## Examples
       iex> balance = %Balance{amount: 50, debit: 50, credit: 0}
       iex> %Ecto.Changeset{valid?: true, changes: changes} = Balance.reverse_pending(balance, 25, :debit, :debit)
@@ -251,6 +256,11 @@ defmodule DoubleEntryLedger.Balance do
   ## Returns
 
   * An Ecto.Changeset with updated balance values
+
+  ## Error Handling
+
+  Returns an invalid changeset if attempting to reverse more than the current
+  balance of the specific type (debit/credit).
 
   ## Examples
 
