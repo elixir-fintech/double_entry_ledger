@@ -192,18 +192,33 @@ defmodule DoubleEntryLedger.Balance do
   * An Ecto.Changeset with updated balance values
 
   ## Examples
-
-      iex> balance = DoubleEntryLedger.Balance.new()
-      iex> %Ecto.Changeset{valid?: true, changes: changes} = DoubleEntryLedger.Balance.reverse_pending(balance, 50, :debit, :debit)
+      iex> balance = %Balance{amount: 50, debit: 50, credit: 0}
+      iex> %Ecto.Changeset{valid?: true, changes: changes} = Balance.reverse_pending(balance, 25, :debit, :debit)
       iex> changes
-      %{amount: -50, debit: -50}
+      %{amount: 25, debit: 25}
 
-      iex> balance = DoubleEntryLedger.Balance.new()
-      iex> %Ecto.Changeset{valid?: true, changes: changes} = DoubleEntryLedger.Balance.reverse_pending(balance, 50, :credit, :debit)
+      iex> balance = %Balance{amount: -50, debit: 0, credit: 50}
+      iex> %Ecto.Changeset{valid?: true, changes: changes} = Balance.reverse_pending(balance, 25, :credit, :debit)
       iex> changes
-      %{amount: 50, credit: -50}
+      %{amount: -25, credit: 25}
+
+      iex> balance = Balance.new()
+      iex> %Ecto.Changeset{valid?: false, errors: errors} = Balance.reverse_pending(balance, 50, :debit, :debit)
+      iex> errors
+      [debit: {"Cannot reverse more than the current debit balance", []}]
+
+      iex> balance = Balance.new()
+      iex> %Ecto.Changeset{valid?: false, errors: errors} = Balance.reverse_pending(balance, 50, :credit, :debit)
+      iex> errors
+      [credit: {"Cannot reverse more than the current credit balance", []}]
   """
   @spec reverse_pending(Balance.t(), integer(), atom(), atom()) :: Ecto.Changeset.t()
+  def reverse_pending(%{credit: cr} = balance, amt, :credit, _) when cr < amt,
+    do: reversal_too_large_error(balance, :credit)
+
+  def reverse_pending(%{debit: de} = balance, amt, :debit, _) when de < amt,
+    do: reversal_too_large_error(balance, :debit)
+
   def reverse_pending(%{amount: amt} = balance, amount, e_type, a_type) when e_type == a_type do
     balance
     |> change()
@@ -239,16 +254,32 @@ defmodule DoubleEntryLedger.Balance do
 
   ## Examples
 
-      iex> balance = %DoubleEntryLedger.Balance{amount: 50, debit: 50, credit: 0}
-      iex> %Ecto.Changeset{changes: changes} = DoubleEntryLedger.Balance.reverse_and_update_pending(balance, 50, 75, :debit, :debit)
+      iex> balance = %Balance{amount: -50, debit: 50, credit: 0}
+      iex> %Ecto.Changeset{valid?: true, changes: changes} = Balance.reverse_and_update_pending(balance, 50, 75, :debit, :credit)
       iex> changes
-      %{amount: 75, debit: 75}
+      %{amount: -75, debit: 75}
 
-      iex> balance = %DoubleEntryLedger.Balance{amount: -50, credit: 50, debit: 0}
-      iex> %Ecto.Changeset{changes: changes} = DoubleEntryLedger.Balance.reverse_and_update_pending(balance, 50, 75, :credit, :debit)
+      iex> balance = %Balance{amount: 50, credit: 50, debit: 0}
+      iex> %Ecto.Changeset{valid?: true, changes: changes} = Balance.reverse_and_update_pending(balance, 50, 75, :credit, :credit)
       iex> changes
-      %{amount: -75, credit: 75}
+      %{amount: 75, credit: 75}
+
+      iex> balance = %Balance{amount: -40, debit: 40, credit: 0}
+      iex> %Ecto.Changeset{valid?: false, errors: errors} = Balance.reverse_and_update_pending(balance, 50, 75, :debit, :credit)
+      iex> errors
+      [debit: {"Cannot reverse more than the current debit balance", []}]
+
+      iex> balance = %Balance{amount: 40, credit: 40, debit: 0}
+      iex> %Ecto.Changeset{valid?: false, errors: errors} = Balance.reverse_and_update_pending(balance, 50, 75, :credit, :credit)
+      iex> errors
+      [credit: {"Cannot reverse more than the current credit balance", []}]
   """
+  def reverse_and_update_pending(%{credit: cr} = balance, amt, _, :credit, _) when cr < amt,
+    do: reversal_too_large_error(balance, :credit)
+
+  def reverse_and_update_pending(%{debit: de} = balance, amt, _, :debit, _) when de < amt,
+    do: reversal_too_large_error(balance, :debit)
+
   @spec reverse_and_update_pending(Balance.t(), integer(), integer(), atom(), atom()) ::
           Ecto.Changeset.t()
   def reverse_and_update_pending(
@@ -277,5 +308,12 @@ defmodule DoubleEntryLedger.Balance do
     |> change()
     |> put_change(:amount, amt + amount_to_reverse - new_amount)
     |> put_change(e_type, Map.get(balance, e_type) - amount_to_reverse + new_amount)
+  end
+
+  @spec reversal_too_large_error(Balance.t(), atom()) :: Ecto.Changeset.t()
+  defp reversal_too_large_error(balance, e_type) do
+    balance
+    |> change()
+    |> add_error(e_type, "Cannot reverse more than the current #{e_type} balance")
   end
 end
