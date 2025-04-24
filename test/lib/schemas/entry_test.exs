@@ -11,6 +11,8 @@ defmodule DoubleEntryLedger.EntryTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.TransactionFixtures
 
+  doctest Entry
+
   describe "changeset" do
     setup [:create_instance, :create_account]
 
