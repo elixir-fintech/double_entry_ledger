@@ -76,8 +76,8 @@ defmodule DoubleEntryLedger.Event.TransactionData do
   This type is commonly used when creating or updating transactions through the event system.
   """
   @type t :: %TransactionData{
-          status: Transaction.state(),
-          entries: [EntryData.t()]
+          status: Transaction.state() | nil,
+          entries: [EntryData.t()] | []
         }
 
   @primary_key false
@@ -116,7 +116,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
       iex> changeset.valid?
       true
   """
-  @spec changeset(t() | %{}, map()) :: Ecto.Changeset.t()
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(transaction_data, attrs) do
     transaction_data
     |> cast(attrs, [:status])
@@ -187,11 +187,11 @@ defmodule DoubleEntryLedger.Event.TransactionData do
       %{status: nil, entries: []}
 
   """
-  @spec to_map(t) :: map()
-  def to_map(transaction_data) do
+  @spec to_map(t()) :: map()
+  def to_map(%{status: status, entries: entries}) do
     %{
-      status: transaction_data.status,
-      entries: Enum.map(transaction_data.entries, &EntryData.to_map/1)
+      status: status,
+      entries: Enum.map(entries, &EntryData.to_map/1)
     }
   end
 
