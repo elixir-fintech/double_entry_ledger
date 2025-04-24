@@ -1,11 +1,45 @@
 defmodule DoubleEntryLedger.Event do
   @moduledoc """
-  This module defines the Event schema.
+  Defines and manages events in the Double Entry Ledger system.
+
+  This module provides the Event schema, which represents a request to create or update a
+  transaction in the ledger. Events serve as an audit trail and queue mechanism for transaction
+  processing, allowing for asynchronous handling, retries, and idempotency.
+
+  ## Key Concepts
+
+  * **Event Processing**: Events progress through states (:pending → :processing → :processed/:failed)
+  * **Idempotency**: Idempotency is enforced using a combination of `action`, `source_idempk` and `update_idempk`. More details
+    are in the `EventMap` module.
+  * **Transaction Data**: Each event contains embedded transaction_data describing the requested changes
+  * **Queue Management**: Fields track processing attempts, retries, and completion status
+
+  ## Event States
+
+  * `:pending` - Newly created, not yet processed
+  * `:processing` - Currently being processed by a worker
+  * `:processed` - Successfully completed
+  * `:failed` - Processing failed with errors
+  * `:occ_timeout` - Failed due to optimistic concurrency control timeout
+
+  ## Event Actions
+
+  * `:create` - Request to create a new transaction
+  * `:update` - Request to update an existing transaction (requires update_idempk)
+
+  ## Processing Flow
+
+  1. Event is created with :pending status
+  2. Worker claims event and updates status to :processing
+  3. Worker processes the event and creates/updates a transaction
+  4. Event is updated to :processed or :failed with results
   """
+
   use DoubleEntryLedger.BaseSchema
 
   alias DoubleEntryLedger.{Transaction, Instance}
   alias DoubleEntryLedger.Event.TransactionData
+  alias DoubleEntryLedger.Event.ErrorMap
 
   @states [:pending, :processed, :failed, :occ_timeout, :processing]
   @actions [:create, :update]
@@ -20,30 +54,62 @@ defmodule DoubleEntryLedger.Event do
 
   alias __MODULE__, as: Event
 
+  @typedoc """
+  Represents an event in the Double Entry Ledger system.
+
+  An event encapsulates a request to create or update a transaction, along with
+  metadata about the processing state, source, and queue management information.
+
+  ## Fields
+
+  * `id`: UUID primary key
+  * `status`: Current processing state (:pending, :processing, :processed, :failed, :occ_timeout)
+  * `action`: The action type (:create or :update)
+  * `source`: Identifier for the system that originated the event
+  * `source_data`: Arbitrary JSON data from the source system
+  * `source_idempk`: Idempotency key from source system
+  * `update_idempk`: Additional idempotency key for update operations
+  * `occ_retry_count`: Counter for optimistic concurrency control retries
+  * `processed_at`: When the event was fully processed
+  * `transaction_data`: Embedded struct with transaction changes to apply
+  * `instance`: Association to the ledger instance
+  * `instance_id`: Foreign key to the ledger instance
+  * `processed_transaction`: Association to the resulting transaction
+  * `processed_transaction_id`: Foreign key to the resulting transaction
+  * `errors`: Array of error maps if processing failed
+  * `processor_id`: ID of the worker processing this event
+  * `processor_version`: Version for optimistic locking during processing
+  * `processing_started_at`: When processing began
+  * `processing_completed_at`: When processing finished
+  * `retry_count`: Number of processing attempts
+  * `next_retry_after`: Timestamp for next retry attempt
+  * `inserted_at`: Creation timestamp
+  * `updated_at`: Last update timestamp
+  """
   @type t :: %Event{
-          id: Ecto.UUID.t(),
-          status: state(),
-          action: action(),
-          source: String.t(),
-          source_data: map(),
-          source_idempk: String.t(),
+          id: Ecto.UUID.t() | nil,
+          status: state() | nil,
+          action: action() | nil,
+          source: String.t() | nil,
+          source_data: map() | nil,
+          source_idempk: String.t() | nil,
           update_idempk: String.t() | nil,
-          occ_retry_count: integer(),
+          occ_retry_count: integer() | nil,
           processed_at: DateTime.t() | nil,
           transaction_data: TransactionData.t() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           processed_transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
           processed_transaction_id: Ecto.UUID.t() | nil,
-          errors: list(map()) | nil,
-          inserted_at: DateTime.t(),
-          updated_at: DateTime.t(),
+          errors: [ErrorMap.error()] | nil,
+          inserted_at: DateTime.t() | nil,
+          updated_at: DateTime.t() | nil,
           # queue related fields
           processor_id: String.t() | nil,
-          processor_version: integer(),
+          processor_version: integer() | nil,
           processing_started_at: DateTime.t() | nil,
           processing_completed_at: DateTime.t() | nil,
-          retry_count: integer(),
+          retry_count: integer() | nil,
           next_retry_after: DateTime.t() | nil
         }
 
@@ -73,9 +139,66 @@ defmodule DoubleEntryLedger.Event do
     timestamps(type: :utc_datetime_usec)
   end
 
+  @doc """
+  Returns a list of available event actions.
+
+  ## Returns
+
+  * A list of atoms representing the valid actions (:create, :update)
+
+  ## Examples
+
+      iex> DoubleEntryLedger.Event.actions()
+      [:create, :update]
+  """
+  @spec actions() :: [action()]
   def actions(), do: @actions
 
-  @doc false
+  @doc """
+  Creates a changeset for validating and creating/updating an Event.
+
+  This function builds an Ecto changeset for an event with appropriate validations
+  and handling based on the action type and transaction data provided.
+
+  ## Parameters
+
+  * `event` - The Event struct to create a changeset for
+  * `attrs` - Map of attributes to apply to the event
+
+  ## Special Handling
+
+  * For `:update` actions with `:pending` transaction status: Uses standard TransactionData changeset
+  * For other `:update` actions: Uses the special update_event_changeset for TransactionData
+  * For `:create` actions: Uses standard TransactionData changeset
+
+  ## Validations
+
+  * Required fields: `:action`, `:source`, `:source_idempk`, `:instance_id`
+  * For updates: also requires `:update_idempk`
+  * Enforces unique constraints for idempotency
+
+  ## Returns
+
+  * An Ecto.Changeset with validations applied
+
+  ## Examples
+
+      # Create event changeset
+      iex> attrs = %{
+      ...>   action: :create,
+      ...>   source: "api",
+      ...>   source_idempk: "order-123",
+      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   transaction_data: %{status: :pending, entries: [
+      ...>     %{account_id: "550e8400-e29b-41d4-a716-446655440000", type: :debit, amount: 100, currency: :USD},
+      ...>     %{account_id: "650e8400-e29b-41d4-a716-446655440000", type: :credit, amount: 100, currency: :USD}
+      ...>   ]}
+      ...> }
+      iex> changeset = Event.changeset(%Event{}, attrs)
+      iex> changeset.valid?
+      true
+  """
+  @spec changeset(Event.t(), map()) :: Ecto.Changeset.t()
   def changeset(event, %{action: :update, transaction_data: %{status: :pending}} = attrs) do
     event
     |> base_changeset(attrs)
@@ -99,6 +222,43 @@ defmodule DoubleEntryLedger.Event do
     |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
   end
 
+  @doc """
+  Creates a changeset for marking an event as being processed.
+
+  This function prepares a changeset that updates an event to the :processing state,
+  assigns a processor, and updates processing metadata such as start time and retry count.
+
+  ## Parameters
+
+  * `event` - The Event struct to update
+  * `processor_id` - String identifier for the processor handling the event
+
+  ## Returns
+
+  * An Ecto.Changeset with processing status updates and optimistic locking
+
+  ## Fields Updated
+
+  * `status`: Set to :processing
+  * `processor_id`: Set to the provided processor_id
+  * `processing_started_at`: Set to current UTC datetime
+  * `processing_completed_at`: Set to nil
+  * `retry_count`: Incremented by 1
+  * `next_retry_after`: Set to nil
+  * `processor_version`: Used for optimistic locking
+
+  ## Examples
+
+      iex> event = %Event{status: :pending, retry_count: 0}
+      iex> changeset = Event.processing_start_changeset(event, "worker-123")
+      iex> %{
+      ...>    status: :processing,
+      ...>    processor_id: "worker-123",
+      ...>    processing_started_at: %DateTime{},
+      ...>    retry_count: 1,
+      ...> } = changeset.changes
+  """
+  @spec processing_start_changeset(Event.t(), String.t()) :: Ecto.Changeset.t()
   def processing_start_changeset(event, processor_id) do
     event
     |> change(%{
@@ -112,6 +272,7 @@ defmodule DoubleEntryLedger.Event do
     |> optimistic_lock(:processor_version)
   end
 
+  @spec base_changeset(Event.t(), map()) :: Ecto.Changeset.t()
   defp base_changeset(event, attrs) do
     event
     |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id, :update_idempk])
@@ -123,6 +284,7 @@ defmodule DoubleEntryLedger.Event do
     )
   end
 
+  @spec update_changeset(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp update_changeset(changeset) do
     changeset
     |> validate_required([:update_idempk])
