@@ -120,7 +120,9 @@ defmodule DoubleEntryLedger.LoadTesting do
         type: :asset,
         normal_balance: :debit,
         posted: %Balance{amount: debit_sum, debit: debit_sum, credit: 0},
-        available: debit_sum
+        available: debit_sum,
+        currency: :EUR
+
       }
       |> Repo.insert!()
     end)
@@ -137,7 +139,8 @@ defmodule DoubleEntryLedger.LoadTesting do
           type: :asset,
           normal_balance: :debit,
           posted: %Balance{amount: 0, debit: 0, credit: 0},
-          available: 0
+          available: 0,
+          currency: :EUR
         }
         |> Repo.insert!()
       end)
@@ -152,7 +155,8 @@ defmodule DoubleEntryLedger.LoadTesting do
       type: :liability,
       normal_balance: :credit,
       posted: %Balance{amount: credit_sum, debit: 0, credit: credit_sum},
-      available: credit_sum
+      available: credit_sum,
+      currency: :EUR
     }
     |> Repo.insert()
   end
