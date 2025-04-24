@@ -32,11 +32,11 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   The system enforces idempotency differently depending on the action type:
 
-  * **Create actions**: Idempotency is enforced using a combination of `:create` action value
-    and the `source_idempk`. This ensures the same external transaction is never created twice.
+  * **Create actions**: Idempotency is enforced using a combination of `:create` action value,
+    `source` and the `source_idempk`. This ensures the same external transaction is never created twice.
 
-  * **Update actions**: Idempotency uses a combination of `:update` action value, the original
-    `source_idempk` (identifying which create action to update), and the `update_idempk`
+  * **Update actions**: Idempotency uses a combination of `:update` action value, the original `source`
+    and `source_idempk` (identifying which create action to update), and the `update_idempk`
     (identifying this specific update). This allows multiple distinct updates to the same
     original transaction.
 
