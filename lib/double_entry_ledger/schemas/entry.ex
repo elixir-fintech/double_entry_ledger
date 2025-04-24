@@ -1,37 +1,37 @@
 defmodule DoubleEntryLedger.Entry do
   @moduledoc """
-Defines and manages individual financial entries in the Double Entry Ledger system.
+  Defines and manages individual financial entries in the Double Entry Ledger system.
 
-This module represents the fundamental building blocks of transactions in double-entry accounting,
-where each entry affects exactly one account and belongs to exactly one transaction. Entries
-come in two types - debits and credits - and must balance across a transaction.
+  This module represents the fundamental building blocks of transactions in double-entry accounting,
+  where each entry affects exactly one account and belongs to exactly one transaction. Entries
+  come in two types - debits and credits - and must balance across a transaction.
 
-## Key Concepts
+  ## Key Concepts
 
-* **Entry Types**: Each entry must be either a `:debit` or `:credit` type
-* **Transaction Relationship**: Entries are always linked to a transaction
-* **Account Relationship**: Each entry affects exactly one account
-* **Balance History**: Creating or updating entries automatically generates balance history records
-* **Currency Matching**: An entry's currency must match its account's currency
+  * **Entry Types**: Each entry must be either a `:debit` or `:credit` type
+  * **Transaction Relationship**: Entries are always linked to a transaction
+  * **Account Relationship**: Each entry affects exactly one account
+  * **Balance History**: Creating or updating entries automatically generates balance history records
+  * **Currency Matching**: An entry's currency must match its account's currency
 
-## Lifecycle
+  ## Lifecycle
 
-Entries go through several possible state transitions:
-* `:posted` - Direct posting to an account's finalized balance
-* `:pending` - Creating a hold or authorization
-* `:pending_to_posted` - Converting a pending entry to a posted entry
-* `:pending_to_pending` - Modifying an existing pending entry
-* `:pending_to_archived` - Canceling a pending entry
-The state transition determines how the entry affects the account's balance and what validations are applied.
-The state itself is stored with the transaction, not the entry.
+  Entries go through several possible state transitions:
+  * `:posted` - Direct posting to an account's finalized balance
+  * `:pending` - Creating a hold or authorization
+  * `:pending_to_posted` - Converting a pending entry to a posted entry
+  * `:pending_to_pending` - Modifying an existing pending entry
+  * `:pending_to_archived` - Canceling a pending entry
+  The state transition determines how the entry affects the account's balance and what validations are applied.
+  The state itself is stored with the transaction, not the entry.
 
-## Balance Updates
+  ## Balance Updates
 
-When entries are created or modified, the module automatically:
-1. Updates the associated account's balance
-2. Creates a balance history entry to track the change
-3. Validates that the currency matches the account
-"""
+  When entries are created or modified, the module automatically:
+  1. Updates the associated account's balance
+  2. Creates a balance history entry to track the change
+  3. Validates that the currency matches the account
+  """
 
   use DoubleEntryLedger.BaseSchema
 
@@ -46,25 +46,25 @@ When entries are created or modified, the module automatically:
   alias __MODULE__, as: Entry
 
   @typedoc """
-Represents a single financial entry in a transaction.
+  Represents a single financial entry in a transaction.
 
-An entry records a single financial event affecting one account in the ledger.
-It contains the monetary amount, entry type (debit or credit), and relationships
-to both the account it affects and the transaction it belongs to.
+  An entry records a single financial event affecting one account in the ledger.
+  It contains the monetary amount, entry type (debit or credit), and relationships
+  to both the account it affects and the transaction it belongs to.
 
-## Fields
+  ## Fields
 
-* `id`: UUID primary key
-* `value`: Money struct containing amount and currency
-* `type`: Either `:debit` or `:credit`
-* `transaction`: Association to the parent transaction
-* `transaction_id`: Foreign key to the transaction
-* `account`: Association to the affected account
-* `account_id`: Foreign key to the account
-* `balance_history_entries`: List of related balance history records
-* `inserted_at`: Creation timestamp
-* `updated_at`: Last update timestamp
-"""
+  * `id`: UUID primary key
+  * `value`: Money struct containing amount and currency
+  * `type`: Either `:debit` or `:credit`
+  * `transaction`: Association to the parent transaction
+  * `transaction_id`: Foreign key to the transaction
+  * `account`: Association to the affected account
+  * `account_id`: Foreign key to the account
+  * `balance_history_entries`: List of related balance history records
+  * `inserted_at`: Creation timestamp
+  * `updated_at`: Last update timestamp
+  """
   @type t :: %Entry{
           id: Ecto.UUID.t() | nil,
           value: Money.t() | nil,
@@ -94,48 +94,48 @@ to both the account it affects and the transaction it belongs to.
   end
 
   @doc """
-Creates a changeset for validating and inserting an entry with transition state.
+  Creates a changeset for validating and inserting an entry with transition state.
 
-This function builds an Ecto changeset for an entry that manages a specific
-transaction state transition, handling account balance updates and history creation.
+  This function builds an Ecto changeset for an entry that manages a specific
+  transaction state transition, handling account balance updates and history creation.
 
-## Parameters
+  ## Parameters
 
-* `entry` - The Entry struct to create a changeset for
-* `attrs` - Map of attributes to apply to the entry
-* `transition` - The transition state (e.g., `:posted`, `:pending`, `:pending_to_posted`)
+  * `entry` - The Entry struct to create a changeset for
+  * `attrs` - Map of attributes to apply to the entry
+  * `transition` - The transition state (e.g., `:posted`, `:pending`, `:pending_to_posted`)
 
-## Returns
+  ## Returns
 
-* An Ecto.Changeset with validations and associations
+  * An Ecto.Changeset with validations and associations
 
-## Account Updates
+  ## Account Updates
 
-When this changeset is applied:
-1. The account balance is updated according to the entry details and transition type
-2. A balance history entry is created to record this change
+  When this changeset is applied:
+  1. The account balance is updated according to the entry details and transition type
+  2. A balance history entry is created to record this change
 
-## Validations
+  ## Validations
 
-* Required fields: `:type`, `:value`, `:account_id`
-* Entry type must be `:debit` or `:credit`
-* Entry currency must match account currency
+  * Required fields: `:type`, `:value`, `:account_id`
+  * Entry type must be `:debit` or `:credit`
+  * Entry currency must match account currency
 
-## Examples
+  ## Examples
 
-    # Create a posted debit entry
-    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
-    iex> {:ok, instance} = InstanceStore.create(%{name: "Test Instance"})
-    iex> {:ok, account} = AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD})
-    iex> attrs = %{
-    ...>   type: :debit,
-    ...>   value: %{amount: 10000, currency: :USD},
-    ...>   account_id: account.id,
-    ...> }
-    iex> changeset = Entry.changeset(%Entry{}, attrs, :posted)
-    iex> changeset.valid?
-    true
-"""
+      # Create a posted debit entry
+      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> {:ok, instance} = InstanceStore.create(%{name: "Test Instance"})
+      iex> {:ok, account} = AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD})
+      iex> attrs = %{
+      ...>   type: :debit,
+      ...>   value: %{amount: 10000, currency: :USD},
+      ...>   account_id: account.id,
+      ...> }
+      iex> changeset = Entry.changeset(%Entry{}, attrs, :posted)
+      iex> changeset.valid?
+      true
+  """
   @spec changeset(Entry.t(), map(), Transaction.state()) :: Ecto.Changeset.t()
   def changeset(entry, %{account_id: id} = attrs, transition)
       when transition in @transaction_states do
@@ -156,38 +156,38 @@ When this changeset is applied:
   end
 
   @doc """
-Creates a basic changeset for validating an entry without transition management.
+  Creates a basic changeset for validating an entry without transition management.
 
-This simplified version validates the entry data but does not handle account
-balance updates or balance history creation. It's typically used for initial
-validation or when working with entries that don't immediately affect accounts.
+  This simplified version validates the entry data but does not handle account
+  balance updates or balance history creation. It's typically used for initial
+  validation or when working with entries that don't immediately affect accounts.
 
-## Parameters
+  ## Parameters
 
-* `entry` - The Entry struct to create a changeset for
-* `attrs` - Map of attributes to apply to the entry
+  * `entry` - The Entry struct to create a changeset for
+  * `attrs` - Map of attributes to apply to the entry
 
-## Returns
+  ## Returns
 
-* An Ecto.Changeset with basic validations applied
+  * An Ecto.Changeset with basic validations applied
 
-## Validations
+  ## Validations
 
-* Required fields: `:type`, `:value`, `:account_id`
-* Entry type must be `:debit` or `:credit`
+  * Required fields: `:type`, `:value`, `:account_id`
+  * Entry type must be `:debit` or `:credit`
 
-## Examples
+  ## Examples
 
-    # Create a simple entry changeset
-    iex> attrs = %{
-    ...>   type: :credit,
-    ...>   value: %{amount: 5000, currency: :EUR},
-    ...>   account_id: "550e8400-e29b-41d4-a716-446655440000"
-    ...> }
-    iex> changeset = Entry.changeset(%Entry{}, attrs)
-    iex> changeset.valid?
-    true
-"""
+      # Create a simple entry changeset
+      iex> attrs = %{
+      ...>   type: :credit,
+      ...>   value: %{amount: 5000, currency: :EUR},
+      ...>   account_id: "550e8400-e29b-41d4-a716-446655440000"
+      ...> }
+      iex> changeset = Entry.changeset(%Entry{}, attrs)
+      iex> changeset.valid?
+      true
+  """
   @spec changeset(Entry.t(), map()) :: Ecto.Changeset.t()
   # catch-all clause
   def changeset(entry, attrs) do
@@ -198,55 +198,55 @@ validation or when working with entries that don't immediately affect accounts.
   end
 
   @doc """
-Creates a changeset for updating an existing entry with transition handling.
+  Creates a changeset for updating an existing entry with transition handling.
 
-This function builds a changeset specifically for updating the value of an
-existing entry while properly handling account balance updates and history creation.
-It's used when modifying entries that are already associated with transactions.
+  This function builds a changeset specifically for updating the value of an
+  existing entry while properly handling account balance updates and history creation.
+  It's used when modifying entries that are already associated with transactions.
 
-## Parameters
+  ## Parameters
 
-* `entry` - The Entry struct to update
-* `attrs` - Map of attributes to update on the entry (only `:value` can be updated)
-* `transition` - The transition state (e.g., `:pending_to_posted`, `:pending_to_pending`)
+  * `entry` - The Entry struct to update
+  * `attrs` - Map of attributes to update on the entry (only `:value` can be updated)
+  * `transition` - The transition state (e.g., `:pending_to_posted`, `:pending_to_pending`)
 
-## Returns
+  ## Returns
 
-* An Ecto.Changeset with validations, preloaded associations, and balance updates
+  * An Ecto.Changeset with validations, preloaded associations, and balance updates
 
-## Account Updates
+  ## Account Updates
 
-When this changeset is applied:
-1. The account balance is updated according to the new entry value and transition type
-2. A balance history entry is created to record this change
+  When this changeset is applied:
+  1. The account balance is updated according to the new entry value and transition type
+  2. A balance history entry is created to record this change
 
-## Validations
+  ## Validations
 
-* Required field: `:value`
-* Entry currency must match account currency
+  * Required field: `:value`
+  * Entry currency must match account currency
 
-## Examples
+  ## Examples
 
-    # Update a pending entry to be posted
-    # An entry has to be created first using an event
-    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
-    iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
-    iex> {:ok, account1} = AccountStore.create(%{
-    ...>    name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
-    iex> {:ok, account2} = AccountStore.create(%{
-    ...>    name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
-    iex> {:ok, _, _} = EventStore.process_from_event_params(%{instance_id: instance.id,
-    ...>  source: "s1", source_idempk: "1", action: :create,
-    ...>  transaction_data: %{status: :pending, entries: [
-    ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
-    ...>      %{account_id: account2.id, amount: 100, currency: :EUR},
-    ...>  ]}})
-    iex> [entry | _]= Repo.all(Entry)
-    iex> attrs = %{value: %{amount: 120, currency: :EUR}}
-    iex> changeset = Entry.update_changeset(entry, attrs, :pending_to_posted)
-    iex> changeset.valid?
-    true
-"""
+      # Update a pending entry to be posted
+      # An entry has to be created first using an event
+      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+      iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
+      iex> {:ok, account1} = AccountStore.create(%{
+      ...>    name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
+      iex> {:ok, account2} = AccountStore.create(%{
+      ...>    name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
+      iex> {:ok, _, _} = EventStore.process_from_event_params(%{instance_id: instance.id,
+      ...>  source: "s1", source_idempk: "1", action: :create,
+      ...>  transaction_data: %{status: :pending, entries: [
+      ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
+      ...>      %{account_id: account2.id, amount: 100, currency: :EUR},
+      ...>  ]}})
+      iex> [entry | _]= Repo.all(Entry)
+      iex> attrs = %{value: %{amount: 120, currency: :EUR}}
+      iex> changeset = Entry.update_changeset(entry, attrs, :pending_to_posted)
+      iex> changeset.valid?
+      true
+  """
   @spec update_changeset(Entry.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
   def update_changeset(entry, attrs, transition) do
     entry
