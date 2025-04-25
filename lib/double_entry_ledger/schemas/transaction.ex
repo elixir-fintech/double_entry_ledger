@@ -1,24 +1,36 @@
 defmodule DoubleEntryLedger.Transaction do
   @moduledoc """
-  The `DoubleEntryLedger.Transaction` module defines the schema and functions for managing transactions within a ledger instance.
-  A transaction consists of multiple entries that affect account balances and includes status information.
+  Defines the transaction schema for the double-entry ledger system.
 
-  ## Schema Fields
+  A transaction represents a financial event recorded in the ledger, consisting of
+  multiple balanced entries that affect account balances. Transactions follow double-entry
+  accounting principles, ensuring that debits equal credits for each currency involved.
 
-    - `id` (binary): The unique identifier for the transaction.
-    - `instance` (Instance.t() | Ecto.Association.NotLoaded.t()): The associated ledger instance.
-    - `instance_id` (binary): The ID of the associated ledger instance.
-    - `posted_at` (DateTime.t()): The date and time when the transaction was posted.
-    - `status` (:pending | :posted | :archived): The transaction status.
-    - `entries` ([Entry.t()] | Ecto.Association.NotLoaded.t()): The entries associated with the transaction.
-    - `inserted_at` (DateTime.t()): The timestamp when the transaction was created.
-    - `updated_at` (DateTime.t()): The timestamp when the transaction was last updated.
+  Transactions can exist in one of three states:
+  - `:pending` - Initial state, can be modified
+  - `:posted` - Finalized state, cannot be modified
+  - `:archived` - Historical state, cannot be modified
 
-  ## Functions
+  Each transaction belongs to a specific ledger instance and contains at least two entries
+  to maintain the balanced equation of accounting.
 
-    - `states/0`: Returns the list of transaction states.
-    - `changeset/2`: Creates and validates the changeset.
+  The following validations are enforced:
+  - Transactions must have at least 2 entries
+  - All entries must belong to accounts in the same ledger instance
+  - Debits must equal credits for each currency involved
+  - State transitions must follow allowed paths
+  - Transactions can only be created in the `:pending` or `:posted` state
+  - Transactions can only be updated if they are in the `:pending` state
+  - Transactions can only be archived from the `:pending` state
+  - Transactions can only be posted from the `:pending` state
+  - Transactions cannot be modified once posted or archived
+
+  Usage Details:
+  Transactions should not be created directly. Instead, use the `DoubleEntryLedger.EventStore` module
+  to create events that will generate transactions. The `EventWorker` will handle the processing of these events
+  and the creation of transactions in the ledger.
   """
+
   use DoubleEntryLedger.BaseSchema
   import Ecto.Query, only: [from: 2]
 
@@ -26,12 +38,36 @@ defmodule DoubleEntryLedger.Transaction do
   alias __MODULE__, as: Transaction
 
   @states [:pending, :posted, :archived]
+
+  @typedoc """
+  Represents the possible states of a transaction:
+  - `:pending` - Transaction is in draft mode and can be modified
+  - `:posted` - Transaction has been finalized and cannot be changed
+  - `:archived` - Transaction has been archived for historical purposes
+  """
   @type state ::
           unquote(
             Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
           )
+
+  @typedoc """
+  List of all possible transaction states.
+  """
   @type states :: [state]
 
+  @typedoc """
+  The transaction struct representing a financial event in the ledger.
+
+  Contains the following fields:
+  - `id`: Unique identifier
+  - `instance`: Associated ledger instance
+  - `instance_id`: ID of the associated ledger instance
+  - `posted_at`: Timestamp when the transaction was posted
+  - `status`: Current state of the transaction
+  - `entries`: Associated debit/credit entries
+  - `inserted_at`: Creation timestamp
+  - `updated_at`: Last modification timestamp
+  """
   @type t :: %__MODULE__{
           id: Ecto.UUID.t() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
@@ -54,7 +90,20 @@ defmodule DoubleEntryLedger.Transaction do
     timestamps(type: :utc_datetime_usec)
   end
 
-  @doc false
+  @doc """
+  Creates a changeset for updating a pending transaction.
+
+  This function is specifically for updating transactions in the `:pending` state,
+  allowing for controlled transitions between states.
+
+  ## Parameters
+    - `transaction`: The existing transaction struct
+    - `attrs`: Map of attributes to change
+    - `transition`: The transaction type being applied
+
+  ## Returns
+    An `Ecto.Changeset` with validations applied
+  """
   @spec changeset(Transaction.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
   def changeset(%{status: status} = transaction, attrs, transition) when status == :pending do
     transaction_changeset(transaction, attrs)
@@ -64,6 +113,22 @@ defmodule DoubleEntryLedger.Transaction do
     |> validate_debit_equals_credit_per_currency()
   end
 
+  @doc """
+  Creates a changeset for a transaction with the provided attributes.
+
+  Performs validations to ensure the transaction follows double-entry accounting principles:
+  - Has at least two entries
+  - All entries belong to accounts in the same ledger instance
+  - Debits equal credits for each currency involved
+  - State transitions follow allowed paths
+
+  ## Parameters
+    - `transaction`: The existing transaction struct
+    - `attrs`: Map of attributes to change
+
+  ## Returns
+    An `Ecto.Changeset` with validations applied
+  """
   @spec changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
   def changeset(transaction, %{status: status} = attrs) do
     transaction_changeset(transaction, attrs)
@@ -84,6 +149,15 @@ defmodule DoubleEntryLedger.Transaction do
     |> update_posted_at()
   end
 
+  @doc """
+  Returns the list of all valid transaction states.
+
+  ## Returns
+    A list of atoms representing the possible transaction states:
+    - `:pending`
+    - `:posted`
+    - `:archived`
+  """
   @spec states() :: states()
   def states, do: @states
 
