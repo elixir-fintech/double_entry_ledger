@@ -64,6 +64,7 @@ defmodule DoubleEntryLedger.Transaction do
     |> validate_debit_equals_credit_per_currency()
   end
 
+  @spec changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
   def changeset(transaction, %{status: status} = attrs) do
     transaction_changeset(transaction, attrs)
     |> cast_assoc(:entries, with: &Entry.changeset(&1, &2, status))
@@ -212,11 +213,14 @@ defmodule DoubleEntryLedger.Transaction do
     |> then(&put_assoc(changeset, :entries, &1))
   end
 
+  @spec account_ids([Entry.t() | Ecto.Changeset.t()]) :: [Ecto.UUID.t()]
   defp account_ids(entries), do: Enum.map(entries, &DoubleEntryLedger.EntryHelper.uuid(&1))
 
+  @spec debit_sum([Entry.t() | Ecto.Changeset.t()]) :: integer()
   defp debit_sum(entries),
     do: Enum.reduce(entries, 0, &DoubleEntryLedger.EntryHelper.debit_sum(&1, &2))
 
+  @spec credit_sum([Entry.t() | Ecto.Changeset.t()]) :: integer()
   defp credit_sum(entries),
     do: Enum.reduce(entries, 0, &DoubleEntryLedger.EntryHelper.credit_sum(&1, &2))
 end
