@@ -1,9 +1,17 @@
 defmodule DoubleEntryLedger.EventWorker.EventTransformer do
   @moduledoc """
-  Provides helper functions for processing events within the double-entry ledger system.
+  Transforms accounting events into ledger operations in the double-entry bookkeeping system.
 
-  This module includes functions to transform transaction and entry data into the formats
-  required by the ledger, handling account retrieval, and mapping entries.
+  This module serves as a transformation layer between incoming transaction events and the internal
+  ledger representation. It handles:
+
+  - Converting transaction data to the format required by the ledger system
+  - Retrieving relevant accounts for each transaction entry
+  - Determining the correct debit/credit classification based on account types
+  - Ensuring monetary values are properly formatted
+
+  The transformer provides a critical validation step, ensuring that all required accounts exist
+  and that entries are properly structured before they are recorded in the ledger.
   """
 
   alias DoubleEntryLedger.{Account, AccountStore, Types, Transaction}
@@ -11,12 +19,30 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
 
   import DoubleEntryLedger.Currency
 
+  @typedoc """
+  Represents a single ledger entry with account, monetary value, and entry type.
+
+  ## Fields
+
+    * `:account_id` - UUID of the account associated with this entry
+    * `:value` - Monetary amount as a `Money` struct (always positive)
+    * `:type` - Either `:debit` or `:credit` indicating the entry type
+  """
   @type entry_map() :: %{
           account_id: Ecto.UUID.t(),
           value: Money.t(),
           type: Types.credit_or_debit()
         }
 
+  @typedoc """
+  Represents a complete transaction with its entries ready for ledger processing.
+
+  ## Fields
+
+    * `:instance_id` - UUID of the instance this transaction belongs to
+    * `:status` - Current state of the transaction (e.g. `:pending`, `:completed`)
+    * `:entries` - List of entry maps that make up this transaction
+  """
   @type transaction_map() :: %{
           instance_id: Ecto.UUID.t(),
           status: Transaction.state(),
@@ -26,15 +52,27 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
   @doc """
   Transforms transaction data into a transaction map suitable for ledger operations.
 
+  This function takes incoming transaction data and converts it to the internal format
+  used by the ledger system. It handles both empty transactions (no entries) and
+  transactions with entries. For transactions with entries, it retrieves the associated
+  accounts and maps each entry to the appropriate entry format.
+
   ## Parameters
 
-    - `transaction_data` - A `%TransactionData{}` struct containing the transaction information.
-    - `instance_id` - The UUID of the instance associated with the transaction.
+    * `transaction_data` - A `TransactionData` struct containing transaction information
+      including entries and status
+    * `instance_id` - UUID of the instance associated with the transaction
 
   ## Returns
 
-    - `{:ok, transaction_map}` on success.
-    - `{:error, reason}` if an error occurs during transformation.
+    * `{:ok, transaction_map}` - Successfully transformed transaction data
+    * `{:error, reason}` - Failed to transform data, with reason as a string
+
+  ## Examples
+
+      iex> transaction_data = %TransactionData{entries: [], status: :pending}
+      iex> EventTransformer.transaction_data_to_transaction_map(transaction_data, "instance-123")
+      {:ok, %{instance_id: "instance-123", status: :pending}}
   """
   @spec transaction_data_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) ::
           {:ok, transaction_map()} | {:error, String.t()}

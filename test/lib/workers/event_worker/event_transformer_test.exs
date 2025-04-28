@@ -11,6 +11,8 @@ defmodule DoubleEntryLedger.EventTransformerTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
+  doctest EventTransformer
+
   describe "transaction_data_to_transaction_map/2" do
     setup [:create_instance, :create_accounts]
 
