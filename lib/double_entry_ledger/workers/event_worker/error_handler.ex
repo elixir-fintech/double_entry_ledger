@@ -1,6 +1,21 @@
 defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   @moduledoc """
-  This module provides functions to handle errors that occur during the processing of events in the Double Entry Ledger system.
+  Specialized error handling for the event processing pipeline in the double-entry ledger system.
+
+  This module provides utilities for processing, transforming, and propagating errors that occur
+  during event processing. It handles complex error mapping between different data structures
+  (transactions, events, event maps) while maintaining detailed error context.
+
+  Key responsibilities include:
+
+  * Transferring validation errors between different system layers
+  * Maintaining error context and traceability
+  * Handling dependency errors between related events
+  * Building properly structured error changesets for client consumption
+
+  The error handler ensures that all validation failures, processing errors, and
+  dependency issues are properly captured for troubleshooting, auditing, and potential
+  retry operations.
   """
 
   alias Ecto.Changeset
@@ -21,6 +36,23 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     AddUpdateEventError
   }
 
+  @doc """
+  Maps transaction validation errors to an event map changeset.
+
+  When a transaction fails validation during event processing, this function ensures
+  those errors are properly reflected in the event map structure, maintaining full
+  error context and attribution.
+
+  ## Parameters
+
+    - `event_map`: The event map used to generate the transaction
+    - `trx_changeset`: Transaction changeset containing validation errors
+
+  ## Returns
+
+    - `Ecto.Changeset.t()`: Event map changeset with propagated errors
+
+  """
   @spec transfer_errors_from_trx_to_event_map(EventMap.t(), Ecto.Changeset.t()) ::
           Ecto.Changeset.t()
   def transfer_errors_from_trx_to_event_map(event_map, trx_changeset) do
@@ -32,6 +64,22 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Map.put(:action, :insert)
   end
 
+  @doc """
+  Maps event validation errors to an event map changeset.
+
+  When an event fails validation during creation or update, this function ensures
+  those errors are properly reflected in the event map structure, maintaining full
+  error context and attribution.
+
+  ## Parameters
+
+  - `event_map`: The original event map
+  - `event_changeset`: Event changeset containing validation errors
+
+  ## Returns
+
+  - `Ecto.Changeset.t()`: Event map changeset with propagated errors
+  """
   @spec transfer_errors_from_event_to_event_map(EventMap.t(), Changeset.t()) :: Changeset.t()
   def transfer_errors_from_event_to_event_map(event_map, event_changeset) do
     build_event_map_changeset(event_map)
@@ -39,6 +87,24 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Map.put(:action, :insert)
   end
 
+  @doc """
+  Handles errors related to dependencies between update events and their create events.
+
+  This function provides specialized error handling for update events that depend on
+  create events which are not in the proper state. It distinguishes between different
+  error scenarios (pending, failed, or not found) and handles each appropriately.
+
+  ## Parameters
+
+    - `error`: An AddUpdateEventError exception containing details about the error
+    - `steps_so_far`: A map containing processing steps completed before the error occurred
+    - `event_map`: The original event map being processed
+
+  ## Returns
+
+    - `Event.t()`: For pending create events, creates a new event with pending status
+    - `Changeset.t()`: For other errors, returns a changeset with mapped errors
+  """
   @spec handle_add_update_event_error(AddUpdateEventError.t(), map(), EventMap.t()) ::
           Event.t() | Changeset.t()
   def handle_add_update_event_error(
