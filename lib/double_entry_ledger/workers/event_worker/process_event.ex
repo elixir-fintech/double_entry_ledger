@@ -1,6 +1,22 @@
 defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   @moduledoc """
-  Provides functions to process ledger events and handle transactions accordingly.
+  Processes accounting events and transforms them into ledger transactions.
+
+  This module serves as the primary entry point for processing double-entry ledger events.
+  It handles two main scenarios:
+
+  - Processing existing `Event` structures already in the system
+  - Processing raw event maps that need to be validated and converted
+
+  The module supports different event actions (create/update) and ensures that only
+  events in the appropriate state are processed. It delegates specialized processing
+  to dedicated handler modules based on the event action.
+
+  Event processing follows these steps:
+  1. Validate the event status and action
+  2. Delegate to the appropriate handler module
+  3. Create or update the associated transaction records
+  4. Update the event status to reflect the result
   """
 
   alias Ecto.Changeset
@@ -27,14 +43,22 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   @actions Event.actions()
 
   @doc """
-  Processes a pending event by executing its associated action.
+  Processes a pending event based on its action type.
+
+  This function takes an existing Event struct and processes it according to its
+  action type. Only events in the pending state can be processed. The function
+  delegates to specialized handlers for different action types (create, update).
 
   ## Parameters
-    - event: The `%Event{}` struct to be processed.
+    - `event` - An %Event{} struct in the pending state
 
   ## Returns
-    - `{:ok, transaction, event}` on success.
-    - `{:error, reason}` on failure.
+    - `{:ok, transaction, event}` - Successfully processed the event, returning the
+      resulting transaction and the updated event
+    - `{:error, event}` - Failed to process the event, with the event containing error details
+    - `{:error, changeset}` - Failed to process the event, with changeset containing validation errors
+    - `{:error, reason}` - Failed to process the event, with reason explaining the failure
+
   """
   @spec process_event(Event.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
@@ -55,14 +79,23 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   end
 
   @doc """
-  Processes an event map by creating an event record and handling the associated transaction.
+  Processes an event map by validating it and converting it to a proper Event record.
+
+  This function serves as the entry point for processing external event data. It
+  validates that the action is supported before delegating to the appropriate handler.
+  The event map is transformed into a properly structured Event record, and the
+  associated transaction is created or updated.
 
   ## Parameters
-    - event_map: A map representing the event data.
+    - `event_map` - A map containing event data with at least an :action field
 
   ## Returns
-    - `{:ok, transaction, event}` on success.
-    - `{:error, reason}` on failure.
+    - `{:ok, transaction, event}` - Successfully processed the event map, returning
+      the resulting transaction and the created event
+    - `{:error, event}` - Failed to process the event, with the event containing error details
+    - `{:error, changeset}` - Failed to process the event, with changeset containing validation errors
+    - `{:error, reason}` - Failed to process the event, with reason explaining the failure
+
   """
   @spec process_event_map(EventMap.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
