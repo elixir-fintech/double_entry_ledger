@@ -46,11 +46,11 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   Processes a pending event based on its action type.
 
   This function takes an existing Event struct and processes it according to its
-  action type. Only events in the pending state can be processed. The function
+  action type. Only events in the processing state can be processed. The function
   delegates to specialized handlers for different action types (create, update).
 
   ## Parameters
-    - `event` - An %Event{} struct in the pending state
+    - `event` - An %Event{} struct in the processing state
 
   ## Returns
     - `{:ok, transaction, event}` - Successfully processed the event, returning the
@@ -61,21 +61,21 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
 
   """
   @spec process_event(Event.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_event(%Event{status: :pending, action: :create} = event) do
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t() | atom()}
+  def process_event(%Event{status: :processing, action: :create} = event) do
     process_create_event(event)
   end
 
-  def process_event(%Event{status: :pending, action: :update} = event) do
+  def process_event(%Event{status: :processing, action: :update} = event) do
     process_update_event(event)
   end
 
-  def process_event(%Event{status: :pending, action: _} = _event) do
-    {:error, "Action is not supported"}
+  def process_event(%Event{status: :processing, action: _} = _event) do
+    {:error, :action_not_supported}
   end
 
   def process_event(%Event{} = _event) do
-    {:error, "Event is not in pending state"}
+    {:error, :event_not_in_processing_state}
   end
 
   @doc """
@@ -98,12 +98,12 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
 
   """
   @spec process_event_map(EventMap.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t() | atom()}
   def process_event_map(%{action: action} = event_map) when action in @actions do
     process_map(event_map)
   end
 
   def process_event_map(_event_map) do
-    {:error, "Action is not supported"}
+    {:error, :action_not_supported}
   end
 end

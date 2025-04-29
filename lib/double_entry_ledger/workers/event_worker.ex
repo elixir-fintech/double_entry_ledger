@@ -117,12 +117,12 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> EventWorker.process_event_with_id("550e8400-e29b-41d4-a716-446655440000")
       {:error, :event_not_found}
   """
-  @spec process_event_with_id(Ecto.UUID.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_event_with_id(uuid) do
-    case EventStore.get_by_id(uuid) do
-      %Event{} = event -> process_event(event)
-      nil -> {:error, :event_not_found}
+  @spec process_event_with_id(Ecto.UUID.t(), String.t() |  nil) ::
+          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t() | atom()}
+  def process_event_with_id(uuid, processor_id \\ "manual") do
+    case EventStore.claim_event_for_processing(uuid, processor_id) do
+      {:ok, event} -> process_event(event)
+      {:error, error} -> {:error, error}
     end
   end
 end

@@ -56,16 +56,16 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       assert transaction.status == :posted
     end
 
-    test "only process pending events", ctx do
+    test "only process events with status :processing", ctx do
       %{event: event} = create_event(ctx)
       EventWorker.process_event_with_id(event.id)
 
-      assert {:error, "Event is not in pending state"} =
+      assert {:error, :event_not_claimable} =
                EventWorker.process_event_with_id(event.id)
 
       EventStore.mark_as_failed(event, "test")
 
-      assert {:error, "Event is not in pending state"} =
+      assert {:error, :event_not_claimable} =
                EventWorker.process_event_with_id(event.id)
     end
   end
