@@ -21,6 +21,7 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
         create_event: create_event
     end
   end
+  ```
   """
 
   defexception [:message, :create_event, :update_event, :reason]
