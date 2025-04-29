@@ -70,7 +70,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
       {:error, :get_create_event_transaction,
        %AddUpdateEventError{reason: :create_event_pending, message: message}, _} ->
-        add_error(event, message)
+        revert_to_pending(event, message)
 
       {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, _} ->
         handle_error(event, error.message)
@@ -110,10 +110,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     end)
   end
 
-    @spec add_error(Event.t(), String.t()) ::
+    @spec revert_to_pending(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
-  defp add_error(event, reason) do
-    case EventStore.add_error(event, reason) do
+  defp revert_to_pending(event, reason) do
+    case EventStore.revert_to_pending(event, reason) do
       {:ok, event} ->
         {:error, event}
 

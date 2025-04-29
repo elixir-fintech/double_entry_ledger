@@ -39,14 +39,14 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
-  describe "add_error/2" do
+  describe "revert_to_pending/2" do
     setup [:create_instance]
 
     test "adds an error to an event", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
 
       assert {:ok, %Event{} = updated_event} =
-               EventStore.add_error(event, "some reason")
+               EventStore.revert_to_pending(event, "some reason")
 
       assert updated_event.status == :pending
       assert updated_event.processed_at == nil
@@ -55,8 +55,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "add_error/2 accumulates errors", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
-      {:ok, event1} = EventStore.add_error(event, "reason1")
-      {:ok, updated_event} = EventStore.add_error(event1, "reason2")
+      {:ok, event1} = EventStore.revert_to_pending(event, "reason1")
+      {:ok, updated_event} = EventStore.revert_to_pending(event1, "reason2")
       assert updated_event.status == :pending
       assert updated_event.processed_at == nil
       assert [%{message: "reason2"}, %{message: "reason1"}] = updated_event.errors

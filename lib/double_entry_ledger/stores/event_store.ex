@@ -255,10 +255,11 @@ defmodule DoubleEntryLedger.EventStore do
     - `{:ok, event}`: If the event was successfully updated
     - `{:error, changeset}`: If the update failed
   """
-  @spec add_error(Event.t(), any()) :: {:ok, Event.t()} | {:error, Changeset.t()}
-  def add_error(event, error) do
+  @spec revert_to_pending(Event.t(), any()) :: {:ok, Event.t()} | {:error, Changeset.t()}
+  def revert_to_pending(event, error) do
     event
     |> build_add_error(error)
+    |> Changeset.change(status: :pending)
     |> Repo.update()
   end
 end

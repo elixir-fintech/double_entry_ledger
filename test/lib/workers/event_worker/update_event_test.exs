@@ -138,7 +138,9 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: %{id: e_id, source: s, source_idempk: s_id}} = create_event(ctx, :pending)
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      {:error, failed_event} = UpdateEvent.process_update_event(event)
+      {:ok, processing_event} = EventStore.claim_event_for_processing(event.id, "manual")
+
+      {:error, failed_event} = UpdateEvent.process_update_event(processing_event)
       assert failed_event.status == :pending
 
       [error | _] = failed_event.errors
