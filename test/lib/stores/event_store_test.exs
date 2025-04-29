@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "returns error when event not found" do
       assert {:error, :event_not_found} =
-               EventStore.claim_event_for_processing(Ecto.UUID.generate())
+               EventStore.claim_event_for_processing(Ecto.UUID.generate(), "manual")
     end
 
     test "returns error when event not claimable", %{instance: instance} do
@@ -115,14 +115,14 @@ defmodule DoubleEntryLedger.EventStoreTest do
       EventStore.mark_as_failed(event, "some reason")
 
       assert {:error, :event_not_claimable} =
-               EventStore.claim_event_for_processing(event.id)
+               EventStore.claim_event_for_processing(event.id, "manual")
     end
 
     test "claims an event for processing", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
 
       assert {:ok, %Event{} = claimed_event} =
-               EventStore.claim_event_for_processing(event.id)
+               EventStore.claim_event_for_processing(event.id, "manual")
 
       assert claimed_event.status == :processing
       assert claimed_event.processor_id == "manual"
@@ -136,7 +136,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
         raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
       end)
 
-      assert {:error, :event_not_claimable} =
+      assert {:error, :event_already_claimed} =
                EventStore.claim_event_for_processing(
                  event.id,
                  "manual",

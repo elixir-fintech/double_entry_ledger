@@ -88,11 +88,12 @@ defmodule DoubleEntryLedger.EventStore do
   ## Returns
     - `{:ok, event}`: If the event was successfully claimed
     - `{:error, :event_not_found}`: If no event with the given ID exists
-    - `{:error, :event_not_claimable}`: If the event cannot be claimed (wrong status or claimed by another processor)
+    - `{:error, :event_already_claimed}`: If the event was claimed by another processor
+    - `{:error, :event_not_claimable}`: If the event is not in a claimable state (not pending or occ_timeout)
   """
   @spec claim_event_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
           {:ok, Event.t()} | {:error, atom()}
-  def claim_event_for_processing(id, processor_id \\ "manual", repo \\ Repo) do
+  def claim_event_for_processing(id, processor_id, repo \\ Repo) do
     case get_by_id(id) do
       nil ->
         {:error, :event_not_found}
@@ -104,7 +105,7 @@ defmodule DoubleEntryLedger.EventStore do
             |> repo.update()
           rescue
             Ecto.StaleEntryError ->
-              {:error, :event_not_claimable}
+              {:error, :event_already_claimed}
           end
         else
           {:error, :event_not_claimable}
