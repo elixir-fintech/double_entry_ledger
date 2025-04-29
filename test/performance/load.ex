@@ -122,7 +122,6 @@ defmodule DoubleEntryLedger.LoadTesting do
         posted: %Balance{amount: debit_sum, debit: debit_sum, credit: 0},
         available: debit_sum,
         currency: :EUR
-
       }
       |> Repo.insert!()
     end)

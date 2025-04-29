@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     end)
   end
 
-    @spec revert_to_pending(Event.t(), String.t()) ::
+  @spec revert_to_pending(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   defp revert_to_pending(event, reason) do
     case EventStore.revert_to_pending(event, reason) do
@@ -122,7 +122,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     end
   end
 
-    @spec handle_error(Event.t(), String.t()) ::
+  @spec handle_error(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   defp handle_error(event, reason) do
     case EventStore.mark_as_failed(event, reason) do

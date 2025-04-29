@@ -61,7 +61,8 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
 
   """
   @spec process_event(Event.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t() | atom()}
+          {:ok, Transaction.t(), Event.t()}
+          | {:error, Event.t() | Changeset.t() | String.t() | atom()}
   def process_event(%Event{status: :processing, action: :create} = event) do
     process_create_event(event)
   end
@@ -98,7 +99,8 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
 
   """
   @spec process_event_map(EventMap.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t() | atom()}
+          {:ok, Transaction.t(), Event.t()}
+          | {:error, Event.t() | Changeset.t() | String.t() | atom()}
   def process_event_map(%{action: action} = event_map) when action in @actions do
     process_map(event_map)
   end

@@ -245,7 +245,7 @@ defmodule DoubleEntryLedger.EventStore do
   end
 
   @doc """
-  Adds an error to the event's error list without changing its status.
+  Adds an error to the event's error list and reverts it to pending state.
 
   ## Parameters
     - `event`: The event to add an error to
