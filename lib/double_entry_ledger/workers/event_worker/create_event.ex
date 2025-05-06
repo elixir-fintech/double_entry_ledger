@@ -78,10 +78,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
         {:error, event}
 
       {:error, :transaction_map, error, event} ->
-        handle_error(event, "Failed to transform transaction data: #{inspect(error)}")
+        schedule_retry(event, "Failed to transform transaction data: #{inspect(error)}")
 
       {:error, step, error, _} ->
-        handle_error(event, "#{step} step failed: #{inspect(error)}")
+        schedule_retry(event, "#{step} step failed: #{inspect(error)}")
     end
   end
 
@@ -94,9 +94,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     end)
   end
 
-  @spec handle_error(Event.t(), String.t()) ::
+  @spec schedule_retry(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
-  defp handle_error(event, reason) do
+  defp schedule_retry(event, reason) do
     case EventStore.schedule_retry(event, reason) do
       {:ok, event} ->
         {:error, event}
