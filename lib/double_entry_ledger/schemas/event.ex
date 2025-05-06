@@ -41,7 +41,7 @@ defmodule DoubleEntryLedger.Event do
   alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Event.ErrorMap
 
-  @states [:pending, :processed, :failed, :occ_timeout, :processing]
+  @states [:pending, :processed, :failed, :occ_timeout, :processing, :dead_letter]
   @actions [:create, :update]
   @type state ::
           unquote(
@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.Event do
   ## Fields
 
   * `id`: UUID primary key
-  * `status`: Current processing state (:pending, :processing, :processed, :failed, :occ_timeout)
+  * `status`: Current processing state (:pending, :processing, :processed, :failed, :occ_timeout, :dead_letter)
   * `action`: The action type (:create or :update)
   * `source`: Identifier for the system that originated the event
   * `source_data`: Arbitrary JSON data from the source system

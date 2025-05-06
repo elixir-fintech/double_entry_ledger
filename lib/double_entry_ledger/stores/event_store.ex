@@ -57,6 +57,11 @@ defmodule DoubleEntryLedger.EventStore do
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker
 
+  @config Application.compile_env(:double_entry_ledger, :event_queue, [])
+  @max_retries Keyword.get(@config, :max_retries, 5)
+  @base_delay Keyword.get(@config, :base_retry_delay, 30)
+  @max_delay Keyword.get(@config, :max_retry_delay, 3600)
+
   @doc """
   Retrieves an event by its unique ID.
 
@@ -206,6 +211,9 @@ defmodule DoubleEntryLedger.EventStore do
 
   @doc """
   Creates a new event after a processing failure, preserving error information.
+  This is used mainly for Events that have not yet been saved to the database which
+  can happen when failing to create a transaction from an EventMap. This is useful
+  for tracking the failure and retrying later.
 
   ## Parameters
     - `event`: The original event that failed
@@ -261,5 +269,70 @@ defmodule DoubleEntryLedger.EventStore do
     |> build_add_error(error)
     |> Changeset.change(status: :pending)
     |> Repo.update()
+  end
+
+  @doc """
+  Sets the next retry time for a failed event using exponential backoff.
+
+  ## Parameters
+    - `event` - The event that failed and needs retry scheduling
+    - `error` - The error message or reason for failure
+
+  ## Returns
+    - `{:ok, updated_event}` - The event with updated retry information
+    - `{:error, changeset}` - Error updating the event
+  """
+  def schedule_retry(event, error) do
+    if event.retry_count >= @max_retries do
+      # Max retries exceeded, mark as dead letter
+      mark_as_dead_letter(event, "Max retry count (#{@max_retries}) exceeded: #{error}")
+    else
+      # Calculate next retry time with exponential backoff
+      retry_delay = calculate_retry_delay(event.retry_count)
+
+      event
+      |> build_add_error(error)
+      |> Ecto.Changeset.change(
+        status: :failed,
+        processor_id: nil,
+        processing_started_at: nil,
+        retry_count: event.retry_count + 1,
+        next_retry_after: DateTime.add(DateTime.utc_now(), retry_delay, :second)
+      )
+      |> Repo.update()
+    end
+  end
+
+  @doc """
+  Marks an event as permanently failed (dead letter).
+
+  ## Parameters
+    - `event` - The event to mark as dead letter
+    - `reason` - The reason for marking as dead letter
+
+  ## Returns
+    - `{:ok, updated_event}` - The event marked as dead letter
+    - `{:error, changeset}` - Error updating the event
+  """
+  def mark_as_dead_letter(event, error) do
+    event
+    |> build_add_error(error)
+    |> Ecto.Changeset.change(
+      status: :dead_letter,
+      processor_id: nil,
+      processing_started_at: nil
+    )
+    |> Repo.update()
+  end
+
+  # Private function to calculate retry delay
+  defp calculate_retry_delay(retry_count) do
+    # Exponential backoff: base_delay * 2^retry_count
+    delay = @base_delay * :math.pow(2, retry_count)
+    delay = min(delay, @max_delay)
+    # Add some jitter to prevent thundering herd
+    jitter = :rand.uniform(div(trunc(delay), 10) + 1)
+
+    trunc(delay + jitter)
   end
 end
