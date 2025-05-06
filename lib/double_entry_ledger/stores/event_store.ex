@@ -289,15 +289,15 @@ defmodule DoubleEntryLedger.EventStore do
     else
       # Calculate next retry time with exponential backoff
       retry_delay = calculate_retry_delay(event.retry_count)
-
+      now = DateTime.utc_now()
       event
       |> build_add_error(error)
       |> Ecto.Changeset.change(
         status: :failed,
         processor_id: nil,
-        processing_started_at: nil,
+        processing_completed_at: now,
         retry_count: event.retry_count + 1,
-        next_retry_after: DateTime.add(DateTime.utc_now(), retry_delay, :second)
+        next_retry_after: DateTime.add(now, retry_delay, :second)
       )
       |> Repo.update()
     end
@@ -319,8 +319,7 @@ defmodule DoubleEntryLedger.EventStore do
     |> build_add_error(error)
     |> Ecto.Changeset.change(
       status: :dead_letter,
-      processor_id: nil,
-      processing_started_at: nil
+      processing_completed_at: DateTime.utc_now()
     )
     |> Repo.update()
   end

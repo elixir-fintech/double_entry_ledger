@@ -146,7 +146,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       [error | _] = failed_event.errors
 
       assert error.message ==
-               "Create event (id: #{e_id}) has not yet been processed for Update Event (id: #{event.id})"
+               "Create event (id: #{e_id}) not yet processed for Update Event (id: #{event.id})"
     end
 
     test "fails when update event failed", %{instance: inst} = ctx do
@@ -160,7 +160,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       [error | _] = failed_event.errors
 
       assert error.message ==
-               "Create event (id: #{pending_event.id}) has failed for Update Event (id: #{event.id})"
+               "Create event (id: #{pending_event.id}) status: :failed for Update Event (id: #{event.id})"
     end
 
     test "update event with last retry that fails", %{instance: inst} = ctx do

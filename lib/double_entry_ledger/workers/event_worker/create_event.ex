@@ -97,7 +97,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   @spec handle_error(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   defp handle_error(event, reason) do
-    case EventStore.mark_as_failed(event, reason) do
+    case EventStore.schedule_retry(event, reason) do
       {:ok, event} ->
         {:error, event}
 

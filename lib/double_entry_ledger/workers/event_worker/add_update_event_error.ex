@@ -43,22 +43,16 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
 
     case create_event do
       %Event{status: :pending} ->
-        %AddUpdateEventError{
-          message:
-            "Create event (id: #{create_event.id}) has not yet been processed for Update Event (id: #{update_event.id})",
-          create_event: create_event,
-          update_event: update_event,
-          reason: :create_event_pending
-        }
+        pending_error(create_event, update_event)
+
+      %Event{status: :processing} ->
+        pending_error(create_event, update_event)
 
       %Event{status: :failed} ->
-        %AddUpdateEventError{
-          message:
-            "Create event (id: #{create_event.id}) has failed for Update Event (id: #{update_event.id})",
-          create_event: create_event,
-          update_event: update_event,
-          reason: :create_event_failed
-        }
+        failed_error(create_event, update_event)
+
+      %Event{status: :dead_letter} ->
+        failed_error(create_event, update_event)
 
       nil ->
         %AddUpdateEventError{
@@ -68,5 +62,25 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
           reason: :create_event_not_found
         }
     end
+  end
+
+  defp pending_error(create_event, update_event) do
+    %AddUpdateEventError{
+      message:
+        "Create event (id: #{create_event.id}) not yet processed for Update Event (id: #{update_event.id})",
+      create_event: create_event,
+      update_event: update_event,
+      reason: :create_event_pending
+    }
+  end
+
+  defp failed_error(create_event, update_event) do
+    %AddUpdateEventError{
+      message:
+        "Create event (id: #{create_event.id}) status: :#{create_event.status} for Update Event (id: #{update_event.id})",
+      create_event: create_event,
+      update_event: update_event,
+      reason: :"create_event_#{create_event.status}"
+    }
   end
 end

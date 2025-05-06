@@ -115,7 +115,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       assert is_struct(event_map, Changeset)
       {error_message, _} = Keyword.get(event_map.errors, :source_idempk)
-      assert error_message =~ "Create event (id: #{pending_event.id}) has failed"
+      assert error_message =~ "Create event (id: #{pending_event.id}) status: :failed"
 
       assert is_nil(
                Event
