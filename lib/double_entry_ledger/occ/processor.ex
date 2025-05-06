@@ -214,15 +214,12 @@ defmodule DoubleEntryLedger.Occ.Processor do
              event,
              %{errors: errors, retries: retries}
            ) do
-        {now, next_retry_after} = get_now_and_next_retry_after()
 
         event
         |> Ecto.Changeset.change(
           errors: errors,
           status: :occ_timeout,
-          occ_retry_count: retries,
-          processing_completed_at: now,
-          next_retry_after: next_retry_after
+          occ_retry_count: retries
         )
       end
 

@@ -282,7 +282,7 @@ defmodule DoubleEntryLedger.EventStore do
     - `{:ok, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  def schedule_retry(event, error) do
+  def schedule_retry(event, error, status \\ :failed) do
     if event.retry_count >= @max_retries do
       # Max retries exceeded, mark as dead letter
       mark_as_dead_letter(event, "Max retry count (#{@max_retries}) exceeded: #{error}")
@@ -293,7 +293,7 @@ defmodule DoubleEntryLedger.EventStore do
       event
       |> build_add_error(error)
       |> Ecto.Changeset.change(
-        status: :failed,
+        status: status,
         processor_id: nil,
         processing_completed_at: now,
         retry_count: event.retry_count + 1,

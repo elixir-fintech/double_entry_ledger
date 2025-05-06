@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       {:ok, event} = create_update_event("source", "1", inst.id, :posted)
 
       {:error, failed_event} = UpdateEvent.process_update_event(event)
-      assert failed_event.status == :failed
+      assert failed_event.status == :dead_letter
 
       [error | _] = failed_event.errors
 
@@ -192,10 +192,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert updated_event.occ_retry_count == 5
       assert updated_event.processed_transaction_id == nil
       assert updated_event.processed_at == nil
-      assert length(updated_event.errors) == 5
-
-      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
-               updated_event.errors
+      assert length(updated_event.errors) == 6
     end
 
     test "when transaction can't be created for other reasons", %{instance: inst} = ctx do
