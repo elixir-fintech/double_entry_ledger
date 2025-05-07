@@ -64,6 +64,36 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     end
   end
 
+  @spec revert_to_pending(Event.t(), String.t()) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
+  def revert_to_pending(event, reason) do
+    case build_revert_to_pending(event, reason) |> Repo.update() do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Adds an error to the event's error list and reverts it to pending state.
+
+  ## Parameters
+    - `event`: The event to add an error to
+    - `error`: Error message or data to add
+
+  ## Returns
+    - `{:ok, event}`: If the event was successfully updated
+    - `{:error, changeset}`: If the update failed
+  """
+  @spec build_revert_to_pending(Event.t(), any()) :: Changeset.t()
+  def build_revert_to_pending(event, error) do
+    event
+    |> build_add_error(error)
+    |> Changeset.change(status: :pending)
+  end
+
   @doc """
   Sets the next retry time for a failed event using exponential backoff.
 

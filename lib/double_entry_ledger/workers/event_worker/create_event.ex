@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     TransactionStore,
     Repo
   }
-  alias DoubleEntryLedger.EventQueue.Scheduling
+  import DoubleEntryLedger.EventQueue.Scheduling
 
   @doc """
   Processes a create event by transforming it into a transaction in the ledger.
@@ -74,13 +74,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
         {:ok, transaction, update_event}
 
       {:error, :transaction, :occ_final_timeout, event} ->
-        Scheduling.schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
+        schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
 
       {:error, :transaction_map, error, event} ->
-        Scheduling.schedule_retry(event, "Failed to transform transaction data: #{inspect(error)}")
+        schedule_retry(event, "Failed to transform transaction data: #{inspect(error)}")
 
       {:error, step, error, _} ->
-        Scheduling.schedule_retry(event, "#{step} step failed: #{inspect(error)}")
+        schedule_retry(event, "#{step} step failed: #{inspect(error)}")
     end
   end
 
@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
     |> Multi.update(:event, fn %{transaction: td} ->
-      Scheduling.build_mark_as_processed(event, td.id)
+      build_mark_as_processed(event, td.id)
     end)
   end
 end

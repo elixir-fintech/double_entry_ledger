@@ -247,24 +247,4 @@ defmodule DoubleEntryLedger.EventStore do
     |> Changeset.change(status: :failed)
     |> Repo.update()
   end
-
-  @doc """
-  Adds an error to the event's error list and reverts it to pending state.
-
-  ## Parameters
-    - `event`: The event to add an error to
-    - `error`: Error message or data to add
-
-  ## Returns
-    - `{:ok, event}`: If the event was successfully updated
-    - `{:error, changeset}`: If the update failed
-  """
-  @spec revert_to_pending(Event.t(), any()) :: {:ok, Event.t()} | {:error, Changeset.t()}
-  def revert_to_pending(event, error) do
-    event
-    |> build_add_error(error)
-    |> Changeset.change(status: :pending)
-    |> Repo.update()
-  end
-
 end
