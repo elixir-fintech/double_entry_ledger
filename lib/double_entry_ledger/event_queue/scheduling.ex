@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   """
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Repo
+  alias DoubleEntryLedger.{Repo, Event}
 
   import DoubleEntryLedger.EventStoreHelper, only: [build_add_error: 2]
 
