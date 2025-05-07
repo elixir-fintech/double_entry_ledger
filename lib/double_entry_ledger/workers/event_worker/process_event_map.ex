@@ -35,7 +35,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     Event,
     Transaction,
     TransactionStore,
-    EventStore,
     Repo,
     EventStoreHelper
   }
@@ -47,6 +46,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   alias Ecto.{Multi, Changeset}
   import DoubleEntryLedger.Occ.Helper
   import DoubleEntryLedger.EventWorker.ErrorHandler
+  alias DoubleEntryLedger.EventQueue.Scheduling
 
   @doc """
   Processes an EventMap by creating both an event record and its associated transaction atomically.
@@ -154,7 +154,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   @spec schedule_retry(Event.t(), String.t(), atom()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   defp schedule_retry(event, reason, status) do
-    case EventStore.schedule_retry(event, reason, status) do
+    case Scheduling.schedule_retry(event, reason, status) do
       {:ok, event} ->
         {:error, event}
 

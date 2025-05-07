@@ -34,6 +34,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   }
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
+  alias DoubleEntryLedger.EventQueue.Scheduling
 
   @doc """
   Processes an update event by modifying the corresponding transaction.
@@ -136,7 +137,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   @spec schedule_retry(Event.t(), String.t(), atom()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   defp schedule_retry(event, reason, status) do
-    case EventStore.schedule_retry(event, reason, status) do
+    case Scheduling.schedule_retry(event, reason, status) do
       {:ok, event} ->
         {:error, event}
 
@@ -148,7 +149,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   @spec move_to_dead_letter(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   defp move_to_dead_letter(event, reason) do
-    case EventStore.mark_as_dead_letter(event, reason) do
+    case Scheduling.mark_as_dead_letter(event, reason) do
       {:ok, event} ->
         {:error, event}
 

@@ -36,11 +36,11 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   alias DoubleEntryLedger.{
     Event,
     Transaction,
-    EventStore,
     EventStoreHelper,
     TransactionStore,
     Repo
   }
+  alias DoubleEntryLedger.EventQueue.Scheduling
 
   @doc """
   Processes a create event by transforming it into a transaction in the ledger.
@@ -97,7 +97,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   @spec schedule_retry(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   defp schedule_retry(event, reason) do
-    case EventStore.schedule_retry(event, reason) do
+    case Scheduling.schedule_retry(event, reason) do
       {:ok, event} ->
         {:error, event}
 
