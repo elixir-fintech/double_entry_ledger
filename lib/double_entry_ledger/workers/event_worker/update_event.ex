@@ -118,7 +118,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
         revert_to_pending(event, error.message)
 
       %{reason: :create_event_failed} ->
-        schedule_retry(event, error.message, :failed)
+        schedule_update_retry(event, error)
 
       _ ->
         move_to_dead_letter(event, error.message)

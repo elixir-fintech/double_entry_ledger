@@ -151,13 +151,16 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
     test "fails when update event failed", %{instance: inst} = ctx do
       %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
-      pending_event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
+      {:error, failed_create_event } = DoubleEntryLedger.EventQueue.Scheduling.schedule_retry(pending_event, "some reason")
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
       {:error, failed_event} = UpdateEvent.process_update_event(event)
       assert failed_event.status == :failed
 
       [error | _] = failed_event.errors
+
+      assert failed_create_event.status == :failed
+      assert DateTime.compare(failed_create_event.next_retry_after, failed_event.next_retry_after) == :lt
 
       assert error.message ==
                "Create event (id: #{pending_event.id}) status: :failed for Update Event (id: #{event.id})"

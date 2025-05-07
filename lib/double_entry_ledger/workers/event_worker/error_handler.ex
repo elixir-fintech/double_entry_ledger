@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   @spec handle_add_update_event_error(AddUpdateEventError.t(), map(), EventMap.t()) ::
           Event.t() | Changeset.t()
   def handle_add_update_event_error(
-        %AddUpdateEventError{reason: :create_event_pending, message: msg},
+        %{reason: :create_event_pending, message: msg},
         steps_so_far,
         event_map
       ) do
@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     end
   end
 
-  def handle_add_update_event_error(%AddUpdateEventError{message: msg}, steps_so_far, event_map) do
+  def handle_add_update_event_error(%{message: msg}, steps_so_far, event_map) do
     steps_so_far[:create_event]
     |> Changeset.change()
     |> Changeset.add_error(:source_idempk, "#{msg}")

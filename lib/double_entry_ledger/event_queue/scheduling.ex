@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   This module is responsible for scheduling events in the event queue.
   """
 
+  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   alias Ecto.Changeset
   alias DoubleEntryLedger.{Repo, Event}
 
@@ -28,6 +29,32 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
           {:error, Event.t()} | {:error, Changeset.t()}
   def schedule_retry(event, reason, status \\ :failed) do
     case build_schedule_retry(event, reason, status) |> Repo.update() do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Sets the next retry time for an update event that failed because
+  the create event was in :failed state using exponential backoff.
+  Makes sure that the next_retry_after is set aster the create event's
+  next_retry_after.
+
+  ## Parameters
+    - `event` - The event that failed and needs retry scheduling
+    - `error` - The associated AddUpdateEventError struct that contains the create event
+
+  ## Returns
+    - `{:ok, updated_event}` - The event with updated retry information
+    - `{:error, changeset}` - Error updating the event
+  """
+  @spec schedule_update_retry(Event.t(), AddUpdateEventError.t()) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
+  def schedule_update_retry(event, reason) do
+    case build_schedule_update_retry(event, reason) |> Repo.update() do
       {:ok, event} ->
         {:error, event}
 
@@ -137,6 +164,23 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
         next_retry_after: DateTime.add(now, retry_delay, :second)
       )
     end
+  end
+
+  @spec build_schedule_update_retry(Event.t(), AddUpdateEventError.t()) :: Changeset.t()
+  def build_schedule_update_retry(event, error) do
+    # Calculate next retry time with exponential backoff
+    retry_delay = calculate_retry_delay(event.retry_count)
+    now = DateTime.utc_now()
+    next_retry_after = DateTime.add(error.create_event.next_retry_after, retry_delay, :second)
+
+    event
+    |> build_add_error(error.message)
+    |> Changeset.change(
+      status: :failed,
+      processor_id: nil,
+      processing_completed_at: now,
+      next_retry_after: next_retry_after
+    )
   end
 
   @spec build_mark_as_dead_letter(Event.t(), String.t()) :: Changeset.t()
