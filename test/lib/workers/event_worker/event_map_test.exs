@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
     test "update event for event_map, when create event failed", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      EventStore.mark_as_failed(pending_event, "Failed to create event")
+      pending_event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       {:error, event_map} = ProcessEventMap.process_map(update_event)

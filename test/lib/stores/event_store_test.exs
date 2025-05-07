@@ -23,22 +23,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
-  describe "mark_as_failed/2" do
-    setup [:create_instance]
-
-    test "marks an event as failed", %{instance: instance} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
-
-      assert {:ok, %Event{} = updated_event} =
-               EventStore.mark_as_failed(event, "some reason")
-
-      assert updated_event.status == :failed
-      assert updated_event.processed_at == nil
-
-      assert [%{message: "some reason"} | _] = updated_event.errors
-    end
-  end
-
   describe "get_create_event_by_source/3" do
     setup [:create_instance, :create_accounts]
 
@@ -87,9 +71,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "returns error when event not claimable", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
-
-      EventStore.mark_as_failed(event, "some reason")
-
+      event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
       assert {:error, :event_not_claimable} =
                EventStore.claim_event_for_processing(event.id, "manual")
     end

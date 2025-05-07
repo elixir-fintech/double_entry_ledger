@@ -228,23 +228,4 @@ defmodule DoubleEntryLedger.EventStore do
     |> Changeset.change(errors: errors, status: status, occ_retry_count: retries)
     |> Repo.insert()
   end
-
-  @doc """
-  Marks an event as failed with the provided error reason.
-
-  ## Parameters
-    - `event`: The event to mark as failed
-    - `reason`: Error message or reason for failure
-
-  ## Returns
-    - `{:ok, event}`: If the event was successfully updated
-    - `{:error, changeset}`: If the update failed
-  """
-  @spec mark_as_failed(Event.t(), String.t()) :: {:ok, Event.t()} | {:error, Changeset.t()}
-  def mark_as_failed(event, reason) do
-    event
-    |> build_add_error(reason)
-    |> Changeset.change(status: :failed)
-    |> Repo.update()
-  end
 end

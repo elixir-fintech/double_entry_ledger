@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       assert {:error, :event_not_claimable} =
                EventWorker.process_event_with_id(event.id)
 
-      EventStore.mark_as_failed(event, "test")
+      event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
 
       assert {:error, :event_not_claimable} =
                EventWorker.process_event_with_id(event.id)
