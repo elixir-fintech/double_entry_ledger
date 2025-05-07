@@ -74,6 +74,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
 
         # Process event in a separate task to not block the GenServer
         Logger.info("Processing event #{event.id} for instance #{instance_id}")
+
         Task.start(fn ->
           process_result = EventWorker.process_event_with_id(event.id, processor_name())
           send(self(), {:processing_complete, event.id, process_result})
@@ -88,6 +89,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
     case result do
       {:ok, _, _} ->
         Logger.info("Successfully processed event #{event_id}")
+
       {:error, reason} ->
         Logger.warning("Failed to process event #{event_id}: #{inspect(reason)}")
         # Note: the error is already recorded in the event by EventWorker.process_event_with_id
@@ -104,9 +106,10 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
 
     # Find an event for this instance that's ready to be processed
     from(e in Event,
-      where: e.instance_id == ^instance_id and
-             e.status in [:pending, :occ_timeout, :failed] and
-             (is_nil(e.next_retry_after) or e.next_retry_after <= ^now),
+      where:
+        e.instance_id == ^instance_id and
+          e.status in [:pending, :occ_timeout, :failed] and
+          (is_nil(e.next_retry_after) or e.next_retry_after <= ^now),
       order_by: [asc: e.inserted_at],
       limit: 1
     )
@@ -114,7 +117,10 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
   end
 
   defp processor_name do
-    prefix = Application.get_env(:double_entry_ledger, :event_queue, [])[:processor_name] || "event_queue"
+    prefix =
+      Application.get_env(:double_entry_ledger, :event_queue, [])[:processor_name] ||
+        "event_queue"
+
     "#{prefix}_#{node()}_#{System.unique_integer([:positive])}"
   end
 end

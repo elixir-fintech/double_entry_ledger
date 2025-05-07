@@ -214,7 +214,6 @@ defmodule DoubleEntryLedger.Occ.Processor do
              event,
              %{errors: errors, retries: retries}
            ) do
-
         event
         |> Ecto.Changeset.change(
           errors: errors,

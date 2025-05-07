@@ -39,6 +39,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     TransactionStore,
     Repo
   }
+
   import DoubleEntryLedger.EventQueue.Scheduling
 
   @doc """
@@ -74,7 +75,11 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
         {:ok, transaction, update_event}
 
       {:error, :transaction, :occ_final_timeout, event} ->
-        schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
+        schedule_retry(
+          event,
+          "transaction step failed: Optimistic concurrency control timeout",
+          :occ_timeout
+        )
 
       {:error, :transaction_map, error, event} ->
         schedule_retry(event, "Failed to transform transaction data: #{inspect(error)}")

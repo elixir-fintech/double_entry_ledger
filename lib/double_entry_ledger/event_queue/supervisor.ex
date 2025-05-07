@@ -12,7 +12,8 @@ defmodule DoubleEntryLedger.EventQueue.Supervisor do
   def init(_init_arg) do
     children = [
       {Registry, keys: :unique, name: DoubleEntryLedger.EventQueue.Registry},
-      {DynamicSupervisor, name: DoubleEntryLedger.EventQueue.InstanceSupervisor, strategy: :one_for_one},
+      {DynamicSupervisor,
+       name: DoubleEntryLedger.EventQueue.InstanceSupervisor, strategy: :one_for_one},
       {DoubleEntryLedger.EventQueue.InstanceMonitor, []}
     ]
 

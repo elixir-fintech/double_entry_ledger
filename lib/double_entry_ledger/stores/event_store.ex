@@ -57,7 +57,6 @@ defmodule DoubleEntryLedger.EventStore do
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker
 
-
   @doc """
   Retrieves an event by its unique ID.
 

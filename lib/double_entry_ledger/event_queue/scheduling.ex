@@ -113,6 +113,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
       # Calculate next retry time with exponential backoff
       retry_delay = calculate_retry_delay(event.retry_count)
       now = DateTime.utc_now()
+
       event
       |> build_add_error(error)
       |> Changeset.change(

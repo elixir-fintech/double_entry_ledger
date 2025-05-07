@@ -7,11 +7,16 @@ config :double_entry_ledger,
 
 # Event queue configuration
 config :double_entry_ledger, :event_queue,
-  poll_interval: 5_000,          # Poll for new events every 5 seconds
-  max_retries: 5,                # Maximum number of retry attempts
-  base_retry_delay: 30,          # Base delay in seconds for first retry
-  max_retry_delay: 3600,         # Maximum delay in seconds (1 hour)
-  processor_name: "event_queue"  # Name prefix for processors
+  # Poll for new events every 5 seconds
+  poll_interval: 5_000,
+  # Maximum number of retry attempts
+  max_retries: 5,
+  # Base delay in seconds for first retry
+  base_retry_delay: 30,
+  # Maximum delay in seconds (1 hour)
+  max_retry_delay: 3600,
+  # Name prefix for processors
+  processor_name: "event_queue"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

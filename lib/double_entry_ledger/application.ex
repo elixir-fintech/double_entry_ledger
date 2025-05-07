@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.Application do
   def start(_type, _args) do
     children = [
       DoubleEntryLedger.Repo,
-      {DoubleEntryLedger.EventQueue.Supervisor, []},
+      {DoubleEntryLedger.EventQueue.Supervisor, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

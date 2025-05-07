@@ -72,7 +72,11 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
         handle_get_create_event_transaction_error(event, error)
 
       {:error, :transaction, :occ_final_timeout, event} ->
-        schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
+        schedule_retry(
+          event,
+          "transaction step failed: Optimistic concurrency control timeout",
+          :occ_timeout
+        )
 
       {:error, step, error, _} ->
         schedule_retry(event, "#{step} step failed: #{inspect(error)}", :failed)

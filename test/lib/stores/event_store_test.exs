@@ -72,6 +72,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
     test "returns error when event not claimable", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
       event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
+
       assert {:error, :event_not_claimable} =
                EventStore.claim_event_for_processing(event.id, "manual")
     end

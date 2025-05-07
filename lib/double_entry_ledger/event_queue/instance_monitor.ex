@@ -52,8 +52,9 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
 
     # Find distinct instance IDs with pending events
     from(e in Event,
-      where: e.status in [:pending, :occ_timeout, :failed] and
-             (is_nil(e.next_retry_after) or e.next_retry_after <= ^now),
+      where:
+        e.status in [:pending, :occ_timeout, :failed] and
+          (is_nil(e.next_retry_after) or e.next_retry_after <= ^now),
       select: e.instance_id,
       distinct: true
     )
@@ -66,10 +67,12 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
       [] ->
         # No processor running, start one
         Logger.info("Starting new processor for instance #{instance_id}")
+
         DynamicSupervisor.start_child(
           DoubleEntryLedger.EventQueue.InstanceSupervisor,
           {InstanceProcessor, [instance_id: instance_id]}
         )
+
       [{pid, _}] ->
         # Processor already running
         Logger.debug("Processor already running for instance #{instance_id}: #{inspect(pid)}")
