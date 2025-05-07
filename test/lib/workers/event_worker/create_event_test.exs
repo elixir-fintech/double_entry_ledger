@@ -72,9 +72,9 @@ defmodule DoubleEntryLedger.CreateEventTest do
       assert updated_event.occ_retry_count == 5
       assert updated_event.processed_transaction_id == nil
       assert updated_event.processed_at == nil
-      assert length(updated_event.errors) == 5
+      assert length(updated_event.errors) == 6
 
-      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
+      assert [_ |[%{message: "OCC conflict: Max number of 5 retries reached"} | _]] =
                updated_event.errors
     end
   end

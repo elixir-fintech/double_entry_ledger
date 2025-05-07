@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
         {:ok, transaction, event}
 
       {:error, :transaction, :occ_final_timeout, event} ->
-        schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
+        Scheduling.schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
 
       {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, steps_so_far} ->
         {:error, handle_add_update_event_error(error, steps_so_far, event_map)}
@@ -127,7 +127,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     |> Multi.insert(:create_event, EventStoreHelper.build_create(new_event_map))
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
     |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
-      EventStoreHelper.build_mark_as_processed(event, transaction.id)
+      Scheduling.build_mark_as_processed(event, transaction.id)
     end)
   end
 
@@ -147,19 +147,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
       repo
     )
     |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
-      EventStoreHelper.build_mark_as_processed(event, transaction.id)
+      Scheduling.build_mark_as_processed(event, transaction.id)
     end)
-  end
-
-  @spec schedule_retry(Event.t(), String.t(), atom()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  defp schedule_retry(event, reason, status) do
-    case Scheduling.schedule_retry(event, reason, status) do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
   end
 end

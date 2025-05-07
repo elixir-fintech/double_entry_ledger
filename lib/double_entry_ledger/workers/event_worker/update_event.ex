@@ -67,16 +67,16 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
         {:ok, transaction, update_event}
 
       {:error, :transaction_map, error, event} ->
-        schedule_retry(event, error, :failed)
+        Scheduling.schedule_retry(event, error, :failed)
 
       {:error, :get_create_event_transaction, error, _} ->
         handle_get_create_event_transaction_error(event, error)
 
       {:error, :transaction, :occ_final_timeout, event} ->
-        schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
+        Scheduling.schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
 
       {:error, step, error, _} ->
-        schedule_retry(event, "#{step} step failed: #{inspect(error)}", :failed)
+        Scheduling.schedule_retry(event, "#{step} step failed: #{inspect(error)}", :failed)
     end
   end
 
@@ -103,7 +103,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     |> EventStoreHelper.build_get_create_event_transaction(:get_create_event_transaction, event)
     |> TransactionStore.build_update(:transaction, :get_create_event_transaction, attr, repo)
     |> Multi.update(:event, fn %{transaction: td} ->
-      EventStoreHelper.build_mark_as_processed(event, td.id)
+      Scheduling.build_mark_as_processed(event, td.id)
     end)
   end
 
@@ -115,10 +115,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
         revert_to_pending(event, error.message)
 
       %{reason: :create_event_failed} ->
-        schedule_retry(event, error.message, :failed)
+        Scheduling.schedule_retry(event, error.message, :failed)
 
       _ ->
-        move_to_dead_letter(event, error.message)
+        Scheduling.move_to_dead_letter(event, error.message)
     end
   end
 
@@ -126,30 +126,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
           {:error, Event.t()} | {:error, Changeset.t()}
   defp revert_to_pending(event, reason) do
     case EventStore.revert_to_pending(event, reason) do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @spec schedule_retry(Event.t(), String.t(), atom()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  defp schedule_retry(event, reason, status) do
-    case Scheduling.schedule_retry(event, reason, status) do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @spec move_to_dead_letter(Event.t(), String.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  defp move_to_dead_letter(event, reason) do
-    case Scheduling.mark_as_dead_letter(event, reason) do
       {:ok, event} ->
         {:error, event}
 

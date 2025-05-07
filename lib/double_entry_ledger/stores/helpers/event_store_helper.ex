@@ -159,33 +159,6 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   end
 
   @doc """
-  Builds a changeset to mark an event as processed.
-
-  This function updates the event's status to `:processed` and sets the associated
-  transaction ID and timestamps.
-
-  ## Parameters
-    - `event`: The Event struct to update
-    - `transaction_id`: The UUID of the associated transaction
-
-  ## Returns
-    - `Ecto.Changeset.t()`: The changeset for marking the event as processed
-  """
-  @spec build_mark_as_processed(Event.t(), Ecto.UUID.t()) :: Changeset.t()
-  def build_mark_as_processed(event, transaction_id) do
-    now = DateTime.utc_now()
-
-    event
-    |> Changeset.change(
-      status: :processed,
-      processed_at: now,
-      processed_transaction_id: transaction_id,
-      processing_completed_at: now,
-      next_retry_after: nil
-    )
-  end
-
-  @doc """
   Builds a changeset to add an error to an event.
 
   This function appends a new error to the event's error list.

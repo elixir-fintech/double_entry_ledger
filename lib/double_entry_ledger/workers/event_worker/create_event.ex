@@ -36,7 +36,6 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   alias DoubleEntryLedger.{
     Event,
     Transaction,
-    EventStoreHelper,
     TransactionStore,
     Repo
   }
@@ -75,13 +74,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
         {:ok, transaction, update_event}
 
       {:error, :transaction, :occ_final_timeout, event} ->
-        {:error, event}
+        Scheduling.schedule_retry(event, "transaction step failed: Optimistic concurrency control timeout", :occ_timeout)
 
       {:error, :transaction_map, error, event} ->
-        schedule_retry(event, "Failed to transform transaction data: #{inspect(error)}")
+        Scheduling.schedule_retry(event, "Failed to transform transaction data: #{inspect(error)}")
 
       {:error, step, error, _} ->
-        schedule_retry(event, "#{step} step failed: #{inspect(error)}")
+        Scheduling.schedule_retry(event, "#{step} step failed: #{inspect(error)}")
     end
   end
 
@@ -90,19 +89,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
     |> Multi.update(:event, fn %{transaction: td} ->
-      EventStoreHelper.build_mark_as_processed(event, td.id)
+      Scheduling.build_mark_as_processed(event, td.id)
     end)
-  end
-
-  @spec schedule_retry(Event.t(), String.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  defp schedule_retry(event, reason) do
-    case Scheduling.schedule_retry(event, reason) do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
   end
 end
