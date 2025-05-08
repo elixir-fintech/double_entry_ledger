@@ -1,6 +1,19 @@
 defmodule DoubleEntryLedger.EventQueue.Scheduling do
   @moduledoc """
   This module is responsible for scheduling events in the event queue.
+
+  It provides a comprehensive set of functions for managing event lifecycle through the queue:
+
+  * Scheduling and retrying failed events with exponential backoff
+  * Managing transitions between different event states (pending, processing, failed, dead letter)
+  * Handling special cases like updates waiting for create events
+  * Adding errors and tracking retry attempts
+
+  The scheduling system uses configurable parameters:
+  * Maximum number of retries before an event is sent to dead letter
+  * Base delay for first retry attempt
+  * Maximum delay cap to prevent excessive wait times
+  * Jitter to prevent thundering herd problems during retries
   """
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
@@ -20,9 +33,10 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   ## Parameters
     - `event` - The event that failed and needs retry scheduling
     - `error` - The error message or reason for failure
+    - `status` - The status to set for the event (defaults to `:failed`)
 
   ## Returns
-    - `{:ok, updated_event}` - The event with updated retry information
+    - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
   @spec schedule_retry(Event.t(), String.t(), Event.state() | nil) ::
@@ -40,7 +54,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   @doc """
   Sets the next retry time for an update event that failed because
   the create event was in :failed state using exponential backoff.
-  Makes sure that the next_retry_after is set aster the create event's
+  Makes sure that the next_retry_after is set after the create event's
   next_retry_after.
 
   ## Parameters
@@ -48,7 +62,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `error` - The associated AddUpdateEventError struct that contains the create event
 
   ## Returns
-    - `{:ok, updated_event}` - The event with updated retry information
+    - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
   @spec schedule_update_retry(Event.t(), AddUpdateEventError.t()) ::
@@ -70,11 +84,11 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   transaction ID and timestamps.
 
   ## Parameters
-    - `event`: The Event struct to update
-    - `transaction_id`: The UUID of the associated transaction
+    - `event` - The Event struct to update
+    - `transaction_id` - The UUID of the associated transaction
 
   ## Returns
-    - `Ecto.Changeset.t()`: The changeset for marking the event as processed
+    - `Ecto.Changeset.t()` - The changeset for marking the event as processed
   """
   @spec build_mark_as_processed(Event.t(), Ecto.UUID.t()) :: Changeset.t()
   def build_mark_as_processed(event, transaction_id) do
@@ -98,9 +112,8 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `reason` - The reason for marking as dead letter
 
   ## Returns
-    - `{:ok, updated_event}` - The event marked as dead letter
+    - `{:error, updated_event}` - The event marked as dead letter
     - `{:error, changeset}` - Error updating the event
-
   """
   @spec move_to_dead_letter(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
@@ -118,12 +131,12 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   Adds an error to the event's error list and reverts it to pending state.
 
   ## Parameters
-    - `event`: The event to add an error to
-    - `error`: Error message or data to add
+    - `event` - The event to add an error to
+    - `error` - Error message or data to add
 
   ## Returns
-    - `{:ok, event}`: If the event was successfully updated
-    - `{:error, changeset}`: If the update failed
+    - `{:error, updated_event}` - The event with updated error and status
+    - `{:error, changeset}` - Error updating the event
   """
   @spec revert_to_pending(Event.t(), String.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
@@ -137,6 +150,19 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     end
   end
 
+  @doc """
+  Builds a changeset to revert an event to pending state.
+
+  Adds the provided error message to the event's errors list and
+  changes the status to `:pending` to allow it to be reprocessed.
+
+  ## Parameters
+    - `event` - The event to revert to pending state
+    - `error` - The error message to add to the event's errors
+
+  ## Returns
+    - `Ecto.Changeset.t()` - The changeset for updating the event
+  """
   @spec build_revert_to_pending(Event.t(), any()) :: Changeset.t()
   def build_revert_to_pending(event, error) do
     event
@@ -144,6 +170,22 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     |> Changeset.change(status: :pending)
   end
 
+  @doc """
+  Builds a changeset to schedule a retry for a failed event.
+
+  Handles both normal retries and terminal failures (dead letter):
+  - If the retry count exceeds the configured maximum, marks as dead letter
+  - Otherwise, calculates the next retry time using exponential backoff
+  - Sets the appropriate event status, clears processor reference, and adds the error
+
+  ## Parameters
+    - `event` - The event that needs to be retried
+    - `error` - The error message to add to the event's errors
+    - `status` - The status to set (usually :failed)
+
+  ## Returns
+    - `Ecto.Changeset.t()` - The changeset for updating the event
+  """
   @spec build_schedule_retry(Event.t(), String.t(), Event.state() | nil) :: Changeset.t()
   def build_schedule_retry(event, error, status) do
     if event.retry_count >= @max_retries do
@@ -166,6 +208,20 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     end
   end
 
+  @doc """
+  Builds a changeset to schedule the retry of an update event that depends
+  on a failed create event.
+
+  Ensures that update events don't retry before their prerequisite create events
+  by scheduling them after the create event's next retry time.
+
+  ## Parameters
+    - `event` - The update event that needs to be retried
+    - `error` - An AddUpdateEventError struct containing the create event and error details
+
+  ## Returns
+    - `Ecto.Changeset.t()` - The changeset for updating the event
+  """
   @spec build_schedule_update_retry(Event.t(), AddUpdateEventError.t()) :: Changeset.t()
   def build_schedule_update_retry(event, error) do
     # Calculate next retry time with exponential backoff
@@ -183,6 +239,20 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     )
   end
 
+  @doc """
+  Builds a changeset to mark an event as permanently failed (dead letter).
+
+  This is used when an event has failed terminally and should not be retried.
+  Adds the provided error message to the event's errors and sets the status
+  to `:dead_letter`.
+
+  ## Parameters
+    - `event` - The event to mark as dead letter
+    - `error` - The error message explaining why the event is being marked as dead letter
+
+  ## Returns
+    - `Ecto.Changeset.t()` - The changeset for updating the event
+  """
   @spec build_mark_as_dead_letter(Event.t(), String.t()) :: Changeset.t()
   def build_mark_as_dead_letter(event, error) do
     event
