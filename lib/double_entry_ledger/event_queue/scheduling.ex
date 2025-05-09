@@ -38,9 +38,9 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry(Event.t(), Event.state() | nil) ::
+  @spec schedule_retry(Event.t(), Event.state()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
-  def schedule_retry(event, status \\ :failed) do
+  def schedule_retry(event, status) do
     case build_schedule_retry_with_reason(event, nil, status) |> Repo.update() do
       {:ok, event} ->
         {:error, event}
@@ -62,9 +62,9 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry_with_reason(Event.t(), String.t(), Event.state() | nil) ::
+  @spec schedule_retry_with_reason(Event.t(), String.t(), Event.state()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
-  def schedule_retry_with_reason(event, reason, status \\ :failed) do
+  def schedule_retry_with_reason(event, reason, status) do
     case build_schedule_retry_with_reason(event, reason, status) |> Repo.update() do
       {:ok, event} ->
         {:error, event}

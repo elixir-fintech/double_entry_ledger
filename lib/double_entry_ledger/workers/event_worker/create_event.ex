@@ -80,11 +80,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
       {:error, :transaction_map, error, event} ->
         schedule_retry_with_reason(
           event,
-          "Failed to transform transaction data: #{inspect(error)}"
+          "Failed to transform transaction data: #{inspect(error)}",
+          :failed
         )
 
       {:error, step, error, _} ->
-        schedule_retry_with_reason(event, "#{step} step failed: #{inspect(error)}")
+        schedule_retry_with_reason(event, "#{step} step failed: #{inspect(error)}", :failed)
     end
   end
 

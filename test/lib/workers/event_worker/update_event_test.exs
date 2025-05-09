@@ -155,7 +155,8 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       {:error, failed_create_event} =
         DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(
           pending_event,
-          "some reason"
+          "some reason",
+          :failed
         )
 
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)

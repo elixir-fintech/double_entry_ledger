@@ -6,7 +6,6 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
   import Mox
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.EventStore
   alias DoubleEntryLedger.Event.EventMap, as: EventMapSchema
   use DoubleEntryLedger.RepoCase
 
