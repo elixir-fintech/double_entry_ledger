@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry(Event.t(), Event.state(), Repo.t()) ::
+  @spec schedule_retry(Event.t(), Event.state(), Ecto.Repo.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   def schedule_retry(event, status, repo \\ Repo) do
     case build_schedule_retry_with_reason(event, nil, status) |> repo.update() do
@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry_with_reason(Event.t(), String.t(), Event.state(), Repo.t()) ::
+  @spec schedule_retry_with_reason(Event.t(), String.t(), Event.state(), Ecto.Repo.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(event, reason, status, repo \\ Repo) do
     case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
@@ -88,7 +88,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_update_retry(Event.t(), AddUpdateEventError.t(), Repo.t()) ::
+  @spec schedule_update_retry(Event.t(), AddUpdateEventError.t(), Ecto.Repo.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   def schedule_update_retry(event, reason, repo \\ Repo) do
     case build_schedule_update_retry(event, reason) |> repo.update() do
@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event marked as dead letter
     - `{:error, changeset}` - Error updating the event
   """
-  @spec move_to_dead_letter(Event.t(), String.t(), Repo.t()) ::
+  @spec move_to_dead_letter(Event.t(), String.t(), Ecto.Repo.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   def move_to_dead_letter(event, reason, repo \\ Repo) do
     case build_mark_as_dead_letter(event, reason) |> repo.update() do
@@ -134,7 +134,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated error and status
     - `{:error, changeset}` - Error updating the event
   """
-  @spec revert_to_pending(Event.t(), String.t(), Repo.t()) ::
+  @spec revert_to_pending(Event.t(), String.t(), Ecto.Repo.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
   def revert_to_pending(event, reason, repo  \\ Repo) do
     case build_revert_to_pending(event, reason) |> repo.update() do
