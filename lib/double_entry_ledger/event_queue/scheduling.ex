@@ -38,10 +38,10 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry(Event.t(), Event.state()) ::
+  @spec schedule_retry(Event.t(), Event.state(), Repo.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
-  def schedule_retry(event, status) do
-    case build_schedule_retry_with_reason(event, nil, status) |> Repo.update() do
+  def schedule_retry(event, status, repo \\ Repo) do
+    case build_schedule_retry_with_reason(event, nil, status) |> repo.update() do
       {:ok, event} ->
         {:error, event}
 
@@ -62,10 +62,10 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry_with_reason(Event.t(), String.t(), Event.state()) ::
+  @spec schedule_retry_with_reason(Event.t(), String.t(), Event.state(), Repo.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
-  def schedule_retry_with_reason(event, reason, status) do
-    case build_schedule_retry_with_reason(event, reason, status) |> Repo.update() do
+  def schedule_retry_with_reason(event, reason, status, repo \\ Repo) do
+    case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
       {:ok, event} ->
         {:error, event}
 
@@ -88,10 +88,56 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_update_retry(Event.t(), AddUpdateEventError.t()) ::
+  @spec schedule_update_retry(Event.t(), AddUpdateEventError.t(), Repo.t()) ::
           {:error, Event.t()} | {:error, Changeset.t()}
-  def schedule_update_retry(event, reason) do
-    case build_schedule_update_retry(event, reason) |> Repo.update() do
+  def schedule_update_retry(event, reason, repo \\ Repo) do
+    case build_schedule_update_retry(event, reason) |> repo.update() do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Marks an event as permanently failed (dead letter).
+
+  ## Parameters
+    - `event` - The event to mark as dead letter
+    - `reason` - The reason for marking as dead letter
+
+  ## Returns
+    - `{:error, updated_event}` - The event marked as dead letter
+    - `{:error, changeset}` - Error updating the event
+  """
+  @spec move_to_dead_letter(Event.t(), String.t(), Repo.t()) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
+  def move_to_dead_letter(event, reason, repo \\ Repo) do
+    case build_mark_as_dead_letter(event, reason) |> repo.update() do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Adds an error to the event's error list and reverts it to pending state.
+
+  ## Parameters
+    - `event` - The event to add an error to
+    - `error` - Error message or data to add
+
+  ## Returns
+    - `{:error, updated_event}` - The event with updated error and status
+    - `{:error, changeset}` - Error updating the event
+  """
+  @spec revert_to_pending(Event.t(), String.t(), Repo.t()) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
+  def revert_to_pending(event, reason, repo  \\ Repo) do
+    case build_revert_to_pending(event, reason) |> repo.update() do
       {:ok, event} ->
         {:error, event}
 
@@ -125,52 +171,6 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
       processing_completed_at: now,
       next_retry_after: nil
     )
-  end
-
-  @doc """
-  Marks an event as permanently failed (dead letter).
-
-  ## Parameters
-    - `event` - The event to mark as dead letter
-    - `reason` - The reason for marking as dead letter
-
-  ## Returns
-    - `{:error, updated_event}` - The event marked as dead letter
-    - `{:error, changeset}` - Error updating the event
-  """
-  @spec move_to_dead_letter(Event.t(), String.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  def move_to_dead_letter(event, reason) do
-    case build_mark_as_dead_letter(event, reason) |> Repo.update() do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @doc """
-  Adds an error to the event's error list and reverts it to pending state.
-
-  ## Parameters
-    - `event` - The event to add an error to
-    - `error` - Error message or data to add
-
-  ## Returns
-    - `{:error, updated_event}` - The event with updated error and status
-    - `{:error, changeset}` - Error updating the event
-  """
-  @spec revert_to_pending(Event.t(), String.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  def revert_to_pending(event, reason) do
-    case build_revert_to_pending(event, reason) |> Repo.update() do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
   end
 
   @doc """
