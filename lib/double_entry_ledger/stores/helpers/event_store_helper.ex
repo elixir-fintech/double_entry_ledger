@@ -172,7 +172,10 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   """
   @spec build_add_error(Event.t(), any()) :: Changeset.t()
   def build_add_error(event, error) do
-    event
-    |> Changeset.change(errors: [build_error(error) | event.errors])
+    if is_nil(error) do
+      Changeset.change(event)
+    else
+      Changeset.change(event, errors: [build_error(error) | event.errors])
+    end
   end
 end

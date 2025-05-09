@@ -78,11 +78,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
         {:ok, transaction, event}
 
       {:error, :transaction, :occ_final_timeout, event} ->
-        Scheduling.schedule_retry(
-          event,
-          "transaction step failed: Optimistic concurrency control timeout",
-          :occ_timeout
-        )
+        Scheduling.schedule_retry(event, :occ_timeout)
 
       {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, steps_so_far} ->
         {:error, handle_add_update_event_error(error, steps_so_far, event_map)}

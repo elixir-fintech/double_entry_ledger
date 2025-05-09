@@ -32,6 +32,29 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
   ## Parameters
     - `event` - The event that failed and needs retry scheduling
+    - `status` - The status to set for the event (defaults to `:failed`)
+
+  ## Returns
+    - `{:error, updated_event}` - The event with updated retry information
+    - `{:error, changeset}` - Error updating the event
+  """
+  @spec schedule_retry(Event.t(), Event.state() | nil) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
+  def schedule_retry(event, status \\ :failed) do
+    case build_schedule_retry_with_reason(event, nil, status) |> Repo.update() do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Sets the next retry time for a failed event using exponential backoff.
+
+  ## Parameters
+    - `event` - The event that failed and needs retry scheduling
     - `error` - The error message or reason for failure
     - `status` - The status to set for the event (defaults to `:failed`)
 
@@ -39,10 +62,10 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry(Event.t(), String.t(), Event.state() | nil) ::
+  @spec schedule_retry_with_reason(Event.t(), String.t(), Event.state() | nil) ::
           {:error, Event.t()} | {:error, Changeset.t()}
-  def schedule_retry(event, reason, status \\ :failed) do
-    case build_schedule_retry(event, reason, status) |> Repo.update() do
+  def schedule_retry_with_reason(event, reason, status \\ :failed) do
+    case build_schedule_retry_with_reason(event, reason, status) |> Repo.update() do
       {:ok, event} ->
         {:error, event}
 
@@ -186,11 +209,11 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
-  @spec build_schedule_retry(Event.t(), String.t(), Event.state() | nil) :: Changeset.t()
-  def build_schedule_retry(event, error, status) do
+  @spec build_schedule_retry_with_reason(Event.t(), String.t() | nil, Event.state()) :: Changeset.t()
+  def build_schedule_retry_with_reason(event, error, status) do
     if event.retry_count >= @max_retries do
       # Max retries exceeded, mark as dead letter
-      build_mark_as_dead_letter(event, "Max retry count (#{@max_retries}) exceeded: #{error}")
+      build_mark_as_dead_letter(event, "Max retry count (#{@max_retries}) exceeded: #{error || status}")
     else
       # Calculate next retry time with exponential backoff
       retry_delay = calculate_retry_delay(event.retry_count)

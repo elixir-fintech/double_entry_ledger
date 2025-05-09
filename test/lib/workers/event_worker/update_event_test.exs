@@ -153,7 +153,10 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
 
       {:error, failed_create_event} =
-        DoubleEntryLedger.EventQueue.Scheduling.schedule_retry(pending_event, "some reason")
+        DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(
+          pending_event,
+          "some reason"
+        )
 
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
@@ -200,9 +203,9 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert updated_event.occ_retry_count == 5
       assert updated_event.processed_transaction_id == nil
       assert updated_event.processed_at == nil
-      assert length(updated_event.errors) == 6
+      assert length(updated_event.errors) == 5
 
-      assert [_ | [%{message: "OCC conflict: Max number of 5 retries reached"} | _]] =
+      assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
                updated_event.errors
     end
 
