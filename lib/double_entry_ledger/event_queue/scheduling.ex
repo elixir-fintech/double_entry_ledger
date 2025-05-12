@@ -50,6 +50,18 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     end
   end
 
+  @spec schedule_retry_m(Event.t(), Event.state(), Ecto.Repo.t()) ::
+          {:ok, {:error, Event.t()}} | {:error, Changeset.t()}
+  def schedule_retry_m(event, status, repo \\ Repo) do
+    case build_schedule_retry_with_reason(event, nil, status) |> repo.update() do
+      {:ok, event} ->
+        {:ok, {:error, event}}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
   @doc """
   Sets the next retry time for a failed event using exponential backoff.
 
@@ -68,6 +80,18 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
       {:ok, event} ->
         {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @spec schedule_retry_with_reason_m(Event.t(), String.t(), Event.state(), Ecto.Repo.t()) ::
+         {:ok, {:error, Event.t()}} | {:error, Changeset.t()}
+  def schedule_retry_with_reason_m(event, reason, status, repo \\ Repo) do
+    case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
+      {:ok, event} ->
+        {:ok, {:error, event}}
 
       {:error, changeset} ->
         {:error, changeset}

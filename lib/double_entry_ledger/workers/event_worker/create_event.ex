@@ -69,23 +69,46 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   """
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_create_event(event, repo \\ Repo) do
+  def process_create_event(original_event, repo \\ Repo) do
+    multi = Multi.new()
+    |> Multi.run(:process_attempt, fn repo, _ ->
+      process_attempt(original_event, repo)
+    end)
+    |> Multi.run(:result_handler, fn repo, %{process_attempt: result} ->
+      result_handler(original_event, result, repo)
+    end)
+
+    case repo.transaction(multi) do
+      {:ok, %{result_handler: result}} -> result
+
+      {:error, _step, error, _} ->
+        {:error, "Transaction failed: #{inspect(error)}"}
+    end
+  end
+
+  def process_attempt(event, repo) do
     case process_with_retry(event, repo) do
-      {:ok, %{transaction: transaction, event: update_event}} ->
-        {:ok, transaction, update_event}
+      {:ok, result} -> {:ok, {:ok, result}}
+      {:error, _, _, _} = failed_attempt ->
+        {:ok, failed_attempt}
+    end
+  end
+
+  def result_handler(original_event, result, repo) do
+    case result do
+      {:ok, %{transaction: transaction, event: event}} ->
+        {:ok, {:ok, transaction, event}}
 
       {:error, :transaction, :occ_final_timeout, event} ->
-        schedule_retry(event, :occ_timeout)
+        schedule_retry_m(event, :occ_timeout, repo)
 
       {:error, :transaction_map, error, event} ->
-        schedule_retry_with_reason(
-          event,
-          "Failed to transform transaction data: #{inspect(error)}",
-          :failed
-        )
+        message = "Failed to transform transaction data: #{inspect(error)}"
+        schedule_retry_with_reason_m(event, message, :failed, repo)
 
-      {:error, step, error, _} ->
-        schedule_retry_with_reason(event, "#{step} step failed: #{inspect(error)}", :failed)
+      {:error, step, error, _steps_so_fat} ->
+        message = "#{step} step failed: #{inspect(error)}"
+        schedule_retry_with_reason_m(original_event, message, :failed, repo)
     end
   end
 
