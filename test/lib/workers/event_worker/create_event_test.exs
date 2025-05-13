@@ -60,7 +60,6 @@ defmodule DoubleEntryLedger.CreateEventTest do
       end)
       |> expect(:update!, 7, fn changeset ->
         Repo.update!(changeset)
-        # simulate a conflict when adding the transaction
       end)
       |> expect(:transaction, 5, fn multi ->
         # the transaction has to be handled by the Repo
@@ -80,6 +79,63 @@ defmodule DoubleEntryLedger.CreateEventTest do
 
       assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
                updated_event.errors
+    end
+  end
+
+  describe "result_handler/3" do
+    setup [:create_instance, :create_accounts]
+
+
+    test "error when transforming transaction data", ctx do
+      %{event: event} = create_event(ctx)
+
+      {:ok, {:error, updated_event}} =
+        CreateEvent.result_handler(event, {:error, :transaction_map, :error, event}, Repo)
+
+      assert updated_event.status == :failed
+      assert updated_event.processed_transaction_id == nil
+      assert updated_event.processed_at == nil
+      assert updated_event.retry_count == 1
+      assert updated_event.next_retry_after != nil
+    end
+
+    test "error when OCC final timeout", ctx do
+      %{event: event} = create_event(ctx)
+
+      {:ok, {:error, updated_event}} =
+        CreateEvent.result_handler(event, {:error, :transaction, :occ_final_timeout, event}, Repo)
+
+      assert updated_event.status == :occ_timeout
+      assert updated_event.processed_transaction_id == nil
+      assert updated_event.processed_at == nil
+      assert updated_event.retry_count == 1
+      assert updated_event.next_retry_after != nil
+    end
+
+    test "other error", ctx do
+      %{event: event} = create_event(ctx)
+
+      {:ok, {:error, updated_event}} =
+        CreateEvent.result_handler(event, {:error, :some_other_step, :some_error, event}, Repo)
+
+      assert updated_event.status == :failed
+      assert updated_event.processed_transaction_id == nil
+      assert updated_event.processed_at == nil
+      assert updated_event.retry_count == 1
+      assert updated_event.next_retry_after != nil
+    end
+
+    test "error updating the event returns error with changeset", ctx do
+      %{event: event} = create_event(ctx)
+
+      DoubleEntryLedger.MockRepo
+      |> expect(:update, fn changeset ->
+        # simulate a conflict when adding the transaction
+         {:error, changeset}
+      end)
+
+      {:error, %Ecto.Changeset{} = changeset} =
+        CreateEvent.result_handler(event, {:error, :transaction_map, :error, event}, DoubleEntryLedger.MockRepo)
     end
   end
 end

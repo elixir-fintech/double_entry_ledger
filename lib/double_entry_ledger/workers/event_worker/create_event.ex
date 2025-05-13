@@ -86,6 +86,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     end
   end
 
+  @spec process_attempt(Event.t(), Ecto.Repo.t()) ::
+          {:ok, Transaction.t(), Event.t()} | {:ok, {:error, atom(), any(), any()}}
   def process_attempt(event, repo) do
     case process_with_retry(event, repo) do
       {:ok, result} -> {:ok, {:ok, result}}
@@ -94,6 +96,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     end
   end
 
+  @spec result_handler(Event.t(), any(), Ecto.Repo.t()) ::
+          {:ok, Transaction.t(), Event.t()} | {:ok, {:error, Event.t()}} | {:error, Ecto.Changeset.t()}
   def result_handler(original_event, result, repo) do
     case result do
       {:ok, %{transaction: transaction, event: event}} ->
