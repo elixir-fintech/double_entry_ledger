@@ -94,7 +94,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     - An Ecto.Multi struct with named operations for transaction processing
   """
   @impl true
-  def build_transaction(event, attr, repo) do
+  def build_transaction(%Event{} = event, attr, repo) do
     Multi.new()
     |> EventStoreHelper.build_get_create_event_transaction(:get_create_event_transaction, event)
     |> TransactionStore.build_update(:transaction, :get_create_event_transaction, attr, repo)

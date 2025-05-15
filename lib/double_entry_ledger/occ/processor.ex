@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
         raise "build_transaction/3 not implemented"
       end
 
-      def build_multi(occable_item, repo) do
+      def build_multi(module, occable_item, repo) do
         Multi.new()
         |> Multi.put(:occable_item, occable_item)
         |> Multi.run(:transaction_map, fn _, %{occable_item: %{instance_id: id, transaction_data: td}} ->
@@ -144,10 +144,19 @@ defmodule DoubleEntryLedger.Occ.Processor do
             end)
 
           %{transaction_map: transaction_map, occable_item: item} ->
-            build_transaction(item, transaction_map, repo)
-            |> Multi.update(:event_success, fn %{transaction: td} ->
-              build_mark_as_processed(item, td.id)
-            end)
+            case item do
+              %EventMap{} ->
+                module.build_transaction(item, transaction_map, repo)
+                |> Multi.update(:event_success, fn %{transaction: td, create_event: event} ->
+                  build_mark_as_processed(event, td.id)
+                end)
+
+              %Event{} ->
+                module.build_transaction(item, transaction_map, repo)
+                |> Multi.update(:event_success, fn %{transaction: td} ->
+                  build_mark_as_processed(item, td.id)
+                end)
+              end
         end)
       end
 
@@ -179,7 +188,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       def retry(module, occable_item, error_map, attempts, repo)
           when attempts > 0 do
 
-        multi = build_multi(occable_item, repo)
+        multi = build_multi(module, occable_item, repo)
 
         case repo.transaction(multi) do
           {:error, :transaction, %Ecto.StaleEntryError{}, steps_so_far} ->
@@ -206,6 +215,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       # Clean up when attempts are exhausted
       def retry(module, occable_item, error_map, 0, repo) do
+        IO.puts("Max retries reached for #{inspect(occable_item)}")
         Occable.timed_out(occable_item, :occable_item, error_map)
         |> Multi.update(:event_failure, fn %{occable_item: occable_item} ->
           build_schedule_retry_with_reason(

@@ -74,11 +74,11 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_map(event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
-      {:ok, %{transaction: transaction, event: event}} ->
+      {:ok, %{transaction: transaction, event_success: event}} ->
         {:ok, transaction, event}
 
-      {:error, :transaction, :occ_final_timeout, event} ->
-        Scheduling.schedule_retry(event, :occ_timeout)
+      {:ok, %{event_failure: event}} ->
+        {:error, event}
 
       {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, steps_so_far} ->
         {:error, handle_add_update_event_error(error, steps_so_far, event_map)}
