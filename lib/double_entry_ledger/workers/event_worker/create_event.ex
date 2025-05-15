@@ -70,58 +70,21 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_create_event(original_event, repo \\ Repo) do
-    multi = Multi.new()
-    |> Multi.run(:process_attempt, fn repo, _ ->
-      process_attempt(original_event, repo)
-    end)
-    |> Multi.run(:result_handler, fn repo, %{process_attempt: result} ->
-      result_handler(original_event, result, repo)
-    end)
+    case process_with_retry(original_event, repo) do
 
-    case repo.transaction(multi) do
-      {:ok, %{result_handler: result}} -> result
+      {:ok, %{event_success: event, transaction: transaction}} ->
+        {:ok, transaction, event}
 
-      {:error, _step, error, _} ->
-        {:error, "Transaction failed: #{inspect(error)}"}
-    end
-  end
+      {:ok, %{event_failure: event}} -> {:error, event}
 
-  @spec process_attempt(Event.t(), Ecto.Repo.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:ok, {:error, atom(), any(), any()}}
-  def process_attempt(event, repo) do
-    case process_with_retry(event, repo) do
-      {:ok, result} -> {:ok, {:ok, result}}
-      {:error, _, _, _} = failed_attempt ->
-        {:ok, failed_attempt}
-    end
-  end
-
-  @spec result_handler(Event.t(), any(), Ecto.Repo.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:ok, {:error, Event.t()}} | {:error, Ecto.Changeset.t()}
-  def result_handler(original_event, result, repo) do
-    case result do
-      {:ok, %{transaction: transaction, event: event}} ->
-        {:ok, {:ok, transaction, event}}
-
-      {:error, :transaction, :occ_final_timeout, event} ->
-        schedule_retry_m(event, :occ_timeout, repo)
-
-      {:error, :transaction_map, error, event} ->
-        message = "Failed to transform transaction data: #{inspect(error)}"
-        schedule_retry_with_reason_m(event, message, :failed, repo)
-
-      {:error, step, error, _steps_so_fat} ->
-        message = "#{step} step failed: #{inspect(error)}"
-        schedule_retry_with_reason_m(original_event, message, :failed, repo)
+      {:error, step, error, _} ->
+        {:error, "Step :#{step} failed: #{inspect(error)}"}
     end
   end
 
   @impl true
-  def build_transaction(event, transaction_map, repo) do
+  def build_transaction(_event, transaction_map, repo) do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
-    |> Multi.update(:event, fn %{transaction: td} ->
-      build_mark_as_processed(event, td.id)
-    end)
   end
 end

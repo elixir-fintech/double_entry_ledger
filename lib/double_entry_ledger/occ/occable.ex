@@ -2,6 +2,7 @@ alias DoubleEntryLedger.Event
 alias DoubleEntryLedger.Event.ErrorMap
 alias DoubleEntryLedger.Event.EventMap
 alias DoubleEntryLedger.Occ.Helper
+alias Ecto.Multi
 
 defprotocol DoubleEntryLedger.Occ.Occable do
   @moduledoc """
@@ -49,12 +50,13 @@ defprotocol DoubleEntryLedger.Occ.Occable do
   ## Returns
     - A tuple containing error details and the final state of the entity
   """
-  @spec timed_out!(t(), ErrorMap.t(), Ecto.Repo.t()) ::
-          {:error, :transaction, :occ_final_timeout, t()}
-  def timed_out!(impl_struct, error_map, repo)
+  @spec timed_out(t(), atom(), ErrorMap.t()) ::
+          Multi.t()
+  def timed_out(impl_struct, name, error_map)
 end
 
 defimpl DoubleEntryLedger.Occ.Occable, for: Event do
+  alias Ecto.Multi
   @doc """
   Updates an Event with retry information during OCC retry cycles.
 
@@ -89,13 +91,14 @@ defimpl DoubleEntryLedger.Occ.Occable, for: Event do
   ## Returns
     - Error tuple containing the updated Event and timeout indication
   """
-  @spec timed_out!(Event.t(), ErrorMap.t(), Ecto.Repo.t()) ::
-          {:error, :transaction, :occ_final_timeout, Event.t()}
-  def timed_out!(event, error_map, repo) do
-    event
-    |> Helper.occ_timeout_changeset(error_map)
-    |> repo.update!()
-    |> then(&{:error, :transaction, :occ_final_timeout, &1})
+  @spec timed_out(Event.t(), atom(), ErrorMap.t()) ::
+          Multi.t()
+  def timed_out(event, name, error_map) do
+    Multi.new()
+    |> Multi.update(name, fn _ ->
+      event
+      |> Helper.occ_timeout_changeset(error_map)
+    end)
   end
 end
 
@@ -131,12 +134,13 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
   ## Returns
     - Error tuple containing the created Event and timeout indication
   """
-  @spec timed_out!(EventMap.t(), ErrorMap.t(), Ecto.Repo.t()) ::
-          {:error, :transaction, :occ_final_timeout, EventMap.t()}
-  def timed_out!(_event_map, error_map, repo) do
-    error_map.steps_so_far.create_event
-    |> Helper.occ_timeout_changeset(error_map)
-    |> repo.insert!()
-    |> then(&{:error, :transaction, :occ_final_timeout, &1})
+  @spec timed_out(EventMap.t(), atom(), ErrorMap.t()) ::
+          Multi.t()
+  def timed_out(_event_map, name, error_map) do
+    Multi.new()
+    |> Multi.update(name, fn _ ->
+      error_map.steps_so_far.create_event
+      |> Helper.occ_timeout_changeset(error_map)
+    end)
   end
 end
