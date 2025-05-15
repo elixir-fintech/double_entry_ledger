@@ -192,7 +192,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         # simulate a conflict when adding the transaction
         Repo.update!(changeset)
       end)
-      |> expect(:transaction, 5, fn multi ->
+      |> expect(:transaction, 6, fn multi ->
         # the transaction has to be handled by the Repo
         Repo.transaction(multi)
       end)
@@ -205,6 +205,8 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert updated_event.processed_transaction_id == nil
       assert updated_event.processed_at == nil
       assert length(updated_event.errors) == 5
+      assert updated_event.retry_count == 1
+      assert updated_event.next_retry_after != nil
 
       assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
                updated_event.errors
@@ -222,20 +224,22 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       DoubleEntryLedger.MockRepo
       |> expect(:update, fn changeset ->
         # simulate a conflict when adding the transaction
-        {:error, changeset}
+        {:error, :conflict}
       end)
       |> expect(:transaction, fn multi ->
         # the transaction has to be handled by the Repo
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Event{} = event} =
+      assert {:error, %Event{} = error_event} =
                UpdateEvent.process_update_event(
                  event,
                  DoubleEntryLedger.MockRepo
                )
 
-      assert event.status == :failed
+      assert error_event.status == :failed
+      assert [%{message: "Step :transaction failed: :conflict"} | _] =
+               error_event.errors
     end
   end
 

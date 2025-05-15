@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
       {:ok, %{event_failure: event}} -> {:error, event}
 
       {:error, step, error, _} ->
-        {:error, "Step :#{step} failed: #{inspect(error)}"}
+        schedule_retry_with_reason(original_event, "Step :#{step} failed: #{inspect(error)}", :failed)
     end
   end
 

@@ -42,8 +42,11 @@ defmodule DoubleEntryLedger.CreateEventTest do
         Repo.transaction(multi)
       end)
 
-      assert {:error, "Step :transaction failed: :conflict"} =
+      assert {:error, %Event{} = error_event} =
                CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+      assert error_event.status == :failed
+      assert [%{message: "Step :transaction failed: :conflict"} | _] =
+              error_event.errors
     end
 
     test "occ timeout", ctx do

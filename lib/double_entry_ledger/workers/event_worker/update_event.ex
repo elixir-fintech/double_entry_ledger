@@ -62,20 +62,17 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_update_event(event, repo \\ Repo) do
     case process_with_retry(event, repo) do
-      {:ok, %{transaction: transaction, event: update_event}} ->
+      {:ok, %{transaction: transaction, event_success: update_event}} ->
         {:ok, transaction, update_event}
 
-      {:error, :transaction_map, error, event} ->
-        schedule_retry_with_reason(event, error, :failed)
+      {:ok, %{event_failure: update_event}} ->
+        {:error, update_event}
 
       {:error, :get_create_event_transaction, error, _} ->
         handle_get_create_event_transaction_error(event, error)
 
-      {:error, :transaction, :occ_final_timeout, event} ->
-        schedule_retry(event, :occ_timeout)
-
       {:error, step, error, _} ->
-        schedule_retry_with_reason(event, "#{step} step failed: #{inspect(error)}", :failed)
+        schedule_retry_with_reason(event, "Step :#{step} failed: #{inspect(error)}", :failed)
     end
   end
 
@@ -101,9 +98,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     Multi.new()
     |> EventStoreHelper.build_get_create_event_transaction(:get_create_event_transaction, event)
     |> TransactionStore.build_update(:transaction, :get_create_event_transaction, attr, repo)
-    |> Multi.update(:event, fn %{transaction: td} ->
-      build_mark_as_processed(event, td.id)
-    end)
   end
 
   @spec handle_get_create_event_transaction_error(Event.t(), AddUpdateEventError.t()) ::
