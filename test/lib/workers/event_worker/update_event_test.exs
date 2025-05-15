@@ -222,7 +222,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         create_update_event(s, s_id, inst.id, :posted)
 
       DoubleEntryLedger.MockRepo
-      |> expect(:update, fn changeset ->
+      |> expect(:update, fn _changeset ->
         # simulate a conflict when adding the transaction
         {:error, :conflict}
       end)

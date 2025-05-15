@@ -144,19 +144,10 @@ defmodule DoubleEntryLedger.Occ.Processor do
             end)
 
           %{transaction_map: transaction_map, occable_item: item} ->
-            case item do
-              %EventMap{} ->
-                module.build_transaction(item, transaction_map, repo)
-                |> Multi.update(:event_success, fn %{transaction: td, create_event: event} ->
-                  build_mark_as_processed(event, td.id)
-                end)
-
-              %Event{} ->
-                module.build_transaction(item, transaction_map, repo)
-                |> Multi.update(:event_success, fn %{transaction: td} ->
-                  build_mark_as_processed(item, td.id)
-                end)
-              end
+            module.build_transaction(item, transaction_map, repo)
+            |> then(
+              &Occable.handle_build_transaction(item, &1)
+            )
         end)
       end
 

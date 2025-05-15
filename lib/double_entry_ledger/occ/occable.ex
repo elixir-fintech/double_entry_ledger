@@ -2,6 +2,7 @@ alias DoubleEntryLedger.Event
 alias DoubleEntryLedger.Event.ErrorMap
 alias DoubleEntryLedger.Event.EventMap
 alias DoubleEntryLedger.Occ.Helper
+alias DoubleEntryLedger.EventQueue.Scheduling
 alias Ecto.Multi
 
 defprotocol DoubleEntryLedger.Occ.Occable do
@@ -34,6 +35,9 @@ defprotocol DoubleEntryLedger.Occ.Occable do
   """
   @spec update!(t(), ErrorMap.t(), Ecto.Repo.t()) :: t()
   def update!(impl_struct, error_map, repo)
+
+  @spec handle_build_transaction(t(), Ecto.Multi.t()) :: Ecto.Multi.t()
+  def handle_build_transaction(multi, impl_struct)
 
   @doc """
   Handles the timeout scenario when maximum OCC retries are reached.
@@ -77,6 +81,20 @@ defimpl DoubleEntryLedger.Occ.Occable, for: Event do
     |> repo.update!()
   end
 
+  @spec handle_build_transaction(Event.t(), Ecto.Multi.t()) :: Ecto.Multi.t()
+  def handle_build_transaction(%{action: :create} = event, multi) do
+    multi
+    |> Multi.update(:event_success, fn %{transaction: transaction} ->
+      Scheduling.build_mark_as_processed(event, transaction.id)
+    end)
+  end
+
+  def handle_build_transaction(%{action: :update} = event, multi) do
+    multi
+    |> Multi.update(:event_success, fn %{transaction: transaction} ->
+      Scheduling.build_mark_as_processed(event, transaction.id)
+    end)
+  end
   @doc """
   Handles OCC timeout for an Event when maximum retries are reached.
 
@@ -119,6 +137,14 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
   """
   @spec update!(EventMap.t(), ErrorMap.t(), Ecto.Repo.t()) :: EventMap.t()
   def update!(event_map, _error_map, _repo), do: event_map
+
+  @spec handle_build_transaction(EventMap.t(), Ecto.Multi.t()) :: Ecto.Multi.t()
+  def handle_build_transaction(_event_map, multi) do
+    multi
+    |> Multi.update(:event_success, fn %{transaction: transaction, create_event: event} ->
+      Scheduling.build_mark_as_processed(event, transaction.id)
+    end)
+  end
 
   @doc """
   Handles OCC timeout for an EventMap when maximum retries are reached.
