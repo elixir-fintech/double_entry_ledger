@@ -153,7 +153,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         {:ok, transaction}
       rescue
         e in AddUpdateEventError ->
-          {:error, e}
+          {:ok, {:error, e}}
       end
     end)
   end

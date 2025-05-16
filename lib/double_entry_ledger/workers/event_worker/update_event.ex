@@ -68,9 +68,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
       {:ok, %{event_failure: update_event}} ->
         {:error, update_event}
 
-      {:error, :get_create_event_transaction, error, _} ->
-        handle_get_create_event_transaction_error(event, error)
-
       {:error, step, error, _} ->
         schedule_retry_with_reason(event, "Step :#{step} failed: #{inspect(error)}", :failed)
     end
@@ -97,21 +94,11 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   def build_transaction(%Event{} = event, attr, repo) do
     Multi.new()
     |> EventStoreHelper.build_get_create_event_transaction(:get_create_event_transaction, event)
-    |> TransactionStore.build_update(:transaction, :get_create_event_transaction, attr, repo)
-  end
-
-  @spec handle_get_create_event_transaction_error(Event.t(), AddUpdateEventError.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  def handle_get_create_event_transaction_error(event, error) do
-    case error do
-      %{reason: :create_event_pending} ->
-        revert_to_pending(event, error.message)
-
-      %{reason: :create_event_failed} ->
-        schedule_update_retry(event, error)
-
-      _ ->
-        move_to_dead_letter(event, error.message)
-    end
+    |> Multi.merge(fn
+        %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
+          Multi.put(Multi.new(), :get_create_event_error, exception)
+        %{get_create_event_transaction: create_transaction} ->
+          TransactionStore.build_update(Multi.new(), :transaction, create_transaction, attr, repo)
+      end)
   end
 end

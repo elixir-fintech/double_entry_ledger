@@ -91,10 +91,26 @@ defimpl DoubleEntryLedger.Occ.Occable, for: Event do
 
   def handle_build_transaction(%{action: :update} = event, multi) do
     multi
-    |> Multi.update(:event_success, fn %{transaction: transaction} ->
-      Scheduling.build_mark_as_processed(event, transaction.id)
-    end)
+    |> Multi.merge(fn
+        %{transaction: transaction} ->
+          Multi.update(Multi.new(), :event_success, fn _ ->
+            Scheduling.build_mark_as_processed(event, transaction.id)
+          end)
+        %{get_create_event_error: %{reason: :create_event_pending} = exception} ->
+          Multi.update(Multi.new, :event_failure, fn _ ->
+            Scheduling.build_revert_to_pending(event, exception.message)
+          end)
+        %{get_create_event_error: %{reason: :create_event_failed} = exception} ->
+          Multi.update(Multi.new, :event_failure, fn _ ->
+            Scheduling.build_schedule_update_retry(event, exception)
+          end)
+        %{get_create_event_error: exception} ->
+          Multi.update(Multi.new, :event_failure, fn _ ->
+            Scheduling.build_mark_as_dead_letter(event, exception.message)
+          end)
+      end)
   end
+
   @doc """
   Handles OCC timeout for an Event when maximum retries are reached.
 
