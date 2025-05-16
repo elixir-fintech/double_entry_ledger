@@ -1,50 +1,60 @@
 defmodule DoubleEntryLedger.Occ.Processor do
   @moduledoc """
-  Behavior definition for implementing Optimistic Concurrency Control (OCC) in event processing.
+  Behavior and default implementation for Optimistic Concurrency Control (OCC)
+  in event processing.
 
-  This module provides a comprehensive framework for handling event processing with
-  optimistic concurrency control, including automatic retries with exponential backoff,
-  error tracking, and standardized transaction handling.
+  This module provides:
 
-  ## Key Features
-
-  * **Behavior Definition**: Defines a standard interface for OCC-aware event processors
-  * **Default Implementations**: Provides sensible defaults for retry logic and error handling
-  * **Exponential Backoff**: Implements intelligent retry timing to reduce contention
-  * **Error Tracking**: Maintains detailed error history through the retry process
-  * **Consistent API**: Enforces a consistent approach to transaction processing across the system
+    * A behaviour defining four callbacks:
+      - `build_transaction/3`
+      - `handle_build_transaction/3`
+      - `handle_transaction_map_error/3`
+      - `handle_occ_final_timeout/2`
+    * A `process_with_retry/2` implementation that:
+      - Converts event data to a transaction map
+      - Builds an Ecto.Multi via `build_multi/3`
+      - Retries on `Ecto.StaleEntryError` with exponential backoff
+      - Calls `handle_occ_final_timeout/2` when retries are exhausted
+    * Helper imports for backoff, error tracking, and scheduling.
 
   ## Usage
 
-  Modules that need OCC capabilities can simply use this behavior:
+      defmodule MyEventProcessor do
+        use DoubleEntryLedger.Occ.Processor
 
-  ```elixir
-  defmodule MyEventProcessor do
-    use DoubleEntryLedger.Occ.Processor
+        @impl true
+        def build_transaction(event, tx_map, repo) do
+          Ecto.Multi.new()
+          |> Ecto.Multi.insert(:transaction, Transaction.changeset(%Transaction{}, tx_map))
+        end
 
-    @impl true
-    def build_transaction(event, transaction_map, repo) do
-      # Your specific transaction building logic here
-      Ecto.Multi.new()
-      |> Ecto.Multi.insert(:event, event_changeset)
-      |> Ecto.Multi.insert(:transaction, transaction_changeset)
-    end
-  end
-  ```
+        @impl true
+        def handle_build_transaction(multi, event, _repo), do: multi
 
-  The processor will automatically handle:
-  * Converting event data to transaction maps
-  * Retrying on StaleEntryError
-  * Tracking retry attempts
-  * Managing timeouts and backoff
-  * Preserving error contexts
+        @impl true
+        def handle_transaction_map_error(event, error, _repo) do
+          Ecto.Multi.new()
+          |> Ecto.Multi.update(
+            :event_failure,
+            Event.changeset(event, %{status: :failed, errors: [inspect(error)]})
+          )
+        end
 
-  Implementing modules only need to define how to build the transaction - all OCC handling is managed by this behavior. "
+        @impl true
+        def handle_occ_final_timeout(event, _repo) do
+          Ecto.Multi.new()
+          |> Ecto.Multi.update(
+            :event_dead_letter,
+            Event.changeset(event, %{status: :dead_letter})
+          )
+        end
+      end
+
   """
+
   alias Ecto.Multi
   alias DoubleEntryLedger.{Event, Transaction}
   alias DoubleEntryLedger.Event.ErrorMap
-  alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker.EventTransformer
   alias DoubleEntryLedger.Occ.Occable
 
@@ -59,42 +69,96 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   The Multi must include specific named steps depending on the input type:
 
-  * `:create_event` (required for EventMap) - Must return the created Event struct when processing the EventMap
-  * `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
-  * `:event`(required) - Must return the saved Event struct when processing the Event
+    * `:create_event` (required for EventMap) - Must return the created Event struct when processing the EventMap
+    * `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
+    * `:event` (required) - Must return the saved Event struct when processing the Event
 
   ## Parameters
 
-  * `occable_item`: An Event struct or EventMap containing the event details to process
-  * `transaction_map`: A map of transaction data derived from the event
-  * `repo`: The Ecto repository to use for database operations
+    - `occable_item`: An Event struct or EventMap containing the event details to process
+    - `transaction_map`: A map of transaction data derived from the event
+    - `repo`: The Ecto repository to use for database operations
 
   ## Returns
 
-  * An `Ecto.Multi` struct containing all the operations to execute atomically
+    - An `Ecto.Multi` struct containing all the operations to execute atomically
 
   ## Implementation Examples
 
   See implementations in:
-  * `DoubleEntryLedger.EventWorker.CreateEvent.build_transaction/3`
-  * `DoubleEntryLedger.EventWorker.UpdateEvent.build_transaction/3`
-  * `DoubleEntryLedger.EventWorker.ProcessEventMap.build_transaction/3`
+    * `DoubleEntryLedger.EventWorker.CreateEvent.build_transaction/3`
+    * `DoubleEntryLedger.EventWorker.UpdateEvent.build_transaction/3`
+    * `DoubleEntryLedger.EventWorker.ProcessEventMap.build_transaction/3`
   """
   @callback build_transaction(
-              Event.t() | EventMap.t(),
+              Occable.t(),
               EventTransformer.transaction_map(),
               Ecto.Repo.t()
-            ) ::
-              Ecto.Multi.t()
+            ) :: Ecto.Multi.t()
 
-  @callback handle_build_transaction(Ecto.Multi.t(), Event.t() | EventMap.t(), Ecto.Repo.t()) :: Ecto.Multi.t()
+  @doc """
+  Allows further customization of the Ecto.Multi after the base transaction steps.
+
+  This callback can be used to add additional steps or modify the Multi before execution.
+
+  ## Parameters
+
+    - `multi`: The Ecto.Multi built by `build_transaction/3`
+    - `occable_item`: The event or event map being processed
+    - `repo`: The Ecto repository
+
+  ## Returns
+
+    - An updated `Ecto.Multi`
+  """
+  @callback handle_build_transaction(Ecto.Multi.t(), Occable.t(), Ecto.Repo.t()) :: Ecto.Multi.t()
+
+  @doc """
+  Handles errors that occur when converting event data to a transaction map.
+
+  This callback should return an Ecto.Multi that updates the event to reflect the error.
+
+  ## Parameters
+
+    - `occable_item`: The event or event map being processed
+    - `error`: The error encountered during transaction map conversion
+    - `repo`: The Ecto repository
+
+  ## Returns
+
+    - An `Ecto.Multi` that updates the event with error information
+  """
+  @callback handle_transaction_map_error(
+              Occable.t(),
+              any(),
+              Ecto.Repo.t()
+            ) :: Ecto.Multi.t()
+
+  @doc """
+  Handles the case when OCC retries are exhausted.
+
+  This callback should return an Ecto.Multi that marks the event as permanently failed.
+
+  ## Parameters
+
+    - `occable_item`: The event or event map being processed
+    - `repo`: The Ecto repository
+
+  ## Returns
+
+    - An `Ecto.Multi` that updates the event as dead letter or timed out
+  """
+  @callback handle_occ_final_timeout(
+              Occable.t(),
+              Ecto.Repo.t()
+            ) :: Ecto.Multi.t()
 
   @doc """
   Process the event with retry mechanisms.
 
   This callback has a default implementation through the __using__ macro.
   """
-  @callback process_with_retry(Event.t() | EventMap.t(), Ecto.Repo.t()) ::
+  @callback process_with_retry(Occable.t(), Ecto.Repo.t()) ::
               {:ok, %{transaction: Transaction.t(), event_success: Event.t()}}
               | {:ok, %{event_failure: Event.t()}}
               | Ecto.Multi.failure()
@@ -102,6 +166,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
   # --- Use Macro for Default Implementations ---
 
   defmacro __using__(_opts) do
+    # Credo:disable-for-next-line Credo.Check.Refactor.LongQuoteBlocks
     quote do
       @behaviour DoubleEntryLedger.Occ.Processor
       alias DoubleEntryLedger.Repo
@@ -116,13 +181,29 @@ defmodule DoubleEntryLedger.Occ.Processor do
       @retry_interval retry_interval()
 
       @impl true
+      @doc """
+      Processes an event with OCC retry logic.
+
+      Converts event data to a transaction map, builds an Ecto.Multi, and
+      retries on `Ecto.StaleEntryError` up to the configured maximum.
+
+      ## Parameters
+
+        - `occable_item`: The event or event map to process
+        - `repo`: The Ecto repository (defaults to `Repo`)
+
+      ## Returns
+
+        - `{:ok, %{transaction: Transaction.t(), event_success: Event.t()}}` on success
+        - `{:ok, %{event_failure: Event.t()}}` on failure
+        - `Ecto.Multi.failure()` on unrecoverable error
+      """
       def process_with_retry(
             %{instance_id: id, transaction_data: td} = occable_item,
             repo \\ Repo
           ) do
         %ErrorMap{} = error_map = create_error_map(occable_item)
-
-        retry(__MODULE__, occable_item, error_map, max_retries(), repo)
+        retry(__MODULE__, occable_item, error_map, @max_retries, repo)
       end
 
       @impl true
@@ -131,14 +212,46 @@ defmodule DoubleEntryLedger.Occ.Processor do
       end
 
       @impl true
-      def handle_build_transaction(_multi, _event_or_map, _repo)  do
+      def handle_build_transaction(_multi, _event_or_map, _repo) do
         raise "handle_build_transaction/3 not implemented"
       end
 
+      @impl true
+      def handle_transaction_map_error(_occable_item, _error, _repo) do
+        raise "handle_transaction_map_error/3 not implemented"
+      end
+
+      @impl true
+      def handle_occ_final_timeout(_occable_item, _repo) do
+        raise "handle_occ_final_timeout/2 not implemented"
+      end
+
+      @doc """
+      Builds the shared `Ecto.Multi` pipeline for both success and error flows.
+
+      1. `:transaction_map` – converts raw data to a map or returns an error tuple
+      2. merges in either:
+         - `handle_transaction_map_error/3` when conversion fails
+         - `build_transaction/3` + `handle_build_transaction/3` on success
+
+      ## Parameters
+
+        - `module` - the processor module implementing the callbacks
+        - `occable_item` - the Event or EventMap being processed
+        - `repo` - the Ecto repo to use for DB ops
+
+      ## Returns
+
+        - an `Ecto.Multi` ready for `repo.transaction/1`
+      """
+      @spec build_multi(module(), Occable.t(), Ecto.Repo.t()) :: Multi.t()
       def build_multi(module, occable_item, repo) do
         Multi.new()
         |> Multi.put(:occable_item, occable_item)
-        |> Multi.run(:transaction_map, fn _, %{occable_item: %{instance_id: id, transaction_data: td}} ->
+        |> Multi.run(:transaction_map, fn _,
+                                          %{
+                                            occable_item: %{instance_id: id, transaction_data: td}
+                                          } ->
           case transaction_data_to_transaction_map(td, id) do
             {:ok, transaction_map} -> {:ok, transaction_map}
             {:error, error} -> {:ok, {:error, error}}
@@ -146,56 +259,47 @@ defmodule DoubleEntryLedger.Occ.Processor do
         end)
         |> Multi.merge(fn
           %{transaction_map: {:error, error}, occable_item: item} ->
-            Multi.update(Multi.new(), :event_failure, fn _ ->
-              build_schedule_retry_with_reason(item, error, :failed)
-            end)
+            module.handle_transaction_map_error(item, error, repo)
 
           %{transaction_map: transaction_map, occable_item: item} ->
             module.build_transaction(item, transaction_map, repo)
             |> module.handle_build_transaction(item, repo)
-
         end)
       end
 
-      # --- Retry Logic ---
-
       @doc """
-      Process with retry for modules implementing Occ.Processor behavior.
+      Retries the OCC pipeline on `Ecto.StaleEntryError` up to `@max_retries` times.
 
-      This function handles retrying a transaction when StaleEntryError occurs,
-      with exponential backoff and error tracking.
+      On each failure, updates the `ErrorMap`, applies exponential backoff (with
+      `set_delay_timer/1`), and tries again. Returns the first non‐error result.
 
       ## Parameters
-        - `module`: The module implementing the Occ.Processor behavior
-        - `event`: The event being processed
-        - `transaction_map`: Transaction data
-        - `attempts`: Number of remaining retry attempts
-        - `repo`: Ecto repository
+
+        - `module` - the processor module
+        - `occable_item` - the item being processed
+        - `error_map` - the current retry/error state
+        - `attempts` - remaining attempts
+        - `repo` - the Ecto repo
+
+      ## Returns
+
+        - `{:ok, %{transaction: Transaction.t(), event_success: Event.t()}}`
+        - `{:ok, %{event_failure: Event.t()}}`
+        - `Ecto.Multi.failure()`
       """
-      @spec retry(
-              module(),
-              Occable.t(),
-              ErrorMap.t(),
-              non_neg_integer(),
-              Ecto.Repo.t()
-            ) ::
+      @spec retry(module(), Occable.t(), ErrorMap.t(), non_neg_integer(), Ecto.Repo.t()) ::
               {:ok, %{transaction: Transaction.t(), event_success: Event.t()}}
               | {:ok, %{event_failure: Event.t()}}
               | Ecto.Multi.failure()
       def retry(module, occable_item, error_map, attempts, repo)
           when attempts > 0 do
-
         multi = build_multi(module, occable_item, repo)
 
         case repo.transaction(multi) do
           {:error, :transaction, %Ecto.StaleEntryError{}, steps_so_far} ->
             new_error_map = update_error_map(error_map, attempts, steps_so_far)
-#           updated_occable_item = Occable.update!(occable_item, new_error_map, repo)
 
-            if attempts > 1 do
-              # no need to set timer for base retry
-              set_delay_timer(attempts)
-            end
+            if attempts > 1, do: set_delay_timer(attempts)
 
             retry(
               module,
@@ -210,21 +314,36 @@ defmodule DoubleEntryLedger.Occ.Processor do
         end
       end
 
-      # Clean up when attempts are exhausted
+      @doc """
+      Finalizes when retry attempts are exhausted.
+
+      Invokes `Occable.timed_out/3` to mark the item as timed out, merges in
+      `handle_occ_final_timeout/2`, then runs one last transaction.
+
+      ## Parameters
+
+        - `module` - the processor module
+        - `occable_item` - the item that timed out
+        - `error_map` - the accumulated errors and retry count
+        - `repo` - the Ecto repo
+
+      ## Returns
+
+        - The result of the final `repo.transaction/1`
+      """
       def retry(module, occable_item, error_map, 0, repo) do
         Occable.timed_out(occable_item, :occable_item, error_map)
-        |> Multi.update(:event_failure, fn %{occable_item: occable_item} ->
-          build_schedule_retry_with_reason(
-            occable_item,
-            nil,
-            :occ_timeout
-          )
+        |> Multi.merge(fn
+          %{occable_item: occable_item} ->
+            module.handle_occ_final_timeout(occable_item, repo)
         end)
         |> repo.transaction()
       end
 
       defoverridable build_transaction: 3,
-                     handle_build_transaction: 3
+                     handle_build_transaction: 3,
+                     handle_transaction_map_error: 3,
+                     handle_occ_final_timeout: 2
     end
   end
 end

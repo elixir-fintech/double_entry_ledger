@@ -9,38 +9,77 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
 
   ## Workflow
 
-  1. Receives an event with `action: :create`
-  2. Transforms the event's transaction data into a valid transaction map
-  3. Attempts to create a transaction in the database
-  4. If successful, marks the event as processed and links it to the created transaction
-  5. If unsuccessful due to concurrency issues, implements retry logic
-  6. If unsuccessful due to other errors, marks the event as failed
+    1. Receives an event with `action: :create`
+    2. Transforms the event's transaction data into a valid transaction map
+    3. Attempts to create a transaction in the database
+    4. If successful, marks the event as processed and links it to the created transaction
+    5. If unsuccessful due to concurrency issues, implements retry logic
+    6. If unsuccessful due to other errors, marks the event as failed
 
   ## Error Handling
 
   The module implements comprehensive error handling with specific error types:
-  - Transaction map transformation errors
-  - Database transaction errors
-  - OCC retry exhaustion errors
+    - Transaction map transformation errors
+    - Database transaction errors
+    - OCC retry exhaustion errors
 
   Each error is recorded in the event's history for auditability.
+
+  ## Main Functions
+
+    * `process_create_event/2` — Entry point for processing a create event.
+    * `build_transaction/3` — Constructs the Ecto.Multi for transaction creation.
+    * `handle_build_transaction/3` — Adds event update step to the Multi.
+    * `handle_transaction_map_error/3` — Handles errors in transaction map conversion.
+    * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion.
+
   """
 
   use DoubleEntryLedger.Occ.Processor
 
-  alias Ecto.{
-    Changeset,
-    Multi
-  }
-
-  alias DoubleEntryLedger.{
-    Event,
-    Transaction,
-    TransactionStore,
-    Repo
-  }
+  alias Ecto.{Changeset, Multi}
+  alias DoubleEntryLedger.{Event, Transaction, TransactionStore, Repo}
 
   import DoubleEntryLedger.EventQueue.Scheduling
+
+  @impl true
+  @doc """
+  Handles errors that occur when converting event data to a transaction map.
+
+  Delegates to `DoubleEntryLedger.EventWorker.ErrorHandler.handle_transaction_map_error/3`.
+
+  ## Parameters
+
+    - `event_map`: The event being processed.
+    - `error`: The error encountered during transaction map conversion.
+    - `repo`: The Ecto repository.
+
+  ## Returns
+
+    - An `Ecto.Multi` that updates the event with error information.
+  """
+  defdelegate handle_transaction_map_error(event_map, error, repo),
+    to: DoubleEntryLedger.EventWorker.ErrorHandler,
+    as: :handle_transaction_map_error
+
+  @impl true
+  @doc """
+  Handles the case when OCC retries are exhausted.
+
+  Delegates to `DoubleEntryLedger.EventWorker.ErrorHandler.handle_occ_final_timeout/2`.
+
+  ## Parameters
+
+    - `event_map`: The event being processed.
+    - `repo`: The Ecto repository.
+
+  ## Returns
+
+    - An `Ecto.Multi` that updates the event as dead letter or timed out.
+  """
+  defdelegate handle_occ_final_timeout(event_map, repo),
+    to: DoubleEntryLedger.EventWorker.ErrorHandler,
+    as: :handle_occ_final_timeout
 
   @doc """
   Processes a create event by transforming it into a transaction in the ledger.
@@ -51,44 +90,67 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
 
   ## Parameters
 
-    - `event`: An `Event` struct containing the transaction data to be processed
-    - `repo`: (Optional) The Ecto repository to use for database operations, defaults to `Repo`
+    - `event`: An `Event` struct containing the transaction data to be processed.
+    - `repo`: (Optional) The Ecto repository to use for database operations, defaults to `Repo`.
 
   ## Returns
 
-    - `{:ok, transaction, event}`: When transaction creation succeeds
-      - `transaction`: The newly created `Transaction` struct
-      - `event`: The updated event with status `:processed`
-
-    - `{:error, event}`: When processing fails due to OCC timeout
-      - `event`: The updated event with error information
-
-    - `{:error, changeset}`: When there's a validation error or database error
-      - `changeset`: The Ecto changeset containing error details
-
+    - `{:ok, transaction, event}`: When transaction creation succeeds.
+    - `{:error, event}`: When processing fails due to OCC timeout.
+    - `{:error, changeset}`: When there's a validation error or database error.
   """
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_create_event(original_event, repo \\ Repo) do
     case process_with_retry(original_event, repo) do
-
       {:ok, %{event_success: event, transaction: transaction}} ->
         {:ok, transaction, event}
 
-      {:ok, %{event_failure: event}} -> {:error, event}
+      {:ok, %{event_failure: event}} ->
+        {:error, event}
 
       {:error, step, error, _} ->
-        schedule_retry_with_reason(original_event, "Step :#{step} failed: #{inspect(error)}", :failed)
+        schedule_retry_with_reason(
+          original_event,
+          "Step :#{step} failed: #{inspect(error)}",
+          :failed
+        )
     end
   end
 
   @impl true
+  @doc """
+  Builds the Ecto.Multi for creating a transaction from an event.
+
+  ## Parameters
+
+    - `event`: The event to process.
+    - `transaction_map`: The transaction data map derived from the event.
+    - `repo`: The Ecto repository.
+
+  ## Returns
+
+    - An `Ecto.Multi` that inserts the transaction.
+  """
   def build_transaction(_event, transaction_map, repo) do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
   end
 
   @impl true
+  @doc """
+  Adds the step to mark the event as processed after transaction creation.
+
+  ## Parameters
+
+    - `multi`: The Ecto.Multi built so far.
+    - `event`: The event being processed.
+    - `_repo`: The Ecto repository (unused).
+
+  ## Returns
+
+    - The updated `Ecto.Multi` with an `:event_success` update step.
+  """
   def handle_build_transaction(multi, event, _repo) do
     multi
     |> Multi.update(:event_success, fn %{transaction: transaction} ->

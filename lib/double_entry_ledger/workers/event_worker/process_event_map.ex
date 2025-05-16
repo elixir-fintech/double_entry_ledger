@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   @moduledoc """
-  Provides functionality to process EventMap structures in the Double Entry Ledger system.
+  Provides functionality to process `EventMap` structures in the Double Entry Ledger system.
 
   This module is responsible for the atomic creation and update of events and their
   associated transactions, implementing the Optimistic Concurrency Control (OCC) pattern
@@ -8,27 +8,29 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
   ## Key Features
 
-  * **Transaction Processing**: Handles both creation of new transactions and updates to
-    existing transactions based on the EventMap's action type (:create or :update)
+    * **Transaction Processing**: Handles both creation of new transactions and updates to
+      existing transactions based on the EventMap's action type (`:create` or `:update`).
 
-  * **Atomic Operations**: Ensures that events and their transactions are processed in a single
-    database transaction, maintaining data consistency
+    * **Atomic Operations**: Ensures that events and their transactions are processed in a single
+      database transaction, maintaining data consistency.
 
-  * **Error Handling**: Provides comprehensive error handling for validation failures,
-    OCC conflicts, and dependency issues between events
+    * **Error Handling**: Provides comprehensive error handling for validation failures,
+      OCC conflicts, and dependency issues between events.
 
-  * **Retry Logic**: Implements automatic retry mechanisms to handle temporary concurrency
-    conflicts
+    * **Retry Logic**: Implements automatic retry mechanisms to handle temporary concurrency
+      conflicts.
 
   ## Main Functions
 
-  * `process_map/2`: Entry point for processing event maps, with comprehensive error handling
-  * `build_transaction/3`: Constructs appropriate Ecto.Multi operations based on event action type
+    * `process_map/2` — Entry point for processing event maps, with comprehensive error handling.
+    * `build_transaction/3` — Constructs appropriate Ecto.Multi operations based on event action type.
+    * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
 
   The module integrates with the OCC processor behavior to handle retries and concurrency
   control, ensuring that events are processed exactly once even in high-concurrency
   environments.
   """
+
   use DoubleEntryLedger.Occ.Processor
 
   alias DoubleEntryLedger.{
@@ -42,32 +44,73 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
-
   alias Ecto.{Multi, Changeset}
   import DoubleEntryLedger.Occ.Helper
   import DoubleEntryLedger.EventWorker.ErrorHandler
+  import DoubleEntryLedger.EventQueue.Scheduling
+
+  @impl true
+  @doc """
+  Handles errors that occur when converting event map data to a transaction map.
+
+  Delegates to `DoubleEntryLedger.EventWorker.ErrorHandler.handle_transaction_map_error/3`.
+
+  ## Parameters
+
+    - `event_map`: The event map being processed.
+    - `error`: The error encountered during transaction map conversion.
+    - `repo`: The Ecto repository.
+
+  ## Returns
+
+    - An `Ecto.Multi` that updates the event with error information.
+  """
+  defdelegate handle_transaction_map_error(event_map, error, repo),
+    to: DoubleEntryLedger.EventWorker.ErrorHandler,
+    as: :handle_transaction_map_error
+
+  @impl true
+  @doc """
+  Handles the case when OCC retries are exhausted for an event map.
+
+  Delegates to `DoubleEntryLedger.EventWorker.ErrorHandler.handle_occ_final_timeout/2`.
+
+  ## Parameters
+
+    - `event_map`: The event map being processed.
+    - `repo`: The Ecto repository.
+
+  ## Returns
+
+    - An `Ecto.Multi` that updates the event as dead letter or timed out.
+  """
+  defdelegate handle_occ_final_timeout(event_map, repo),
+    to: DoubleEntryLedger.EventWorker.ErrorHandler,
+    as: :handle_occ_final_timeout
 
   @doc """
-  Processes an EventMap by creating both an event record and its associated transaction atomically.
+  Processes an `EventMap` by creating both an event record and its associated transaction atomically.
 
   This function is designed for synchronous use, ensuring that both the event and the transaction
-  are created or updated in one atomic operation. It handles both :create and :update action types,
+  are created or updated in one atomic operation. It handles both `:create` and `:update` action types,
   with appropriate transaction building logic for each case. The entire operation uses Optimistic
   Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively.
 
   ## Parameters
-    - `event_map`: An EventMap struct containing all event and transaction data
-    - `repo`: The repository to use for database operations (defaults to `Repo`)
+
+    - `event_map`: An `EventMap` struct containing all event and transaction data.
+    - `repo`: The repository to use for database operations (defaults to `Repo`).
 
   ## Returns
-    - `{:ok, transaction, event}` on success, where both the transaction and event are created/updated successfully
+
+    - `{:ok, transaction, event}` on success, where both the transaction and event are created/updated successfully.
     - `{:error, event}` if the transaction processing fails with an OCC or dependency issue:
-      - If there was an OCC timeout, the event will be in the :occ_timeout state and can be retried
-      - If this is an update event and the create event is still in pending state, the event will be in the :pending state
+      - If there was an OCC timeout, the event will be in the `:occ_timeout` state and can be retried.
+      - If this is an update event and the create event is still in pending state, the event will be in the `:pending` state.
     - `{:error, changeset}` if validation errors occur:
-      - For event validation failures, the EventMap changeset will contain event-related errors
-      - For transaction validation failures, the EventMap changeset will contain mapped transaction errors
-    - `{:error, reason}` for other errors, with a string describing the error and the failing step
+      - For event validation failures, the EventMap changeset will contain event-related errors.
+      - For transaction validation failures, the EventMap changeset will contain mapped transaction errors.
+    - `{:error, reason}` for other errors, with a string describing the error and the failing step.
   """
   @spec process_map(EventMap.t(), Ecto.Repo.t() | nil) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
@@ -91,29 +134,31 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   end
 
   @doc """
-  Builds an Ecto.Multi transaction for processing an event map based on its action type.
+  Builds an `Ecto.Multi` transaction for processing an event map based on its action type.
 
-  This function implements the OccProcessor behavior and creates the appropriate
-  transaction operations depending on whether the event is a :create or :update action.
+  This function implements the OCC processor behavior and creates the appropriate
+  transaction operations depending on whether the event is a `:create` or `:update` action.
 
-  For :create actions:
-  - Inserts a new event with status :pending
-  - Creates a new transaction in the ledger
-  - Updates the event to mark it as processed with the transaction ID
+  ### For `:create` actions:
+    - Inserts a new event with status `:pending`
+    - Creates a new transaction in the ledger
+    - Updates the event to mark it as processed with the transaction ID
 
-  For :update actions:
-  - Inserts a new event with status :pending
-  - Retrieves the related "create event" transaction
-  - Updates the existing transaction with new data
-  - Updates the event to mark it as processed with the transaction ID
+  ### For `:update` actions:
+    - Inserts a new event with status `:pending`
+    - Retrieves the related "create event" transaction
+    - Updates the existing transaction with new data
+    - Updates the event to mark it as processed with the transaction ID
 
   ## Parameters
-    - `event_map`: An EventMap struct containing the event details and action type
-    - `transaction_map`: A map containing the transaction data to be created or updated
-    - `repo`: The Ecto repository to use for database operations
+
+    - `event_map`: An `EventMap` struct containing the event details and action type.
+    - `transaction_map`: A map containing the transaction data to be created or updated.
+    - `repo`: The Ecto repository to use for database operations.
 
   ## Returns
-    - An `Ecto.Multi` struct containing the operations to execute within a transaction
+
+    - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
   @impl true
   def build_transaction(%{action: :create} = event_map, transaction_map, repo) do
@@ -124,6 +169,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
   end
 
+  @impl true
   def build_transaction(%{action: :update} = event_map, transaction_map, repo) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
@@ -134,39 +180,60 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
       :create_event
     )
     |> Multi.merge(fn
-        %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
-          Multi.put(Multi.new(), :get_create_event_error, exception)
-        %{get_create_event_transaction: create_transaction} ->
-          TransactionStore.build_update(
-            Multi.new(),
-            :transaction,
-            create_transaction,
-            transaction_map,
-            repo
-          )
-      end)
+      %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
+        Multi.put(Multi.new(), :get_create_event_error, exception)
+
+      %{get_create_event_transaction: create_transaction} ->
+        TransactionStore.build_update(
+          Multi.new(),
+          :transaction,
+          create_transaction,
+          transaction_map,
+          repo
+        )
+    end)
   end
 
   @impl true
+  @doc """
+  Adds the step to update the event or handle errors after transaction processing.
+
+  This function inspects the results of the previous Multi steps and determines
+  whether to mark the event as processed, revert it to pending, schedule a retry,
+  or move it to the dead letter queue.
+
+  ## Parameters
+
+    - `multi`: The Ecto.Multi built so far.
+    - `event_map`: The event map being processed.
+    - `_repo`: The Ecto repository (unused).
+
+  ## Returns
+
+    - The updated `Ecto.Multi` with an `:event_success` or `:event_failure` step.
+  """
   def handle_build_transaction(multi, _event_map, _repo) do
     multi
     |> Multi.merge(fn
-        %{transaction: transaction, create_event: event} ->
-          Multi.update(Multi.new(), :event_success, fn _ ->
-            build_mark_as_processed(event, transaction.id)
-          end)
-        %{get_create_event_error: %{reason: :create_event_pending} = exception, create_event: event} ->
-          Multi.update(Multi.new(), :event_failure, fn _ ->
-            build_revert_to_pending(event, exception.message)
-          end)
-        %{get_create_event_error: %{reason: :create_event_failed} = exception, create_event: event} ->
-          Multi.update(Multi.new(), :event_failure, fn _ ->
-            build_schedule_update_retry(event, exception)
-          end)
-        %{get_create_event_error: exception, create_event: event} ->
-          Multi.update(Multi.new(), :event_failure, fn _ ->
-            build_mark_as_dead_letter(event, exception.message)
-          end)
+      %{transaction: transaction, create_event: event} ->
+        Multi.update(Multi.new(), :event_success, fn _ ->
+          build_mark_as_processed(event, transaction.id)
         end)
+
+      %{get_create_event_error: %{reason: :create_event_pending} = exception, create_event: event} ->
+        Multi.update(Multi.new(), :event_failure, fn _ ->
+          build_revert_to_pending(event, exception.message)
+        end)
+
+      %{get_create_event_error: %{reason: :create_event_failed} = exception, create_event: event} ->
+        Multi.update(Multi.new(), :event_failure, fn _ ->
+          build_schedule_update_retry(event, exception)
+        end)
+
+      %{get_create_event_error: exception, create_event: event} ->
+        Multi.update(Multi.new(), :event_failure, fn _ ->
+          build_mark_as_dead_letter(event, exception.message)
+        end)
+    end)
   end
 end

@@ -6,20 +6,21 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   during event processing. It handles complex error mapping between different data structures
   (transactions, events, event maps) while maintaining detailed error context.
 
-  Key responsibilities include:
+  ## Key Responsibilities
 
-  * Transferring validation errors between different system layers
-  * Maintaining error context and traceability
-  * Handling dependency errors between related events
-  * Building properly structured error changesets for client consumption
+    * Transferring validation errors between different system layers
+    * Maintaining error context and traceability
+    * Handling dependency errors between related events
+    * Building properly structured error changesets for client consumption
 
   The error handler ensures that all validation failures, processing errors, and
   dependency issues are properly captured for troubleshooting, auditing, and potential
   retry operations.
   """
 
-  alias Ecto.Changeset
+  alias Ecto.{Changeset, Multi}
   import DoubleEntryLedger.Event.ErrorMap
+  import DoubleEntryLedger.EventQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
 
   alias DoubleEntryLedger.{
     Event,
@@ -36,6 +37,55 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     AddUpdateEventError
   }
 
+  alias DoubleEntryLedger.Occ.Occable
+
+  @doc """
+  Handles errors that occur during transaction map conversion.
+
+  Schedules a retry for the given occable item, marking it as failed.
+
+  ## Parameters
+
+    - `occable_item`: The event or event map being processed.
+    - `error`: The error encountered during transaction map conversion.
+    - `repo`: The Ecto repository (unused).
+
+  ## Returns
+
+    - An `Ecto.Multi` that updates the event with error information.
+  """
+  @spec handle_transaction_map_error(Occable.t(), any(), Ecto.Repo.t()) :: Multi.t()
+  def handle_transaction_map_error(occable_item, error, _repo) do
+    Multi.update(Multi.new(), :event_failure, fn _ ->
+      build_schedule_retry_with_reason(occable_item, error, :failed)
+    end)
+  end
+
+  @doc """
+  Handles the case when OCC retries are exhausted.
+
+  Schedules a retry for the given occable item, marking it as OCC timeout.
+
+  ## Parameters
+
+    - `occable_item`: The event or event map being processed.
+    - `repo`: The Ecto repository (unused).
+
+  ## Returns
+
+    - An `Ecto.Multi` that updates the event as dead letter or timed out.
+  """
+  @spec handle_occ_final_timeout(Occable.t(), Ecto.Repo.t()) :: Multi.t()
+  def handle_occ_final_timeout(occable_item, _repo) do
+    Multi.update(Multi.new(), :event_failure, fn _ ->
+      build_schedule_retry_with_reason(
+        occable_item,
+        nil,
+        :occ_timeout
+      )
+    end)
+  end
+
   @doc """
   Maps transaction validation errors to an event map changeset.
 
@@ -51,7 +101,6 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   ## Returns
 
     - `Ecto.Changeset.t()`: Event map changeset with propagated errors
-
   """
   @spec transfer_errors_from_trx_to_event_map(EventMap.t(), Ecto.Changeset.t()) ::
           Ecto.Changeset.t()
@@ -73,12 +122,12 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
 
   ## Parameters
 
-  - `event_map`: The original event map
-  - `event_changeset`: Event changeset containing validation errors
+    - `event_map`: The original event map
+    - `event_changeset`: Event changeset containing validation errors
 
   ## Returns
 
-  - `Ecto.Changeset.t()`: Event map changeset with propagated errors
+    - `Ecto.Changeset.t()`: Event map changeset with propagated errors
   """
   @spec transfer_errors_from_event_to_event_map(EventMap.t(), Changeset.t()) :: Changeset.t()
   def transfer_errors_from_event_to_event_map(event_map, event_changeset) do
@@ -133,12 +182,14 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> then(&transfer_errors_from_event_to_event_map(event_map, &1))
   end
 
+  @doc false
   @spec build_event_map_changeset(EventMap.t()) :: Changeset.t()
   defp build_event_map_changeset(event_map) do
     %EventMap{}
     |> EventMap.changeset(EventMap.to_map(event_map))
   end
 
+  @doc false
   @spec build_transaction_data_changeset(EventMap.t(), Changeset.t()) :: Changeset.t()
   defp build_transaction_data_changeset(%{transaction_data: transaction_data}, trx_changeset) do
     %TransactionData{}
@@ -151,6 +202,7 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Map.put(:action, :insert)
   end
 
+  @doc false
   @spec add_transaction_data_errors(Changeset.t(), Changeset.t()) :: Changeset.t()
   defp add_transaction_data_errors(changeset, trx_changeset) do
     errors = get_all_errors(trx_changeset)
@@ -159,18 +211,21 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Enum.reduce(changeset, &add_errors_to_changeset(&2, &1, errors))
   end
 
+  @doc false
   @spec add_entry_data_errors(Changeset.t(), map()) :: Changeset.t()
   defp add_entry_data_errors(changeset, entry_errors) do
     [:currency, :amount, :account_id]
     |> Enum.reduce(changeset, &add_errors_to_changeset(&2, &1, entry_errors))
   end
 
+  @doc false
   @spec add_event_errors(Changeset.t(), map()) :: Changeset.t()
   defp add_event_errors(event_map_changeset, errors) do
     [:update_idempk, :source_idempk]
     |> Enum.reduce(event_map_changeset, &add_errors_to_changeset(&2, &1, errors))
   end
 
+  @doc false
   @spec get_entry_changesets_with_errors(TransactionData.t(), map()) :: [Changeset.t()]
   defp get_entry_changesets_with_errors(%{entries: entries}, trx_changeset) do
     entry_errors = get_entry_errors(trx_changeset)
@@ -180,6 +235,7 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Enum.map(&build_entry_data_changeset(&1, entry_errors))
   end
 
+  @doc false
   @spec build_entry_data_changeset({EntryData.t(), integer()}, list()) :: Changeset.t()
   defp build_entry_data_changeset({entry_data, index}, entry_errors) do
     %EntryData{}
@@ -188,6 +244,7 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Map.put(:action, :insert)
   end
 
+  @doc false
   @spec get_all_errors(Changeset.t()) :: map()
   defp get_all_errors(changeset) do
     Changeset.traverse_errors(changeset, fn {msg, opts} ->
@@ -197,12 +254,14 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     end)
   end
 
+  @doc false
   @spec get_entry_errors(Changeset.t()) :: [map()]
   defp get_entry_errors(trx_changeset) do
     get_all_errors(trx_changeset)
     |> Map.get(:entries, [])
   end
 
+  @doc false
   @spec add_errors_to_changeset(Changeset.t(), atom(), map()) :: Changeset.t()
   defp add_errors_to_changeset(changeset, field, errors) do
     if Map.has_key?(errors, field) do
