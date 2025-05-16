@@ -101,4 +101,26 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
           TransactionStore.build_update(Multi.new(), :transaction, create_transaction, attr, repo)
       end)
   end
+
+  def handle_build_transaction(multi, event, _repo) do
+    multi
+    |> Multi.merge(fn
+        %{transaction: transaction} ->
+          Multi.update(Multi.new(), :event_success, fn _ ->
+            build_mark_as_processed(event, transaction.id)
+          end)
+        %{get_create_event_error: %{reason: :create_event_pending} = exception} ->
+          Multi.update(Multi.new, :event_failure, fn _ ->
+            build_revert_to_pending(event, exception.message)
+          end)
+        %{get_create_event_error: %{reason: :create_event_failed} = exception} ->
+          Multi.update(Multi.new, :event_failure, fn _ ->
+            build_schedule_update_retry(event, exception)
+          end)
+        %{get_create_event_error: exception} ->
+          Multi.update(Multi.new, :event_failure, fn _ ->
+            build_mark_as_dead_letter(event, exception.message)
+          end)
+      end)
+  end
 end

@@ -2,7 +2,6 @@ alias DoubleEntryLedger.Event
 alias DoubleEntryLedger.Event.ErrorMap
 alias DoubleEntryLedger.Event.EventMap
 alias DoubleEntryLedger.Occ.Helper
-alias DoubleEntryLedger.EventQueue.Scheduling
 alias Ecto.Multi
 
 defprotocol DoubleEntryLedger.Occ.Occable do
@@ -35,9 +34,6 @@ defprotocol DoubleEntryLedger.Occ.Occable do
   """
   @spec update!(t(), ErrorMap.t(), Ecto.Repo.t()) :: t()
   def update!(impl_struct, error_map, repo)
-
-  @spec handle_build_transaction(t(), Ecto.Multi.t()) :: Ecto.Multi.t()
-  def handle_build_transaction(multi, impl_struct)
 
   @doc """
   Handles the timeout scenario when maximum OCC retries are reached.
@@ -79,36 +75,6 @@ defimpl DoubleEntryLedger.Occ.Occable, for: Event do
     event
     |> Ecto.Changeset.change(occ_retry_count: error_map.retries, errors: error_map.errors)
     |> repo.update!()
-  end
-
-  @spec handle_build_transaction(Event.t(), Ecto.Multi.t()) :: Ecto.Multi.t()
-  def handle_build_transaction(%{action: :create} = event, multi) do
-    multi
-    |> Multi.update(:event_success, fn %{transaction: transaction} ->
-      Scheduling.build_mark_as_processed(event, transaction.id)
-    end)
-  end
-
-  def handle_build_transaction(%{action: :update} = event, multi) do
-    multi
-    |> Multi.merge(fn
-        %{transaction: transaction} ->
-          Multi.update(Multi.new(), :event_success, fn _ ->
-            Scheduling.build_mark_as_processed(event, transaction.id)
-          end)
-        %{get_create_event_error: %{reason: :create_event_pending} = exception} ->
-          Multi.update(Multi.new, :event_failure, fn _ ->
-            Scheduling.build_revert_to_pending(event, exception.message)
-          end)
-        %{get_create_event_error: %{reason: :create_event_failed} = exception} ->
-          Multi.update(Multi.new, :event_failure, fn _ ->
-            Scheduling.build_schedule_update_retry(event, exception)
-          end)
-        %{get_create_event_error: exception} ->
-          Multi.update(Multi.new, :event_failure, fn _ ->
-            Scheduling.build_mark_as_dead_letter(event, exception.message)
-          end)
-      end)
   end
 
   @doc """
@@ -153,29 +119,6 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
   """
   @spec update!(EventMap.t(), ErrorMap.t(), Ecto.Repo.t()) :: EventMap.t()
   def update!(event_map, _error_map, _repo), do: event_map
-
-  @spec handle_build_transaction(EventMap.t(), Ecto.Multi.t()) :: Ecto.Multi.t()
-  def handle_build_transaction(_event_map, multi) do
-    multi
-    |> Multi.merge(fn
-        %{transaction: transaction, create_event: event} ->
-          Multi.update(Multi.new(), :event_success, fn _ ->
-            Scheduling.build_mark_as_processed(event, transaction.id)
-          end)
-        %{get_create_event_error: %{reason: :create_event_pending} = exception, create_event: event} ->
-          Multi.update(Multi.new(), :event_failure, fn _ ->
-            Scheduling.build_revert_to_pending(event, exception.message)
-          end)
-        %{get_create_event_error: %{reason: :create_event_failed} = exception, create_event: event} ->
-          Multi.update(Multi.new(), :event_failure, fn _ ->
-            Scheduling.build_schedule_update_retry(event, exception)
-          end)
-        %{get_create_event_error: exception, create_event: event} ->
-          Multi.update(Multi.new(), :event_failure, fn _ ->
-            Scheduling.build_mark_as_dead_letter(event, exception.message)
-          end)
-        end)
-  end
 
   @doc """
   Handles OCC timeout for an EventMap when maximum retries are reached.

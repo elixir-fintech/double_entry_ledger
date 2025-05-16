@@ -87,6 +87,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
             ) ::
               Ecto.Multi.t()
 
+  @callback handle_build_transaction(Ecto.Multi.t(), Event.t() | EventMap.t(), Ecto.Repo.t()) :: Ecto.Multi.t()
+
   @doc """
   Process the event with retry mechanisms.
 
@@ -128,6 +130,11 @@ defmodule DoubleEntryLedger.Occ.Processor do
         raise "build_transaction/3 not implemented"
       end
 
+      @impl true
+      def handle_build_transaction(_multi, _event_or_map, _repo)  do
+        raise "handle_build_transaction/3 not implemented"
+      end
+
       def build_multi(module, occable_item, repo) do
         Multi.new()
         |> Multi.put(:occable_item, occable_item)
@@ -145,9 +152,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
           %{transaction_map: transaction_map, occable_item: item} ->
             module.build_transaction(item, transaction_map, repo)
-            |> then(
-              &Occable.handle_build_transaction(item, &1)
-            )
+            |> module.handle_build_transaction(item, repo)
+
         end)
       end
 
@@ -217,7 +223,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
         |> repo.transaction()
       end
 
-      defoverridable build_transaction: 3
+      defoverridable build_transaction: 3,
+                     handle_build_transaction: 3
     end
   end
 end

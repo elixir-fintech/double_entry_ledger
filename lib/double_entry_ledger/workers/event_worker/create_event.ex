@@ -87,4 +87,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     Multi.new()
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
   end
+
+  @impl true
+  def handle_build_transaction(multi, event, _repo) do
+    multi
+    |> Multi.update(:event_success, fn %{transaction: transaction} ->
+      build_mark_as_processed(event, transaction.id)
+    end)
+  end
 end
