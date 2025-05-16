@@ -157,9 +157,24 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
   @spec handle_build_transaction(EventMap.t(), Ecto.Multi.t()) :: Ecto.Multi.t()
   def handle_build_transaction(_event_map, multi) do
     multi
-    |> Multi.update(:event_success, fn %{transaction: transaction, create_event: event} ->
-      Scheduling.build_mark_as_processed(event, transaction.id)
-    end)
+    |> Multi.merge(fn
+        %{transaction: transaction, create_event: event} ->
+          Multi.update(Multi.new(), :event_success, fn _ ->
+            Scheduling.build_mark_as_processed(event, transaction.id)
+          end)
+        %{get_create_event_error: %{reason: :create_event_pending} = exception, create_event: event} ->
+          Multi.update(Multi.new(), :event_failure, fn _ ->
+            Scheduling.build_revert_to_pending(event, exception.message)
+          end)
+        %{get_create_event_error: %{reason: :create_event_failed} = exception, create_event: event} ->
+          Multi.update(Multi.new(), :event_failure, fn _ ->
+            Scheduling.build_schedule_update_retry(event, exception)
+          end)
+        %{get_create_event_error: exception, create_event: event} ->
+          Multi.update(Multi.new(), :event_failure, fn _ ->
+            Scheduling.build_mark_as_dead_letter(event, exception.message)
+          end)
+        end)
   end
 
   @doc """

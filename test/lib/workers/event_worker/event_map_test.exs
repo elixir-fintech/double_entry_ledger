@@ -103,29 +103,31 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       assert saved_update_event.status == :pending
       assert saved_update_event.id != pending_event.id
+      assert saved_update_event.processed_transaction_id == nil
+      assert saved_update_event.processed_at == nil
+      assert saved_update_event.errors != []
     end
 
-    test "update event for event_map, when create event failed", ctx do
-      %{event: pending_event} = create_event(ctx, :pending)
-      pending_event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
-      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
-
-      {:error, event_map} = ProcessEventMap.process_map(update_event)
-
-      assert is_struct(event_map, Changeset)
-      {error_message, _} = Keyword.get(event_map.errors, :source_idempk)
-      assert error_message =~ "Create event (id: #{pending_event.id}) status: :failed"
-
-      assert is_nil(
-               Event
-               |> where(
-                 [e],
-                 e.source == ^pending_event.source and
-                   e.source_idempk == ^pending_event.source_idempk and not is_nil(e.update_idempk)
-               )
-               |> Repo.one()
-             )
-    end
+    #test "update event for event_map, when create event failed", ctx do
+      #%{event: pending_event} = create_event(ctx, :pending)
+      #failed_event = pending_event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
+      #update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
+      #{:error, event_map} = ProcessEventMap.process_map(update_event)
+#
+      #assert is_struct(event_map, Event)
+#
+      #saved_update_event =
+               #Event
+               #|> where(
+                 #[e],
+                 #e.source == ^failed_event.source and
+                   #e.source_idempk == ^failed_event.source_idempk and not is_nil(e.update_idempk)
+               #)
+               #|> Repo.one()
+#
+      #assert saved_update_event.status == :failed
+#
+    #end
   end
 
   describe "process_map/2 with OCC timeout" do

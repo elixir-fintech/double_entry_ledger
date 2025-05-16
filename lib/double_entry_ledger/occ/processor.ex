@@ -206,7 +206,6 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       # Clean up when attempts are exhausted
       def retry(module, occable_item, error_map, 0, repo) do
-        IO.puts("Max retries reached for #{inspect(occable_item)}")
         Occable.timed_out(occable_item, :occable_item, error_map)
         |> Multi.update(:event_failure, fn %{occable_item: occable_item} ->
           build_schedule_retry_with_reason(

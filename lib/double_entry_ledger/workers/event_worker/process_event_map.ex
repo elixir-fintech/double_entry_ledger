@@ -46,7 +46,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   alias Ecto.{Multi, Changeset}
   import DoubleEntryLedger.Occ.Helper
   import DoubleEntryLedger.EventWorker.ErrorHandler
-  alias DoubleEntryLedger.EventQueue.Scheduling
 
   @doc """
   Processes an EventMap by creating both an event record and its associated transaction atomically.
@@ -79,9 +78,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
       {:ok, %{event_failure: event}} ->
         {:error, event}
-
-      {:error, :get_create_event_transaction, %AddUpdateEventError{} = error, steps_so_far} ->
-        {:error, handle_add_update_event_error(error, steps_so_far, event_map)}
 
       {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
         {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
@@ -126,9 +122,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     Multi.new()
     |> Multi.insert(:create_event, EventStoreHelper.build_create(new_event_map))
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
-    |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
-      Scheduling.build_mark_as_processed(event, transaction.id)
-    end)
   end
 
   def build_transaction(%{action: :update} = event_map, transaction_map, repo) do
@@ -140,14 +133,17 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
       :get_create_event_transaction,
       :create_event
     )
-    |> TransactionStore.build_update(
-      :transaction,
-      :get_create_event_transaction,
-      transaction_map,
-      repo
-    )
-    |> Multi.update(:event, fn %{transaction: transaction, create_event: event} ->
-      Scheduling.build_mark_as_processed(event, transaction.id)
-    end)
+    |> Multi.merge(fn
+        %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
+          Multi.put(Multi.new(), :get_create_event_error, exception)
+        %{get_create_event_transaction: create_transaction} ->
+          TransactionStore.build_update(
+            Multi.new(),
+            :transaction,
+            create_transaction,
+            transaction_map,
+            repo
+          )
+      end)
   end
 end
