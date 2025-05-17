@@ -44,9 +44,11 @@ defmodule DoubleEntryLedger.CreateEventTest do
 
       assert {:error, %Event{} = error_event} =
                CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+
       assert error_event.status == :failed
+
       assert [%{message: "Step :transaction failed: :conflict"} | _] =
-              error_event.errors
+               error_event.errors
     end
 
     test "occ timeout", ctx do
@@ -61,17 +63,18 @@ defmodule DoubleEntryLedger.CreateEventTest do
         Repo.transaction(multi)
         # the transaction has to be handled by the Repo
       end)
-      {:error, updated_event} =  CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+
+      {:error, updated_event} =
+        CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
 
       assert updated_event.processed_transaction_id == nil
       assert updated_event.processed_at == nil
       assert updated_event.occ_retry_count == 5
       assert updated_event.retry_count == 1
       assert updated_event.next_retry_after != nil
+
       assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
                updated_event.errors
-
     end
   end
-
 end

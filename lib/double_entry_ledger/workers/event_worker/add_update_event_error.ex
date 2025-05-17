@@ -12,16 +12,35 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
 
   This exception is typically raised in the EventWorker when processing an update event:
 
-  ```elixir
-  def process_update_event(%{action: :update} = event_map) do
-    # If we can't find the create event or it's in an invalid state
-    if create_event.status == :pending do
-      raise AddUpdateEventError,
-        update_event: update_event,
-        create_event: create_event
-    end
-  end
-  ```
+      iex> raise AddUpdateEventError,
+      ...>   update_event: update_event,
+      ...>   create_event: create_event
+      ** (AddUpdateEventError) Create event (id: ...) not yet processed for Update Event (id: ...)
+
+  ## Reasons
+
+  The exception struct includes a `:reason` field, which can be one of:
+
+    * `:create_event_not_processed` — The create event exists but is not yet processed (pending, processing, occ_timeout, or failed)
+    * `:create_event_in_dead_letter` — The create event is in the dead letter state
+    * `:create_event_not_found` — The create event could not be found
+
+  ## Fields
+
+    * `:message` — Human-readable error message
+    * `:create_event` — The create event struct (may be `nil`)
+    * `:update_event` — The update event struct
+    * `:reason` — Atom describing the error reason
+
+  ## Example
+
+      try do
+        # ...code that may raise AddUpdateEventError...
+      rescue
+        e in AddUpdateEventError ->
+          IO.inspect(e.reason)
+          IO.inspect(e.message)
+      end
   """
 
   defexception [:message, :create_event, :update_event, :reason]
@@ -48,11 +67,20 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
       %Event{status: :processing} ->
         pending_error(create_event, update_event)
 
+      %Event{status: :occ_timeout} ->
+        pending_error(create_event, update_event)
+
       %Event{status: :failed} ->
-        failed_error(create_event, update_event)
+        pending_error(create_event, update_event)
 
       %Event{status: :dead_letter} ->
-        failed_error(create_event, update_event)
+        %AddUpdateEventError{
+          message:
+            "Create event (id: #{create_event.id}) in dead_letter for Update Event (id: #{update_event.id})",
+          create_event: create_event,
+          update_event: update_event,
+          reason: :create_event_in_dead_letter
+        }
 
       nil ->
         %AddUpdateEventError{
@@ -67,20 +95,10 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
   defp pending_error(create_event, update_event) do
     %AddUpdateEventError{
       message:
-        "Create event (id: #{create_event.id}) not yet processed for Update Event (id: #{update_event.id})",
+        "Create event (id: #{create_event.id}, status: #{create_event.status}) not yet processed for Update Event (id: #{update_event.id})",
       create_event: create_event,
       update_event: update_event,
-      reason: :create_event_pending
-    }
-  end
-
-  defp failed_error(create_event, update_event) do
-    %AddUpdateEventError{
-      message:
-        "Create event (id: #{create_event.id}) status: :#{create_event.status} for Update Event (id: #{update_event.id})",
-      create_event: create_event,
-      update_event: update_event,
-      reason: :"create_event_#{create_event.status}"
+      reason: :create_event_not_processed
     }
   end
 end

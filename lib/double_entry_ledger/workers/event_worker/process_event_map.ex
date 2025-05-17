@@ -1,34 +1,29 @@
 defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   @moduledoc """
-  Provides functionality to process `EventMap` structures in the Double Entry Ledger system.
+  Processes `EventMap` structures for atomic creation and update of events and their
+  associated transactions in the Double Entry Ledger system.
 
-  This module is responsible for the atomic creation and update of events and their
-  associated transactions, implementing the Optimistic Concurrency Control (OCC) pattern
-  to handle concurrent modifications safely.
+  This module implements the Optimistic Concurrency Control (OCC) pattern to ensure
+  safe concurrent processing of events, providing robust error handling, retry logic,
+  and transactional guarantees. It supports both creation and update flows for events,
+  ensuring that all operations are performed atomically and consistently.
 
-  ## Key Features
+  ## Features
 
-    * **Transaction Processing**: Handles both creation of new transactions and updates to
-      existing transactions based on the EventMap's action type (`:create` or `:update`).
-
-    * **Atomic Operations**: Ensures that events and their transactions are processed in a single
-      database transaction, maintaining data consistency.
-
-    * **Error Handling**: Provides comprehensive error handling for validation failures,
-      OCC conflicts, and dependency issues between events.
-
-    * **Retry Logic**: Implements automatic retry mechanisms to handle temporary concurrency
-      conflicts.
+    * Transaction Processing: Handles both creation and update of transactions based on the event map's action.
+    * Atomic Operations: Ensures all event and transaction changes are performed in a single database transaction.
+    * Error Handling: Maps validation and dependency errors to the appropriate changeset or event state.
+    * Retry Logic: Retries OCC conflicts and schedules retries for dependency errors.
+    * OCC Integration: Integrates with the OCC processor behavior for safe, idempotent event processing.
 
   ## Main Functions
 
-    * `process_map/2` — Entry point for processing event maps, with comprehensive error handling.
-    * `build_transaction/3` — Constructs appropriate Ecto.Multi operations based on event action type.
+    * `process_map/2` — Entry point for processing event maps with error handling and OCC.
+    * `build_transaction/3` — Constructs Ecto.Multi operations for create or update actions.
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
 
-  The module integrates with the OCC processor behavior to handle retries and concurrency
-  control, ensuring that events are processed exactly once even in high-concurrency
-  environments.
+  This module ensures that events are processed exactly once, even in high-concurrency
+  environments, and that all error and retry scenarios are handled transparently.
   """
 
   use DoubleEntryLedger.Occ.Processor
@@ -133,6 +128,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     end
   end
 
+  @impl true
   @doc """
   Builds an `Ecto.Multi` transaction for processing an event map based on its action type.
 
@@ -160,7 +156,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
     - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
-  @impl true
   def build_transaction(%{action: :create} = event_map, transaction_map, repo) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
@@ -198,19 +193,23 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   @doc """
   Adds the step to update the event or handle errors after transaction processing.
 
-  This function inspects the results of the previous Multi steps and determines
-  whether to mark the event as processed, revert it to pending, schedule a retry,
-  or move it to the dead letter queue.
+  This function inspects the results of the previous `Ecto.Multi` steps and determines
+  the appropriate next action for the event:
+
+    * If both the transaction and event creation succeed, the event is marked as processed.
+    * If the related create event is not yet processed, the event is reverted to pending.
+    * If the related create event failed, a retry is scheduled for the update event.
+    * For all other errors, the event is marked as dead letter.
 
   ## Parameters
 
-    - `multi`: The Ecto.Multi built so far.
+    - `multi`: The `Ecto.Multi` built so far.
     - `event_map`: The event map being processed.
     - `_repo`: The Ecto repository (unused).
 
   ## Returns
 
-    - The updated `Ecto.Multi` with an `:event_success` or `:event_failure` step.
+    - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step.
   """
   def handle_build_transaction(multi, _event_map, _repo) do
     multi
@@ -220,7 +219,10 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
           build_mark_as_processed(event, transaction.id)
         end)
 
-      %{get_create_event_error: %{reason: :create_event_pending} = exception, create_event: event} ->
+      %{
+        get_create_event_error: %{reason: :create_event_not_processed} = exception,
+        create_event: event
+      } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
         end)

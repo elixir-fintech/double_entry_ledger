@@ -8,10 +8,24 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
 
   ## Key Responsibilities
 
-    * Transferring validation errors between different system layers
-    * Maintaining error context and traceability
-    * Handling dependency errors between related events
-    * Building properly structured error changesets for client consumption
+    * Transferring validation errors between different system layers (transaction, event, event map)
+    * Maintaining error context and traceability for audit and troubleshooting
+    * Handling dependency errors between related events (e.g., update events depending on create events)
+    * Building properly structured error changesets for client consumption and retry logic
+
+  ## Examples
+
+      # Handling a transaction map conversion error
+      iex> ErrorHandler.handle_transaction_map_error(event, "invalid data", Repo)
+      #Ecto.Multi<...>
+
+      # Mapping transaction validation errors to an event map changeset
+      iex> ErrorHandler.transfer_errors_from_trx_to_event_map(event_map, trx_changeset)
+      #Ecto.Changeset<...>
+
+      # Mapping event validation errors to an event map changeset
+      iex> ErrorHandler.transfer_errors_from_event_to_event_map(event_map, event_changeset)
+      #Ecto.Changeset<...>
 
   The error handler ensures that all validation failures, processing errors, and
   dependency issues are properly captured for troubleshooting, auditing, and potential
@@ -19,22 +33,12 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   """
 
   alias Ecto.{Changeset, Multi}
-  import DoubleEntryLedger.Event.ErrorMap
   import DoubleEntryLedger.EventQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
-
-  alias DoubleEntryLedger.{
-    Event,
-    EventStore
-  }
 
   alias DoubleEntryLedger.Event.{
     EntryData,
     TransactionData,
     EventMap
-  }
-
-  alias DoubleEntryLedger.EventWorker.{
-    AddUpdateEventError
   }
 
   alias DoubleEntryLedger.Occ.Occable
@@ -134,52 +138,6 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     build_event_map_changeset(event_map)
     |> add_event_errors(get_all_errors(event_changeset))
     |> Map.put(:action, :insert)
-  end
-
-  @doc """
-  Handles errors related to dependencies between update events and their create events.
-
-  This function provides specialized error handling for update events that depend on
-  create events which are not in the proper state. It distinguishes between different
-  error scenarios (pending, failed, or not found) and handles each appropriately.
-
-  ## Parameters
-
-    - `error`: An AddUpdateEventError exception containing details about the error
-    - `steps_so_far`: A map containing processing steps completed before the error occurred
-    - `event_map`: The original event map being processed
-
-  ## Returns
-
-    - `Event.t()`: For pending create events, creates a new event with pending status
-    - `Changeset.t()`: For other errors, returns a changeset with mapped errors
-  """
-  @spec handle_add_update_event_error(AddUpdateEventError.t(), map(), EventMap.t()) ::
-          Event.t() | Changeset.t()
-  def handle_add_update_event_error(
-        %{reason: :create_event_pending, message: msg},
-        steps_so_far,
-        event_map
-      ) do
-    case EventStore.create_event_after_failure(
-           steps_so_far[:create_event],
-           [build_error(msg)],
-           1,
-           :pending
-         ) do
-      {:ok, event} ->
-        event
-
-      {:error, changeset} ->
-        transfer_errors_from_event_to_event_map(event_map, changeset)
-    end
-  end
-
-  def handle_add_update_event_error(%{message: msg}, steps_so_far, event_map) do
-    steps_so_far[:create_event]
-    |> Changeset.change()
-    |> Changeset.add_error(:source_idempk, "#{msg}")
-    |> then(&transfer_errors_from_event_to_event_map(event_map, &1))
   end
 
   @doc false

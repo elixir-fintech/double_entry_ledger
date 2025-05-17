@@ -85,49 +85,52 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       assert transaction.status == :posted
     end
 
+    test "dead letter when create event does not exist", ctx do
+      event_map = event_map(ctx, :pending)
+      update_event_map = %{event_map | update_idempk: Ecto.UUID.generate(), action: :update}
+
+      {:error, %{status: status, errors: [error | _]}} =
+        ProcessEventMap.process_map(update_event_map)
+
+      assert status == :dead_letter
+      assert error.message =~ "Create Event not found for Update Event (id:"
+    end
+
     test "update event for event_map, when create event not yet processed", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
-      {:error, event_map} = ProcessEventMap.process_map(update_event)
-      assert is_struct(event_map, Event)
+      {:error, update_event} = ProcessEventMap.process_map(update_event)
 
-      saved_update_event =
-        Event
-        |> where(
-          [e],
-          e.source == ^pending_event.source and e.source_idempk == ^pending_event.source_idempk and
-            not is_nil(e.update_idempk)
-        )
-        |> Repo.one()
-
-      assert saved_update_event.status == :pending
-      assert saved_update_event.id != pending_event.id
-      assert saved_update_event.processed_transaction_id == nil
-      assert saved_update_event.processed_at == nil
-      assert saved_update_event.errors != []
+      assert update_event.status == :pending
+      assert update_event.id != pending_event.id
+      assert update_event.processed_transaction_id == nil
+      assert update_event.processed_at == nil
+      assert update_event.errors != []
     end
 
-    #test "update event for event_map, when create event failed", ctx do
-      #%{event: pending_event} = create_event(ctx, :pending)
-      #failed_event = pending_event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
-      #update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
-      #{:error, event_map} = ProcessEventMap.process_map(update_event)
-#
-      #assert is_struct(event_map, Event)
-#
-      #saved_update_event =
-               #Event
-               #|> where(
-                 #[e],
-                 #e.source == ^failed_event.source and
-                   #e.source_idempk == ^failed_event.source_idempk and not is_nil(e.update_idempk)
-               #)
-               #|> Repo.one()
-#
-      #assert saved_update_event.status == :failed
-#
-    #end
+    test "update event is pending for event_map, when create event failed", ctx do
+      %{event: pending_event} = create_event(ctx, :pending)
+      failed_event = pending_event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
+      update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
+
+      {:error, update_event} = ProcessEventMap.process_map(update_event)
+
+      assert update_event.status == :pending
+    end
+
+    test "update event is dead_letter for event_map, when create event failed", ctx do
+      %{event: pending_event} = create_event(ctx, :pending)
+
+      failed_event =
+        pending_event |> Ecto.Changeset.change(%{status: :dead_letter}) |> Repo.update!()
+
+      update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
+
+      {:error, update_event} = ProcessEventMap.process_map(update_event)
+
+      assert update_event.status == :dead_letter
+    end
   end
 
   describe "process_map/2 with OCC timeout" do

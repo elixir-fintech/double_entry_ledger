@@ -28,6 +28,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
     * `handle_transaction_map_error/3` — Handles errors in transaction map conversion.
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion.
+
   """
 
   use DoubleEntryLedger.Occ.Processor
@@ -185,7 +186,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
           build_mark_as_processed(event, transaction.id)
         end)
 
-      %{get_create_event_error: %{reason: :create_event_pending} = exception} ->
+      %{get_create_event_error: %{reason: :create_event_not_processed} = exception} ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
         end)

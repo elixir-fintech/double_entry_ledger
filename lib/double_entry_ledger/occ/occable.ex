@@ -57,6 +57,7 @@ end
 
 defimpl DoubleEntryLedger.Occ.Occable, for: Event do
   alias Ecto.Multi
+
   @doc """
   Updates an Event with retry information during OCC retry cycles.
 

@@ -56,14 +56,14 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       assert transaction.status == :posted
     end
 
-    test "only process events with status :processing", ctx do
+    test "don't process events with status [:processed, :dead_letter]", ctx do
       %{event: event} = create_event(ctx)
       EventWorker.process_event_with_id(event.id)
 
       assert {:error, :event_not_claimable} =
                EventWorker.process_event_with_id(event.id)
 
-      event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
+      event |> Ecto.Changeset.change(%{status: :dead_letter}) |> Repo.update!()
 
       assert {:error, :event_not_claimable} =
                EventWorker.process_event_with_id(event.id)

@@ -8,14 +8,14 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Key Functionality
 
-  * **Event Management**: Create, retrieve, and track events
-  * **Event Processing**: Claim events for processing, mark events as processed or failed
-  * **Event Queries**: Find events by instance, transaction ID, or other criteria
-  * **Error Handling**: Track and manage errors that occur during event processing
+    * **Event Management**: Create, retrieve, and track events.
+    * **Event Processing**: Claim events for processing, mark events as processed or failed.
+    * **Event Queries**: Find events by instance, transaction ID, or other criteria.
+    * **Error Handling**: Track and manage errors that occur during event processing.
 
   ## Usage Examples
 
-  Creating and processing a new event:
+  ### Creating and processing a new event
 
       {:ok, transaction, event} = DoubleEntryLedger.EventStore.process_from_event_params(%{
         instance_id: instance.id,
@@ -30,15 +30,15 @@ defmodule DoubleEntryLedger.EventStore do
         }
       })
 
-  Retrieving events for an instance:
+  ### Retrieving events for an instance
 
       events = DoubleEntryLedger.EventStore.list_all_for_instance(instance.id)
 
-  Retrieving events for a transaction:
+  ### Retrieving events for a transaction
 
       events = DoubleEntryLedger.EventStore.list_all_for_transaction(transaction.id)
 
-  Manually processing an event:
+  ### Manually processing an event
 
       {:ok, event} = DoubleEntryLedger.EventStore.claim_event_for_processing(event.id, "worker-1")
       # Process event logic here
@@ -46,8 +46,10 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Implementation Notes
 
-  The module implements optimistic concurrency control for event claiming and processing,
-  ensuring that events are processed exactly once even in high-concurrency environments.
+  - The module implements optimistic concurrency control for event claiming and processing,
+    ensuring that events are processed exactly once even in high-concurrency environments.
+  - All queries are paginated and ordered by insertion time descending for efficient retrieval.
+  - Error handling is explicit, with clear return values for all failure modes.
   """
   import Ecto.Query
   import DoubleEntryLedger.EventStoreHelper
@@ -99,7 +101,7 @@ defmodule DoubleEntryLedger.EventStore do
         {:error, :event_not_found}
 
       event ->
-        if event.status in [:pending, :occ_timeout] do
+        if event.status in [:pending, :occ_timeout, :failed] do
           try do
             Event.processing_start_changeset(event, processor_id)
             |> repo.update()

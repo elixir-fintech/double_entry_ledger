@@ -32,41 +32,6 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
   ## Parameters
     - `event` - The event that failed and needs retry scheduling
-    - `status` - The status to set for the event (defaults to `:failed`)
-
-  ## Returns
-    - `{:error, updated_event}` - The event with updated retry information
-    - `{:error, changeset}` - Error updating the event
-  """
-  @spec schedule_retry(Event.t(), Event.state(), Ecto.Repo.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  def schedule_retry(event, status, repo \\ Repo) do
-    case build_schedule_retry_with_reason(event, nil, status) |> repo.update() do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @spec schedule_retry_m(Event.t(), Event.state(), Ecto.Repo.t()) ::
-          {:ok, {:error, Event.t()}} | {:error, Changeset.t()}
-  def schedule_retry_m(event, status, repo \\ Repo) do
-    case build_schedule_retry_with_reason(event, nil, status) |> repo.update() do
-      {:ok, event} ->
-        {:ok, {:error, event}}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @doc """
-  Sets the next retry time for a failed event using exponential backoff.
-
-  ## Parameters
-    - `event` - The event that failed and needs retry scheduling
     - `error` - The error message or reason for failure
     - `status` - The status to set for the event (defaults to `:failed`)
 
@@ -78,90 +43,6 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
           {:error, Event.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(event, reason, status, repo \\ Repo) do
     case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @spec schedule_retry_with_reason_m(Event.t(), String.t(), Event.state(), Ecto.Repo.t()) ::
-         {:ok, {:error, Event.t()}} | {:error, Changeset.t()}
-  def schedule_retry_with_reason_m(event, reason, status, repo \\ Repo) do
-    case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
-      {:ok, event} ->
-        {:ok, {:error, event}}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @doc """
-  Sets the next retry time for an update event that failed because
-  the create event was in :failed state using exponential backoff.
-  Makes sure that the next_retry_after is set after the create event's
-  next_retry_after.
-
-  ## Parameters
-    - `event` - The event that failed and needs retry scheduling
-    - `error` - The associated AddUpdateEventError struct that contains the create event
-
-  ## Returns
-    - `{:error, updated_event}` - The event with updated retry information
-    - `{:error, changeset}` - Error updating the event
-  """
-  @spec schedule_update_retry(Event.t(), AddUpdateEventError.t(), Ecto.Repo.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  def schedule_update_retry(event, reason, repo \\ Repo) do
-    case build_schedule_update_retry(event, reason) |> repo.update() do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @doc """
-  Marks an event as permanently failed (dead letter).
-
-  ## Parameters
-    - `event` - The event to mark as dead letter
-    - `reason` - The reason for marking as dead letter
-
-  ## Returns
-    - `{:error, updated_event}` - The event marked as dead letter
-    - `{:error, changeset}` - Error updating the event
-  """
-  @spec move_to_dead_letter(Event.t(), String.t(), Ecto.Repo.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  def move_to_dead_letter(event, reason, repo \\ Repo) do
-    case build_mark_as_dead_letter(event, reason) |> repo.update() do
-      {:ok, event} ->
-        {:error, event}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @doc """
-  Adds an error to the event's error list and reverts it to pending state.
-
-  ## Parameters
-    - `event` - The event to add an error to
-    - `error` - Error message or data to add
-
-  ## Returns
-    - `{:error, updated_event}` - The event with updated error and status
-    - `{:error, changeset}` - Error updating the event
-  """
-  @spec revert_to_pending(Event.t(), String.t(), Ecto.Repo.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
-  def revert_to_pending(event, reason, repo  \\ Repo) do
-    case build_revert_to_pending(event, reason) |> repo.update() do
       {:ok, event} ->
         {:error, event}
 
@@ -233,11 +114,15 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
-  @spec build_schedule_retry_with_reason(Event.t(), String.t() | nil, Event.state()) :: Changeset.t()
+  @spec build_schedule_retry_with_reason(Event.t(), String.t() | nil, Event.state()) ::
+          Changeset.t()
   def build_schedule_retry_with_reason(event, error, status) do
     if event.retry_count >= @max_retries do
       # Max retries exceeded, mark as dead letter
-      build_mark_as_dead_letter(event, "Max retry count (#{@max_retries}) exceeded: #{error || status}")
+      build_mark_as_dead_letter(
+        event,
+        "Max retry count (#{@max_retries}) exceeded: #{error || status}"
+      )
     else
       # Calculate next retry time with exponential backoff
       retry_delay = calculate_retry_delay(event.retry_count)
@@ -274,7 +159,9 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     # Calculate next retry time with exponential backoff
     retry_delay = calculate_retry_delay(event.retry_count)
     now = DateTime.utc_now()
-    next_retry_after = DateTime.add(error.create_event.next_retry_after, retry_delay, :second)
+
+    next_retry_after =
+      DateTime.add(error.create_event.next_retry_after || now, retry_delay, :second)
 
     event
     |> build_add_error(error.message)

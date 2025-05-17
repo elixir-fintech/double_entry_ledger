@@ -122,7 +122,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert transaction.status == :archived
     end
 
-    test "fails when create event does not exist", %{instance: inst} do
+    test "dead letter when create event does not exist", %{instance: inst} do
       {:ok, event} = create_update_event("source", "1", inst.id, :posted)
 
       {:error, failed_event} = UpdateEvent.process_update_event(event)
@@ -134,7 +134,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
                "Create Event not found for Update Event (id: #{event.id})"
     end
 
-    test "fails when create event is still pending", %{instance: inst} = ctx do
+    test "back to pending when create event is still pending", %{instance: inst} = ctx do
       %{event: %{id: e_id, source: s, source_idempk: s_id}} = create_event(ctx, :pending)
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
@@ -146,10 +146,10 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       [error | _] = failed_event.errors
 
       assert error.message ==
-               "Create event (id: #{e_id}) not yet processed for Update Event (id: #{event.id})"
+               "Create event (id: #{e_id}, status: pending) not yet processed for Update Event (id: #{event.id})"
     end
 
-    test "fails when update event failed", %{instance: inst} = ctx do
+    test "back to pending when create event failed", %{instance: inst} = ctx do
       %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
 
       {:error, failed_create_event} =
@@ -162,17 +162,35 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
       {:error, failed_event} = UpdateEvent.process_update_event(event)
-      assert failed_event.status == :failed
+      assert failed_event.status == :pending
 
       [error | _] = failed_event.errors
 
       assert failed_create_event.status == :failed
 
-      assert DateTime.compare(failed_create_event.next_retry_after, failed_event.next_retry_after) ==
-               :lt
+      assert error.message ==
+               "Create event (id: #{pending_event.id}, status: failed) not yet processed for Update Event (id: #{event.id})"
+    end
+
+    test "dead_letter when create event in dead_letter", %{instance: inst} = ctx do
+      %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
+
+      failed_create_event =
+        DoubleEntryLedger.EventQueue.Scheduling.build_mark_as_dead_letter(
+          pending_event,
+          "some reason"
+        )
+        |> DoubleEntryLedger.Repo.update!()
+
+      {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
+
+      {:error, failed_event} = UpdateEvent.process_update_event(event)
+      assert failed_event.status == :dead_letter
+
+      [error | _] = failed_event.errors
 
       assert error.message ==
-               "Create event (id: #{pending_event.id}) status: :failed for Update Event (id: #{event.id})"
+               "Create event (id: #{pending_event.id}) in dead_letter for Update Event (id: #{event.id})"
     end
 
     test "update event with last retry that fails", %{instance: inst} = ctx do
@@ -238,6 +256,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
                )
 
       assert error_event.status == :failed
+
       assert [%{message: "Step :transaction failed: :conflict"} | _] =
                error_event.errors
     end
