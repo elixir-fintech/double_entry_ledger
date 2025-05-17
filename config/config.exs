@@ -1,5 +1,9 @@
 import Config
 
+
+config :logger,
+  formatter: {LoggerJSON.Formatters.Basic, metadata: :all}
+
 config :double_entry_ledger,
   ecto_repos: [DoubleEntryLedger.Repo],
   max_retries: 5,

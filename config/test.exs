@@ -12,3 +12,11 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   port: "5432",
   pool: Ecto.Adapters.SQL.Sandbox,
   stacktrace: true
+
+config :logger,
+  backends: [:console],
+  level: :info
+
+config :logger, :console,
+  format: "$time $message $metadata[$level]\n",
+  metadata: :all
