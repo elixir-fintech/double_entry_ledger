@@ -175,12 +175,11 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     test "dead_letter when create event in dead_letter", %{instance: inst} = ctx do
       %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
 
-      failed_create_event =
-        DoubleEntryLedger.EventQueue.Scheduling.build_mark_as_dead_letter(
-          pending_event,
-          "some reason"
-        )
-        |> DoubleEntryLedger.Repo.update!()
+      DoubleEntryLedger.EventQueue.Scheduling.build_mark_as_dead_letter(
+        pending_event,
+        "some reason"
+      )
+      |> DoubleEntryLedger.Repo.update!()
 
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 

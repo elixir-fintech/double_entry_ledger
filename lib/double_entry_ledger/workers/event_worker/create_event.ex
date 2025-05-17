@@ -34,13 +34,15 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion.
 
   """
-
+  require Logger
   use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.{Event, Transaction, TransactionStore, Repo}
 
   import DoubleEntryLedger.EventQueue.Scheduling
+
+  @module_name __MODULE__ |> Module.split() |> List.last()
 
   @impl true
   @doc """
@@ -102,17 +104,30 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process_create_event(original_event, repo \\ Repo) do
+    # Credo:disable-for-this-file Credo.Check.Warning.MissedMetadataKeyInLoggerConfig
     case process_with_retry(original_event, repo) do
       {:ok, %{event_success: event, transaction: transaction}} ->
+        Logger.info("#{@module_name}: processed successfully",
+          event_id: event.id,
+          event_status: event.status,
+          transaction_id: transaction.id)
         {:ok, transaction, event}
 
-      {:ok, %{event_failure: event}} ->
+      {:ok, %{event_failure: %{errors: [last_error| _]} = event}} ->
+        Logger.info("#{@module_name}: #{last_error.message}",
+          event_id: event.id,
+          event_status: event.status)
         {:error, event}
 
       {:error, step, error, _} ->
+        message = "#{@module_name}: Step :#{step} failed: #{inspect(error)}"
+        Logger.info(message,
+          event_id: original_event.id,
+          event_status: original_event.status,
+          error: error)
         schedule_retry_with_reason(
           original_event,
-          "Step :#{step} failed: #{inspect(error)}",
+          message,
           :failed
         )
     end
