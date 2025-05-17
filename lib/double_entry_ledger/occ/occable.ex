@@ -140,7 +140,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
   def timed_out(_event_map, name, error_map) do
     Multi.new()
     |> Multi.insert(name, fn _ ->
-      error_map.steps_so_far.create_event
+      error_map.steps_so_far[:new_event]
       |> Helper.occ_timeout_changeset(error_map)
     end)
   end

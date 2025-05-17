@@ -117,7 +117,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
       {:ok, %{event_failure: event}} ->
         {:error, event}
 
-      {:error, :create_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
+      {:error, :new_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
         {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
 
       {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
@@ -160,7 +160,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.insert(:create_event, EventStoreHelper.build_create(new_event_map))
+    |> Multi.insert(:new_event, EventStoreHelper.build_create(new_event_map))
     |> TransactionStore.build_create(:transaction, transaction_map, repo)
   end
 
@@ -169,10 +169,10 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.insert(:create_event, EventStoreHelper.build_create(new_event_map))
+    |> Multi.insert(:new_event, EventStoreHelper.build_create(new_event_map))
     |> EventStoreHelper.build_get_create_event_transaction(
       :get_create_event_transaction,
-      :create_event
+      :new_event
     )
     |> Multi.merge(fn
       %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
@@ -214,25 +214,25 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   def handle_build_transaction(multi, _event_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: transaction, create_event: event} ->
+      %{transaction: transaction, new_event: event} ->
         Multi.update(Multi.new(), :event_success, fn _ ->
           build_mark_as_processed(event, transaction.id)
         end)
 
       %{
         get_create_event_error: %{reason: :create_event_not_processed} = exception,
-        create_event: event
+        new_event: event
       } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
         end)
 
-      %{get_create_event_error: %{reason: :create_event_failed} = exception, create_event: event} ->
+      %{get_create_event_error: %{reason: :create_event_failed} = exception, new_event: event} ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_schedule_update_retry(event, exception)
         end)
 
-      %{get_create_event_error: exception, create_event: event} ->
+      %{get_create_event_error: exception, new_event: event} ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_mark_as_dead_letter(event, exception.message)
         end)
