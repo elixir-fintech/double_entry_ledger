@@ -25,6 +25,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   * `create/1`: Creates and validates an EventMap from a map of attributes
   * `changeset/2`: Builds a changeset for validating EventMap data
   * `to_map/1`: Converts an EventMap struct to a plain map representation
+  * `log_trace/1,2`: Builds a map of trace metadata for logging from an EventMap
 
   ## Implementation Details
 
@@ -219,6 +220,58 @@ defmodule DoubleEntryLedger.Event.EventMap do
   def changeset(event_map, attrs) do
     base_changeset(event_map, attrs)
     |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
+  end
+
+  @doc """
+  Builds a map of trace metadata for logging from an EventMap.
+
+  This function extracts key fields from the given `EventMap` struct to provide
+  consistent, structured metadata for logging and tracing purposes. The returned map
+  includes the action, source, and a composite trace ID.
+
+  ## Parameters
+
+    - `event_map`: The `EventMap` struct to extract trace information from.
+
+  ## Returns
+
+    - A map containing trace metadata for the event map.
+  """
+  @spec log_trace(EventMap.t()) :: map()
+  def log_trace(event_map) do
+    %{
+      is_event_map: true,
+      event_action: event_map.action,
+      event_source: event_map.source,
+      event_trace_id:
+        [event_map.source, event_map.source_idempk, event_map.update_idempk]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.join("-")
+    }
+  end
+
+  @doc """
+  Builds a map of trace metadata for logging from an EventMap and an error.
+
+  This function extends `log_trace/1` by also including error information
+  when an error value is provided.
+
+  ## Parameters
+
+    - `event_map`: The `EventMap` struct to extract trace information from.
+    - `error`: Any error value to include in the trace metadata.
+
+  ## Returns
+
+    - A map containing trace metadata for the event map and the error.
+  """
+  @spec log_trace(EventMap.t(), any()) :: map()
+  def log_trace(event_map, error) do
+    Map.put(
+      log_trace(event_map),
+      :error,
+      inspect(error, label: "Error")
+    )
   end
 
   @doc """

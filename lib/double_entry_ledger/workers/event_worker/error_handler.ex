@@ -140,6 +140,29 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> Map.put(:action, :insert)
   end
 
+  @doc """
+  Returns all errors from an Ecto changeset as a map, with error messages interpolated.
+
+  This function traverses the errors in the given changeset and replaces any placeholders
+  in the error messages with their actual values.
+
+  ## Parameters
+
+    - `changeset`: The `Ecto.Changeset` to extract errors from.
+
+  ## Returns
+
+    - A map where each key is a field and each value is a list of error messages for that field.
+  """
+  @spec get_all_errors(Changeset.t()) :: map()
+  def get_all_errors(changeset) do
+    Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+  end
+
   @doc false
   @spec build_event_map_changeset(EventMap.t()) :: Changeset.t()
   defp build_event_map_changeset(event_map) do
@@ -200,16 +223,6 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
     |> EntryData.changeset(EntryData.to_map(entry_data))
     |> add_entry_data_errors(Enum.at(entry_errors, index))
     |> Map.put(:action, :insert)
-  end
-
-  @doc false
-  @spec get_all_errors(Changeset.t()) :: map()
-  defp get_all_errors(changeset) do
-    Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
-    end)
   end
 
   @doc false

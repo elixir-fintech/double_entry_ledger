@@ -256,7 +256,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
       assert error_event.status == :failed
 
-      assert [%{message: "Step :transaction failed: :conflict"} | _] =
+      assert [%{message: "UpdateEvent: Step :transaction failed. Error: :conflict"} | _] =
                error_event.errors
     end
   end

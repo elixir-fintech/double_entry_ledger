@@ -112,19 +112,42 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
   def process_map(event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
       {:ok, %{transaction: transaction, event_success: event}} ->
+        Logger.info(
+          "#{@module_name}: processed successfully",
+          Event.log_trace(event, transaction)
+        )
+
         {:ok, transaction, event}
 
-      {:ok, %{event_failure: event}} ->
+      {:ok, %{event_failure: %{errors: [last_error | _]} = event}} ->
+        Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
         {:error, event}
 
       {:error, :new_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
+        Logger.warning(
+          "#{@module_name}: Event changeset failed",
+          EventMap.log_trace(event_map, get_all_errors(event_changeset))
+        )
+
         {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
 
       {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
+        Logger.warning(
+          "#{@module_name}: Transaction changeset failed",
+          EventMap.log_trace(event_map, get_all_errors(trx_changeset))
+        )
+
         {:error, transfer_errors_from_trx_to_event_map(event_map, trx_changeset)}
 
       {:error, step, error, _steps_so_far} ->
-        {:error, "#{step} failed: #{inspect(error)}"}
+        message = "#{@module_name}: Step :#{step} failed."
+
+        Logger.error(
+          message,
+          EventMap.log_trace(event_map, error)
+        )
+
+        {:error, "#{message} #{inspect(error)}"}
     end
   end
 

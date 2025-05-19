@@ -32,9 +32,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     * `handle_build_transaction/3` — Adds event update step to the Multi.
     * `handle_transaction_map_error/3` — Handles errors in transaction map conversion.
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion.
-
   """
-  require Logger
+
   use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.{Changeset, Multi}
@@ -98,6 +97,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     - `{:ok, transaction, event}`: When transaction creation succeeds.
     - `{:error, event}`: When processing fails due to OCC timeout.
     - `{:error, changeset}`: When there's a validation error or database error.
+    - `{:error, reason}`: When another error occurs, with a reason explaining the failure.
   """
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
@@ -105,16 +105,21 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     # Credo:disable-for-this-file Credo.Check.Warning.MissedMetadataKeyInLoggerConfig
     case process_with_retry(original_event, repo) do
       {:ok, %{event_success: event, transaction: transaction}} ->
-        Logger.info("#{@module_name}: processed successfully", Event.log_trace(event, transaction))
+        Logger.info(
+          "#{@module_name}: processed successfully",
+          Event.log_trace(event, transaction)
+        )
+
         {:ok, transaction, event}
 
-      {:ok, %{event_failure: %{errors: [last_error| _]} = event}} ->
+      {:ok, %{event_failure: %{errors: [last_error | _]} = event}} ->
         Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
         {:error, event}
 
       {:error, step, error, _} ->
         message = "#{@module_name}: Step :#{step} failed."
         Logger.error(message, Event.log_trace(original_event, error))
+
         schedule_retry_with_reason(
           original_event,
           "#{message} Error: #{inspect(error)}",

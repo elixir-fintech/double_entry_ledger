@@ -169,6 +169,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
     # Credo:disable-for-next-line Credo.Check.Refactor.LongQuoteBlocks
     quote do
       @behaviour DoubleEntryLedger.Occ.Processor
+
+      require Logger
       alias DoubleEntryLedger.Repo
       alias Ecto.Multi
       import DoubleEntryLedger.Occ.Helper

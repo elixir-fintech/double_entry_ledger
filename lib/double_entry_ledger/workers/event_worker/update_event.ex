@@ -28,7 +28,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
     * `handle_transaction_map_error/3` — Handles errors in transaction map conversion.
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion.
-
   """
 
   use DoubleEntryLedger.Occ.Processor
@@ -114,16 +113,29 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   """
   @spec process_update_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_update_event(event, repo \\ Repo) do
-    case process_with_retry(event, repo) do
+  def process_update_event(original_event, repo \\ Repo) do
+    case process_with_retry(original_event, repo) do
       {:ok, %{transaction: transaction, event_success: update_event}} ->
+        Logger.info(
+          "#{@module_name}: processed successfully",
+          Event.log_trace(update_event, transaction)
+        )
+
         {:ok, transaction, update_event}
 
-      {:ok, %{event_failure: update_event}} ->
+      {:ok, %{event_failure: %{errors: [last_error | _]} = update_event}} ->
+        Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(update_event))
         {:error, update_event}
 
       {:error, step, error, _} ->
-        schedule_retry_with_reason(event, "Step :#{step} failed: #{inspect(error)}", :failed)
+        message = "#{@module_name}: Step :#{step} failed."
+        Logger.error(message, Event.log_trace(original_event, error))
+
+        schedule_retry_with_reason(
+          original_event,
+          "#{message} Error: #{inspect(error)}",
+          :failed
+        )
     end
   end
 
