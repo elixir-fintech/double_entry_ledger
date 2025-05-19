@@ -272,6 +272,67 @@ defmodule DoubleEntryLedger.Event do
     |> optimistic_lock(:processor_version)
   end
 
+  @doc """
+  Builds a map of trace metadata for logging from an event.
+
+  This function extracts key fields from the given `Event` struct to provide
+  consistent, structured metadata for logging and tracing purposes. The returned map
+  includes the event's ID, status, action, source, and a composite trace ID.
+
+  ## Parameters
+
+    - `event`: The `Event` struct to extract trace information from.
+
+  ## Returns
+
+    - A map containing trace metadata for the event.
+  """
+  @spec log_trace(Event.t()) :: map()
+  def log_trace(event) do
+    %{
+      event_id: event.id,
+      event_status: event.status,
+      event_action: event.action,
+      event_source: event.source,
+      event_trace_id:
+        [event.source, event.source_idempk, event.update_idempk]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.join("-")
+    }
+  end
+
+  @doc """
+  Builds a map of trace metadata for logging from an event and a transaction or and error.
+
+  This function extends `log_trace/1` by also including the transaction ID
+  when a `Transaction` struct is provided.
+
+  ## Parameters
+
+    - `event`: The `Event` struct to extract trace information from.
+    - `transaction` | `error`: The `Transaction` struct to extract the transaction ID from, or the error value to display
+
+  ## Returns
+
+    - A map containing trace metadata for the event and transaction or error
+  """
+  @spec log_trace(Event.t(), Transaction.t() | any()) :: map()
+  def log_trace(event, %Transaction{} = transaction) do
+    Map.put(
+      log_trace(event),
+      :transaction_id,
+      transaction.id
+    )
+  end
+
+  def log_trace(event, error) do
+    Map.put(
+      log_trace(event),
+      :error,
+      inspect(error, label: "Error")
+    )
+  end
+
   @spec base_changeset(Event.t(), map()) :: Ecto.Changeset.t()
   defp base_changeset(event, attrs) do
     event
