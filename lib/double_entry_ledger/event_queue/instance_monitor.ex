@@ -1,9 +1,31 @@
 defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
   @moduledoc """
-  Monitors for instances with pending events and starts processors as needed.
+  Monitors event queue instances for pending events and ensures processors are started as needed.
 
-  This module periodically checks for instances that have events needing processing
-  and ensures an instance processor is running for each of them.
+  ## Overview
+
+  The `InstanceMonitor` is a GenServer responsible for periodically scanning the database
+  for event queue instances that have events requiring processing. For each such instance,
+  it ensures that an `InstanceProcessor` is running to handle the events.
+
+  ## Responsibilities
+
+    * Periodically poll the database for instances with pending, failed, or timed-out events.
+    * For each instance with processable events, ensure an `InstanceProcessor` is started.
+    * Avoid starting duplicate processors for the same instance by checking the Registry.
+    * Use application configuration for poll interval (`:poll_interval` in `:event_queue` config).
+
+  ## Configuration
+
+  The poll interval can be set in your application config:
+
+      config :double_entry_ledger, :event_queue, poll_interval: 5_000
+
+  The default poll interval is 5,000 milliseconds (5 seconds) if not specified.
+
+  ## Process Supervision
+
+  This module is intended to be supervised as part of the event queue supervision tree.
   """
   use GenServer
   require Logger
@@ -15,6 +37,11 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
 
   # Client API
 
+  @doc """
+  Starts the InstanceMonitor GenServer.
+
+  This function is typically called by the supervisor and does not need to be called directly.
+  """
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
@@ -22,6 +49,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
   # Server Callbacks
 
   @impl true
+  @doc false
   def init(_) do
     config = Application.get_env(:double_entry_ledger, :event_queue, [])
     poll_interval = Keyword.get(config, :poll_interval, 5_000)
@@ -31,6 +59,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
   end
 
   @impl true
+  @doc false
   def handle_info(:poll, state) do
     monitor_instances()
     schedule_poll(state.poll_interval)
