@@ -1,10 +1,19 @@
 defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
   @moduledoc """
-  Processes events sequentially for a specific instance.
+  Handles processing of events for a specific event queue instance.
 
-  This module continuously processes pending events for a single instance,
-  ensuring they are processed in order of insertion. It handles retries
-  with exponential backoff for failed events.
+  The `InstanceProcessor` is responsible for fetching, processing, and updating the status
+  of events belonging to a single event queue instance. It is started dynamically by the
+  `InstanceMonitor` when there are events to process for a given instance.
+
+  ## Responsibilities
+
+    * Fetch pending, failed, or timed-out events for the assigned instance.
+    * Process each event and update its status in the database.
+    * Handle retries and error cases according to event queue logic.
+    * Ensure only one processor runs per instance at a time (enforced via Registry).
+
+  This module is typically supervised under the `InstanceSupervisor` as a dynamic child.
   """
   use GenServer
   require Logger
