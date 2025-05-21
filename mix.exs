@@ -15,68 +15,7 @@ defmodule DoubleEntryLedger.MixProject do
         plt_add_apps: [:mix]
         # flags: [:overspecs]
       ],
-      docs: [
-        main: "readme",
-        extras: ["README.md", "pages/DoubleEntryLedger.md", "LICENSE"],
-        groups_for_modules: [
-          Instance: [
-            DoubleEntryLedger.InstanceStore,
-            DoubleEntryLedger.Instance
-          ],
-          Account: [
-            DoubleEntryLedger.AccountStore,
-            DoubleEntryLedger.Account,
-            DoubleEntryLedger.Balance,
-            DoubleEntryLedger.BalanceHistoryEntry
-          ],
-          Transaction: [
-            DoubleEntryLedger.TransactionStore,
-            DoubleEntryLedger.Transaction,
-            DoubleEntryLedger.Entry
-          ],
-          Event: [
-            DoubleEntryLedger.EventStore,
-            DoubleEntryLedger.EventStoreHelper,
-            DoubleEntryLedger.Event,
-            DoubleEntryLedger.Event.EventMap,
-            DoubleEntryLedger.Event.EntryData,
-            DoubleEntryLedger.Event.TransactionData,
-            DoubleEntryLedger.Event.ErrorMap
-          ],
-          EventWorker: [
-            DoubleEntryLedger.EventWorker,
-            DoubleEntryLedger.EventWorker.ProcessEvent,
-            DoubleEntryLedger.EventWorker.ProcessEventMap,
-            DoubleEntryLedger.EventWorker.CreateEvent,
-            DoubleEntryLedger.EventWorker.UpdateEvent,
-            DoubleEntryLedger.EventWorker.EventTransformer,
-            DoubleEntryLedger.EventWorker.AddUpdateEventError,
-            DoubleEntryLedger.EventWorker.ErrorHandler
-          ],
-          "EventQueue": [
-            DoubleEntryLedger.EventQueue.Supervisor,
-            DoubleEntryLedger.EventQueue.Scheduling,
-            DoubleEntryLedger.EventQueue.InstanceProcessor,
-            DoubleEntryLedger.EventQueue.InstanceMonitor,
-          ],
-          "Protocols, Types, Constants and Currency": [
-            DoubleEntryLedger.EntryHelper,
-            DoubleEntryLedger.Types,
-            DoubleEntryLedger.Currency
-          ],
-          "Optimistic Concurrency Control": [
-            DoubleEntryLedger.Occ.Processor,
-            DoubleEntryLedger.Occ.Helper,
-            DoubleEntryLedger.Occ.Occable,
-          ],
-          Repo: [
-            DoubleEntryLedger.Repo,
-            DoubleEntryLedger.RepoBehaviour,
-            DoubleEntryLedger.BaseSchema
-          ]
-        ],
-        before_closing_head_tag: &before_closing_head_tag/1
-      ]
+      docs: docs()
     ]
   end
 
@@ -123,5 +62,76 @@ defmodule DoubleEntryLedger.MixProject do
       }
     </style>
     """
+  end
+
+  defp docs() do
+    [
+      main: "readme",
+      extras: [
+        "README.md",
+        "pages/DoubleEntryLedger.md",
+        "pages/AsynchronousEventProcessing.md",
+        "pages/HandlingPendingTransactions.md",
+        "LICENSE"
+        ],
+      groups_for_modules: [
+        Instance: [
+          DoubleEntryLedger.InstanceStore,
+          DoubleEntryLedger.Instance
+        ],
+        Account: [
+          DoubleEntryLedger.AccountStore,
+          DoubleEntryLedger.Account,
+          DoubleEntryLedger.Balance,
+          DoubleEntryLedger.BalanceHistoryEntry
+        ],
+        Transaction: [
+          DoubleEntryLedger.TransactionStore,
+          DoubleEntryLedger.Transaction,
+          DoubleEntryLedger.Entry
+        ],
+        Event: [
+          DoubleEntryLedger.EventStore,
+          DoubleEntryLedger.EventStoreHelper,
+          DoubleEntryLedger.Event,
+          DoubleEntryLedger.Event.EventMap,
+          DoubleEntryLedger.Event.EntryData,
+          DoubleEntryLedger.Event.TransactionData,
+          DoubleEntryLedger.Event.ErrorMap
+        ],
+        EventWorker: [
+          DoubleEntryLedger.EventWorker,
+          DoubleEntryLedger.EventWorker.ProcessEvent,
+          DoubleEntryLedger.EventWorker.ProcessEventMap,
+          DoubleEntryLedger.EventWorker.CreateEvent,
+          DoubleEntryLedger.EventWorker.UpdateEvent,
+          DoubleEntryLedger.EventWorker.EventTransformer,
+          DoubleEntryLedger.EventWorker.AddUpdateEventError,
+          DoubleEntryLedger.EventWorker.ErrorHandler
+        ],
+        "EventQueue": [
+          DoubleEntryLedger.EventQueue.Supervisor,
+          DoubleEntryLedger.EventQueue.Scheduling,
+          DoubleEntryLedger.EventQueue.InstanceProcessor,
+          DoubleEntryLedger.EventQueue.InstanceMonitor,
+        ],
+        "Protocols, Types, Constants and Currency": [
+          DoubleEntryLedger.EntryHelper,
+          DoubleEntryLedger.Types,
+          DoubleEntryLedger.Currency
+        ],
+        "Optimistic Concurrency Control": [
+          DoubleEntryLedger.Occ.Processor,
+          DoubleEntryLedger.Occ.Helper,
+          DoubleEntryLedger.Occ.Occable,
+        ],
+        Repo: [
+          DoubleEntryLedger.Repo,
+          DoubleEntryLedger.RepoBehaviour,
+          DoubleEntryLedger.BaseSchema
+        ]
+      ],
+      before_closing_head_tag: &before_closing_head_tag/1
+    ]
   end
 end
