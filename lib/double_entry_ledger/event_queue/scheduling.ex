@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   alias Ecto.Changeset
-  alias DoubleEntryLedger.{Repo, Event}
+  alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, Transaction}
 
   import DoubleEntryLedger.EventStoreHelper, only: [build_add_error: 2]
 
@@ -77,6 +77,18 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
       next_retry_after: nil
     )
   end
+
+
+  @spec build_create_event_transaction_link(Event.t(), Transaction.t()) ::
+          Changeset.t()
+  def build_create_event_transaction_link(%Event{id: event_id}, %Transaction{id: transaction_id}) do
+    %EventTransactionLink{}
+    |> EventTransactionLink.changeset(%{
+      event_id: event_id,
+      transaction_id: transaction_id
+    })
+  end
+
 
   @doc """
   Builds a changeset to revert an event to pending state.

@@ -166,5 +166,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     |> Multi.update(:event_success, fn %{transaction: transaction} ->
       build_mark_as_processed(event, transaction.id)
     end)
+    |> Multi.insert(:event_transaction_link, fn %{transaction: transaction} ->
+      build_create_event_transaction_link(event, transaction)
+    end)
   end
 end

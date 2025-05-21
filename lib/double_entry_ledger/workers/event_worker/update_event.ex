@@ -197,6 +197,9 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
         Multi.update(Multi.new(), :event_success, fn _ ->
           build_mark_as_processed(event, transaction.id)
         end)
+        |> Multi.insert(:event_transaction_link, fn _ ->
+          build_create_event_transaction_link(event, transaction)
+    end)
 
       %{get_create_event_error: %{reason: :create_event_not_processed} = exception} ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
