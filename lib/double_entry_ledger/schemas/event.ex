@@ -74,8 +74,6 @@ defmodule DoubleEntryLedger.Event do
   * `transaction_data`: Embedded struct with transaction changes to apply
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
-  * `processed_transaction`: Association to the resulting transaction
-  * `processed_transaction_id`: Foreign key to the resulting transaction
   * `errors`: Array of error maps if processing failed
   * `processor_id`: ID of the worker processing this event
   * `processor_version`: Version for optimistic locking during processing
@@ -99,8 +97,8 @@ defmodule DoubleEntryLedger.Event do
           transaction_data: TransactionData.t() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
-          processed_transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
-          processed_transaction_id: Ecto.UUID.t() | nil,
+          event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
+          transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
           errors: [ErrorMap.error()] | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil,
@@ -125,7 +123,6 @@ defmodule DoubleEntryLedger.Event do
     field(:errors, {:array, :map}, default: [])
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    belongs_to(:processed_transaction, Transaction, type: Ecto.UUID)
     embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData)
     has_many(:event_transaction_links, EventTransactionLink)
     has_many(:transactions, through: [:event_transaction_links, :transaction])

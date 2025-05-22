@@ -18,7 +18,6 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
 
       add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
 
-      add :processed_transaction_id, references(:transactions, on_delete: :nothing, type: :binary_id), null: true
       add :transaction_data, :map, null: false
 
       add :errors, :jsonb, default: "[]"
@@ -32,7 +31,6 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create index(:events, [:source], prefix: "double_entry_ledger")
     create index(:events, [:source_idempk], prefix: "double_entry_ledger")
     create index(:events, [:instance_id], prefix: "double_entry_ledger")
-    create index(:events, [:processed_transaction_id], prefix: "double_entry_ledger")
     create index(:events, [:instance_id, :status], prefix: "double_entry_ledger")
     create index(:events, [:instance_id, :action], prefix: "double_entry_ledger")
     create unique_index(:events, [:instance_id, :source, :source_idempk],
