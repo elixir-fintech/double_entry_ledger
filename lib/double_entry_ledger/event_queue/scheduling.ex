@@ -64,15 +64,14 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for marking the event as processed
   """
-  @spec build_mark_as_processed(Event.t(), Ecto.UUID.t()) :: Changeset.t()
-  def build_mark_as_processed(event, transaction_id) do
+  @spec build_mark_as_processed(Event.t()) :: Changeset.t()
+  def build_mark_as_processed(event) do
     now = DateTime.utc_now()
 
     event
     |> Changeset.change(
       status: :processed,
       processed_at: now,
-      processed_transaction_id: transaction_id,
       processing_completed_at: now,
       next_retry_after: nil
     )

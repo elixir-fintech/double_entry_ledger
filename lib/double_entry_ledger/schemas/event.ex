@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Event do
 
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Transaction, Instance}
+  alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink}
   alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Event.ErrorMap
 
@@ -127,6 +127,8 @@ defmodule DoubleEntryLedger.Event do
     belongs_to(:instance, Instance, type: Ecto.UUID)
     belongs_to(:processed_transaction, Transaction, type: Ecto.UUID)
     embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData)
+    has_many(:event_transaction_links, EventTransactionLink)
+    has_many(:transactions, through: [:event_transaction_links, :transaction])
 
     # queue related fields
     field(:processor_id, :string)

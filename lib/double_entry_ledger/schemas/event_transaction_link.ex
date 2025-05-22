@@ -24,6 +24,7 @@ defmodule DoubleEntryLedger.EventTransactionLink do
   alias __MODULE__, as: EventTransactionLink
 
   @type t :: %EventTransactionLink{
+          id: Ecto.UUID.t() | nil,
           event: Event.t() | Ecto.Association.NotLoaded.t(),
           event_id: Ecto.UUID.t() | nil,
           transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
@@ -32,7 +33,6 @@ defmodule DoubleEntryLedger.EventTransactionLink do
           updated_at: DateTime.t() | nil
         }
 
-  @primary_key false
   schema "event_transaction_links" do
     belongs_to(:event, Event)
     belongs_to(:transaction, Transaction)

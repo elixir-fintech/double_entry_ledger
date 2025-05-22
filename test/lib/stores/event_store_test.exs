@@ -51,8 +51,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
                  event.source_idempk,
                  instance.id
                )
-
-      assert found_event.processed_transaction.id == transaction.id
+      [processed_transaction | []] = found_event.transactions
+      assert processed_transaction.id == transaction.id
     end
 
     test "returns nil for non-existent event", %{instance: instance} do

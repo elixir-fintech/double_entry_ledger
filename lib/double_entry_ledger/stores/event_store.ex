@@ -199,7 +199,8 @@ defmodule DoubleEntryLedger.EventStore do
   def list_all_for_transaction(transaction_id) do
     Repo.all(
       from(e in Event,
-        where: e.processed_transaction_id == ^transaction_id,
+        join: evt in assoc(e, :event_transaction_links),
+        where: evt.transaction_id == ^transaction_id,
         select: e,
         order_by: [desc: e.inserted_at]
       )

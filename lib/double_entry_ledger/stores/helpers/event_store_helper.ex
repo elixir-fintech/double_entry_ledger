@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
       source_idempk: source_idempk,
       instance_id: instance_id
     )
-    |> Repo.preload(processed_transaction: [entries: :account])
+    |> Repo.preload(transactions: [entries: :account])
   end
 
   @doc """
@@ -115,7 +115,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         } = event
       ) do
     case get_create_event_by_source(source, source_idempk, id) do
-      %{processed_transaction: %{id: _} = transaction, status: :processed} = create_event ->
+      %{transactions: [transaction| _], status: :processed} = create_event ->
         {:ok, {transaction, create_event}}
 
       create_event ->
