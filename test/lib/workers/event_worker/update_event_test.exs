@@ -219,7 +219,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
       assert updated_event.status == :occ_timeout
       assert updated_event.occ_retry_count == 5
-      %{transactions: [] } = updated_event = Repo.preload(updated_event, :transactions)
+      %{transactions: []} = updated_event = Repo.preload(updated_event, :transactions)
       assert updated_event.processed_at == nil
       assert length(updated_event.errors) == 5
       assert updated_event.retry_count == 1
@@ -263,7 +263,10 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
   defp shared_event_asserts(transaction, processed_event, pending_transaction) do
     assert processed_event.status == :processed
-    %{transactions: [processed_transaction | []] } = processed_event = Repo.preload(processed_event, :transactions)
+
+    %{transactions: [processed_transaction | []]} =
+      processed_event = Repo.preload(processed_event, :transactions)
+
     assert processed_transaction.id == pending_transaction.id
     assert transaction.id == pending_transaction.id
     assert processed_event.processed_at != nil

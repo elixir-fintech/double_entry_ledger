@@ -1,6 +1,5 @@
 import Config
 
-
 config :logger,
   formatter: {LoggerJSON.Formatters.Basic, metadata: :all}
 

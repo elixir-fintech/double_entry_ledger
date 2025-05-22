@@ -115,7 +115,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         } = event
       ) do
     case get_create_event_by_source(source, source_idempk, id) do
-      %{transactions: [transaction| _], status: :processed} = create_event ->
+      %{transactions: [transaction | _], status: :processed} = create_event ->
         {:ok, {transaction, create_event}}
 
       create_event ->

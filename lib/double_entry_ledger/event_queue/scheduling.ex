@@ -77,7 +77,6 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     )
   end
 
-
   @spec build_create_event_transaction_link(Event.t(), Transaction.t()) ::
           Changeset.t()
   def build_create_event_transaction_link(%Event{id: event_id}, %Transaction{id: transaction_id}) do
@@ -87,7 +86,6 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
       transaction_id: transaction_id
     })
   end
-
 
   @doc """
   Builds a changeset to revert an event to pending state.

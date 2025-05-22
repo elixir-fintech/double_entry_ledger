@@ -73,7 +73,7 @@ defmodule DoubleEntryLedger.MixProject do
         "pages/AsynchronousEventProcessing.md",
         "pages/HandlingPendingTransactions.md",
         "LICENSE"
-        ],
+      ],
       groups_for_modules: [
         Instance: [
           DoubleEntryLedger.InstanceStore,
@@ -109,11 +109,11 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.EventWorker.AddUpdateEventError,
           DoubleEntryLedger.EventWorker.ErrorHandler
         ],
-        "EventQueue": [
+        EventQueue: [
           DoubleEntryLedger.EventQueue.Supervisor,
           DoubleEntryLedger.EventQueue.Scheduling,
           DoubleEntryLedger.EventQueue.InstanceProcessor,
-          DoubleEntryLedger.EventQueue.InstanceMonitor,
+          DoubleEntryLedger.EventQueue.InstanceMonitor
         ],
         "Protocols, Types, Constants and Currency": [
           DoubleEntryLedger.EntryHelper,
@@ -123,7 +123,7 @@ defmodule DoubleEntryLedger.MixProject do
         "Optimistic Concurrency Control": [
           DoubleEntryLedger.Occ.Processor,
           DoubleEntryLedger.Occ.Helper,
-          DoubleEntryLedger.Occ.Occable,
+          DoubleEntryLedger.Occ.Occable
         ],
         Repo: [
           DoubleEntryLedger.Repo,

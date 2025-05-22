@@ -24,7 +24,10 @@ defmodule DoubleEntryLedger.CreateEventTest do
 
       {:ok, transaction, processed_event} = CreateEvent.process_create_event(event)
       assert processed_event.status == :processed
-      %{transactions: [processed_transaction | []] } = processed_event = Repo.preload(processed_event, :transactions)
+
+      %{transactions: [processed_transaction | []]} =
+        processed_event = Repo.preload(processed_event, :transactions)
+
       assert processed_transaction.id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :posted
@@ -68,7 +71,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
       {:error, updated_event} =
         CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
 
-      %{transactions: [] } = updated_event = Repo.preload(updated_event, :transactions)
+      %{transactions: []} = updated_event = Repo.preload(updated_event, :transactions)
       assert updated_event.processed_at == nil
       assert updated_event.occ_retry_count == 5
       assert updated_event.retry_count == 1

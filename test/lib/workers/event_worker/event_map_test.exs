@@ -27,7 +27,10 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       {:ok, transaction, processed_event} = ProcessEventMap.process_map(event_map)
       assert processed_event.status == :processed
-      %{transactions: [processed_transaction | []] } = processed_event = Repo.preload(processed_event, :transactions)
+
+      %{transactions: [processed_transaction | []]} =
+        processed_event = Repo.preload(processed_event, :transactions)
+
       assert processed_transaction.id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :pending
@@ -80,7 +83,10 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       {:ok, transaction, processed_event} = ProcessEventMap.process_map(update_event)
       assert processed_event.status == :processed
-      %{transactions: [processed_transaction | []] } = processed_event = Repo.preload(processed_event, :transactions)
+
+      %{transactions: [processed_transaction | []]} =
+        processed_event = Repo.preload(processed_event, :transactions)
+
       assert processed_transaction.id == transaction.id
       assert processed_transaction.id == pending_transaction.id
       assert processed_event.processed_at != nil
@@ -106,7 +112,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       assert update_event.status == :pending
       assert update_event.id != pending_event.id
-      %{transactions: [] } = update_event = Repo.preload(update_event, :transactions)
+      %{transactions: []} = update_event = Repo.preload(update_event, :transactions)
       assert update_event.processed_at == nil
       assert update_event.errors != []
     end
@@ -158,7 +164,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       assert %Event{status: :occ_timeout, occ_retry_count: 5} =
                updated_event = Repo.get(Event, id)
 
-      %{transactions: [] } = updated_event = Repo.preload(updated_event, :transactions)
+      %{transactions: []} = updated_event = Repo.preload(updated_event, :transactions)
       assert updated_event.processed_at == nil
       assert length(updated_event.errors) == 5
 

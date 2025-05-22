@@ -25,7 +25,10 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
       {:ok, transaction, processed_event} = EventWorker.process_event_with_id(event.id)
       assert processed_event.status == :processed
-      %{transactions: [processed_transaction | []] } = processed_event = Repo.preload(processed_event, :transactions)
+
+      %{transactions: [processed_transaction | []]} =
+        processed_event = Repo.preload(processed_event, :transactions)
+
       assert processed_transaction.id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :posted
@@ -49,7 +52,10 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
       {:ok, transaction, processed_event} = EventWorker.process_event_with_id(event.id)
       assert processed_event.status == :processed
-      %{transactions: [processed_transaction | []] } = processed_event = Repo.preload(processed_event, :transactions)
+
+      %{transactions: [processed_transaction | []]} =
+        processed_event = Repo.preload(processed_event, :transactions)
+
       assert processed_transaction.id == pending_transaction.id
       assert transaction.id == pending_transaction.id
       assert processed_event.processed_at != nil
@@ -99,7 +105,10 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
       {:ok, transaction, processed_event} = EventWorker.process_new_event(event_map)
       assert processed_event.status == :processed
-      %{transactions: [processed_transaction | []] } = processed_event = Repo.preload(processed_event, :transactions)
+
+      %{transactions: [processed_transaction | []]} =
+        processed_event = Repo.preload(processed_event, :transactions)
+
       assert processed_transaction.id == transaction.id
       assert processed_event.processed_at != nil
       assert transaction.status == :pending
