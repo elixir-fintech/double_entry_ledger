@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Event do
 
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink}
+  alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
   alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Event.ErrorMap
 
@@ -126,6 +126,7 @@ defmodule DoubleEntryLedger.Event do
     embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData)
     has_many(:event_transaction_links, EventTransactionLink)
     has_many(:transactions, through: [:event_transaction_links, :transaction])
+    has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
 
     # queue related fields
     field(:processor_id, :string)
@@ -334,10 +335,13 @@ defmodule DoubleEntryLedger.Event do
 
   @spec base_changeset(Event.t(), map()) :: Ecto.Changeset.t()
   defp base_changeset(event, attrs) do
+    attrs = Map.put_new(attrs, :event_queue_item, %{})
     event
+
     |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id, :update_idempk])
     |> validate_required([:action, :source, :source_idempk, :instance_id])
     |> validate_inclusion(:action, @actions)
+    |> cast_assoc(:event_queue_item, with: &EventQueueItem.changeset/2, required: true)
     |> unique_constraint(:source_idempk,
       name: "unique_instance_source_source_idempk",
       message: "already exists for this instance"

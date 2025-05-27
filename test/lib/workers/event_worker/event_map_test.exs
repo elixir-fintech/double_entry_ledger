@@ -27,6 +27,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       {:ok, transaction, processed_event} = ProcessEventMap.process_map(event_map)
       assert processed_event.status == :processed
+      assert processed_event.event_queue_item != nil
 
       %{transactions: [processed_transaction | []]} =
         processed_event = Repo.preload(processed_event, :transactions)
