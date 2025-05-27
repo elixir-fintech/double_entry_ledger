@@ -21,10 +21,11 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
              } = Changeset.apply_changes(EventQueueItem.changeset(%EventQueueItem{}, %{}))
     end
 
-
     test "invalid changeset with invalid status" do
       attrs = %{event_id: Ecto.UUID.generate(), status: "invalid_status"}
-      assert %Changeset{errors: [status: {"is invalid", _}]} = EventQueueItem.changeset(%EventQueueItem{}, attrs)
+
+      assert %Changeset{errors: [status: {"is invalid", _}]} =
+               EventQueueItem.changeset(%EventQueueItem{}, attrs)
     end
   end
 
@@ -41,6 +42,5 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
       assert changeset.changes.processing_started_at
       assert changeset.errors == []
     end
-
   end
 end

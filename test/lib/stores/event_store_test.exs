@@ -15,7 +15,9 @@ defmodule DoubleEntryLedger.EventStoreTest do
     setup [:create_instance]
 
     test "inserts a new event and adds an event_queue_item", %{instance: instance} do
-      assert {:ok, %Event{id: id} = event} = EventStore.create(event_attrs(instance_id: instance.id))
+      assert {:ok, %Event{id: id} = event} =
+               EventStore.create(event_attrs(instance_id: instance.id))
+
       assert event.status == :pending
       assert event.processed_at == nil
       assert event.occ_retry_count == 0
@@ -63,5 +65,4 @@ defmodule DoubleEntryLedger.EventStoreTest do
                EventStoreHelper.get_create_event_by_source("source", "source_idempk", instance.id)
     end
   end
-
 end

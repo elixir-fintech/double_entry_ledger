@@ -43,7 +43,6 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       assert eqm.processing_completed_at == nil
       assert eqm.retry_count == 1
       assert eqm.next_retry_after == nil
-
     end
 
     test "returns an error when stale entry error occurs", %{instance: instance} do
@@ -62,4 +61,4 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
                )
     end
   end
- end
+end

@@ -252,7 +252,9 @@ defmodule DoubleEntryLedger.Event do
   @spec processing_start_changeset(Event.t(), String.t()) :: Ecto.Changeset.t()
   def processing_start_changeset(event, processor_id) do
     event = event |> Repo.preload(:event_queue_item)
-    event_queue_changeset = event.event_queue_item |> EventQueueItem.processing_start_changeset(processor_id)
+
+    event_queue_changeset =
+      event.event_queue_item |> EventQueueItem.processing_start_changeset(processor_id)
 
     event
     |> change(%{
@@ -330,8 +332,8 @@ defmodule DoubleEntryLedger.Event do
   @spec base_changeset(Event.t(), map()) :: Ecto.Changeset.t()
   defp base_changeset(event, attrs) do
     attrs = Map.put_new(attrs, :event_queue_item, %{})
-    event
 
+    event
     |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id, :update_idempk])
     |> validate_required([:action, :source, :source_idempk, :instance_id])
     |> validate_inclusion(:action, @actions)

@@ -30,19 +30,19 @@ defmodule DoubleEntryLedger.EventQueueItem do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "event_queue_items" do
-    field :status, Ecto.Enum, values: @states, default: :pending
-    field :processor_id, :string
-    field :processor_version, :integer, default: 1
-    field :processing_started_at, :utc_datetime_usec
-    field :processing_completed_at, :utc_datetime_usec
-    field :retry_count, :integer, default: 0
-    field :next_retry_after, :utc_datetime_usec
-    field :occ_retry_count, :integer, default: 0
-    field :errors, {:array, :map}, default: []
+    field(:status, Ecto.Enum, values: @states, default: :pending)
+    field(:processor_id, :string)
+    field(:processor_version, :integer, default: 1)
+    field(:processing_started_at, :utc_datetime_usec)
+    field(:processing_completed_at, :utc_datetime_usec)
+    field(:retry_count, :integer, default: 0)
+    field(:next_retry_after, :utc_datetime_usec)
+    field(:occ_retry_count, :integer, default: 0)
+    field(:errors, {:array, :map}, default: [])
 
     timestamps(type: :utc_datetime_usec)
 
-    belongs_to :event, Event, type: Ecto.UUID
+    belongs_to(:event, Event, type: Ecto.UUID)
   end
 
   @doc false
