@@ -84,11 +84,20 @@ defmodule DoubleEntryLedger.EventStoreTest do
     test "claims an event for processing", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
 
-      assert {:ok, %Event{} = claimed_event} =
+      assert {:ok, %Event{event_queue_item: eqm} = claimed_event} =
                EventStore.claim_event_for_processing(event.id, "manual")
 
       assert claimed_event.status == :processing
       assert claimed_event.processor_id == "manual"
+
+      assert eqm.status == :processing
+      assert eqm.event_id == claimed_event.id
+      assert eqm.processor_id == "manual"
+      assert eqm.processing_started_at != nil
+      assert eqm.processing_completed_at == nil
+      assert eqm.retry_count == 1
+      assert eqm.next_retry_after == nil
+
     end
 
     test "returns an error when stale entry error occurs", %{instance: instance} do

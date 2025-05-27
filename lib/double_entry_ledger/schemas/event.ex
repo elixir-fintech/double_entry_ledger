@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Event do
 
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
+  alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem, Repo}
   alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Event.ErrorMap
 
@@ -248,19 +248,12 @@ defmodule DoubleEntryLedger.Event do
   * `next_retry_after`: Set to nil
   * `processor_version`: Used for optimistic locking
 
-  ## Examples
-
-      iex> event = %Event{status: :pending, retry_count: 0}
-      iex> changeset = Event.processing_start_changeset(event, "worker-123")
-      iex> %{
-      ...>    status: :processing,
-      ...>    processor_id: "worker-123",
-      ...>    processing_started_at: %DateTime{},
-      ...>    retry_count: 1,
-      ...> } = changeset.changes
   """
   @spec processing_start_changeset(Event.t(), String.t()) :: Ecto.Changeset.t()
   def processing_start_changeset(event, processor_id) do
+    event = event |> Repo.preload(:event_queue_item)
+    event_queue_changeset = event.event_queue_item |> EventQueueItem.processing_start_changeset(processor_id)
+
     event
     |> change(%{
       status: :processing,
@@ -270,7 +263,7 @@ defmodule DoubleEntryLedger.Event do
       retry_count: event.retry_count + 1,
       next_retry_after: nil
     })
-    |> optimistic_lock(:processor_version)
+    |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
   @doc """
