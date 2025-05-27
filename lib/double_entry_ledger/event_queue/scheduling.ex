@@ -17,8 +17,9 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   """
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
-  alias Ecto.Changeset
+  import Ecto.Changeset, only: [change: 2, put_assoc: 3]
   alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, Transaction, EventStore}
+  alias DoubleEntryLedger.EventQueueItem
 
   import DoubleEntryLedger.EventStoreHelper, only: [build_add_error: 2]
 
@@ -105,15 +106,21 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   """
   @spec build_mark_as_processed(Event.t()) :: Changeset.t()
   def build_mark_as_processed(event) do
+    event = event |> Repo.preload(:event_queue_item)
     now = DateTime.utc_now()
 
+    event_queue_changeset =
+      event.event_queue_item
+      |> EventQueueItem.processing_complete_changeset()
+
     event
-    |> Changeset.change(
+    |> change(
       status: :processed,
       processed_at: now,
       processing_completed_at: now,
       next_retry_after: nil
     )
+    |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
   @spec build_create_event_transaction_link(Event.t(), Transaction.t()) ::
@@ -143,7 +150,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   def build_revert_to_pending(event, error) do
     event
     |> build_add_error(error)
-    |> Changeset.change(status: :pending)
+    |> change(status: :pending)
   end
 
   @doc """
@@ -178,7 +185,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
       event
       |> build_add_error(error)
-      |> Changeset.change(
+      |> change(
         status: status,
         processor_id: nil,
         processing_completed_at: now,
@@ -213,7 +220,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
     event
     |> build_add_error(error.message)
-    |> Changeset.change(
+    |> change(
       status: :failed,
       processor_id: nil,
       processing_completed_at: now,
@@ -239,7 +246,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   def build_mark_as_dead_letter(event, error) do
     event
     |> build_add_error(error)
-    |> Changeset.change(
+    |> change(
       status: :dead_letter,
       processing_completed_at: DateTime.utc_now()
     )

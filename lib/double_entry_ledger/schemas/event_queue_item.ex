@@ -77,4 +77,16 @@ defmodule DoubleEntryLedger.EventQueueItem do
     })
     |> optimistic_lock(:processor_version)
   end
+
+  @spec processing_complete_changeset(Event.t()) :: Ecto.Changeset.t()
+  def processing_complete_changeset(event_queue_item) do
+    now = DateTime.utc_now()
+
+    event_queue_item
+    |> change(%{
+      status: :processed,
+      processing_completed_at: now,
+      next_retry_after: nil
+    })
+  end
 end

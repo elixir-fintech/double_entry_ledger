@@ -61,4 +61,24 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
                )
     end
   end
+
+  describe "build_mark_as_processed/1" do
+    setup [:create_instance, :create_accounts]
+
+    test "builds changeset to mark event as processed", %{instance: instance} do
+      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+
+      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_mark_as_processed(event)
+      assert changeset.valid?
+      assert changes.status == :processed
+      assert changes.processing_completed_at != nil
+      assert Ecto.Changeset.get_field(changeset, :next_retry_after) == nil
+
+      assert event_queue_item.valid?
+      assert event_queue_item.changes.status == :processed
+      assert event_queue_item.changes.processing_completed_at != nil
+      assert Ecto.Changeset.get_field(event_queue_item, :next_retry_after) == nil
+
+    end
+  end
 end
