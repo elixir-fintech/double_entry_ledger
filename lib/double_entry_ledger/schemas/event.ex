@@ -99,6 +99,7 @@ defmodule DoubleEntryLedger.Event do
           instance_id: Ecto.UUID.t() | nil,
           event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
           transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
+          event_queue_item: EventQueueItem.t() | Ecto.Association.NotLoaded.t(),
           errors: [ErrorMap.error()] | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil,
