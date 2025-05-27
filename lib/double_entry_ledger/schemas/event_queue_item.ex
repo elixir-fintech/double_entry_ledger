@@ -6,7 +6,11 @@ defmodule DoubleEntryLedger.EventQueueItem do
 
   use Ecto.Schema
   import Ecto.Changeset
+  alias DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.Event
+  import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
+
+  alias __MODULE__, as: EventQueueItem
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t() | nil,
@@ -64,7 +68,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
     |> validate_inclusion(:status, @states)
   end
 
-  @spec processing_start_changeset(Event.t(), String.t()) :: Ecto.Changeset.t()
+  @spec processing_start_changeset(EventQueueItem.t(), String.t()) :: Ecto.Changeset.t()
   def processing_start_changeset(event_queue_item, processor_id) do
     event_queue_item
     |> change(%{
@@ -78,7 +82,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
     |> optimistic_lock(:processor_version)
   end
 
-  @spec processing_complete_changeset(Event.t()) :: Ecto.Changeset.t()
+  @spec processing_complete_changeset(EventQueueItem.t()) :: Ecto.Changeset.t()
   def processing_complete_changeset(event_queue_item) do
     now = DateTime.utc_now()
 
@@ -88,5 +92,25 @@ defmodule DoubleEntryLedger.EventQueueItem do
       processing_completed_at: now,
       next_retry_after: nil
     })
+  end
+
+  @spec dead_letter_changeset(EventQueueItem.t(), any()) :: Ecto.Changeset.t()
+  def dead_letter_changeset(event_queue_item, error) do
+    event_queue_item
+    |> change(%{
+      status: :dead_letter,
+      processing_completed_at: DateTime.utc_now(),
+      errors: build_errors(event_queue_item, error),
+      next_retry_after: nil
+    })
+  end
+
+  @spec build_errors(EventQueueItem.t(), any()) :: list(ErrorMap.error())
+  defp build_errors(event_queue_item, error) do
+    if is_nil(error) do
+      event_queue_item.errors
+    else
+      [build_error(error) | event_queue_item.errors]
+    end
   end
 end

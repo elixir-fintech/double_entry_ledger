@@ -244,12 +244,19 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   """
   @spec build_mark_as_dead_letter(Event.t(), String.t()) :: Changeset.t()
   def build_mark_as_dead_letter(event, error) do
+    event = event |> Repo.preload(:event_queue_item)
+
+    event_queue_changeset =
+      event.event_queue_item
+      |> EventQueueItem.dead_letter_changeset(error)
+
     event
     |> build_add_error(error)
     |> change(
       status: :dead_letter,
       processing_completed_at: DateTime.utc_now()
     )
+    |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
   # Private function to calculate retry delay

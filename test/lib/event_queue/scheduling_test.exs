@@ -81,4 +81,27 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
 
     end
   end
+
+  describe "build_mark_as_dead_letter/2" do
+    setup [:create_instance, :create_accounts]
+
+    test "builds changeset to mark event as dead letter", %{instance: instance} do
+      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+      error = "Test error"
+
+      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_mark_as_dead_letter(event, error)
+
+      assert changeset.valid?
+      assert changes.status == :dead_letter
+      assert changes.processing_completed_at != nil
+      assert Ecto.Changeset.get_field(changeset, :next_retry_after) == nil
+      assert Enum.any?(changes.errors, fn e -> e.message == error end)
+
+      assert event_queue_item.valid?
+      assert event_queue_item.changes.status == :dead_letter
+      assert event_queue_item.changes.processing_completed_at != nil
+      assert Ecto.Changeset.get_field(event_queue_item, :next_retry_after) == nil
+      assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
+    end
+  end
 end
