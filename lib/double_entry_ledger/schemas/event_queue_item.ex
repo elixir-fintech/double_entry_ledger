@@ -8,6 +8,20 @@ defmodule DoubleEntryLedger.EventQueueItem do
   import Ecto.Changeset
   alias DoubleEntryLedger.Event
 
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t() | nil,
+          status: state() | nil,
+          processor_id: String.t() | nil,
+          processor_version: integer() | nil,
+          processing_started_at: DateTime.t() | nil,
+          processing_completed_at: DateTime.t() | nil,
+          retry_count: integer() | nil,
+          next_retry_after: DateTime.t() | nil,
+          occ_retry_count: integer() | nil,
+          errors: list(map()) | nil,
+          event_id: Ecto.UUID.t() | nil
+        }
+
   @states [:pending, :processed, :failed, :occ_timeout, :processing, :dead_letter]
   @type state ::
           unquote(

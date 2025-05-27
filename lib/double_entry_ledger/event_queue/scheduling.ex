@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   alias Ecto.Changeset
-  alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, Transaction}
+  alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, Transaction, EventStore}
 
   import DoubleEntryLedger.EventStoreHelper, only: [build_add_error: 2]
 
@@ -48,6 +48,45 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
       {:error, changeset} ->
         {:error, changeset}
+    end
+  end
+
+  @doc """
+  Claims an event for processing by marking it as being processed by a specific processor.
+
+  This function implements optimistic concurrency control to ensure that only one processor
+  can claim an event at a time. It only allows claiming events with status :pending or :occ_timeout.
+
+  ## Parameters
+    - `id`: The UUID of the event to claim
+    - `processor_id`: A string identifier for the processor claiming the event (defaults to "manual")
+    - `repo`: The Ecto repository to use (defaults to Repo)
+
+  ## Returns
+    - `{:ok, event}`: If the event was successfully claimed
+    - `{:error, :event_not_found}`: If no event with the given ID exists
+    - `{:error, :event_already_claimed}`: If the event was claimed by another processor
+    - `{:error, :event_not_claimable}`: If the event is not in a claimable state (not pending or occ_timeout)
+  """
+  @spec claim_event_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
+          {:ok, Event.t()} | {:error, atom()}
+  def claim_event_for_processing(id, processor_id, repo \\ Repo) do
+    case EventStore.get_by_id(id) do
+      nil ->
+        {:error, :event_not_found}
+
+      event ->
+        if event.status in [:pending, :occ_timeout, :failed] do
+          try do
+            Event.processing_start_changeset(event, processor_id)
+            |> repo.update()
+          rescue
+            Ecto.StaleEntryError ->
+              {:error, :event_already_claimed}
+          end
+        else
+          {:error, :event_not_claimable}
+        end
     end
   end
 

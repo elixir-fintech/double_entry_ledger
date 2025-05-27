@@ -21,13 +21,12 @@ defmodule DoubleEntryLedger.EventWorker do
 
   alias DoubleEntryLedger.{
     Event,
-    EventStore,
     Transaction
   }
 
   alias DoubleEntryLedger.Event.EventMap
-
   alias DoubleEntryLedger.EventWorker.ProcessEvent
+  alias DoubleEntryLedger.EventQueue.Scheduling
 
   import ProcessEvent, only: [process_event: 1, process_event_map: 1]
 
@@ -121,7 +120,7 @@ defmodule DoubleEntryLedger.EventWorker do
           {:ok, Transaction.t(), Event.t()}
           | {:error, Event.t() | Changeset.t() | String.t() | atom()}
   def process_event_with_id(uuid, processor_id \\ "manual") do
-    case EventStore.claim_event_for_processing(uuid, processor_id) do
+    case Scheduling.claim_event_for_processing(uuid, processor_id) do
       {:ok, event} -> process_event(event)
       {:error, error} -> {:error, error}
     end

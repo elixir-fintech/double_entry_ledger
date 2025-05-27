@@ -11,8 +11,9 @@ defmodule DoubleEntryLedger.UpdateEventTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.{Event, EventStore}
+  alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventWorker.{UpdateEvent, CreateEvent}
+  alias DoubleEntryLedger.EventQueue.Scheduling
 
   doctest UpdateEvent
 
@@ -138,7 +139,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: %{id: e_id, source: s, source_idempk: s_id}} = create_event(ctx, :pending)
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      {:ok, processing_event} = EventStore.claim_event_for_processing(event.id, "manual")
+      {:ok, processing_event} = Scheduling.claim_event_for_processing(event.id, "manual")
 
       {:error, failed_event} = UpdateEvent.process_update_event(processing_event)
       assert failed_event.status == :pending
