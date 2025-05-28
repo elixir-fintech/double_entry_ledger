@@ -72,11 +72,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     test "builds changeset to mark event as processed", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
 
-      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_mark_as_processed(event)
-      assert changeset.valid?
-      assert changes.status == :processed
-      assert changes.processing_completed_at != nil
-      assert Ecto.Changeset.get_field(changeset, :next_retry_after) == nil
+      %{changes: %{event_queue_item: event_queue_item}} = Scheduling.build_mark_as_processed(event)
 
       assert event_queue_item.valid?
       assert event_queue_item.changes.status == :processed
@@ -136,7 +132,6 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
       error = "Test error"
       reason = :failed
-      delay = 60
 
       %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_schedule_retry_with_reason(event, error, reason)
 

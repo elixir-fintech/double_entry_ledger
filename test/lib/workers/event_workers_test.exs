@@ -23,14 +23,13 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     test "process create event successfully", ctx do
       %{event: event} = create_event(ctx)
 
-      {:ok, transaction, processed_event} = EventWorker.process_event_with_id(event.id)
-      assert processed_event.status == :processed
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} = EventWorker.process_event_with_id(event.id)
+      assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} =
-        processed_event = Repo.preload(processed_event, :transactions)
+      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
-      assert processed_event.processed_at != nil
+      assert evq.processing_completed_at != nil
       assert transaction.status == :posted
     end
 
@@ -50,15 +49,14 @@ defmodule DoubleEntryLedger.EventWorkerTest do
           %{account_id: a2.id, amount: 50, currency: "EUR"}
         ])
 
-      {:ok, transaction, processed_event} = EventWorker.process_event_with_id(event.id)
-      assert processed_event.status == :processed
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} = EventWorker.process_event_with_id(event.id)
+      assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} =
-        processed_event = Repo.preload(processed_event, :transactions)
+      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == pending_transaction.id
       assert transaction.id == pending_transaction.id
-      assert processed_event.processed_at != nil
+      assert evq.processing_completed_at != nil
       assert return_available_balances(ctx) == [50, 50]
       assert return_pending_balances(ctx) == [0, 0]
       assert transaction.status == :posted
@@ -103,14 +101,13 @@ defmodule DoubleEntryLedger.EventWorkerTest do
         }
         |> EventMap.create()
 
-      {:ok, transaction, processed_event} = EventWorker.process_new_event(event_map)
-      assert processed_event.status == :processed
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} = EventWorker.process_new_event(event_map)
+      assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} =
-        processed_event = Repo.preload(processed_event, :transactions)
+      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
-      assert processed_event.processed_at != nil
+      assert evq.processing_completed_at != nil
       assert transaction.status == :pending
     end
   end

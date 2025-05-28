@@ -61,19 +61,19 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
     create_event = Keyword.get(opts, :create_event)
 
     case create_event do
-      %Event{status: :pending} ->
+      %{event_queue_item: %{status: :pending}} ->
         pending_error(create_event, update_event)
 
-      %Event{status: :processing} ->
+      %{event_queue_item: %{status: :processing}} ->
         pending_error(create_event, update_event)
 
-      %Event{status: :occ_timeout} ->
+      %{event_queue_item: %{status: :occ_timeout}} ->
         pending_error(create_event, update_event)
 
-      %Event{status: :failed} ->
+      %{event_queue_item: %{status: :failed}} ->
         pending_error(create_event, update_event)
 
-      %Event{status: :dead_letter} ->
+      %{event_queue_item: %{status: :dead_letter}} ->
         %AddUpdateEventError{
           message:
             "Create event (id: #{create_event.id}) in dead_letter for Update Event (id: #{update_event.id})",
@@ -92,10 +92,10 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
     end
   end
 
-  defp pending_error(create_event, update_event) do
+  defp pending_error(%{event_queue_item: %{status: status}} = create_event, update_event) do
     %AddUpdateEventError{
       message:
-        "Create event (id: #{create_event.id}, status: #{create_event.status}) not yet processed for Update Event (id: #{update_event.id})",
+        "Create event (id: #{create_event.id}, status: #{status}) not yet processed for Update Event (id: #{update_event.id})",
       create_event: create_event,
       update_event: update_event,
       reason: :create_event_not_processed

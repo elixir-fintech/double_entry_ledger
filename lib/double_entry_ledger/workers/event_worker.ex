@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.EventWorker do
       ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
       ...>      %{account_id: account2.id, amount: 100, currency: :EUR},
       ...>  ]}}
-      iex> {:ok, %Transaction{status: :pending}, %Event{status: :processed}} = EventWorker.process_new_event(event_map)
+      iex> {:ok, %Transaction{status: :pending}, %Event{event_queue_item: %{status: :processed}}} = EventWorker.process_new_event(event_map)
 
   """
   @spec process_new_event(EventMap.t()) ::
@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.EventWorker do
       ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
       ...>      %{account_id: account2.id, amount: 100, currency: :EUR},
       ...>  ]}})
-      iex> {:ok, %Transaction{status: :pending}, %Event{status: :processed}} = EventWorker.process_event_with_id(event.id)
+      iex> {:ok, %Transaction{status: :pending}, %Event{event_queue_item: %{status: :processed}}} = EventWorker.process_event_with_id(event.id)
 
       # Attempt to process a non-existent event
       iex> EventWorker.process_event_with_id("550e8400-e29b-41d4-a716-446655440000")

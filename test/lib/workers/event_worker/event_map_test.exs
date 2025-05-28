@@ -25,15 +25,13 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     test "create event for event_map, which must also create the event", ctx do
       event_map = struct(EventMapSchema, event_map(ctx))
 
-      {:ok, transaction, processed_event} = ProcessEventMap.process_map(event_map)
-      assert processed_event.status == :processed
-      assert processed_event.event_queue_item != nil
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} = ProcessEventMap.process_map(event_map)
+      assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} =
-        processed_event = Repo.preload(processed_event, :transactions)
+      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
-      assert processed_event.processed_at != nil
+      assert evq.processing_completed_at != nil
       assert transaction.status == :pending
     end
 
@@ -82,15 +80,14 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
-      {:ok, transaction, processed_event} = ProcessEventMap.process_map(update_event)
-      assert processed_event.status == :processed
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} = ProcessEventMap.process_map(update_event)
+      assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} =
-        processed_event = Repo.preload(processed_event, :transactions)
+      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
       assert processed_transaction.id == pending_transaction.id
-      assert processed_event.processed_at != nil
+      assert evq.processing_completed_at != nil
       assert transaction.status == :posted
     end
 
@@ -131,14 +128,14 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     test "update event is dead_letter for event_map, when create event failed", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
 
-      failed_event =
-        pending_event |> Ecto.Changeset.change(%{status: :dead_letter}) |> Repo.update!()
+      pending_event.event_queue_item |> Ecto.Changeset.change(%{status: :dead_letter}) |> Repo.update!()
+      failed_event = Repo.preload(pending_event, :event_queue_item)
 
       update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
 
-      {:error, update_event} = ProcessEventMap.process_map(update_event)
+      {:error, %{event_queue_item: evq}} = ProcessEventMap.process_map(update_event)
 
-      assert update_event.status == :dead_letter
+      assert evq.status == :dead_letter
     end
   end
 

@@ -22,14 +22,13 @@ defmodule DoubleEntryLedger.CreateEventTest do
     test "successful", ctx do
       %{event: event} = create_event(ctx)
 
-      {:ok, transaction, processed_event} = CreateEvent.process_create_event(event)
-      assert processed_event.status == :processed
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} = CreateEvent.process_create_event(event)
+      assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} =
-        processed_event = Repo.preload(processed_event, :transactions)
+      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
-      assert processed_event.processed_at != nil
+      assert evq.processing_completed_at != nil
       assert transaction.status == :posted
     end
 

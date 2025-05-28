@@ -126,10 +126,10 @@ defmodule DoubleEntryLedger.UpdateEventTest do
     test "dead letter when create event does not exist", %{instance: inst} do
       {:ok, event} = create_update_event("source", "1", inst.id, :posted)
 
-      {:error, failed_event} = UpdateEvent.process_update_event(event)
-      assert failed_event.status == :dead_letter
+      {:error, %{event_queue_item: evq}} = UpdateEvent.process_update_event(event)
+      assert evq.status == :dead_letter
 
-      [error | _] = failed_event.errors
+      [error | _] = evq.errors
 
       assert error.message ==
                "Create Event not found for Update Event (id: #{event.id})"
@@ -263,13 +263,13 @@ defmodule DoubleEntryLedger.UpdateEventTest do
   end
 
   defp shared_event_asserts(transaction, processed_event, pending_transaction) do
-    assert processed_event.status == :processed
+    assert processed_event.event_queue_item.status == :processed
 
     %{transactions: [processed_transaction | []]} =
       processed_event = Repo.preload(processed_event, :transactions)
 
     assert processed_transaction.id == pending_transaction.id
     assert transaction.id == pending_transaction.id
-    assert processed_event.processed_at != nil
+    assert processed_event.event_queue_item.processing_completed_at != nil
   end
 end
