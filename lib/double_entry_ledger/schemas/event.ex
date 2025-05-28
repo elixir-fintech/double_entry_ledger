@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Event do
 
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem, Repo}
+  alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
   alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Event.ErrorMap
 
@@ -250,11 +250,10 @@ defmodule DoubleEntryLedger.Event do
 
   """
   @spec processing_start_changeset(Event.t(), String.t()) :: Ecto.Changeset.t()
-  def processing_start_changeset(event, processor_id) do
-    event = event |> Repo.preload(:event_queue_item)
-
+  def processing_start_changeset(%{event_queue_item: event_queue_item} = event, processor_id) do
     event_queue_changeset =
-      event.event_queue_item |> EventQueueItem.processing_start_changeset(processor_id)
+      event_queue_item
+      |> EventQueueItem.processing_start_changeset(processor_id)
 
     event
     |> change(%{})
