@@ -112,6 +112,25 @@ defmodule DoubleEntryLedger.EventQueueItem do
     })
   end
 
+  @spec schedule_retry_changeset(
+          EventQueueItem.t(),
+          any(),
+          state(),
+          non_neg_integer()
+        ) :: Ecto.Changeset.t()
+  def schedule_retry_changeset(event_queue_item, error, state, delay) do
+    now = DateTime.utc_now()
+    event_queue_item
+    |> change(%{
+      status: state,
+      next_retry_after: DateTime.add(now, delay, :second),
+      retry_count: event_queue_item.retry_count + 1,
+      processor_id: nil,
+      processing_completed_at: now,
+      errors: build_errors(event_queue_item, error)
+    })
+  end
+
   @spec build_errors(EventQueueItem.t(), any()) :: list(ErrorMap.error())
   defp build_errors(event_queue_item, error) do
     if is_nil(error) do

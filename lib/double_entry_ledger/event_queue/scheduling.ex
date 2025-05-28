@@ -77,8 +77,8 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
       nil ->
         {:error, :event_not_found}
 
-      event ->
-        if event.status in [:pending, :occ_timeout, :failed] do
+      %{event_queue_item: %{status: status}} = event ->
+        if status in [:pending, :occ_timeout, :failed] do
           try do
             Event.processing_start_changeset(event, processor_id)
             |> repo.update()
@@ -187,9 +187,18 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
         "Max retry count (#{@max_retries}) exceeded: #{error || status}"
       )
     else
+      event = event |> Repo.preload(:event_queue_item)
       # Calculate next retry time with exponential backoff
       retry_delay = calculate_retry_delay(event.retry_count)
       now = DateTime.utc_now()
+
+      event_queue_item_changeset =
+        event.event_queue_item
+        |> EventQueueItem.schedule_retry_changeset(
+          error,
+          status,
+          retry_delay
+        )
 
       event
       |> build_add_error(error)
@@ -200,6 +209,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
         retry_count: event.retry_count + 1,
         next_retry_after: DateTime.add(now, retry_delay, :second)
       )
+      |> put_assoc(:event_queue_item, event_queue_item_changeset)
     end
   end
 
