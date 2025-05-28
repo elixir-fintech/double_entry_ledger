@@ -21,10 +21,14 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
 
     test "returns error when event not claimable", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+
       event =
         event
         |> Ecto.Changeset.change()
-        |> Ecto.Changeset.put_assoc(:event_queue_item, %{id: event.event_queue_item.id, status: :processed})
+        |> Ecto.Changeset.put_assoc(:event_queue_item, %{
+          id: event.event_queue_item.id,
+          status: :processed
+        })
         |> Repo.update!()
 
       assert {:error, :event_not_claimable} =
@@ -72,13 +76,13 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     test "builds changeset to mark event as processed", %{instance: instance} do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
 
-      %{changes: %{event_queue_item: event_queue_item}} = Scheduling.build_mark_as_processed(event)
+      %{changes: %{event_queue_item: event_queue_item}} =
+        Scheduling.build_mark_as_processed(event)
 
       assert event_queue_item.valid?
       assert event_queue_item.changes.status == :processed
       assert event_queue_item.changes.processing_completed_at != nil
       assert Ecto.Changeset.get_field(event_queue_item, :next_retry_after) == nil
-
     end
   end
 
@@ -89,7 +93,8 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
       error = "Test error"
 
-      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_mark_as_dead_letter(event, error)
+      %{changes: %{event_queue_item: event_queue_item} = changes} =
+        changeset = Scheduling.build_mark_as_dead_letter(event, error)
 
       assert changeset.valid?
       assert changes.status == :dead_letter
@@ -113,7 +118,8 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       {:ok, event} = Scheduling.claim_event_for_processing(pending_event.id, "manual")
       error = "Test error"
 
-      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_revert_to_pending(event, error)
+      %{changes: %{event_queue_item: event_queue_item} = changes} =
+        changeset = Scheduling.build_revert_to_pending(event, error)
 
       assert changeset.valid?
       assert changes.status == :pending
@@ -133,7 +139,8 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       error = "Test error"
       reason = :failed
 
-      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_schedule_retry_with_reason(event, error, reason)
+      %{changes: %{event_queue_item: event_queue_item} = changes} =
+        changeset = Scheduling.build_schedule_retry_with_reason(event, error, reason)
 
       assert changeset.valid?
       assert changes.status == reason
@@ -148,30 +155,31 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
     end
   end
-#
-#  describe "build_schedule_update_retry" do
-#    setup [:create_instance, :create_accounts]
-#
-#    test "builds changeset to schedule update_retry", %{instance: instance} do
-#      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
-#      error = "Test error"
-#      reason = :failed
-#      delay = 60
-#
-#      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_schedule_update_retry(event, error)
-#
-#      assert changeset.valid?
-#      assert changes.status == reason
-#      assert changes.next_retry_after != nil
-#      assert changes.retry_count == 1
-#      assert Enum.any?(changes.errors, fn e -> e.message == error end)
-#
-#      # TODO
-#      #assert event_queue_item.valid?
-#      #assert event_queue_item.changes.status == reason
-#      #assert event_queue_item.changes.next_retry_after != nil
-#      #assert event_queue_item.changes.retry_count == 1
-#      #assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
-#    end
-#  end
+
+  #
+  #  describe "build_schedule_update_retry" do
+  #    setup [:create_instance, :create_accounts]
+  #
+  #    test "builds changeset to schedule update_retry", %{instance: instance} do
+  #      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+  #      error = "Test error"
+  #      reason = :failed
+  #      delay = 60
+  #
+  #      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_schedule_update_retry(event, error)
+  #
+  #      assert changeset.valid?
+  #      assert changes.status == reason
+  #      assert changes.next_retry_after != nil
+  #      assert changes.retry_count == 1
+  #      assert Enum.any?(changes.errors, fn e -> e.message == error end)
+  #
+  #      # TODO
+  #      #assert event_queue_item.valid?
+  #      #assert event_queue_item.changes.status == reason
+  #      #assert event_queue_item.changes.next_retry_after != nil
+  #      #assert event_queue_item.changes.retry_count == 1
+  #      #assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
+  #    end
+  #  end
 end

@@ -118,8 +118,8 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
       join: eqi in assoc(e, :event_queue_item),
       where:
         eqi.status in [:pending, :occ_timeout, :failed] and
-        e.instance_id == ^instance_id and
-        (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
+          e.instance_id == ^instance_id and
+          (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
       order_by: [asc: e.inserted_at],
       limit: 1
     )

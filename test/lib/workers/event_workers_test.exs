@@ -23,7 +23,9 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     test "process create event successfully", ctx do
       %{event: event} = create_event(ctx)
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} = EventWorker.process_event_with_id(event.id)
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+        EventWorker.process_event_with_id(event.id)
+
       assert evq.status == :processed
 
       %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
@@ -49,7 +51,9 @@ defmodule DoubleEntryLedger.EventWorkerTest do
           %{account_id: a2.id, amount: 50, currency: "EUR"}
         ])
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} = EventWorker.process_event_with_id(event.id)
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+        EventWorker.process_event_with_id(event.id)
+
       assert evq.status == :processed
 
       %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
@@ -101,7 +105,9 @@ defmodule DoubleEntryLedger.EventWorkerTest do
         }
         |> EventMap.create()
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} = EventWorker.process_new_event(event_map)
+      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+        EventWorker.process_new_event(event_map)
+
       assert evq.status == :processed
 
       %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
