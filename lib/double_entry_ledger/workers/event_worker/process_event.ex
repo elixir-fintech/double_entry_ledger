@@ -63,15 +63,15 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   @spec process_event(Event.t()) ::
           {:ok, Transaction.t(), Event.t()}
           | {:error, Event.t() | Changeset.t() | String.t() | atom()}
-  def process_event(%Event{status: :processing, action: :create} = event) do
+  def process_event(%Event{event_queue_item: %{status: :processing}, action: :create} = event) do
     process_create_event(event)
   end
 
-  def process_event(%Event{status: :processing, action: :update} = event) do
+  def process_event(%Event{event_queue_item: %{status: :processing}, action: :update} = event) do
     process_update_event(event)
   end
 
-  def process_event(%Event{status: :processing, action: _} = _event) do
+  def process_event(%Event{event_queue_item: %{status: :processing}, action: _} = _event) do
     {:error, :action_not_supported}
   end
 

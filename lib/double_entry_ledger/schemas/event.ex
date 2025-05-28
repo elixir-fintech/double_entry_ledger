@@ -257,14 +257,7 @@ defmodule DoubleEntryLedger.Event do
       event.event_queue_item |> EventQueueItem.processing_start_changeset(processor_id)
 
     event
-    |> change(%{
-      status: :processing,
-      processor_id: processor_id,
-      processing_started_at: DateTime.utc_now(),
-      processing_completed_at: nil,
-      retry_count: event.retry_count + 1,
-      next_retry_after: nil
-    })
+    |> change(%{})
     |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
