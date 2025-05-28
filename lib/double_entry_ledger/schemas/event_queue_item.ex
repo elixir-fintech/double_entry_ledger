@@ -120,7 +120,6 @@ defmodule DoubleEntryLedger.EventQueueItem do
         ) :: Ecto.Changeset.t()
   def schedule_retry_changeset(event_queue_item, error, state, delay) do
     now = DateTime.utc_now()
-
     event_queue_item
     |> change(%{
       status: state,

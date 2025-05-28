@@ -69,17 +69,17 @@ defmodule DoubleEntryLedger.CreateEventTest do
         # the transaction has to be handled by the Repo
       end)
 
-      {:error, updated_event} =
+      {:error, %{event_queue_item: eqm} = updated_event} =
         CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
 
-      %{transactions: []} = updated_event = Repo.preload(updated_event, :transactions)
-      assert updated_event.processed_at == nil
-      assert updated_event.occ_retry_count == 5
-      assert updated_event.retry_count == 1
-      assert updated_event.next_retry_after != nil
+      %{transactions: []} = Repo.preload(updated_event, :transactions)
+      assert eqm.processing_completed_at != nil
+      assert eqm.occ_retry_count == 5
+      assert eqm.retry_count == 1
+      assert eqm.next_retry_after != nil
 
       assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
-               updated_event.errors
+               eqm.errors
     end
   end
 end

@@ -119,7 +119,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
         {:ok, transaction, event}
 
-      {:ok, %{event_failure: %{errors: [last_error | _]} = event}} ->
+      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
         Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
         {:error, event}
 

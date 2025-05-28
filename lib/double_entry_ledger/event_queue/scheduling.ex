@@ -140,16 +140,13 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
   @spec build_revert_to_pending(Event.t(), any()) :: Changeset.t()
-  def build_revert_to_pending(event, error) do
-    event = event |> Repo.preload(:event_queue_item)
-
+  def build_revert_to_pending(%{event_queue_item: event_queue_item} = event, error) do
     event_queue_changeset =
-      event.event_queue_item
+      event_queue_item
       |> EventQueueItem.revert_to_pending_changeset(error)
 
     event
-    |> build_add_error(error)
-    |> change(status: :pending)
+    |> change(%{})
     |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 

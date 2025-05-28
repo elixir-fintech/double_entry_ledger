@@ -276,10 +276,10 @@ defmodule DoubleEntryLedger.Event do
     - A map containing trace metadata for the event.
   """
   @spec log_trace(Event.t()) :: map()
-  def log_trace(event) do
+  def log_trace(%{event_queue_item: event_queue_item} = event) do
     %{
       event_id: event.id,
-      event_status: event.status,
+      event_status: event_queue_item.status,
       event_action: event.action,
       event_source: event.source,
       event_trace_id:

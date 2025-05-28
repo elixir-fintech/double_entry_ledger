@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       event_map = event_map(ctx, :pending)
       update_event_map = %{event_map | update_idempk: Ecto.UUID.generate(), action: :update}
 
-      {:error, %{status: status, errors: [error | _]}} =
+      {:error, %{event_queue_item: %{status: status, errors: [error | _]}}} =
         ProcessEventMap.process_map(update_event_map)
 
       assert status == :dead_letter
@@ -110,13 +110,13 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       %{event: pending_event} = create_event(ctx, :pending)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
-      {:error, update_event} = ProcessEventMap.process_map(update_event)
+      {:error, %{event_queue_item: eqm} = update_event} = ProcessEventMap.process_map(update_event)
 
-      assert update_event.status == :pending
+      assert eqm.status == :pending
       assert update_event.id != pending_event.id
-      %{transactions: []} = update_event = Repo.preload(update_event, :transactions)
-      assert update_event.processed_at == nil
-      assert update_event.errors != []
+      %{transactions: []} = Repo.preload(update_event, :transactions)
+      assert eqm.processing_completed_at == nil
+      assert eqm.errors != []
     end
 
     test "update event is pending for event_map, when create event failed", ctx do
@@ -124,9 +124,9 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       failed_event = pending_event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
       update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
 
-      {:error, update_event} = ProcessEventMap.process_map(update_event)
+      {:error, %{event_queue_item: eqm}} = ProcessEventMap.process_map(update_event)
 
-      assert update_event.status == :pending
+      assert eqm.status == :pending
     end
 
     test "update event is dead_letter for event_map, when create event failed", ctx do

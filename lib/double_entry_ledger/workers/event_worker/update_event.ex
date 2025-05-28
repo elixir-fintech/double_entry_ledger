@@ -123,7 +123,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
         {:ok, transaction, update_event}
 
-      {:ok, %{event_failure: %{errors: [last_error | _]} = update_event}} ->
+      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = update_event}} ->
         Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(update_event))
         {:error, update_event}
 

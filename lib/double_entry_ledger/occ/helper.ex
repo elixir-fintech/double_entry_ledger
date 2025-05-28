@@ -50,6 +50,8 @@ defmodule DoubleEntryLedger.Occ.Helper do
   import DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.Event
+  alias Ecto.Changeset
+  import Ecto.Changeset, only: [put_assoc: 3, change: 2]
 
   defdelegate create_error_map(event), to: DoubleEntryLedger.Event.ErrorMap
 
@@ -174,17 +176,19 @@ defmodule DoubleEntryLedger.Occ.Helper do
 
   """
   @spec occ_timeout_changeset(Event.t(), ErrorMap.t()) ::
-          Ecto.Changeset.t()
+          Changeset.t()
   def occ_timeout_changeset(
-        event,
+        %{event_queue_item: %{id: eqm_id}} = event,
         %{errors: errors, retries: retries}
       ) do
     event
-    |> Ecto.Changeset.change(
-      errors: errors,
+    |> change(%{})
+    |> put_assoc(:event_queue_item, %{
+      id: eqm_id,
       status: :occ_timeout,
-      occ_retry_count: retries
-    )
+      occ_retry_count: retries,
+      errors: errors
+    })
   end
 
   @doc """
