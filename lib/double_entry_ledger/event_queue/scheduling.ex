@@ -20,6 +20,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
   alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, Transaction, EventStore}
   alias DoubleEntryLedger.EventQueueItem
+  alias Ecto.Changeset
 
   import DoubleEntryLedger.EventStoreHelper, only: [build_add_error: 2]
 
@@ -148,9 +149,16 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   """
   @spec build_revert_to_pending(Event.t(), any()) :: Changeset.t()
   def build_revert_to_pending(event, error) do
+    event = event |> Repo.preload(:event_queue_item)
+
+    event_queue_changeset =
+      event.event_queue_item
+      |> EventQueueItem.revert_to_pending_changeset(error)
+
     event
     |> build_add_error(error)
     |> change(status: :pending)
+    |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
   @doc """

@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   """
   @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_create_event(original_event, repo \\ Repo) do
+  def process_create_event(%Event{} = original_event, repo \\ Repo) do
     # Credo:disable-for-this-file Credo.Check.Warning.MissedMetadataKeyInLoggerConfig
     case process_with_retry(original_event, repo) do
       {:ok, %{event_success: event, transaction: transaction}} ->

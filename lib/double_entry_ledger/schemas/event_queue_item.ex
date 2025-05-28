@@ -84,13 +84,20 @@ defmodule DoubleEntryLedger.EventQueueItem do
 
   @spec processing_complete_changeset(EventQueueItem.t()) :: Ecto.Changeset.t()
   def processing_complete_changeset(event_queue_item) do
-    now = DateTime.utc_now()
-
     event_queue_item
     |> change(%{
       status: :processed,
-      processing_completed_at: now,
+      processing_completed_at: DateTime.utc_now(),
       next_retry_after: nil
+    })
+  end
+
+  @spec revert_to_pending_changeset(EventQueueItem.t(), any()) :: Ecto.Changeset.t()
+  def revert_to_pending_changeset(event_queue_item, error \\ nil) do
+    event_queue_item
+    |> change(%{
+      status: :pending,
+      errors: build_errors(event_queue_item, error)
     })
   end
 

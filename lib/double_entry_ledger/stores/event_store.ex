@@ -73,7 +73,10 @@ defmodule DoubleEntryLedger.EventStore do
   """
   @spec get_by_id(Ecto.UUID.t()) :: Event.t() | nil
   def get_by_id(id) do
-    Repo.get(Event, id)
+    Event
+    |> where(id: ^id)
+    |> preload([:event_queue_item])
+    |> Repo.one()
   end
 
   @doc """

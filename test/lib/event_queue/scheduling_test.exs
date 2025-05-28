@@ -104,4 +104,24 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
     end
   end
+
+  describe "build_revert_to_pending/2" do
+    setup [:create_instance, :create_accounts]
+
+    test "builds changeset to revert event to pending", %{instance: instance} do
+      {:ok, pending_event} = EventStore.create(event_attrs(instance_id: instance.id))
+      {:ok, event} = Scheduling.claim_event_for_processing(pending_event.id, "manual")
+      error = "Test error"
+
+      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_revert_to_pending(event, error)
+
+      assert changeset.valid?
+      assert changes.status == :pending
+      assert Enum.any?(changes.errors, fn e -> e.message == error end)
+
+      assert event_queue_item.valid?
+      assert event_queue_item.changes.status == :pending
+      assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
+    end
+  end
 end
