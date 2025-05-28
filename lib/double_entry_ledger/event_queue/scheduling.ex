@@ -106,9 +106,9 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `Ecto.Changeset.t()` - The changeset for marking the event as processed
   """
   @spec build_mark_as_processed(Event.t()) :: Changeset.t()
-  def build_mark_as_processed(event) do
+  def build_mark_as_processed(%{event_queue_item: event_queue_item} = event) do
     event_queue_changeset =
-      event.event_queue_item
+      event_queue_item
       |> EventQueueItem.processing_complete_changeset()
 
     event
@@ -250,11 +250,9 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
   @spec build_mark_as_dead_letter(Event.t(), String.t()) :: Changeset.t()
-  def build_mark_as_dead_letter(event, error) do
-    event = event |> Repo.preload(:event_queue_item)
-
+  def build_mark_as_dead_letter(%{event_queue_item: event_queue_item} = event, error) do
     event_queue_changeset =
-      event.event_queue_item
+      event_queue_item
       |> EventQueueItem.dead_letter_changeset(error)
 
     event
