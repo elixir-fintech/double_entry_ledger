@@ -184,10 +184,10 @@ defmodule DoubleEntryLedger.UpdateEventTest do
 
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
-      {:error, failed_event} = UpdateEvent.process_update_event(event)
-      assert failed_event.status == :dead_letter
+      {:error, %{event_queue_item: eqm}} = UpdateEvent.process_update_event(event)
+      assert eqm.status == :dead_letter
 
-      [error | _] = failed_event.errors
+      [error | _] = eqm.errors
 
       assert error.message ==
                "Create event (id: #{pending_event.id}) in dead_letter for Update Event (id: #{event.id})"

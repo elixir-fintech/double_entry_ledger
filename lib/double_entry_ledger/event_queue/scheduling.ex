@@ -256,11 +256,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
       |> EventQueueItem.dead_letter_changeset(error)
 
     event
-    |> build_add_error(error)
-    |> change(
-      status: :dead_letter,
-      processing_completed_at: DateTime.utc_now()
-    )
+    |> change(%{})
     |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
