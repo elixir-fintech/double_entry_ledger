@@ -227,7 +227,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert eqm.next_retry_after != nil
 
       assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =
-              eqm.errors
+               eqm.errors
     end
 
     test "when transaction can't be created for other reasons", %{instance: inst} = ctx do

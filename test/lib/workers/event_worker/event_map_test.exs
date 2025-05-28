@@ -110,7 +110,8 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       %{event: pending_event} = create_event(ctx, :pending)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
-      {:error, %{event_queue_item: eqm} = update_event} = ProcessEventMap.process_map(update_event)
+      {:error, %{event_queue_item: eqm} = update_event} =
+        ProcessEventMap.process_map(update_event)
 
       assert eqm.status == :pending
       assert update_event.id != pending_event.id
