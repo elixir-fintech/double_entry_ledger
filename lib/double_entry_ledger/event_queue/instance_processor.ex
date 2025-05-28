@@ -115,10 +115,11 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
 
     # Find an event for this instance that's ready to be processed
     from(e in Event,
+      join: eqi in assoc(e, :event_queue_item),
       where:
+        eqi.status in [:pending, :occ_timeout, :failed] and
         e.instance_id == ^instance_id and
-          e.status in [:pending, :occ_timeout, :failed] and
-          (is_nil(e.next_retry_after) or e.next_retry_after <= ^now),
+        (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
       order_by: [asc: e.inserted_at],
       limit: 1
     )
