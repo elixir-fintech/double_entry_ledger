@@ -2,7 +2,7 @@ alias DoubleEntryLedger.Event
 alias DoubleEntryLedger.Event.ErrorMap
 alias DoubleEntryLedger.Event.EventMap
 alias DoubleEntryLedger.Occ.Helper
-alias Ecto.Multi
+alias Ecto.{Multi, Changeset}
 
 defprotocol DoubleEntryLedger.Occ.Occable do
   @moduledoc """
@@ -138,9 +138,16 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
   @spec timed_out(EventMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()
   def timed_out(_event_map, name, error_map) do
+    new_event_step = :new_event
+
     Multi.new()
-    |> Multi.insert(name, fn _ ->
-      error_map.steps_so_far[:new_event]
+    |> Multi.insert(new_event_step, fn _ ->
+      Map.get(error_map.steps_so_far, new_event_step)
+      |> Map.delete(:event_queue_item)
+      |> Changeset.change(%{})
+    end)
+    |> Multi.update(name, fn changes ->
+      Map.get(changes, new_event_step)
       |> Helper.occ_timeout_changeset(error_map)
     end)
   end

@@ -16,6 +16,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
   alias DoubleEntryLedger.EventWorker.ProcessEventMap
   alias DoubleEntryLedger.EventWorker.CreateEvent
   alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.EventStore
 
   doctest ProcessEventMap
 
@@ -147,36 +148,40 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     end
   end
 
-  # TODO
-  # describe "process_map/2 with OCC timeout" do
-  # setup [:create_instance, :create_accounts, :verify_on_exit!]
-  #
-  # test "with last retry that fails", ctx do
-  # DoubleEntryLedger.MockRepo
-  # |> expect(:insert, 5, fn changeset ->
-  ## simulate a conflict when adding the transaction
-  # raise Ecto.StaleEntryError, action: :update, changeset: changeset
-  # end)
-  # |> expect(:transaction, 6, fn multi ->
-  ## the transaction has to be handled by the Repo
-  # Repo.transaction(multi)
-  # end)
-  #
-  # assert {:error, %Event{id: id, status: :occ_timeout}} =
-  # ProcessEventMap.process_map(
-  # struct(EventMapSchema, event_map(ctx)),
-  # DoubleEntryLedger.MockRepo
-  # )
-  #
-  # assert %Event{status: :occ_timeout, occ_retry_count: 5} =
-  # updated_event = Repo.get(Event, id)
-  #
-  # %{transactions: []} = updated_event = Repo.preload(updated_event, :transactions)
-  # assert updated_event.processed_at == nil
-  # assert length(updated_event.errors) == 5
-  #
-  # assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] =
-  # updated_event.errors
-  # end
-  # end
+  TODO
+
+  describe "process_map/2 with OCC timeout" do
+    # , :verify_on_exit!]
+    setup [:create_instance, :create_accounts]
+
+    test "with last retry that fails", ctx do
+      DoubleEntryLedger.MockRepo
+      |> expect(:insert, 5, fn changeset ->
+        # simulate a conflict when adding the transaction
+        raise Ecto.StaleEntryError, action: :update, changeset: changeset
+      end)
+      |> expect(:transaction, 6, fn multi ->
+        # the transaction has to be handled by the Repo
+        Repo.transaction(multi)
+      end)
+
+      assert {:error, %Event{id: id, event_queue_item: %{status: :occ_timeout}}} =
+               ProcessEventMap.process_map(
+                 struct(
+                   EventMapSchema,
+                   event_map(ctx)
+                 ),
+                 DoubleEntryLedger.MockRepo
+               )
+
+      assert %Event{
+               event_queue_item: %{status: :occ_timeout, occ_retry_count: 5, errors: errors},
+               transactions: []
+             } =
+               EventStore.get_by_id(id) |> Repo.preload(:transactions)
+
+      assert length(errors) == 5
+      assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] = errors
+    end
+  end
 end

@@ -139,36 +139,37 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     end
   end
 
+  describe "build_schedule_update_retry" do
+    setup [:create_instance, :create_accounts]
 
-    describe "build_schedule_update_retry" do
-      setup [:create_instance, :create_accounts]
+    test "builds changeset to schedule update_retry", %{instance: instance} = ctx do
+      %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
 
-      test "builds changeset to schedule update_retry", %{instance: instance} = ctx  do
-        %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
+      {:error, failed_create_event} =
+        DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(
+          pending_event,
+          "some reason",
+          :failed
+        )
 
-        {:error, failed_create_event} =
-          DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(
-            pending_event,
-            "some reason",
-            :failed
-          )
+      {:ok, event} = create_update_event(s, s_id, instance.id, :posted)
+      test_message = "Test error"
 
-        {:ok, event} = create_update_event(s, s_id, instance.id, :posted)
-        test_message = "Test error"
-        error = %AddUpdateEventError{
-          create_event: failed_create_event,
-          update_event: event,
-          message: test_message,
-          reason: :create_event_not_processed
-        }
+      error = %AddUpdateEventError{
+        create_event: failed_create_event,
+        update_event: event,
+        message: test_message,
+        reason: :create_event_not_processed
+      }
 
-        %{changes: %{event_queue_item: event_queue_item}} = Scheduling.build_schedule_update_retry(event, error)
+      %{changes: %{event_queue_item: event_queue_item}} =
+        Scheduling.build_schedule_update_retry(event, error)
 
-        assert event_queue_item.valid?
-        assert event_queue_item.changes.status == :failed
-        assert event_queue_item.changes.next_retry_after != nil
-        assert Changeset.get_field(event_queue_item, :retry_count) == 0
-        assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == test_message end)
-      end
+      assert event_queue_item.valid?
+      assert event_queue_item.changes.status == :failed
+      assert event_queue_item.changes.next_retry_after != nil
+      assert Changeset.get_field(event_queue_item, :retry_count) == 0
+      assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == test_message end)
     end
+  end
 end

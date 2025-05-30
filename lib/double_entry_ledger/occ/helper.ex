@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
 
   import DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.Event.ErrorMap
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.{Event, EventQueueItem}
   alias Ecto.Changeset
   import Ecto.Changeset, only: [put_assoc: 3, change: 2]
 
@@ -178,17 +178,24 @@ defmodule DoubleEntryLedger.Occ.Helper do
   @spec occ_timeout_changeset(Event.t(), ErrorMap.t()) ::
           Changeset.t()
   def occ_timeout_changeset(
-        %{event_queue_item: %{id: eqm_id}} = event,
-        %{errors: errors, retries: retries}
+        %{event_queue_item: event_queue_item} = event,
+        error_map
       ) do
     event
     |> change(%{})
-    |> put_assoc(:event_queue_item, %{
-      id: eqm_id,
-      status: :occ_timeout,
-      occ_retry_count: retries,
-      errors: errors
-    })
+    |> put_assoc(
+      :event_queue_item,
+      build_occ_timeout_changeset(event_queue_item, error_map)
+    )
+  end
+
+  def occ_timeout_changeset(event, error_map) do
+    event
+    |> change(%{})
+    |> put_assoc(
+      :event_queue_item,
+      build_occ_timeout_changeset(%EventQueueItem{}, error_map)
+    )
   end
 
   @doc """
@@ -221,5 +228,16 @@ defmodule DoubleEntryLedger.Occ.Helper do
 
   def occ_error_message(_attempts) do
     "OCC conflict: Max number of #{@max_retries} retries reached"
+  end
+
+  @spec build_occ_timeout_changeset(EventQueueItem.t(), ErrorMap.t()) ::
+          Changeset.t()
+  defp build_occ_timeout_changeset(event_queue_item, %{errors: errors, retries: retries}) do
+    event_queue_item
+    |> change(%{
+      status: :occ_timeout,
+      occ_retry_count: retries,
+      errors: errors
+    })
   end
 end
