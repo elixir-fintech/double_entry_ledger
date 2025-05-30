@@ -4,6 +4,8 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
   """
   use ExUnit.Case, async: true
   import Mox
+  alias Ecto.Changeset
+  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.InstanceFixtures
@@ -137,30 +139,36 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     end
   end
 
-  #
-  #  describe "build_schedule_update_retry" do
-  #    setup [:create_instance, :create_accounts]
-  #
-  #    test "builds changeset to schedule update_retry", %{instance: instance} do
-  #      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
-  #      error = "Test error"
-  #      reason = :failed
-  #      delay = 60
-  #
-  #      %{changes: %{event_queue_item: event_queue_item} = changes } = changeset = Scheduling.build_schedule_update_retry(event, error)
-  #
-  #      assert changeset.valid?
-  #      assert changes.status == reason
-  #      assert changes.next_retry_after != nil
-  #      assert changes.retry_count == 1
-  #      assert Enum.any?(changes.errors, fn e -> e.message == error end)
-  #
-  #      # TODO
-  #      #assert event_queue_item.valid?
-  #      #assert event_queue_item.changes.status == reason
-  #      #assert event_queue_item.changes.next_retry_after != nil
-  #      #assert event_queue_item.changes.retry_count == 1
-  #      #assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
-  #    end
-  #  end
+
+    describe "build_schedule_update_retry" do
+      setup [:create_instance, :create_accounts]
+
+      test "builds changeset to schedule update_retry", %{instance: instance} = ctx  do
+        %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
+
+        {:error, failed_create_event} =
+          DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(
+            pending_event,
+            "some reason",
+            :failed
+          )
+
+        {:ok, event} = create_update_event(s, s_id, instance.id, :posted)
+        test_message = "Test error"
+        error = %AddUpdateEventError{
+          create_event: failed_create_event,
+          update_event: event,
+          message: test_message,
+          reason: :create_event_not_processed
+        }
+
+        %{changes: %{event_queue_item: event_queue_item}} = Scheduling.build_schedule_update_retry(event, error)
+
+        assert event_queue_item.valid?
+        assert event_queue_item.changes.status == :failed
+        assert event_queue_item.changes.next_retry_after != nil
+        assert Changeset.get_field(event_queue_item, :retry_count) == 0
+        assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == test_message end)
+      end
+    end
 end

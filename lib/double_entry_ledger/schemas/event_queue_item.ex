@@ -6,6 +6,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
 
   use Ecto.Schema
   import Ecto.Changeset
+  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   alias DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.Event
   import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
@@ -130,6 +131,27 @@ defmodule DoubleEntryLedger.EventQueueItem do
       processing_completed_at: now,
       errors: build_errors(event_queue_item, error)
     })
+  end
+
+  @spec schedule_update_retry_changeset(
+          EventQueueItem.t(),
+          AddUpdateEventError.t(),
+          non_neg_integer()
+        ) :: Ecto.Changeset.t()
+  def schedule_update_retry_changeset(event_queue_item, %AddUpdateEventError{} = error, retry_delay) do
+    now = DateTime.utc_now()
+
+    next_retry_after =
+      DateTime.add(error.create_event.next_retry_after || now, retry_delay, :second)
+
+    event_queue_item
+    |> change(
+      status: :failed,
+      processor_id: nil,
+      processing_completed_at: now,
+      next_retry_after: next_retry_after,
+      errors: build_errors(event_queue_item, error.message)
+    )
   end
 
   @spec build_errors(EventQueueItem.t(), any()) :: list(ErrorMap.error())

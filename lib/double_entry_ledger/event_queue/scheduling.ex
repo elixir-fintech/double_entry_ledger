@@ -212,19 +212,17 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   def build_schedule_update_retry(event, error) do
     # Calculate next retry time with exponential backoff
     retry_delay = calculate_retry_delay(event.retry_count)
-    now = DateTime.utc_now()
 
-    next_retry_after =
-      DateTime.add(error.create_event.next_retry_after || now, retry_delay, :second)
+    event_queue_item_changeset =
+      event.event_queue_item
+      |> EventQueueItem.schedule_update_retry_changeset(
+        error,
+        retry_delay
+      )
 
     event
-    |> build_add_error(error.message)
-    |> change(
-      status: :failed,
-      processor_id: nil,
-      processing_completed_at: now,
-      next_retry_after: next_retry_after
-    )
+    |> change(%{})
+    |> put_assoc(:event_queue_item, event_queue_item_changeset)
   end
 
   @doc """
