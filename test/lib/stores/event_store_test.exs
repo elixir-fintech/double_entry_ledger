@@ -19,7 +19,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
                EventStore.create(event_attrs(instance_id: instance.id))
 
       assert event.status == :pending
-      assert event.processed_at == nil
 
       assert %{id: evq_id, event_id: ^id, status: :pending} = event.event_queue_item
       assert evq_id != nil

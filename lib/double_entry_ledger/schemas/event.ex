@@ -39,7 +39,6 @@ defmodule DoubleEntryLedger.Event do
 
   alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
   alias DoubleEntryLedger.Event.TransactionData
-  alias DoubleEntryLedger.Event.ErrorMap
 
   @states [:pending, :processed, :failed, :occ_timeout, :processing, :dead_letter]
   @actions [:create, :update]
@@ -92,14 +91,12 @@ defmodule DoubleEntryLedger.Event do
           source_data: map() | nil,
           source_idempk: String.t() | nil,
           update_idempk: String.t() | nil,
-          processed_at: DateTime.t() | nil,
           transaction_data: TransactionData.t() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
           transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
           event_queue_item: EventQueueItem.t() | Ecto.Association.NotLoaded.t(),
-          errors: [ErrorMap.error()] | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil,
           # queue related fields
@@ -112,8 +109,6 @@ defmodule DoubleEntryLedger.Event do
     field(:source_data, :map, default: %{})
     field(:source_idempk, :string)
     field(:update_idempk, :string)
-    field(:processed_at, :utc_datetime_usec)
-    field(:errors, {:array, :map}, default: [])
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData)
