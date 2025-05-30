@@ -25,6 +25,9 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEventQueueItem do
     create index(:event_queue_items, :status, prefix: "double_entry_ledger")
     create index(:event_queue_items, :next_retry_after, prefix: "double_entry_ledger")
     create index(:event_queue_items, [:next_retry_after, :status], prefix: "double_entry_ledger", name: "idx_event_queue_items_next_retry_status")
-    create index(:events, [:status, :inserted_at], prefix: "double_entry_ledger", where: "status = 'dead_letter'", name: "idx_event_queue_items_dead_letter_queue")
+    create index(:event_queue_items, [:status, :inserted_at],
+      prefix: "double_entry_ledger",
+      where: "status = 'dead_letter'",
+      name: "idx_event_queue_items_dead_letter_queue")
   end
 end

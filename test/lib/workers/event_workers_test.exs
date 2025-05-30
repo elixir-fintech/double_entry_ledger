@@ -73,7 +73,12 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       assert {:error, :event_not_claimable} =
                EventWorker.process_event_with_id(event.id)
 
-      event |> Ecto.Changeset.change(%{status: :dead_letter}) |> Repo.update!()
+      event
+      |> Ecto.Changeset.change()
+      |> Ecto.Changeset.put_assoc(
+        :event_queue_item,
+        %{id: event.event_queue_item.id, status: :dead_letter})
+      |> Repo.update!()
 
       assert {:error, :event_not_claimable} =
                EventWorker.process_event_with_id(event.id)

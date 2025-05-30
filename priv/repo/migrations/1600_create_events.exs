@@ -5,10 +5,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create table(:events, primary_key: false, prefix: "double_entry_ledger") do
       add :id, :binary_id, primary_key: true
 
-      # Enum fields stored as strings
-      add :status, :string, null: false, default: "pending"
       add :action, :string, null: false
-
       add :source, :string, null: false
       add :source_idempk, :string, null: false
       add :source_data, :map, null: false, default: %{}
@@ -26,7 +23,6 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create index(:events, [:source], prefix: "double_entry_ledger")
     create index(:events, [:source_idempk], prefix: "double_entry_ledger")
     create index(:events, [:instance_id], prefix: "double_entry_ledger")
-    create index(:events, [:instance_id, :status], prefix: "double_entry_ledger")
     create index(:events, [:instance_id, :action], prefix: "double_entry_ledger")
     create unique_index(:events, [:instance_id, :source, :source_idempk],
       prefix: "double_entry_ledger",

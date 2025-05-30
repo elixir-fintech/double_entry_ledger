@@ -122,8 +122,12 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
     end
 
     test "update event is pending for event_map, when create event failed", ctx do
-      %{event: pending_event} = create_event(ctx, :pending)
-      failed_event = pending_event |> Ecto.Changeset.change(%{status: :failed}) |> Repo.update!()
+      %{event: %{event_queue_item: eqm1} = pending_event} = create_event(ctx, :pending)
+      failed_event = pending_event
+      |> Ecto.Changeset.change(%{})
+      |> Ecto.Changeset.put_assoc(:event_queue_item, %{id: eqm1.id, status: :failed})
+      |> Repo.update!()
+
       update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
 
       {:error, %{event_queue_item: eqm}} = ProcessEventMap.process_map(update_event)

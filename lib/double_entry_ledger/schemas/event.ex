@@ -40,12 +40,7 @@ defmodule DoubleEntryLedger.Event do
   alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
   alias DoubleEntryLedger.Event.TransactionData
 
-  @states [:pending, :processed, :failed, :occ_timeout, :processing, :dead_letter]
   @actions [:create, :update]
-  @type state ::
-          unquote(
-            Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
-          )
   @type action ::
           unquote(
             Enum.reduce(@actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
@@ -62,30 +57,19 @@ defmodule DoubleEntryLedger.Event do
   ## Fields
 
   * `id`: UUID primary key
-  * `status`: Current processing state (:pending, :processing, :processed, :failed, :occ_timeout, :dead_letter)
   * `action`: The action type (:create or :update)
   * `source`: Identifier for the system that originated the event
   * `source_data`: Arbitrary JSON data from the source system
   * `source_idempk`: Idempotency key from source system
   * `update_idempk`: Additional idempotency key for update operations
-  * `occ_retry_count`: Counter for optimistic concurrency control retries
-  * `processed_at`: When the event was fully processed
   * `transaction_data`: Embedded struct with transaction changes to apply
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
-  * `errors`: Array of error maps if processing failed
-  * `processor_id`: ID of the worker processing this event
-  * `processor_version`: Version for optimistic locking during processing
-  * `processing_started_at`: When processing began
-  * `processing_completed_at`: When processing finished
-  * `retry_count`: Number of processing attempts
-  * `next_retry_after`: Timestamp for next retry attempt
   * `inserted_at`: Creation timestamp
   * `updated_at`: Last update timestamp
   """
   @type t :: %Event{
           id: Ecto.UUID.t() | nil,
-          status: state() | nil,
           action: action() | nil,
           source: String.t() | nil,
           source_data: map() | nil,
@@ -103,7 +87,6 @@ defmodule DoubleEntryLedger.Event do
         }
 
   schema "events" do
-    field(:status, Ecto.Enum, values: @states, default: :pending)
     field(:action, Ecto.Enum, values: @actions)
     field(:source, :string)
     field(:source_data, :map, default: %{})
