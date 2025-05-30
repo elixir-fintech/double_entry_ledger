@@ -116,6 +116,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
     # Find an event for this instance that's ready to be processed
     from(e in Event,
       join: eqi in assoc(e, :event_queue_item),
+      prefix: "double_entry_ledger",
       where:
         eqi.status in [:pending, :occ_timeout, :failed] and
           e.instance_id == ^instance_id and

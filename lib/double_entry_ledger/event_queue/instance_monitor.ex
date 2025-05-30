@@ -30,7 +30,8 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
   use GenServer
   require Logger
 
-  alias DoubleEntryLedger.{Repo, Event}
+  alias DoubleEntryLedger.{Repo, Event, EventQueueItem}
+
   alias DoubleEntryLedger.EventQueue.InstanceProcessor
 
   import Ecto.Query
@@ -81,9 +82,12 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
 
     # Find distinct instance IDs with pending events
     from(e in Event,
+      join: eqi in EventQueueItem,
+      prefix: "double_entry_ledger",
+      on: e.id == eqi.event_id,
       where:
-        e.status in [:pending, :occ_timeout, :failed] and
-          (is_nil(e.next_retry_after) or e.next_retry_after <= ^now),
+        eqi.status in [:pending, :occ_timeout, :failed] and
+          (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
       select: e.instance_id,
       distinct: true
     )
