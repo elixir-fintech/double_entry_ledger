@@ -22,8 +22,6 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   alias DoubleEntryLedger.EventQueueItem
   alias Ecto.Changeset
 
-  import DoubleEntryLedger.EventStoreHelper, only: [build_add_error: 2]
-
   @config Application.compile_env(:double_entry_ledger, :event_queue, [])
   @max_retries Keyword.get(@config, :max_retries, 5)
   @base_delay Keyword.get(@config, :base_retry_delay, 30)
@@ -168,8 +166,9 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   """
   @spec build_schedule_retry_with_reason(Event.t(), String.t() | nil, Event.state()) ::
           Changeset.t()
-  def build_schedule_retry_with_reason(event, error, status) do
-    if event.retry_count >= @max_retries do
+  def build_schedule_retry_with_reason(%{event_queue_item: event_queue_item} = event, error, status) do
+    retry_count = event_queue_item.retry_count || 0
+    if retry_count >= @max_retries do
       # Max retries exceeded, mark as dead letter
       build_mark_as_dead_letter(
         event,
@@ -177,10 +176,10 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
       )
     else
       # Calculate next retry time with exponential backoff
-      retry_delay = calculate_retry_delay(event.retry_count)
+      retry_delay = calculate_retry_delay(retry_count)
 
       event_queue_item_changeset =
-        event.event_queue_item
+        event_queue_item
         |> EventQueueItem.schedule_retry_changeset(
           error,
           status,
@@ -188,7 +187,6 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
         )
 
       event
-      |> build_add_error(error)
       |> change(%{})
       |> put_assoc(:event_queue_item, event_queue_item_changeset)
     end
@@ -209,15 +207,12 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
   @spec build_schedule_update_retry(Event.t(), AddUpdateEventError.t()) :: Changeset.t()
-  def build_schedule_update_retry(event, error) do
-    # Calculate next retry time with exponential backoff
-    retry_delay = calculate_retry_delay(event.retry_count)
-
+  def build_schedule_update_retry(%{event_queue_item: event_queue_item} = event, error) do
     event_queue_item_changeset =
-      event.event_queue_item
+      event_queue_item
       |> EventQueueItem.schedule_update_retry_changeset(
         error,
-        retry_delay
+        calculate_retry_delay(event_queue_item.retry_count)
       )
 
     event

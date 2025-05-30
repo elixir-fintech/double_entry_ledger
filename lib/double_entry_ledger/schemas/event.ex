@@ -104,12 +104,6 @@ defmodule DoubleEntryLedger.Event do
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil,
           # queue related fields
-          processor_id: String.t() | nil,
-          processor_version: integer() | nil,
-          processing_started_at: DateTime.t() | nil,
-          processing_completed_at: DateTime.t() | nil,
-          retry_count: integer() | nil,
-          next_retry_after: DateTime.t() | nil
         }
 
   schema "events" do
@@ -128,14 +122,6 @@ defmodule DoubleEntryLedger.Event do
     has_many(:event_transaction_links, EventTransactionLink)
     has_many(:transactions, through: [:event_transaction_links, :transaction])
     has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
-
-    # queue related fields
-    field(:processor_id, :string)
-    field(:processor_version, :integer, default: 1)
-    field(:processing_started_at, :utc_datetime_usec)
-    field(:processing_completed_at, :utc_datetime_usec)
-    field(:retry_count, :integer, default: 0)
-    field(:next_retry_after, :utc_datetime_usec)
 
     timestamps(type: :utc_datetime_usec)
   end

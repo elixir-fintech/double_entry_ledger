@@ -140,13 +140,15 @@ defmodule DoubleEntryLedger.EventQueueItem do
         ) :: Ecto.Changeset.t()
   def schedule_update_retry_changeset(
         event_queue_item,
-        %AddUpdateEventError{} = error,
+        %AddUpdateEventError{create_event: create_event, message: message},
         retry_delay
       ) do
     now = DateTime.utc_now()
 
+    %{event_queue_item: %{next_retry_after: ce_next_retry_after}} = create_event
+
     next_retry_after =
-      DateTime.add(error.create_event.next_retry_after || now, retry_delay, :second)
+      DateTime.add(ce_next_retry_after || now, retry_delay, :second)
 
     event_queue_item
     |> change(
@@ -154,7 +156,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
       processor_id: nil,
       processing_completed_at: now,
       next_retry_after: next_retry_after,
-      errors: build_errors(event_queue_item, error.message)
+      errors: build_errors(event_queue_item, message)
     )
   end
 
