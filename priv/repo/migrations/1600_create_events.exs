@@ -13,21 +13,16 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
       add :source_idempk, :string, null: false
       add :source_data, :map, null: false, default: %{}
       add :update_idempk, :string
-      add :tries, :integer, default: 0
-      add :processed_at, :utc_datetime_usec
 
       add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
 
       add :transaction_data, :map, null: false
-
-      add :errors, :jsonb, default: "[]"
 
       timestamps(type: :utc_datetime_usec)
     end
 
     # Optionally, add indexes for performance optimization
     create index(:events, [:inserted_at], prefix: "double_entry_ledger")
-    create index(:events, [:processed_at], prefix: "double_entry_ledger")
     create index(:events, [:source], prefix: "double_entry_ledger")
     create index(:events, [:source_idempk], prefix: "double_entry_ledger")
     create index(:events, [:instance_id], prefix: "double_entry_ledger")

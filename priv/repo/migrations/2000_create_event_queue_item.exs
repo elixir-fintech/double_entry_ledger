@@ -21,6 +21,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEventQueueItem do
       timestamps(type: :utc_datetime_usec)
     end
 
+    create index(:event_queue_items, :processing_completed_at, prefix: "double_entry_ledger")
     create index(:event_queue_items, :status, prefix: "double_entry_ledger")
     create index(:event_queue_items, :next_retry_after, prefix: "double_entry_ledger")
     create index(:event_queue_items, [:next_retry_after, :status], prefix: "double_entry_ledger", name: "idx_event_queue_items_next_retry_status")
