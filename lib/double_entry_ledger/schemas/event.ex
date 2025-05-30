@@ -92,7 +92,6 @@ defmodule DoubleEntryLedger.Event do
           source_data: map() | nil,
           source_idempk: String.t() | nil,
           update_idempk: String.t() | nil,
-          occ_retry_count: integer() | nil,
           processed_at: DateTime.t() | nil,
           transaction_data: TransactionData.t() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
@@ -113,7 +112,6 @@ defmodule DoubleEntryLedger.Event do
     field(:source_data, :map, default: %{})
     field(:source_idempk, :string)
     field(:update_idempk, :string)
-    field(:occ_retry_count, :integer, default: 0)
     field(:processed_at, :utc_datetime_usec)
     field(:errors, {:array, :map}, default: [])
 

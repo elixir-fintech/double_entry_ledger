@@ -20,7 +20,6 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
       assert event.status == :pending
       assert event.processed_at == nil
-      assert event.occ_retry_count == 0
 
       assert %{id: evq_id, event_id: ^id, status: :pending} = event.event_queue_item
       assert evq_id != nil
