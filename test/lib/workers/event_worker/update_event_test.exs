@@ -249,16 +249,16 @@ defmodule DoubleEntryLedger.UpdateEventTest do
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Event{} = error_event} =
+      assert {:error, %Event{event_queue_item: eqm}} =
                UpdateEvent.process_update_event(
                  event,
                  DoubleEntryLedger.MockRepo
                )
 
-      assert error_event.status == :failed
+      assert eqm.status == :failed
 
       assert [%{message: "UpdateEvent: Step :transaction failed. Error: :conflict"} | _] =
-               error_event.errors
+               eqm.errors
     end
   end
 

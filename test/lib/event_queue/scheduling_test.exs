@@ -126,14 +126,8 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       error = "Test error"
       reason = :failed
 
-      %{changes: %{event_queue_item: event_queue_item} = changes} =
-        changeset = Scheduling.build_schedule_retry_with_reason(event, error, reason)
-
-      assert changeset.valid?
-      assert changes.status == reason
-      assert changes.next_retry_after != nil
-      assert changes.retry_count == 1
-      assert Enum.any?(changes.errors, fn e -> e.message == error end)
+      %{changes: %{event_queue_item: event_queue_item}} =
+        Scheduling.build_schedule_retry_with_reason(event, error, reason)
 
       assert event_queue_item.valid?
       assert event_queue_item.changes.status == reason
