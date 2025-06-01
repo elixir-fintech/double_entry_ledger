@@ -34,6 +34,7 @@ defmodule DoubleEntryLedger.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:money, "~> 1.12"},
       {:logger_json, "~> 7.0"},
+      {:jason, "~> 1.4"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:mox, "~> 1.0", only: [:test]},
