@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.LoadTesting do
     - :ok when the load test is completed.
   """
   def run_load_test(concurrency) do
-    debit_sum = 10_000
+    debit_sum = 100_000
     {:ok, instance} = %Instance{} |> Repo.insert()
     sources = create_debit_sources(concurrency, instance, debit_sum)
     destination_arrays = create_debit_destinations(concurrency, instance)
