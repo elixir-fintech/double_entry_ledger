@@ -63,3 +63,10 @@ jobs:
         MIX_ENV: test
     - name: Run tests
       run: mix test
+    - name: Run load tests
+      run: |
+        mix ecto.create
+        mix ecto.migrate
+        mix load_test 10
+      env:
+        MIX_ENV: perf
