@@ -31,16 +31,14 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.{
-    ProcessEventMap,
+    UpdateEventMap,
     UpdateEvent,
-    CreateEvent
+    CreateEvent,
+    CreateEventMap
   }
 
-  import ProcessEventMap, only: [process_map: 1]
   import CreateEvent, only: [process_create_event: 1]
   import UpdateEvent, only: [process_update_event: 1]
-
-  @actions Event.actions()
 
   @doc """
   Processes a pending event based on its action type.
@@ -101,8 +99,12 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   @spec process_event_map(EventMap.t()) ::
           {:ok, Transaction.t(), Event.t()}
           | {:error, Event.t() | Changeset.t() | String.t() | atom()}
-  def process_event_map(%{action: action} = event_map) when action in @actions do
-    process_map(event_map)
+  def process_event_map(%{action: :create} = event_map) do
+    CreateEventMap.process(event_map)
+  end
+
+  def process_event_map(%{action: :update} = event_map) do
+    UpdateEventMap.process(event_map)
   end
 
   def process_event_map(_event_map) do

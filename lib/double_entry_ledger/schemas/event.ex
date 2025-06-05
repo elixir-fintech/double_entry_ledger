@@ -82,8 +82,7 @@ defmodule DoubleEntryLedger.Event do
           transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
           event_queue_item: EventQueueItem.t() | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
-          updated_at: DateTime.t() | nil,
-          # queue related fields
+          updated_at: DateTime.t() | nil
         }
 
   schema "events" do

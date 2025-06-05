@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
+defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
   @moduledoc """
   Processes `EventMap` structures for atomic creation and update of events and their
   associated transactions in the Double Entry Ledger system.
@@ -107,9 +107,9 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
       - For transaction validation failures, the EventMap changeset will contain mapped transaction errors.
     - `{:error, reason}` for other errors, with a string describing the error and the failing step.
   """
-  @spec process_map(EventMap.t(), Ecto.Repo.t() | nil) ::
+  @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_map(event_map, repo \\ Repo) do
+  def process(%{action: :update} = event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
       {:ok, %{transaction: transaction, event_success: event}} ->
         Logger.info(
@@ -179,15 +179,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEventMap do
 
     - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
-  def build_transaction(%{action: :create} = event_map, transaction_map, repo) do
-    new_event_map = Map.put_new(event_map, :status, :pending)
-
-    Multi.new()
-    |> Multi.insert(:new_event, EventStoreHelper.build_create(new_event_map))
-    |> TransactionStore.build_create(:transaction, transaction_map, repo)
-  end
-
-  @impl true
   def build_transaction(%{action: :update} = event_map, transaction_map, repo) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 

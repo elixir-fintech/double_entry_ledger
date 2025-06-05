@@ -77,7 +77,8 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       |> Ecto.Changeset.change()
       |> Ecto.Changeset.put_assoc(
         :event_queue_item,
-        %{id: event.event_queue_item.id, status: :dead_letter})
+        %{id: event.event_queue_item.id, status: :dead_letter}
+      )
       |> Repo.update!()
 
       assert {:error, :event_not_claimable} =

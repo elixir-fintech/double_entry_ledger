@@ -166,8 +166,13 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   """
   @spec build_schedule_retry_with_reason(Event.t(), String.t() | nil, Event.state()) ::
           Changeset.t()
-  def build_schedule_retry_with_reason(%{event_queue_item: event_queue_item} = event, error, status) do
+  def build_schedule_retry_with_reason(
+        %{event_queue_item: event_queue_item} = event,
+        error,
+        status
+      ) do
     retry_count = event_queue_item.retry_count || 0
+
     if retry_count >= @max_retries do
       # Max retries exceeded, mark as dead letter
       build_mark_as_dead_letter(
