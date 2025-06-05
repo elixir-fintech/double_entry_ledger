@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
   ## Main Functions
 
-    * `process_update_event/2` — Entry point for processing an update event.
+    * `process/2` — Entry point for processing an update event.
     * `build_transaction/3` — Constructs the Ecto.Multi for transaction update.
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
     * `handle_transaction_map_error/3` — Handles errors in transaction map conversion.
@@ -111,9 +111,9 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     - Handles optimistic concurrency conflicts with retries.
     - Properly marks events as failed with meaningful error messages.
   """
-  @spec process_update_event(Event.t(), Ecto.Repo.t()) ::
+  @spec process(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_update_event(original_event, repo \\ Repo) do
+  def process(original_event, repo \\ Repo) do
     case process_with_retry(original_event, repo) do
       {:ok, %{transaction: transaction, event_success: update_event}} ->
         Logger.info(

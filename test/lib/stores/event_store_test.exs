@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "returns processed_transaction", %{instance: instance} = ctx do
       %{event: event} = create_event(ctx, :pending)
-      {:ok, transaction, _} = CreateEvent.process_create_event(event)
+      {:ok, transaction, _} = CreateEvent.process(event)
 
       assert %Event{} =
                found_event =

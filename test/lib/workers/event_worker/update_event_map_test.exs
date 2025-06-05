@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, pending_transaction, _} =
-        CreateEvent.process_create_event(pending_event)
+        CreateEvent.process(pending_event)
 
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
@@ -122,7 +122,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
     test "with last retry that fails", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      CreateEvent.process_create_event(pending_event)
+      CreateEvent.process(pending_event)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       DoubleEntryLedger.MockRepo

@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
 
   ## Main Functions
 
-    * `process_create_event/2` — Entry point for processing a create event.
+    * `process/2` — Entry point for processing a create event.
     * `build_transaction/3` — Constructs the Ecto.Multi for transaction creation.
     * `handle_build_transaction/3` — Adds event update step to the Multi.
     * `handle_transaction_map_error/3` — Handles errors in transaction map conversion.
@@ -99,9 +99,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     - `{:error, changeset}`: When there's a validation error or database error.
     - `{:error, reason}`: When another error occurs, with a reason explaining the failure.
   """
-  @spec process_create_event(Event.t(), Ecto.Repo.t()) ::
+  @spec process(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
-  def process_create_event(%Event{} = original_event, repo \\ Repo) do
+  def process(%Event{} = original_event, repo \\ Repo) do
     # Credo:disable-for-this-file Credo.Check.Warning.MissedMetadataKeyInLoggerConfig
     case process_with_retry(original_event, repo) do
       {:ok, %{event_success: event, transaction: transaction}} ->

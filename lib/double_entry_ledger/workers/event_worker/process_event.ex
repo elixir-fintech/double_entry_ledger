@@ -37,9 +37,6 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     CreateEventMap
   }
 
-  import CreateEvent, only: [process_create_event: 1]
-  import UpdateEvent, only: [process_update_event: 1]
-
   @doc """
   Processes a pending event based on its action type.
 
@@ -62,11 +59,11 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
           {:ok, Transaction.t(), Event.t()}
           | {:error, Event.t() | Changeset.t() | String.t() | atom()}
   def process_event(%Event{event_queue_item: %{status: :processing}, action: :create} = event) do
-    process_create_event(event)
+    CreateEvent.process(event)
   end
 
   def process_event(%Event{event_queue_item: %{status: :processing}, action: :update} = event) do
-    process_update_event(event)
+    UpdateEvent.process(event)
   end
 
   def process_event(%Event{event_queue_item: %{status: :processing}, action: _} = _event) do

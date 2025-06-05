@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
       %{event: event} = create_event(ctx)
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
-        CreateEvent.process_create_event(event)
+        CreateEvent.process(event)
 
       assert evq.status == :processed
 
@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
       end)
 
       assert {:error, %Event{event_queue_item: eqm}} =
-               CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+               CreateEvent.process(event, DoubleEntryLedger.MockRepo)
 
       assert eqm.status == :failed
 
@@ -70,7 +70,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
       end)
 
       {:error, %{event_queue_item: eqm} = updated_event} =
-        CreateEvent.process_create_event(event, DoubleEntryLedger.MockRepo)
+        CreateEvent.process(event, DoubleEntryLedger.MockRepo)
 
       %{transactions: []} = Repo.preload(updated_event, :transactions)
       assert eqm.processing_completed_at != nil
