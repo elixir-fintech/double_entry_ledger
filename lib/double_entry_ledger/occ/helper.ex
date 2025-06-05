@@ -153,7 +153,8 @@ defmodule DoubleEntryLedger.Occ.Helper do
     %ErrorMap{
       errors: build_errors(error_map.errors, message),
       steps_so_far: steps_so_far,
-      retries: error_map.retries + 1
+      retries: error_map.retries + 1,
+      save_on_error: error_map.save_on_error
     }
   end
 

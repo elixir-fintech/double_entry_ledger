@@ -137,7 +137,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
   """
   @spec timed_out(EventMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()
-  def timed_out(_event_map, name, error_map) do
+  def timed_out(_event_map, name, %{save_on_error: true} = error_map) do
     new_event_step = :new_event
 
     Multi.new()

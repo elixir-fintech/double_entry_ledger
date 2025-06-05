@@ -38,7 +38,8 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
 
   defstruct errors: [],
             steps_so_far: %{},
-            retries: 0
+            retries: 0,
+            save_on_error: false
 
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Event.EventMap
@@ -74,7 +75,8 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
   @type t :: %ErrorMap{
           errors: list(error()) | [],
           steps_so_far: map(),
-          retries: integer()
+          retries: integer(),
+          save_on_error: boolean()
         }
 
   @doc """
@@ -173,7 +175,8 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
     %ErrorMap{
       errors: Map.get(event_queue_item, :errors, []),
       steps_so_far: %{},
-      retries: 0
+      retries: 0,
+      save_on_error: true
     }
   end
 
@@ -181,7 +184,8 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
     %ErrorMap{
       errors: [],
       steps_so_far: %{},
-      retries: 0
+      retries: 0,
+      save_on_error: true
     }
   end
 end
