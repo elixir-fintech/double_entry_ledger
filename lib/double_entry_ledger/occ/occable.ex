@@ -151,4 +151,14 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
       |> Helper.occ_timeout_changeset(error_map)
     end)
   end
+
+  def timed_out(event_map, _name, %{save_on_error: false}) do
+    event_map_changeset =
+      event_map
+      |> EventMap.changeset(%{})
+      |> Changeset.add_error(:occ_timeout, "OCC retries exhausted")
+
+    Multi.new()
+    |> Multi.error(:occ_timeout, event_map_changeset)
+  end
 end

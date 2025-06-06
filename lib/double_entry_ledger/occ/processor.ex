@@ -163,6 +163,10 @@ defmodule DoubleEntryLedger.Occ.Processor do
               | {:ok, %{event_failure: Event.t()}}
               | Ecto.Multi.failure()
 
+  @callback process_with_retry_no_save_on_error(Occable.t(), Ecto.Repo.t()) ::
+              {:ok, %{transaction: Transaction.t(), event_success: Event.t()}}
+              | Ecto.Multi.failure()
+
   # --- Use Macro for Default Implementations ---
 
   defmacro __using__(_opts) do
@@ -207,6 +211,15 @@ defmodule DoubleEntryLedger.Occ.Processor do
             repo \\ Repo
           ) do
         %ErrorMap{} = error_map = create_error_map(occable_item)
+        retry(__MODULE__, occable_item, error_map, @max_retries, repo)
+      end
+
+      @impl true
+      def process_with_retry_no_save_on_error(
+            %{instance_id: id, transaction_data: td} = occable_item,
+            repo \\ Repo
+          ) do
+        %ErrorMap{} = error_map = %{create_error_map(occable_item) | save_on_error: false}
         retry(__MODULE__, occable_item, error_map, @max_retries, repo)
       end
 

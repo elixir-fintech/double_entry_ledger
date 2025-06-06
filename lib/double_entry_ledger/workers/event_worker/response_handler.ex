@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
+defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
   @moduledoc """
   Specialized error handling for the event processing pipeline in the double-entry ledger system.
 
@@ -31,9 +31,15 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   dependency issues are properly captured for troubleshooting, auditing, and potential
   retry operations.
   """
+  require Logger
+  import DoubleEntryLedger.EventQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
 
   alias Ecto.{Changeset, Multi}
-  import DoubleEntryLedger.EventQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
+
+  alias DoubleEntryLedger.{
+    Event,
+    Transaction
+  }
 
   alias DoubleEntryLedger.Event.{
     EntryData,
@@ -42,6 +48,50 @@ defmodule DoubleEntryLedger.EventWorker.ErrorHandler do
   }
 
   alias DoubleEntryLedger.Occ.Occable
+
+  @spec default_process_response_handler(
+          {:ok, map()} | {:error, :atom, any(), map()},
+          Occable.t(),
+          String.t()
+        ) ::
+          {:ok, Transaction.t(), Event.t()} | {:error, Changeset.t() | String.t()}
+  def default_process_response_handler(response, %EventMap{} = event_map, module_name) do
+    case response do
+      {:ok, %{transaction: transaction, event_success: event}} ->
+        Logger.info(
+          "#{module_name}: processed successfully",
+          Event.log_trace(event, transaction)
+        )
+
+        {:ok, transaction, event}
+
+      {:error, :new_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
+        Logger.warning(
+          "#{module_name}: Event changeset failed",
+          EventMap.log_trace(event_map, get_all_errors(event_changeset))
+        )
+
+        {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
+
+      {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
+        Logger.warning(
+          "#{module_name}: Transaction changeset failed",
+          EventMap.log_trace(event_map, get_all_errors(trx_changeset))
+        )
+
+        {:error, transfer_errors_from_trx_to_event_map(event_map, trx_changeset)}
+
+      {:error, step, error, _steps_so_far} ->
+        message = "#{module_name}: Step :#{step} failed."
+
+        Logger.error(
+          message,
+          EventMap.log_trace(event_map, error)
+        )
+
+        {:error, "#{message} #{inspect(error)}"}
+    end
+  end
 
   @doc """
   Handles errors that occur during transaction map conversion.
