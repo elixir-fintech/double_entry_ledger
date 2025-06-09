@@ -32,7 +32,9 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
   retry operations.
   """
   require Logger
-  import DoubleEntryLedger.EventQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
+
+  import DoubleEntryLedger.EventQueue.Scheduling,
+    only: [build_schedule_retry_with_reason: 3, schedule_retry_with_reason: 3]
 
   alias Ecto.{Changeset, Multi}
 
@@ -49,13 +51,13 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
 
   alias DoubleEntryLedger.Occ.Occable
 
-  @spec default_process_response_handler(
+  @spec default_event_map_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
-          Occable.t(),
+          EventMap.t(),
           String.t()
         ) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Changeset.t() | String.t()}
-  def default_process_response_handler(response, %EventMap{} = event_map, module_name) do
+  def default_event_map_response_handler(response, %EventMap{} = event_map, module_name) do
     case response do
       {:ok, %{transaction: transaction, event_success: event}} ->
         Logger.info(
@@ -90,6 +92,38 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
         )
 
         {:error, "#{message} #{inspect(error)}"}
+    end
+  end
+
+  @spec default_event_response_handler(
+          {:ok, map()} | {:error, :atom, any(), map()},
+          Event.t(),
+          String.t()
+        ) ::
+          {:ok, Transaction.t(), Event.t()} | {:error, Changeset.t() | Event.t() | String.t()}
+  def default_event_response_handler(response, %Event{} = original_event, module_name) do
+    case response do
+      {:ok, %{event_success: event, transaction: transaction}} ->
+        Logger.info(
+          "#{module_name}: processed successfully",
+          Event.log_trace(event, transaction)
+        )
+
+        {:ok, transaction, event}
+
+      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
+        Logger.warning("#{module_name}: #{last_error.message}", Event.log_trace(event))
+        {:error, event}
+
+      {:error, step, error, _} ->
+        message = "#{module_name}: Step :#{step} failed."
+        Logger.error(message, Event.log_trace(original_event, error))
+
+        schedule_retry_with_reason(
+          original_event,
+          "#{message} Error: #{inspect(error)}",
+          :failed
+        )
     end
   end
 

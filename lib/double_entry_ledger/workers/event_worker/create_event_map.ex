@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
   import DoubleEntryLedger.Occ.Helper
 
   import DoubleEntryLedger.EventWorker.ResponseHandler,
-    only: [default_process_response_handler: 3]
+    only: [default_event_map_response_handler: 3]
 
   import DoubleEntryLedger.EventQueue.Scheduling
 
@@ -118,7 +118,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
         {:error, event}
 
       response ->
-        default_process_response_handler(response, event_map, @module_name)
+        default_event_map_response_handler(response, event_map, @module_name)
     end
   end
 

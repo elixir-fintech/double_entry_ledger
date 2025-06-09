@@ -1,16 +1,12 @@
 defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
   @moduledoc """
-  Processes `EventMap` structures for atomic creation and update of events and their
-  associated transactions in the Double Entry Ledger system.
+  Processes `EventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system.
 
-  This module implements the Optimistic Concurrency Control (OCC) pattern to ensure
-  safe concurrent processing of events, providing robust error handling, retry logic,
-  and transactional guarantees. It supports both creation and update flows for events,
-  ensuring that all operations are performed atomically and consistently.
+  Implements the Optimistic Concurrency Control (OCC) pattern to ensure safe concurrent processing of update events, providing robust error handling, retry logic, and transactional guarantees. This module ensures that update operations are performed atomically and consistently, and that all error and retry scenarios are handled transparently.
 
   ## Features
 
-    * Transaction Processing: Handles both creation and update of transactions based on the event map's action.
+    * Transaction Processing: Handles update of transactions based on the event map's action.
     * Atomic Operations: Ensures all event and transaction changes are performed in a single database transaction.
     * Error Handling: Maps validation and dependency errors to the appropriate changeset or event state.
     * Retry Logic: Retries OCC conflicts and schedules retries for dependency errors.
@@ -18,15 +14,20 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
 
   ## Main Functions
 
-    * `process_map/2` — Entry point for processing event maps with error handling and OCC.
-    * `build_transaction/3` — Constructs Ecto.Multi operations for create or update actions.
+    * `process/2` — Entry point for processing update event maps with error handling and OCC.
+    * `build_transaction/3` — Constructs Ecto.Multi operations for update actions.
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
 
-  This module ensures that events are processed exactly once, even in high-concurrency
-  environments, and that all error and retry scenarios are handled transparently.
+  This module ensures that update events are processed exactly once, even in high-concurrency environments, and that all error and retry scenarios are handled transparently.
   """
 
   use DoubleEntryLedger.Occ.Processor
+  import DoubleEntryLedger.Occ.Helper
+  import DoubleEntryLedger.EventWorker.ResponseHandler
+  import DoubleEntryLedger.EventQueue.Scheduling
+
+  import DoubleEntryLedger.EventWorker.ResponseHandler,
+    only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{
     Event,
@@ -40,9 +41,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   alias Ecto.{Multi, Changeset}
-  import DoubleEntryLedger.Occ.Helper
-  import DoubleEntryLedger.EventWorker.ResponseHandler
-  import DoubleEntryLedger.EventQueue.Scheduling
 
   @impl true
   @doc """
@@ -111,43 +109,12 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process(%{action: :update} = event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
-      {:ok, %{transaction: transaction, event_success: event}} ->
-        Logger.info(
-          "#{@module_name}: processed successfully",
-          Event.log_trace(event, transaction)
-        )
-
-        {:ok, transaction, event}
-
       {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
         Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
         {:error, event}
 
-      {:error, :new_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
-        Logger.warning(
-          "#{@module_name}: Event changeset failed",
-          EventMap.log_trace(event_map, get_all_errors(event_changeset))
-        )
-
-        {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
-
-      {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
-        Logger.warning(
-          "#{@module_name}: Transaction changeset failed",
-          EventMap.log_trace(event_map, get_all_errors(trx_changeset))
-        )
-
-        {:error, transfer_errors_from_trx_to_event_map(event_map, trx_changeset)}
-
-      {:error, step, error, _steps_so_far} ->
-        message = "#{@module_name}: Step :#{step} failed."
-
-        Logger.error(
-          message,
-          EventMap.log_trace(event_map, error)
-        )
-
-        {:error, "#{message} #{inspect(error)}"}
+      response ->
+        default_event_map_response_handler(response, event_map, @module_name)
     end
   end
 

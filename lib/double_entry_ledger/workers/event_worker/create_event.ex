@@ -41,6 +41,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
 
   import DoubleEntryLedger.EventQueue.Scheduling
 
+  import DoubleEntryLedger.EventWorker.ResponseHandler,
+    only: [default_event_response_handler: 3]
+
   @impl true
   @doc """
   Handles errors that occur when converting event data to a transaction map.
@@ -102,30 +105,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   @spec process(Event.t(), Ecto.Repo.t()) ::
           {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
   def process(%Event{} = original_event, repo \\ Repo) do
-    # Credo:disable-for-this-file Credo.Check.Warning.MissedMetadataKeyInLoggerConfig
-    case process_with_retry(original_event, repo) do
-      {:ok, %{event_success: event, transaction: transaction}} ->
-        Logger.info(
-          "#{@module_name}: processed successfully",
-          Event.log_trace(event, transaction)
-        )
-
-        {:ok, transaction, event}
-
-      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
-        Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
-        {:error, event}
-
-      {:error, step, error, _} ->
-        message = "#{@module_name}: Step :#{step} failed."
-        Logger.error(message, Event.log_trace(original_event, error))
-
-        schedule_retry_with_reason(
-          original_event,
-          "#{message} Error: #{inspect(error)}",
-          :failed
-        )
-    end
+    process_with_retry(original_event, repo)
+    |> default_event_response_handler(original_event, @module_name)
   end
 
   @impl true

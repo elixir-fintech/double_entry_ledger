@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMapNoSaveOnError do
   use DoubleEntryLedger.Occ.Processor
 
   import DoubleEntryLedger.EventWorker.ResponseHandler,
-    only: [default_process_response_handler: 3]
+    only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{
     Event,
@@ -25,6 +25,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMapNoSaveOnError do
   alias Ecto.Changeset
 
   @impl true
+  # this function will never be called, as we don't save on error
+  # but we need to implement it to satisfy the behaviour
   defdelegate handle_occ_final_timeout(event_map, repo),
     to: DoubleEntryLedger.EventWorker.ResponseHandler,
     as: :handle_occ_final_timeout
@@ -73,7 +75,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMapNoSaveOnError do
         {:error, changeset}
 
       response ->
-        default_process_response_handler(response, event_map, @module_name)
+        default_event_map_response_handler(response, event_map, @module_name)
     end
   end
 
