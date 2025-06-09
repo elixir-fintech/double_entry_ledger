@@ -68,5 +68,42 @@ defmodule DoubleEntryLedger.EventTransformerTest do
 
       assert !Map.has_key?(transaction_map, :entries)
     end
+
+    test "returns error for non-existing accounts", %{instance: instance} do
+      entries = [
+        %EntryData{account_id: Ecto.UUID.generate(), amount: 100, currency: "EUR"},
+        %EntryData{account_id: Ecto.UUID.generate(), amount: 100, currency: "EUR"}
+      ]
+
+      transaction_data = %TransactionData{entries: entries, status: :posted}
+
+      assert {:error, :no_accounts_found} =
+               EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+    end
+
+    test "returns error for mismatched accounts and entries", %{instance: instance,
+      accounts: [a1, _, _, _]} do
+      entries = [
+        %EntryData{account_id: a1.id, amount: 100, currency: "EUR"},
+        %EntryData{account_id: Ecto.UUID.generate(), amount: 100, currency: "EUR"}
+      ]
+
+      transaction_data = %TransactionData{entries: entries, status: :posted}
+
+      assert {:error, :some_accounts_not_found} =
+               EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+    end
+
+    test "returns error for incomplete entry data", %{instance: instance,
+      accounts: [a1, a2, _, _]} do
+      entries = [
+        %EntryData{account_id: a1.id, currency: "EUR", amount: 100},
+        %EntryData{account_id: a2.id, amount: 100}
+      ]
+      transaction_data = %TransactionData{status: :posted, entries: entries}
+
+      assert {:error, :invalid_entry_data} =
+               EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+    end
   end
 end

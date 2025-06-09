@@ -256,7 +256,10 @@ defmodule DoubleEntryLedger.AccountStore do
 
   """
   @spec get_accounts_by_instance_id(Ecto.UUID.t(), list(String.t())) ::
-          {:error, String.t()} | {:ok, list(Account.t())}
+          {:ok, list(Account.t())}
+          | {:error, :no_accounts_found | :some_accounts_not_found | :no_account_ids_provided}
+  def get_accounts_by_instance_id(_instance_id, []), do: {:error, :no_account_ids_provided}
+
   def get_accounts_by_instance_id(instance_id, account_ids) do
     accounts =
       Repo.all(
@@ -265,10 +268,15 @@ defmodule DoubleEntryLedger.AccountStore do
         )
       )
 
-    if length(accounts) == length(account_ids) do
-      {:ok, accounts}
-    else
-      {:error, "Some accounts were not found"}
+    cond do
+      accounts == [] ->
+        {:error, :no_accounts_found}
+
+      length(accounts) < length(account_ids) ->
+        {:error, :some_accounts_not_found}
+
+      true ->
+        {:ok, accounts}
     end
   end
 
@@ -298,7 +306,8 @@ defmodule DoubleEntryLedger.AccountStore do
 
   """
   @spec get_accounts_by_instance_id_and_type(Ecto.UUID.t(), Types.account_type()) ::
-          {:error, String.t()} | {:ok, list(Account.t())}
+          {:ok, list(Account.t())}
+          | {:error, :no_accounts_found_for_provided_type}
   def get_accounts_by_instance_id_and_type(instance_id, type) do
     accounts =
       Repo.all(
@@ -310,7 +319,7 @@ defmodule DoubleEntryLedger.AccountStore do
     if length(accounts) > 0 do
       {:ok, accounts}
     else
-      {:error, "No #{type} accounts were found"}
+      {:error, :no_accounts_found_for_provided_type}
     end
   end
 
@@ -341,7 +350,7 @@ defmodule DoubleEntryLedger.AccountStore do
 
   """
   @spec get_all_accounts_by_instance_id(Ecto.UUID.t()) ::
-          {:error, String.t()} | {:ok, list(Account.t())}
+          {:ok, list(Account.t())} | {:error, :no_accounts_found}
   def get_all_accounts_by_instance_id(instance_id) do
     accounts =
       Repo.all(
@@ -354,7 +363,7 @@ defmodule DoubleEntryLedger.AccountStore do
     if length(accounts) > 0 do
       {:ok, accounts}
     else
-      {:error, "No accounts were found"}
+      {:error, :no_accounts_found}
     end
   end
 end
