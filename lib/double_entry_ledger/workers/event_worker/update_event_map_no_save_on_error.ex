@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
+defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
   @moduledoc """
   Processes `EventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system.
 
@@ -30,7 +30,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{
-    Event,
     EventWorker,
     TransactionStore,
     Repo,
@@ -40,7 +39,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
   alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
-  alias Ecto.Multi
+  alias Ecto.{Multi, Changeset}
 
   @impl true
   @doc """
@@ -108,10 +107,22 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
   @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process(%{action: :update} = event_map, repo \\ Repo) do
-    case process_with_retry(event_map, repo) do
-      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
-        Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
-        {:error, event}
+    case process_with_retry_no_save_on_error(event_map, repo) do
+      {:error, :occ_timeout, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+        Logger.warning(
+          "#{@module_name}: OCC timeout reached",
+          EventMap.log_trace(event_map, changeset.errors)
+        )
+
+        {:error, changeset}
+
+      {:error, :create_event_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+        Logger.warning(
+          "#{@module_name}: Create event error",
+          EventMap.log_trace(event_map, changeset.errors)
+        )
+
+        {:error, changeset}
 
       response ->
         default_event_map_response_handler(response, event_map, @module_name)
@@ -192,7 +203,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
 
     - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step.
   """
-  def handle_build_transaction(multi, _event_map, _repo) do
+  def handle_build_transaction(multi, event_map, _repo) do
     multi
     |> Multi.merge(fn
       %{transaction: transaction, new_event: event} ->
@@ -203,23 +214,18 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
           build_create_event_transaction_link(event, transaction)
         end)
 
-      %{
-        get_create_event_error: %{reason: :create_event_not_processed} = exception,
-        new_event: event
-      } ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
-          build_revert_to_pending(event, exception.message)
-        end)
+      %{get_create_event_error: %{reason: reason}, new_event: _event} ->
+        event_map_changeset =
+          cast_to_event_map(event_map)
+          |> EventMap.changeset(%{})
+          |> Changeset.add_error(:create_event_error, to_string(reason))
 
-      %{get_create_event_error: %{reason: :create_event_failed} = exception, new_event: event} ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
-          build_schedule_update_retry(event, exception)
-        end)
-
-      %{get_create_event_error: exception, new_event: event} ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
-          build_mark_as_dead_letter(event, exception.message)
-        end)
+        Multi.new()
+        |> Multi.error(:create_event_error, event_map_changeset)
     end)
   end
+
+  defp cast_to_event_map(%EventMap{} = event_map), do: event_map
+  # Only cast if it's a plain map
+  defp cast_to_event_map(event_map) when is_map(event_map), do: struct(EventMap, event_map)
 end
