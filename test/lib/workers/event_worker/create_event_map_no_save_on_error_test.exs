@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMapNoSaveOnErrorTest do
 
   doctest CreateEventMapNoSaveOnError
 
-  describe "process_map/1" do
+  describe "process/1" do
     setup [:create_instance, :create_accounts]
 
     test "create event for event_map, which must also create the event", ctx do
@@ -60,6 +60,40 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMapNoSaveOnErrorTest do
         CreateEventMapNoSaveOnError.process(struct(EventMapSchema, updated_event_map))
 
       assert %Changeset{data: %EventMapSchema{}} = changeset
+    end
+
+    test "return EventMap changeset for invalid entry data currency", ctx do
+      event_map = event_map(ctx, :pending)
+
+      updated_event_map =
+        update_in(event_map, [:transaction_data, :entries, Access.at(1), :currency], fn _ ->
+          "XYZ"
+        end)
+
+      {:error, changeset} =
+        CreateEventMapNoSaveOnError.process(struct(EventMapSchema, updated_event_map))
+
+      assert %Changeset{
+               data: %EventMapSchema{},
+               errors: [input_event_map: {"invalid_entry_data", []}]
+             } = changeset
+    end
+
+    test "return EventMap changeset for non existing account", ctx do
+      event_map = event_map(ctx, :pending)
+
+      updated_event_map =
+        update_in(event_map, [:transaction_data, :entries, Access.at(1), :account_id], fn _ ->
+          Ecto.UUID.generate()
+        end)
+
+      {:error, changeset} =
+        CreateEventMapNoSaveOnError.process(struct(EventMapSchema, updated_event_map))
+
+      assert %Changeset{
+               data: %EventMapSchema{},
+               errors: [input_event_map: {"some_accounts_not_found", []}]
+             } = changeset
     end
   end
 
