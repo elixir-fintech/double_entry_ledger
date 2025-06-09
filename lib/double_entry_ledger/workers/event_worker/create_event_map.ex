@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
 
   alias DoubleEntryLedger.{
     Event,
-    Transaction,
+    EventWorker,
     TransactionStore,
     Repo,
     EventStoreHelper
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
 
   alias DoubleEntryLedger.Event.EventMap
 
-  alias Ecto.{Multi, Changeset}
+  alias Ecto.Multi
   import DoubleEntryLedger.Occ.Helper
 
   import DoubleEntryLedger.EventWorker.ResponseHandler,
@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
     - `{:error, reason}` for other errors, with a string describing the error and the failing step.
   """
   @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
+          EventWorker.success_tuple() | EventWorker.error_tuple()
   def process(%{action: :create} = event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
       {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->

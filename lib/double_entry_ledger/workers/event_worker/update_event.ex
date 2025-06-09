@@ -32,12 +32,11 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
 
   use DoubleEntryLedger.Occ.Processor
 
-  alias Ecto.Changeset
   alias Ecto.Multi
 
   alias DoubleEntryLedger.{
     Event,
-    Transaction,
+    EventWorker,
     EventStoreHelper,
     TransactionStore,
     Repo
@@ -115,7 +114,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
     - Properly marks events as failed with meaningful error messages.
   """
   @spec process(Event.t(), Ecto.Repo.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
+          EventWorker.success_tuple() | EventWorker.error_tuple()
   def process(original_event, repo \\ Repo) do
     process_with_retry(original_event, repo)
     |> default_event_response_handler(original_event, @module_name)

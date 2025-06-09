@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.EventStore do
   import DoubleEntryLedger.EventStoreHelper
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.{Repo, Event, Transaction}
+  alias DoubleEntryLedger.{Repo, Event}
   alias DoubleEntryLedger.Event.EventMap
   alias DoubleEntryLedger.EventWorker
 
@@ -111,8 +111,7 @@ defmodule DoubleEntryLedger.EventStore do
     - `{:error, reason}`: If processing failed for other reasons
   """
   @spec process_from_event_params(map()) ::
-          {:ok, Transaction.t(), Event.t()}
-          | {:error, Event.t() | Ecto.Changeset.t() | String.t()}
+    EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_from_event_params(event_params) do
     case EventMap.create(event_params) do
       {:ok, event_map} ->

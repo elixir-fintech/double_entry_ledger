@@ -30,6 +30,9 @@ defmodule DoubleEntryLedger.EventWorker do
 
   import ProcessEvent, only: [process_event: 1, process_event_map: 1]
 
+  @type success_tuple :: {:ok, Transaction.t(), Event.t()}
+  @type error_tuple :: {:error, Event.t() | Changeset.t() | String.t()}
+
   @doc """
   Processes a new event map by delegating to the appropriate handler.
 
@@ -70,7 +73,7 @@ defmodule DoubleEntryLedger.EventWorker do
 
   """
   @spec process_new_event(EventMap.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
+          success_tuple() | error_tuple()
   def process_new_event(%EventMap{} = event_map) do
     process_event_map(event_map)
   end
@@ -117,8 +120,7 @@ defmodule DoubleEntryLedger.EventWorker do
       {:error, :event_not_found}
   """
   @spec process_event_with_id(Ecto.UUID.t(), String.t() | nil) ::
-          {:ok, Transaction.t(), Event.t()}
-          | {:error, Event.t() | Changeset.t() | String.t() | atom()}
+          success_tuple() | error_tuple()
   def process_event_with_id(uuid, processor_id \\ "manual") do
     case Scheduling.claim_event_for_processing(uuid, processor_id) do
       {:ok, event} -> process_event(event)

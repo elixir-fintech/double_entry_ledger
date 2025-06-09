@@ -36,8 +36,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
 
   use DoubleEntryLedger.Occ.Processor
 
-  alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.{Event, Transaction, TransactionStore, Repo}
+  alias Ecto.Multi
+  alias DoubleEntryLedger.{Event, EventWorker, TransactionStore, Repo}
 
   import DoubleEntryLedger.EventQueue.Scheduling
 
@@ -103,7 +103,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
     - `{:error, reason}`: When another error occurs, with a reason explaining the failure.
   """
   @spec process(Event.t(), Ecto.Repo.t()) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Event.t() | Changeset.t() | String.t()}
+          EventWorker.success_tuple() | EventWorker.error_tuple()
   def process(%Event{} = original_event, repo \\ Repo) do
     process_with_retry(original_event, repo)
     |> default_event_response_handler(original_event, @module_name)

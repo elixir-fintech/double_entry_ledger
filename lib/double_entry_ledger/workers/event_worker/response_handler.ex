@@ -40,7 +40,8 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
 
   alias DoubleEntryLedger.{
     Event,
-    Transaction
+    Transaction,
+    EventWorker
   }
 
   alias DoubleEntryLedger.Event.{
@@ -56,7 +57,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
           EventMap.t(),
           String.t()
         ) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Changeset.t() | String.t()}
+          EventWorker.success_tuple() | {:error, Changeset.t() | String.t()}
   def default_event_map_response_handler(response, %EventMap{} = event_map, module_name) do
     case response do
       {:ok, %{transaction: transaction, event_success: event}} ->
@@ -100,7 +101,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
           Event.t(),
           String.t()
         ) ::
-          {:ok, Transaction.t(), Event.t()} | {:error, Changeset.t() | Event.t() | String.t()}
+          EventWorker.success_tuple() | {:error, Event.t() | String.t()}
   def default_event_response_handler(response, %Event{} = original_event, module_name) do
     case response do
       {:ok, %{event_success: event, transaction: transaction}} ->

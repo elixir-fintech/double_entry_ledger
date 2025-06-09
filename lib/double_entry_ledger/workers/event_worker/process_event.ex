@@ -19,12 +19,10 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   4. Update the event status to reflect the result
   """
 
-  alias Ecto.Changeset
-
   alias DoubleEntryLedger.{
     CreateEvent,
     Event,
-    Transaction,
+    EventWorker,
     UpdateEvent
   }
 
@@ -56,8 +54,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
 
   """
   @spec process_event(Event.t()) ::
-          {:ok, Transaction.t(), Event.t()}
-          | {:error, Event.t() | Changeset.t() | String.t() | atom()}
+          EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_event(%Event{event_queue_item: %{status: :processing}, action: :create} = event) do
     CreateEvent.process(event)
   end
@@ -94,8 +91,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
 
   """
   @spec process_event_map(EventMap.t()) ::
-          {:ok, Transaction.t(), Event.t()}
-          | {:error, Event.t() | Changeset.t() | String.t() | atom()}
+          EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_event_map(%{action: :create} = event_map) do
     CreateEventMap.process(event_map)
   end
