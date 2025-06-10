@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMapNoSaveOnError do
         {:error, changeset}
 
       {:error, :input_event_map_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
-        Logger.warning(
+        Logger.error(
           "#{@module_name}: Input event map error",
           EventMap.log_trace(event_map, changeset.errors)
         )

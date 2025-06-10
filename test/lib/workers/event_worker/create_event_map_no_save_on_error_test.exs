@@ -97,8 +97,6 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMapNoSaveOnErrorTest do
     end
   end
 
-  TODO
-
   describe "process_map/2 with OCC timeout" do
     # , :verify_on_exit!]
     setup [:create_instance, :create_accounts]

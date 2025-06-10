@@ -1,14 +1,14 @@
 defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
   @moduledoc """
-  Processes `EventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system.
+  Processes `EventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system, without saving on error.
 
-  Implements the Optimistic Concurrency Control (OCC) pattern to ensure safe concurrent processing of update events, providing robust error handling, retry logic, and transactional guarantees. This module ensures that update operations are performed atomically and consistently, and that all error and retry scenarios are handled transparently.
+  Implements the Optimistic Concurrency Control (OCC) pattern to ensure safe concurrent processing of update events, providing robust error handling, retry logic, and transactional guarantees. This module ensures that update operations are performed atomically and consistently, and that all error and retry scenarios are handled transparently. Unlike the standard update event map processor, this variant does not persist changes on error, but instead returns changesets with error details for client handling.
 
   ## Features
 
     * Transaction Processing: Handles update of transactions based on the event map's action.
     * Atomic Operations: Ensures all event and transaction changes are performed in a single database transaction.
-    * Error Handling: Maps validation and dependency errors to the appropriate changeset or event state.
+    * Error Handling: Maps validation and dependency errors to the appropriate changeset or event state, but does not persist on error.
     * Retry Logic: Retries OCC conflicts and schedules retries for dependency errors.
     * OCC Integration: Integrates with the OCC processor behavior for safe, idempotent event processing.
 
@@ -17,8 +17,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
     * `process/2` — Entry point for processing update event maps with error handling and OCC.
     * `build_transaction/3` — Constructs Ecto.Multi operations for update actions.
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
+    * `handle_transaction_map_error/3` — Returns a changeset with error details, does not persist.
+    * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion, does not persist.
 
-  This module ensures that update events are processed exactly once, even in high-concurrency environments, and that all error and retry scenarios are handled transparently.
+  This module ensures that update events are processed exactly once, even in high-concurrency environments, and that all error and retry scenarios are handled transparently and returned to the caller for further handling.
   """
 
   use DoubleEntryLedger.Occ.Processor
@@ -31,62 +33,29 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
 
   alias DoubleEntryLedger.{
     EventWorker,
-    TransactionStore,
-    Repo,
-    EventStoreHelper
+    Repo
   }
 
   alias DoubleEntryLedger.Event.EventMap
 
-  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   alias Ecto.{Multi, Changeset}
 
+  # this function will never be called, as we don't save on error
+  # but we need to implement it to satisfy the behaviour
   @impl true
-  @doc """
-  Handles errors that occur when converting event map data to a transaction map.
-
-  Delegates to `DoubleEntryLedger.EventWorker.ResponseHandler.handle_transaction_map_error/3`.
-
-  ## Parameters
-
-    - `event_map`: The event map being processed.
-    - `error`: The error encountered during transaction map conversion.
-    - `repo`: The Ecto repository.
-
-  ## Returns
-
-    - An `Ecto.Multi` that updates the event with error information.
-  """
-  defdelegate handle_transaction_map_error(event_map, error, repo),
-    to: DoubleEntryLedger.EventWorker.ResponseHandler,
-    as: :handle_transaction_map_error
-
-  @impl true
-  @doc """
-  Handles the case when OCC retries are exhausted for an event map.
-
-  Delegates to `DoubleEntryLedger.EventWorker.ResponseHandler.handle_occ_final_timeout/2`.
-
-  ## Parameters
-
-    - `event_map`: The event map being processed.
-    - `repo`: The Ecto repository.
-
-  ## Returns
-
-    - An `Ecto.Multi` that updates the event as dead letter or timed out.
-  """
   defdelegate handle_occ_final_timeout(event_map, repo),
     to: DoubleEntryLedger.EventWorker.ResponseHandler,
     as: :handle_occ_final_timeout
 
-  @doc """
-  Processes an `EventMap` by creating both an event record and its associated transaction atomically.
+  @impl true
+  defdelegate build_transaction(event_map, transaction_map, repo),
+    to: DoubleEntryLedger.EventWorker.UpdateEventMap,
+    as: :build_transaction
 
-  This function is designed for synchronous use, ensuring that both the event and the transaction
-  are created or updated in one atomic operation. It handles both `:create` and `:update` action types,
-  with appropriate transaction building logic for each case. The entire operation uses Optimistic
-  Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively.
+  @doc """
+  Processes an `EventMap` by creating both an event record and its associated transaction atomically, without saving on error.
+
+  This function is designed for synchronous use, ensuring that both the event and the transaction are created or updated in one atomic operation. It handles both `:create` and `:update` action types, with appropriate transaction building logic for each case. The entire operation uses Optimistic Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively. If an error occurs, a changeset with error details is returned instead of persisting the error state.
 
   ## Parameters
 
@@ -96,12 +65,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
   ## Returns
 
     - `{:ok, transaction, event}` on success, where both the transaction and event are created/updated successfully.
-    - `{:error, event}` if the transaction processing fails with an OCC or dependency issue:
-      - If there was an OCC timeout, the event will be in the `:occ_timeout` state and can be retried.
-      - If this is an update event and the create event is still in pending state, the event will be in the `:pending` state.
-    - `{:error, changeset}` if validation errors occur:
-      - For event validation failures, the EventMap changeset will contain event-related errors.
-      - For transaction validation failures, the EventMap changeset will contain mapped transaction errors.
+    - `{:error, changeset}` if validation or dependency errors occur (not persisted).
     - `{:error, reason}` for other errors, with a string describing the error and the failing step.
   """
   @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
@@ -117,8 +81,16 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
         {:error, changeset}
 
       {:error, :create_event_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
-        Logger.warning(
-          "#{@module_name}: Create event error",
+        Logger.error(
+          "#{@module_name}: Update event error",
+          EventMap.log_trace(event_map, changeset.errors)
+        )
+
+        {:error, changeset}
+
+      {:error, :input_event_map_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+        Logger.error(
+          "#{@module_name}: Input event map error",
           EventMap.log_trace(event_map, changeset.errors)
         )
 
@@ -127,58 +99,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
       response ->
         default_event_map_response_handler(response, event_map, @module_name)
     end
-  end
-
-  @impl true
-  @doc """
-  Builds an `Ecto.Multi` transaction for processing an event map based on its action type.
-
-  This function implements the OCC processor behavior and creates the appropriate
-  transaction operations depending on whether the event is a `:create` or `:update` action.
-
-  ### For `:create` actions:
-    - Inserts a new event with status `:pending`
-    - Creates a new transaction in the ledger
-    - Updates the event to mark it as processed with the transaction ID
-
-  ### For `:update` actions:
-    - Inserts a new event with status `:pending`
-    - Retrieves the related "create event" transaction
-    - Updates the existing transaction with new data
-    - Updates the event to mark it as processed with the transaction ID
-
-  ## Parameters
-
-    - `event_map`: An `EventMap` struct containing the event details and action type.
-    - `transaction_map`: A map containing the transaction data to be created or updated.
-    - `repo`: The Ecto repository to use for database operations.
-
-  ## Returns
-
-    - An `Ecto.Multi` struct containing the operations to execute within a transaction.
-  """
-  def build_transaction(%{action: :update} = event_map, transaction_map, repo) do
-    new_event_map = Map.put_new(event_map, :status, :pending)
-
-    Multi.new()
-    |> Multi.insert(:new_event, EventStoreHelper.build_create(new_event_map))
-    |> EventStoreHelper.build_get_create_event_transaction(
-      :get_create_event_transaction,
-      :new_event
-    )
-    |> Multi.merge(fn
-      %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
-        Multi.put(Multi.new(), :get_create_event_error, exception)
-
-      %{get_create_event_transaction: create_transaction} ->
-        TransactionStore.build_update(
-          Multi.new(),
-          :transaction,
-          create_transaction,
-          transaction_map,
-          repo
-        )
-    end)
   end
 
   @impl true
@@ -193,6 +113,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
     * If the related create event failed, a retry is scheduled for the update event.
     * For all other errors, the event is marked as dead letter.
 
+  If an error occurs, a changeset with error details is returned instead of persisting the error state.
+
   ## Parameters
 
     - `multi`: The `Ecto.Multi` built so far.
@@ -201,7 +123,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
 
   ## Returns
 
-    - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step.
+    - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step, or a changeset with error details.
   """
   def handle_build_transaction(multi, event_map, _repo) do
     multi
@@ -223,6 +145,23 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
         Multi.new()
         |> Multi.error(:create_event_error, event_map_changeset)
     end)
+  end
+
+  @impl true
+  @doc """
+  Returns a changeset with error details for the given event map and error, without persisting the error.
+
+  This function is used to handle errors in transaction mapping, providing a changeset that
+  describes the error without affecting the database state.
+  """
+  def handle_transaction_map_error(event_map, error, _repo) do
+    event_map_changeset =
+      cast_to_event_map(event_map)
+      |> EventMap.changeset(%{})
+      |> Changeset.add_error(:input_event_map, to_string(error))
+
+    Multi.new()
+    |> Multi.error(:input_event_map_error, event_map_changeset)
   end
 
   defp cast_to_event_map(%EventMap{} = event_map), do: event_map
