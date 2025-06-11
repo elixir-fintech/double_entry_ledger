@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.EventStore do
   def get_by_id(id) do
     Event
     |> where(id: ^id)
-    |> preload([:event_queue_item])
+    |> preload([:event_queue_item, :transactions])
     |> Repo.one()
   end
 
@@ -138,15 +138,15 @@ defmodule DoubleEntryLedger.EventStore do
   def list_all_for_instance(instance_id, page \\ 1, per_page \\ 40) do
     offset = (page - 1) * per_page
 
-    Repo.all(
-      from(e in Event,
-        where: e.instance_id == ^instance_id,
-        order_by: [desc: e.inserted_at],
-        limit: ^per_page,
-        offset: ^offset,
-        select: e
-      )
+    from(e in Event,
+      where: e.instance_id == ^instance_id,
+      order_by: [desc: e.inserted_at],
+      limit: ^per_page,
+      offset: ^offset,
+      select: e
     )
+    |> preload([:event_queue_item, :transactions])
+    |> Repo.all()
   end
 
   @doc """
@@ -160,14 +160,14 @@ defmodule DoubleEntryLedger.EventStore do
   """
   @spec list_all_for_transaction(Ecto.UUID.t()) :: list(Event.t())
   def list_all_for_transaction(transaction_id) do
-    Repo.all(
-      from(e in Event,
-        join: evt in assoc(e, :event_transaction_links),
-        where: evt.transaction_id == ^transaction_id,
-        select: e,
-        order_by: [desc: e.inserted_at]
-      )
+    from(e in Event,
+      join: evt in assoc(e, :event_transaction_links),
+      where: evt.transaction_id == ^transaction_id,
+      select: e,
+      order_by: [desc: e.inserted_at]
     )
+    |> preload([:event_queue_item, :transactions])
+    |> Repo.all()
   end
 
   @doc """

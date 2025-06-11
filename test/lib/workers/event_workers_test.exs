@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+      %{transactions: [processed_transaction | []]} = EventStore.get_by_id(processed_event.id)
 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+      %{transactions: [processed_transaction | []]} = EventStore.get_by_id(processed_event.id)
 
       assert processed_transaction.id == pending_transaction.id
       assert transaction.id == pending_transaction.id
