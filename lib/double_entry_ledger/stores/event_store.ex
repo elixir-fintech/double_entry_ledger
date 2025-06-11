@@ -122,6 +122,18 @@ defmodule DoubleEntryLedger.EventStore do
     end
   end
 
+  @spec process_from_event_params_no_save_on_error(map()) ::
+    EventWorker.success_tuple() | EventWorker.error_tuple()
+  def process_from_event_params_no_save_on_error(event_params) do
+    case EventMap.create(event_params) do
+      {:ok, event_map} ->
+        EventWorker.process_new_event_no_save_on_error(event_map)
+
+      {:error, event_map_changeset} ->
+        {:error, event_map_changeset}
+    end
+  end
+
   @doc """
   Lists events for a specific instance with pagination.
 

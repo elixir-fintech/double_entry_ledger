@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.EventWorker do
   alias DoubleEntryLedger.EventWorker.ProcessEvent
   alias DoubleEntryLedger.EventQueue.Scheduling
 
-  import ProcessEvent, only: [process_event: 1, process_event_map: 1]
+  import ProcessEvent, only: [process_event: 1, process_event_map: 1, process_event_map_no_save_on_error: 1]
 
   @type success_tuple :: {:ok, Transaction.t(), Event.t()}
   @type error_tuple :: {:error, Event.t() | Changeset.t() | String.t()}
@@ -76,6 +76,12 @@ defmodule DoubleEntryLedger.EventWorker do
           success_tuple() | error_tuple()
   def process_new_event(%EventMap{} = event_map) do
     process_event_map(event_map)
+  end
+
+  @spec process_new_event_no_save_on_error(EventMap.t()) ::
+          success_tuple() | error_tuple()
+  def process_new_event_no_save_on_error(%EventMap{} = event_map) do
+    process_event_map_no_save_on_error(event_map)
   end
 
   @doc """
