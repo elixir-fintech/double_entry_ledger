@@ -183,20 +183,21 @@ defmodule DoubleEntryLedger.EventStore do
   end
 
   @doc """
-  Creates a new event after a processing failure, preserving error information.
-  This is used mainly for Events that have not yet been saved to the database which
-  can happen when failing to create a transaction from an EventMap. This is useful
-  for tracking the failure and retrying later.
+  Creates a new event record after a processing failure, preserving error information.
+
+  This function is used to persist an event that failed to process, including its error details,
+  retry count, and status. It is typically called when an event could not be saved or processed
+  successfully, allowing for later inspection or retry.
 
   ## Parameters
-    - `event`: The original event that failed
-    - `errors`: List of error messages or maps
-    - `retries`: Number of retries that have been attempted
-    - `status`: New status for the event (typically :failed or :occ_timeout)
+    - `event`: The original `%Event{}` struct that failed
+    - `errors`: A list of error messages or error maps to attach to the event
+    - `retries`: The number of retry attempts that have been made
+    - `status`: The new status for the event (e.g., `:failed`, `:occ_timeout`)
 
   ## Returns
-    - `{:ok, event}`: If the new event was successfully created
-    - `{:error, changeset}`: If event creation failed
+    - `{:ok, %Event{}}` if the event was successfully created
+    - `{:error, %Ecto.Changeset{}}` if validation or insertion failed
   """
   @spec create_event_after_failure(Event.t(), list(), integer(), atom()) ::
           {:ok, Event.t()} | {:error, Changeset.t()}

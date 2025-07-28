@@ -74,23 +74,20 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   end
 
   @doc """
-  Processes an event map by validating it and converting it to a proper Event record.
+  Processes an event map by validating and dispatching it to the correct handler.
 
-  This function serves as the entry point for processing external event data. It
-  validates that the action is supported before delegating to the appropriate handler.
-  The event map is transformed into a properly structured Event record, and the
-  associated transaction is created or updated.
+  This function is the entry point for processing external event data. It checks the `:action` field
+  and delegates to the appropriate handler for `:create` or `:update` actions. The event map is
+  transformed into a structured Event record, and the associated transaction is created or updated.
 
   ## Parameters
-    - `event_map` - A map containing event data with at least an :action field
+    - `event_map`: A map containing event data, including an `:action` key
 
   ## Returns
-    - `{:ok, transaction, event}` - Successfully processed the event map, returning
-      the resulting transaction and the created event
-    - `{:error, event}` - Failed to process the event, with the event containing error details
-    - `{:error, changeset}` - Failed to process the event, with changeset containing validation errors
-    - `{:error, reason}` - Failed to process the event, with reason explaining the failure
-
+    - `{:ok, transaction, event}`: On successful processing
+    - `{:error, event}`: If processing failed, with the event containing error details
+    - `{:error, changeset}`: If validation failed
+    - `{:error, reason}`: For other errors or unsupported actions
   """
   @spec process_event_map(EventMap.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
@@ -106,6 +103,21 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     {:error, :action_not_supported}
   end
 
+  @doc """
+  Processes an event map without saving on error, dispatching to the correct handler.
+
+  This function is similar to `process_event_map/1` but is used in scenarios where errors should not
+  be persisted to the database. It checks the `:action` field and delegates to the appropriate handler.
+
+  ## Parameters
+    - `event_map`: A map containing event data, including an `:action` key
+
+  ## Returns
+    - `{:ok, transaction, event}`: On successful processing
+    - `{:error, event}`: If processing failed, with the event containing error details
+    - `{:error, changeset}`: If validation failed
+    - `{:error, reason}`: For other errors or unsupported actions
+  """
   @spec process_event_map_no_save_on_error(EventMap.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_event_map_no_save_on_error(%{action: :create} = event_map) do

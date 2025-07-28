@@ -85,25 +85,22 @@ defmodule DoubleEntryLedger.EventWorker do
   end
 
   @doc """
-  Retrieves and processes an event by its UUID.
+  Retrieves and processes an event by its UUID, claiming it for processing.
 
-  Fetches the event from the event store by its UUID and processes it according to
-  its action type. Only events in the `:pending` state can be processed. This function
-  is useful for processing events that were previously stored but not yet processed,
-  or for retrying failed events.
+  This function fetches the event from the event store by its UUID and attempts to claim it for processing.
+  Only events in a claimable state (e.g., `:pending`) will be processed. The function is useful for
+  processing events that were previously stored but not yet processed, or for retrying failed events.
 
   ## Parameters
-
     - `uuid`: The UUID string identifying the event to process
+    - `processor_id`: (optional) The processor identifier (defaults to "manual")
 
   ## Returns
-
-    - `{:ok, transaction, event}` - Successfully processed the event, returning both
-      the created/updated transaction and the final event record
-    - `{:error, "Event not found"}` - No event found with the given UUID
-    - `{:error, event}` - Failed to process the event, with the event containing error details
-    - `{:error, changeset}` - Failed validation, with changeset containing validation errors
-    - `{:error, reason}` - Failed with a general error, with reason explaining the failure
+    - `{:ok, transaction, event}`: Successfully processed the event, returning both the transaction and event
+    - `{:error, :event_not_found}`: No event found with the given UUID
+    - `{:error, event}`: Failed to process the event, with the event containing error details
+    - `{:error, changeset}`: Failed validation, with changeset containing validation errors
+    - `{:error, reason}`: Failed with a general error, with reason explaining the failure
 
   ## Examples
 
