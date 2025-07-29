@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
   This schema is used to track events that need to be processed by workers.
   """
 
-  use Ecto.Schema
+  use DoubleEntryLedger.BaseSchema
   import Ecto.Changeset
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   alias DoubleEntryLedger.Event.ErrorMap
@@ -33,7 +33,6 @@ defmodule DoubleEntryLedger.EventQueueItem do
             Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
           )
 
-  @primary_key {:id, :binary_id, autogenerate: true}
   schema "event_queue_items" do
     field(:status, Ecto.Enum, values: @states, default: :pending)
     field(:processor_id, :string)

@@ -76,6 +76,7 @@ defmodule DoubleEntryLedger.MixProject do
         "pages/DoubleEntryLedger.md",
         "pages/AsynchronousEventProcessing.md",
         "pages/HandlingPendingTransactions.md",
+        "pages/EventSourcing.md",
         "LICENSE"
       ],
       groups_for_modules: [
