@@ -2,14 +2,8 @@ defmodule DoubleEntryLedger.TransactionStore do
   @moduledoc """
   Provides functions for managing transactions in the double-entry ledger system.
 
-  This module serves as the primary interface for all transaction-related operations,
-  including creating, retrieving, updating, and querying transactions. It handles the
-  core financial records of the double-entry ledger, ensuring proper transaction creation
-  and modification with appropriate validations.
-
   ## Key Functionality
 
-  * **Transaction Management**: Create, retrieve, and update transactions
   * **Complex Queries**: Find transactions by instance ID and account relationships
   * **Multi Integration**: Build operations that integrate with Ecto.Multi for atomic operations
   * **Optimistic Concurrency**: Handle Ecto.StaleEntryError with appropriate error handling
@@ -25,33 +19,13 @@ defmodule DoubleEntryLedger.TransactionStore do
 
       transactions = DoubleEntryLedger.TransactionStore.list_all_for_instance(instance.id)
 
-  Creating a transaction (typically via events):
+  Getting transactions for an account in an instance:
 
-      {:ok, transaction} = DoubleEntryLedger.TransactionStore.create(%{
-        instance_id: instance.id,
-        description: "Monthly invoice",
-        entries: [
-          %{account_id: cash_account.id, amount: 100_00, type: :debit},
-          %{account_id: revenue_account.id, amount: 100_00, type: :credit}
-        ]
-      })
-
-  Using the Multi building blocks:
-
-      multi =
-        Ecto.Multi.new()
-        |> DoubleEntryLedger.TransactionStore.build_create(:transaction, transaction_map)
-        |> Ecto.Multi.run(:after_create, fn _, %{transaction: transaction} ->
-          # Additional operations
-          {:ok, transaction}
-        end)
+      transactions = DoubleEntryLedger.TransactionStore.list_all_for_instance_and_account(instance.id, account.id)
 
   ## Implementation Notes
 
-  The module provides both direct operations (create/update) and building blocks for
-  Ecto.Multi operations, allowing for both simple usage and complex atomic operations.
-  **It is advised not to use the `create` and `update` functions, as there is no audit trail
-  for these operations. Instead use an event to create or update a transaction.**
+  There are no create/update functions, as there is no audit trail for these operations. Instead use an event to create or update a transaction.
   It uses optimistic concurrency control to handle concurrent modifications to related accounts.
   """
   alias Ecto.Multi
@@ -202,53 +176,6 @@ defmodule DoubleEntryLedger.TransactionStore do
           {:error, e}
       end
     end)
-  end
-
-  @doc """
-  Creates a new transaction with the given attributes. This can throw an
-  `Ecto.StaleEntryError` if the accounts associated with this transaction have
-  been updated in the meantime. Generally it is recommended to use an event
-  to create a transaction as this creates the full audit trail.
-
-  ## Parameters
-
-    - `transaction` - A map or `Transaction` struct containing the transaction data.
-
-  ## Returns
-
-    - `{:ok, %Transaction{}}` on success.
-    - `{:error, changeset}` on failure.
-  """
-  @spec create(Transaction.t() | map()) :: {:ok, Transaction.t()} | {:error, any()}
-  def create(transaction) do
-    %Transaction{}
-    |> Transaction.changeset(transaction)
-    |> Repo.insert()
-  end
-
-  @doc """
-  Updates an existing transaction with the given attributes. This can throw an
-  `Ecto.StaleEntryError` if the accounts associated with this transaction have
-  been updated in the meantime. Generally it is recommended to use an event
-  to update a transaction as this creates the full audit trail.
-
-  ## Parameters
-
-    - `transaction` - The `Transaction` struct to be updated.
-    - `attrs` - A map of attributes for the update.
-
-  ## Returns
-
-    - `{:ok, %Transaction{}}` on success.
-    - `{:error, changeset}` on failure.
-  """
-  @spec update(Transaction.t(), map()) :: {:ok, Transaction.t()} | {:error, any()}
-  def update(transaction, attrs) do
-    transition = update_transition(transaction, attrs)
-
-    transaction
-    |> Transaction.changeset(attrs, transition)
-    |> Repo.update()
   end
 
   @doc """

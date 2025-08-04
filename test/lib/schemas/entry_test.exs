@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EntryTest do
 
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Account, Entry, Repo, BalanceHistoryEntry, Balance}
+  alias DoubleEntryLedger.{Account, Entry, Repo, Balance}
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
@@ -76,37 +76,33 @@ defmodule DoubleEntryLedger.EntryTest do
     setup [:create_instance, :create_accounts, :create_transaction]
 
     test "balance history entry is created", %{transaction: %{entries: [e0, _]}} do
-      %{balance_history_entries: [first | _t]} =
+      %{balance_history_entries: [first | _t] = balance_history_entries} =
         account =
         Repo.get!(Account, e0.account_id, preload: [:balance_history_entries])
         |> Repo.preload([:balance_history_entries])
 
+      assert 1 == length(balance_history_entries)
       assert first.account_id == e0.account_id
       assert first.entry_id == e0.id
       assert first.available == account.available
-      assert first.posted == %Balance{amount: 0, credit: 0, debit: 0}
       assert first.posted == account.posted
-      assert account.normal_balance == :debit
-      assert first.pending == %Balance{amount: 100, credit: 0, debit: 100}
       assert first.pending == account.pending
     end
 
-    test "returns changeset with balance history entry", %{transaction: %{entries: [e0, _]}} do
+    test "returns changeset with balance history entry", %{transaction: %{entries: entries}} do
+      e0 = Enum.find(entries, fn e -> e.type == :credit end)
       changeset = Entry.update_changeset(e0, %{value: Money.new(100, :EUR)}, :pending_to_posted)
 
-      [h | _t] =
+      [h , t | _] =
         balance_history_entries =
         Ecto.Changeset.get_assoc(changeset, :balance_history_entries, :struct)
-
       assert 2 = length(balance_history_entries)
-
-      assert %BalanceHistoryEntry{
-               available: 100,
-               posted: %Balance{amount: 100, credit: 0, debit: 100},
-               pending: %Balance{amount: 0, credit: 0, debit: 0}
-             } = h
-
       assert h.account_id == e0.account_id
+      assert t.pending == %Balance{amount: 100, debit: 0, credit: 100}
+      assert t.posted == %Balance{amount: 0, debit: 0, credit: 0}
+      assert h.pending == %Balance{amount: 0, debit: 0, credit: 0}
+      assert h.posted == %Balance{amount: 100, debit: 0, credit: 100}
+
       # not yet persisted
       assert h.entry_id == nil
     end

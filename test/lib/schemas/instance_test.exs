@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.InstanceTest do
   """
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Instance, TransactionStore, Repo}
+  alias DoubleEntryLedger.{Instance, Repo}
 
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
@@ -70,34 +70,14 @@ defmodule DoubleEntryLedger.InstanceTest do
              } = Instance.validate_account_balances(inst)
     end
 
-    test "it works for balanced accounts", %{instance: inst, accounts: [a1, a2, a3, _]} do
-      attr =
-        transaction_attr(
-          status: :posted,
-          instance_id: inst.id,
-          entries: [
-            %{type: :debit, value: Money.new(50, :EUR), account_id: a1.id},
-            %{type: :credit, value: Money.new(100, :EUR), account_id: a2.id},
-            %{type: :debit, value: Money.new(50, :EUR), account_id: a3.id}
-          ]
-        )
+    test "it works for balanced accounts", %{instance: inst} = ctx do
 
-      attr2 =
-        transaction_attr(
-          instance_id: inst.id,
-          entries: [
-            %{type: :debit, value: Money.new(10, :EUR), account_id: a1.id},
-            %{type: :credit, value: Money.new(40, :EUR), account_id: a2.id},
-            %{type: :debit, value: Money.new(30, :EUR), account_id: a3.id}
-          ]
-        )
-
-      TransactionStore.create(attr)
-      TransactionStore.create(attr2)
+      create_transaction(ctx)
+      create_transaction(ctx, :posted)
 
       assert {
                :ok,
-               %{pending_credit: 40, pending_debit: 40, posted_credit: 100, posted_debit: 100}
+               %{pending_credit: 100, pending_debit: 100, posted_credit: 100, posted_debit: 100}
              } = Instance.validate_account_balances(inst)
     end
   end

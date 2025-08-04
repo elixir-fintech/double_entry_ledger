@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.TransactionFixtures do
   transaction entities.
   """
 
-  alias DoubleEntryLedger.TransactionStore
+  alias DoubleEntryLedger.EventStore
 
   def transaction_attr(attrs) do
     attrs
@@ -20,17 +20,22 @@ defmodule DoubleEntryLedger.TransactionFixtures do
         %{instance: instance, accounts: [acc1, acc2, _, _]} = ctx,
         status \\ :pending
       ) do
-    transaction =
-      transaction_attr(
+    event =
+      %{
+        action: :create,
+        source: "transaction",
+        source_idempk: Ecto.UUID.generate(),
         instance_id: instance.id,
-        status: status,
-        entries: [
-          %{type: :debit, value: Money.new(100, :EUR), account_id: acc1.id},
-          %{type: :credit, value: Money.new(100, :EUR), account_id: acc2.id}
-        ]
-      )
+        transaction_data: %{
+          status: status,
+          entries: [
+            %{currency: "EUR", amount: 100, account_id: acc1.id},
+            %{currency: "EUR", amount: 100, account_id: acc2.id}
+          ]
+        }
+      }
 
-    {:ok, transaction} = TransactionStore.create(transaction)
+    {:ok, transaction, _event} = EventStore.process_from_event_params(event)
     Map.put(ctx, :transaction, transaction)
   end
 

@@ -7,6 +7,7 @@ defmodule DoubleEntryLedger.TransactionTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.TransactionFixtures
+  import Ecto.Query, only: [from: 2]
 
   doctest Transaction
 
@@ -343,8 +344,9 @@ defmodule DoubleEntryLedger.TransactionTest do
     end
 
     test "archived to pending or posted", ctx do
-      %{transaction: trx} = create_pending_transaction(ctx)
-      {:ok, trx} = TransactionStore.update(trx, %{status: :archived})
+      %{transaction: %{id: id}} = create_pending_transaction(ctx)
+      from(t in Transaction, where: t.id == ^id) |> Repo.update_all(set: [status: :archived])
+      trx = TransactionStore.get_by_id(id)
 
       assert %Ecto.Changeset{
                errors: [
