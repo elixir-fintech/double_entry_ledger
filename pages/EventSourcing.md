@@ -29,3 +29,7 @@ DoubleEntryLedger uses an event-sourced architecture where the `Event` record is
 ## Summary
 
 DoubleEntryLedger's event-sourced design ensures that all business actions are permanently recorded as immutable events. The system maintains account balance projections through the `Account` schema with embedded `Balance` structs and preserves complete historical changes via `BalanceHistoryEntry` records. The `EventQueueItem` status tracking enables safe retries and full replay capabilities by timestamp ordering. This architecture guarantees auditability, recoverability, and transparency for all accounting operations.
+
+## Immutability Enforcement (TODO)
+
+Currently immutability is not enforced on the database level. On the application level an `Event` can't be changed or deleted and all `Balance` updates to an `Account` are driven by events, including the adding of `BalanceHistoryEntry`. The best way to enforce immutability in Postgres would be through the implementation of Row Level Security which enables fine grained control over actions per table.

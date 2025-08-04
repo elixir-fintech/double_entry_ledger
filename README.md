@@ -25,7 +25,12 @@ The migrations create a `double_entry_ledger` schema and all tables and indexes 
 
 ## Usage
 
-This library provides modules and functions to create, update, and manage ledger instances, accounts, and transactions. It ensures that all transactions are balanced and maintains the integrity of the ledger.
+This library provides modules and functions to create, update, and manage ledger instances, accounts, events and transactions. All ledger interaction should be done through below modules, this ensures the integrity of the ledger.
+
+- **[EventStore](DoubleEntryLedger.EventStore.html)**: To create, process and read `Events`. All value movements are initiated by an event.
+- **[InstanceStore](DoubleEntryLedger.InstanceStore.html)**: To create, update and delete `Ledger` instances.
+- **[AccountStore](DoubleEntryLedger.AccountStore.html)**: To create, update and delete `Accounts`.
+- **[TransactionStore](DoubleEntryLedger.TransactionStore.html)**: To read `Transactions`.
 
 ## Documentation
 

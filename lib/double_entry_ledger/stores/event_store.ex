@@ -16,8 +16,11 @@ defmodule DoubleEntryLedger.EventStore do
   ## Usage Examples
 
   ### Creating and processing a new event
+  Events can be created and processed immediately or queued for asynchronous processing.
+  If the event is processed immediately, it will create the associated transaction
+  and update the event status. If the event processing fails, it will be queued and retried.
 
-      {:ok, transaction, event} = DoubleEntryLedger.EventStore.process_from_event_params(%{
+      event_params(%{
         instance_id: instance.id,
         action: :create,
         transaction_data: %{
@@ -30,6 +33,12 @@ defmodule DoubleEntryLedger.EventStore do
         }
       })
 
+      # create and process the event immediately
+      {:ok, transaction, event} = DoubleEntryLedger.EventStore.process_from_event_params(event_params)
+
+      # create event for asynchronous processing later
+      {:ok, event} = DoubleEntryLedger.EventStore.create(event_params)
+
   ### Retrieving events for an instance
 
       events = DoubleEntryLedger.EventStore.list_all_for_instance(instance.id)
@@ -38,11 +47,12 @@ defmodule DoubleEntryLedger.EventStore do
 
       events = DoubleEntryLedger.EventStore.list_all_for_transaction(transaction.id)
 
-  ### Manually processing an event
+  ### Process event without saving it in the EventStore on error
+  If you want more control over error handling, you can process an event without saving it
+  in the EventStore on error. This allows you to handle the event processing logic
+  without automatically persisting the event, which can be useful for debugging or custom error handling.
 
-      {:ok, event} = DoubleEntryLedger.EventStore.claim_event_for_processing(event.id, "worker-1")
-      # Process event logic here
-      {:ok, _updated_event} = DoubleEntryLedger.EventStore.mark_as_processed(event, transaction.id)
+      {:ok, transaction, event} = DoubleEntryLedger.EventStore.process_from_event_params_no_save_on_error(event_params)
 
   ## Implementation Notes
 
@@ -99,7 +109,9 @@ defmodule DoubleEntryLedger.EventStore do
   Processes an event from provided parameters, handling the entire workflow.
 
   This function creates an EventMap from the parameters, then processes it through
-  the EventWorker to create both an event record and its associated transaction.
+  the EventWorker to create both an event record in the EventStore and creates the necessary projections.
+
+  If the processing fails, it will return an error tuple with details about the failure. The event is saved to the EventStore and then retried later.
 
   ## Parameters
     - `event_params`: Map containing event parameters including action and transaction data
@@ -122,6 +134,9 @@ defmodule DoubleEntryLedger.EventStore do
     end
   end
 
+  @doc """
+  Same as `process_from_event_params/1`, but does not save the event on error.
+  """
   @spec process_from_event_params_no_save_on_error(map()) ::
     EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_from_event_params_no_save_on_error(event_params) do

@@ -73,8 +73,7 @@ You can later check the event and transaction status:
 
 ```elixir
 event = DoubleEntryLedger.EventStore.get_by_id(event.id)
-transaction_id = event.processed_transaction_id
-transaction = DoubleEntryLedger.TransactionStore.get_by_id(transaction_id)
+[transaction| _] = event.transactions
 IO.inspect(transaction.status) # :pending (until posted or archived)
 ```
 
