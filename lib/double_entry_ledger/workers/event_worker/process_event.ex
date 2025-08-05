@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.{
-    UpdateEvent,
+    UpdateTransactionEvent,
     UpdateEventMap,
     UpdateEventMapNoSaveOnError,
     CreateTransactionEvent,
@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   end
 
   def process_event(%Event{event_queue_item: %{status: :processing}, action: :update} = event) do
-    UpdateEvent.process(event)
+    UpdateTransactionEvent.process(event)
   end
 
   def process_event(%Event{event_queue_item: %{status: :processing}, action: _} = _event) do

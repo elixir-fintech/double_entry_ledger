@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
+defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEvent do
   @moduledoc """
-  Processes update events in the double-entry ledger system.
+  Processes update (transaction) events in the double-entry ledger system.
 
   This module handles the complete lifecycle of update events, which modify existing
   transactions in the ledger system. It implements optimistic concurrency control (OCC)
