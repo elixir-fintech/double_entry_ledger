@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
-  describe "get_create_event_by_source/3" do
+  describe "get_create_transaction_event_by_source/3" do
     setup [:create_instance, :create_accounts]
 
     test "gets an event by source", %{instance: instance} do
@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
       assert %Event{} =
                found_event =
-               EventStoreHelper.get_create_event_by_source(
+               EventStoreHelper.get_create_transaction_event_by_source(
                  event.source,
                  event.source_idempk,
                  instance.id
@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
       assert %Event{} =
                found_event =
-               EventStoreHelper.get_create_event_by_source(
+               EventStoreHelper.get_create_transaction_event_by_source(
                  event.source,
                  event.source_idempk,
                  instance.id
@@ -58,7 +58,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "returns nil for non-existent event", %{instance: instance} do
       assert nil ==
-               EventStoreHelper.get_create_event_by_source("source", "source_idempk", instance.id)
+               EventStoreHelper.get_create_transaction_event_by_source("source", "source_idempk", instance.id)
     end
   end
 end

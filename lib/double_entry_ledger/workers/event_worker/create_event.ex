@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
 
   ## Workflow
 
-    1. Receives an event with `action: :create`
+    1. Receives an event with `action: :create_transaction`
     2. Transforms the event's transaction data into a valid transaction map
     3. Attempts to create a transaction in the database
     4. If successful, marks the event as processed and links it to the created transaction
@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   @doc """
   Processes a create event by transforming it into a transaction in the ledger.
 
-  Takes an event with `action: :create` and attempts to transform its data into
+  Takes an event with `action: :create_transaction` and attempts to transform its data into
   a valid transaction. Handles the complete lifecycle of transaction creation,
   including optimistic concurrency control, error handling, and event status updates.
 
@@ -104,7 +104,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
   """
   @spec process(Event.t(), Ecto.Repo.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process(%Event{} = original_event, repo \\ Repo) do
+  def process(%Event{action: :create_transaction} = original_event, repo \\ Repo) do
     process_with_retry(original_event, repo)
     |> default_event_response_handler(original_event, @module_name)
   end
@@ -148,7 +148,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEvent do
       build_mark_as_processed(event)
     end)
     |> Multi.insert(:event_transaction_link, fn %{transaction: transaction} ->
-      build_create_event_transaction_link(event, transaction)
+      build_create_transaction_event_transaction_link(event, transaction)
     end)
   end
 end

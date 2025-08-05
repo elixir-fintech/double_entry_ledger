@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
       assert {:error,
               %Changeset{
                 data: %EventMapSchema{},
-                errors: [create_event_error: {"create_event_not_found", _}]
+                errors: [create_transaction_event_error: {"create_transaction_event_not_found", _}]
               }} =
                UpdateEventMapNoSaveOnError.process(update_event_map)
     end
@@ -135,7 +135,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
       assert {:error,
               %Changeset{
                 data: %EventMapSchema{},
-                errors: [create_event_error: {"create_event_not_processed", _}]
+                errors: [create_transaction_event_error: {"create_transaction_event_not_processed", _}]
               }} =
                UpdateEventMapNoSaveOnError.process(update_event)
     end
@@ -154,7 +154,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
       assert {:error,
               %Changeset{
                 data: %EventMapSchema{},
-                errors: [create_event_error: {"create_event_not_processed", _}]
+                errors: [create_transaction_event_error: {"create_transaction_event_not_processed", _}]
               }} =
                UpdateEventMapNoSaveOnError.process(update_event)
     end
@@ -173,7 +173,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
       assert {:error,
               %Changeset{
                 data: %EventMapSchema{},
-                errors: [create_event_error: {"create_event_in_dead_letter", _}]
+                errors: [create_transaction_event_error: {"create_transaction_event_in_dead_letter", _}]
               }} =
                UpdateEventMapNoSaveOnError.process(update_event)
     end

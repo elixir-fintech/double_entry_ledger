@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   """
   @spec process_event(Event.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process_event(%Event{event_queue_item: %{status: :processing}, action: :create} = event) do
+  def process_event(%Event{event_queue_item: %{status: :processing}, action: :create_transaction} = event) do
     CreateEvent.process(event)
   end
 
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   Processes an event map by validating and dispatching it to the correct handler.
 
   This function is the entry point for processing external event data. It checks the `:action` field
-  and delegates to the appropriate handler for `:create` or `:update` actions. The event map is
+  and delegates to the appropriate handler for `:create_transaction` or `:update` actions. The event map is
   transformed into a structured Event record, and the associated transaction is created or updated.
 
   ## Parameters
@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   """
   @spec process_event_map(EventMap.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process_event_map(%{action: :create} = event_map) do
+  def process_event_map(%{action: :create_transaction} = event_map) do
     CreateEventMap.process(event_map)
   end
 
@@ -120,7 +120,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   """
   @spec process_event_map_no_save_on_error(EventMap.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process_event_map_no_save_on_error(%{action: :create} = event_map) do
+  def process_event_map_no_save_on_error(%{action: :create_transaction} = event_map) do
     CreateEventMapNoSaveOnError.process(event_map)
   end
 

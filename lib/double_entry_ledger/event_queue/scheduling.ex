@@ -114,9 +114,9 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
-  @spec build_create_event_transaction_link(Event.t(), Transaction.t()) ::
+  @spec build_create_transaction_event_transaction_link(Event.t(), Transaction.t()) ::
           Changeset.t()
-  def build_create_event_transaction_link(%Event{id: event_id}, %Transaction{id: transaction_id}) do
+  def build_create_transaction_event_transaction_link(%Event{id: event_id}, %Transaction{id: transaction_id}) do
     %EventTransactionLink{}
     |> EventTransactionLink.changeset(%{
       event_id: event_id,

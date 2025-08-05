@@ -132,7 +132,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       [error | _] = evq.errors
 
       assert error.message ==
-               "Create Event not found for Update Event (id: #{event.id})"
+               "create_transaction Event not found for Update Event (id: #{event.id})"
     end
 
     test "back to pending when create event is still pending", %{instance: inst} = ctx do
@@ -147,7 +147,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       [error | _] = eqm.errors
 
       assert error.message ==
-               "Create event (id: #{e_id}, status: pending) not yet processed for Update Event (id: #{event.id})"
+               "create_transaction Event (id: #{e_id}, status: pending) not yet processed for Update Event (id: #{event.id})"
     end
 
     test "back to pending when create event failed", %{instance: inst} = ctx do
@@ -170,7 +170,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       assert failed_create_event.event_queue_item.status == :failed
 
       assert error.message ==
-               "Create event (id: #{pending_event.id}, status: failed) not yet processed for Update Event (id: #{event.id})"
+               "create_transaction Event (id: #{pending_event.id}, status: failed) not yet processed for Update Event (id: #{event.id})"
     end
 
     test "dead_letter when create event in dead_letter", %{instance: inst} = ctx do
@@ -190,7 +190,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       [error | _] = eqm.errors
 
       assert error.message ==
-               "Create event (id: #{pending_event.id}) in dead_letter for Update Event (id: #{event.id})"
+               "create_transaction Event (id: #{pending_event.id}) in dead_letter for Update Event (id: #{event.id})"
     end
 
     test "update event with last retry that fails", %{instance: inst} = ctx do

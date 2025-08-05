@@ -37,8 +37,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
   alias DoubleEntryLedger.Event.EventMap
   alias Ecto.Changeset
-  alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.Event.EventMap
+  alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Event, Transaction}
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
@@ -46,10 +45,10 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   Builds an Event changeset from an EventMap or attribute map.
 
   ## Parameters
-    - `event_map_or_attrs`: Either an EventMap struct or a plain map of attributes
+    - event_map_or_attrs: Either an EventMap struct or a plain map of attributes
 
   ## Returns
-    - `Ecto.Changeset.t()`: A changeset for creating a new Event
+    - Ecto.Changeset.t() A changeset for creating a new Event
   """
   @spec build_create(EventMap.t() | map()) :: Changeset.t()
   def build_create(%EventMap{} = event_map) do
@@ -76,11 +75,11 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   ## Returns
     - `Event.t() | nil`: The found event with preloaded transaction and entries, or nil if not found
   """
-  @spec get_create_event_by_source(String.t(), String.t(), Ecto.UUID.t()) :: Event.t() | nil
-  def get_create_event_by_source(source, source_idempk, instance_id) do
+  @spec get_create_transaction_event_by_source(String.t(), String.t(), Ecto.UUID.t()) :: Event.t() | nil
+  def get_create_transaction_event_by_source(source, source_idempk, instance_id) do
     Event
     |> Repo.get_by(
-      action: :create,
+      action: :create_transaction,
       source: source,
       source_idempk: source_idempk,
       instance_id: instance_id
@@ -104,22 +103,22 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   ## Implementation Notes
   This is typically used when processing update events to find the original transaction to modify.
   """
-  @spec get_create_event_transaction(Event.t()) ::
+  @spec get_create_transaction_event_transaction(Event.t()) ::
           {:ok, {Transaction.t(), Event.t()}}
           | {:error | :pending_error, String.t(), Event.t() | nil}
-  def get_create_event_transaction(
+  def get_create_transaction_event_transaction(
         %{
           source: source,
           source_idempk: source_idempk,
           instance_id: id
         } = event
       ) do
-    case get_create_event_by_source(source, source_idempk, id) do
-      %{transactions: [transaction | _], event_queue_item: %{status: :processed}} = create_event ->
-        {:ok, {transaction, create_event}}
+    case get_create_transaction_event_by_source(source, source_idempk, id) do
+      %{transactions: [transaction | _], event_queue_item: %{status: :processed}} = create_transaction_event ->
+        {:ok, {transaction, create_transaction_event}}
 
-      create_event ->
-        raise AddUpdateEventError, create_event: create_event, update_event: event
+      create_transaction_event ->
+        raise AddUpdateEventError, create_transaction_event: create_transaction_event, update_event: event
     end
   end
 
@@ -137,9 +136,9 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   ## Returns
     - `Ecto.Multi.t()`: The updated Multi instance with the new step added
   """
-  @spec build_get_create_event_transaction(Ecto.Multi.t(), atom(), Event.t() | atom()) ::
+  @spec build_get_create_transaction_event_transaction(Ecto.Multi.t(), atom(), Event.t() | atom()) ::
           Ecto.Multi.t()
-  def build_get_create_event_transaction(multi, step, event_or_step) do
+  def build_get_create_transaction_event_transaction(multi, step, event_or_step) do
     multi
     |> Multi.run(step, fn _, changes ->
       event =
@@ -149,7 +148,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         end
 
       try do
-        {:ok, {transaction, _}} = get_create_event_transaction(event)
+        {:ok, {transaction, _}} = get_create_transaction_event_transaction(event)
         {:ok, transaction}
       rescue
         e in AddUpdateEventError ->

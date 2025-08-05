@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     } do
       {:ok, event_map} =
         %{
-          action: :create,
+          action: :create_transaction,
           instance_id: inst.id,
           source: "source",
           source_data: %{},

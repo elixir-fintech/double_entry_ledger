@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.TransactionFixtures do
       ) do
     event =
       %{
-        action: :create,
+        action: :create_transaction,
         source: "transaction",
         source_idempk: Ecto.UUID.generate(),
         instance_id: instance.id,

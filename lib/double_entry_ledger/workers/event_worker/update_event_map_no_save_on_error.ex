@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
   @doc """
   Processes an `EventMap` by creating both an event record and its associated transaction atomically, without saving on error.
 
-  This function is designed for synchronous use, ensuring that both the event and the transaction are created or updated in one atomic operation. It handles both `:create` and `:update` action types, with appropriate transaction building logic for each case. The entire operation uses Optimistic Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively. If an error occurs, a changeset with error details is returned instead of persisting the error state.
+  This function is designed for synchronous use, ensuring that both the event and the transaction are created or updated in one atomic operation. It handles both `:create_transaction` and `:update` action types, with appropriate transaction building logic for each case. The entire operation uses Optimistic Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively. If an error occurs, a changeset with error details is returned instead of persisting the error state.
 
   ## Parameters
 
@@ -80,7 +80,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
 
         {:error, changeset}
 
-      {:error, :create_event_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+      {:error, :create_transaction_event_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Update event error",
           EventMap.log_trace(event_map, changeset.errors)
@@ -133,17 +133,17 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
           build_mark_as_processed(event)
         end)
         |> Multi.insert(:event_transaction_link, fn _ ->
-          build_create_event_transaction_link(event, transaction)
+          build_create_transaction_event_transaction_link(event, transaction)
         end)
 
-      %{get_create_event_error: %{reason: reason}, new_event: _event} ->
+      %{get_create_transaction_event_error: %{reason: reason}, new_event: _event} ->
         event_map_changeset =
           cast_to_event_map(event_map)
           |> EventMap.changeset(%{})
-          |> Changeset.add_error(:create_event_error, to_string(reason))
+          |> Changeset.add_error(:create_transaction_event_error, to_string(reason))
 
         Multi.new()
-        |> Multi.error(:create_event_error, event_map_changeset)
+        |> Multi.error(:create_transaction_event_error, event_map_changeset)
     end)
   end
 

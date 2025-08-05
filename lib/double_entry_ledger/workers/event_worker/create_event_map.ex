@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
   Processes an `EventMap` by creating both an event record and its associated transaction atomically.
 
   This function is designed for synchronous use, ensuring that both the event and the transaction
-  are created or updated in one atomic operation. It handles both `:create` and `:update` action types,
+  are created or updated in one atomic operation. It handles both `:create_transaction` and `:update` action types,
   with appropriate transaction building logic for each case. The entire operation uses Optimistic
   Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively.
 
@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
   """
   @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process(%{action: :create} = event_map, repo \\ Repo) do
+def process(%{action: :create_transaction} = event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
       {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
         Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
@@ -127,9 +127,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
   Builds an `Ecto.Multi` transaction for processing an event map based on its action type.
 
   This function implements the OCC processor behavior and creates the appropriate
-  transaction operations depending on whether the event is a `:create` or `:update` action.
+  transaction operations depending on whether the event is a `:create_transaction` or `:update` action.
 
-  ### For `:create` actions:
+  ### For `:create_transaction` actions:
     - Inserts a new event with status `:pending`
     - Creates a new transaction in the ledger
     - Updates the event to mark it as processed with the transaction ID
@@ -150,7 +150,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
 
     - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
-  def build_transaction(%{action: :create} = event_map, transaction_map, repo) do
+  def build_transaction(%{action: :create_transaction} = event_map, transaction_map, repo) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
@@ -188,7 +188,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
           build_mark_as_processed(event)
         end)
         |> Multi.insert(:event_transaction_link, fn _ ->
-          build_create_event_transaction_link(event, transaction)
+          build_create_transaction_event_transaction_link(event, transaction)
         end)
     end)
   end

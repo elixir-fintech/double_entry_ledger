@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Event do
 
   ## Event Actions
 
-  * `:create` - Request to create a new transaction
+  * `:create_transaction` - Request to create a new transaction
   * `:update` - Request to update an existing transaction (requires update_idempk)
 
   ## Processing Flow
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Event do
   alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
   alias DoubleEntryLedger.Event.TransactionData
 
-  @actions [:create, :update]
+  @actions [:create_transaction, :update]
   @type action ::
           unquote(
             Enum.reduce(@actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.Event do
   ## Fields
 
   * `id`: UUID primary key
-  * `action`: The action type (:create or :update)
+  * `action`: The action type (:create_transaction or :update)
   * `source`: Identifier for the system that originated the event
   * `source_data`: Arbitrary JSON data from the source system
   * `source_idempk`: Idempotency key from source system
@@ -106,12 +106,12 @@ defmodule DoubleEntryLedger.Event do
 
   ## Returns
 
-  * A list of atoms representing the valid actions (:create, :update)
+  * A list of atoms representing the valid actions (:create_transaction, :update)
 
   ## Examples
 
       iex> DoubleEntryLedger.Event.actions()
-      [:create, :update]
+      [:create_transaction, :update]
   """
   @spec actions() :: [action()]
   def actions(), do: @actions
@@ -131,7 +131,7 @@ defmodule DoubleEntryLedger.Event do
 
   * For `:update` actions with `:pending` transaction status: Uses standard TransactionData changeset
   * For other `:update` actions: Uses the special update_event_changeset for TransactionData
-  * For `:create` actions: Uses standard TransactionData changeset
+  * For `:create_transaction` actions: Uses standard TransactionData changeset
 
   ## Validations
 
@@ -147,7 +147,7 @@ defmodule DoubleEntryLedger.Event do
 
       # Create event changeset
       iex> attrs = %{
-      ...>   action: :create,
+      ...>   action: :create_transaction,
       ...>   source: "api",
       ...>   source_idempk: "order-123",
       ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",

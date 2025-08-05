@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
   Processes an `EventMap` by creating both an event record and its associated transaction atomically.
 
   This function is designed for synchronous use, ensuring that both the event and the transaction
-  are created or updated in one atomic operation. It handles both `:create` and `:update` action types,
+  are created or updated in one atomic operation. It handles both `:create_transaction` and `:update` action types,
   with appropriate transaction building logic for each case. The entire operation uses Optimistic
   Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively.
 
@@ -123,9 +123,9 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
   Builds an `Ecto.Multi` transaction for processing an event map based on its action type.
 
   This function implements the OCC processor behavior and creates the appropriate
-  transaction operations depending on whether the event is a `:create` or `:update` action.
+  transaction operations depending on whether the event is a `:create_transaction` or `:update` action.
 
-  ### For `:create` actions:
+  ### For `:create_transaction` actions:
     - Inserts a new event with status `:pending`
     - Creates a new transaction in the ledger
     - Updates the event to mark it as processed with the transaction ID
@@ -151,15 +151,15 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
 
     Multi.new()
     |> Multi.insert(:new_event, EventStoreHelper.build_create(new_event_map))
-    |> EventStoreHelper.build_get_create_event_transaction(
-      :get_create_event_transaction,
+    |> EventStoreHelper.build_get_create_transaction_event_transaction(
+      :get_create_transaction_event_transaction,
       :new_event
     )
     |> Multi.merge(fn
-      %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
-        Multi.put(Multi.new(), :get_create_event_error, exception)
+      %{get_create_transaction_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
+        Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
 
-      %{get_create_event_transaction: create_transaction} ->
+      %{get_create_transaction_event_transaction: create_transaction} ->
         TransactionStore.build_update(
           Multi.new(),
           :transaction,
@@ -200,23 +200,23 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
           build_mark_as_processed(event)
         end)
         |> Multi.insert(:event_transaction_link, fn _ ->
-          build_create_event_transaction_link(event, transaction)
+          build_create_transaction_event_transaction_link(event, transaction)
         end)
 
       %{
-        get_create_event_error: %{reason: :create_event_not_processed} = exception,
+        get_create_transaction_event_error: %{reason: :create_transaction_event_not_processed} = exception,
         new_event: event
       } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
         end)
 
-      %{get_create_event_error: %{reason: :create_event_failed} = exception, new_event: event} ->
+      %{get_create_transaction_event_error: %{reason: :create_transaction_event_failed} = exception, new_event: event} ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_schedule_update_retry(event, exception)
         end)
 
-      %{get_create_event_error: exception, new_event: event} ->
+      %{get_create_transaction_event_error: exception, new_event: event} ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_mark_as_dead_letter(event, exception.message)
         end)

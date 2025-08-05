@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
         UpdateEventMap.process(update_event_map)
 
       assert status == :dead_letter
-      assert error.message =~ "Create Event not found for Update Event (id:"
+      assert error.message =~ "create_transaction Event not found for Update Event (id:"
     end
 
     test "update event for event_map, when create event not yet processed", ctx do

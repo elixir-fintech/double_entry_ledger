@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   EventMap contains the following fields:
 
-  * `action`: The type of action to perform (:create or :update)
+  * `action`: The type of action to perform (:create_transaction or :update)
   * `instance_id`: UUID of the ledger instance this event belongs to
   * `source`: Identifier of the external system generating the event
   * `source_data`: Optional map containing additional metadata from the source system
@@ -33,7 +33,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   The system enforces idempotency differently depending on the action type:
 
-  * **Create actions**: Idempotency is enforced using a combination of `:create` action value,
+  * **Create actions**: Idempotency is enforced using a combination of `:create_transaction` action value,
     `source` and the `source_idempk`. This ensures the same external transaction is never created twice.
 
   * **Update actions**: Idempotency uses a combination of `:update` action value, the original `source`
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   Creating an EventMap for a new transaction:
 
       EventMap.create(%{
-        action: "create",
+        action: "create_transaction",
         instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9",
         source: "accounting_system",
         source_idempk: "invoice_123",
@@ -102,7 +102,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   ## Fields
 
-  * `action`: The operation type (:create or :update)
+  * `action`: The operation type (:create_transaction or :update)
   * `instance_id`: UUID of the ledger instance this event belongs to
   * `source`: Identifier of the external system generating the event
   * `source_data`: Optional metadata from the source system
@@ -155,7 +155,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   ## Example
 
     iex> alias DoubleEntryLedger.Event.EventMap
-    iex> {:ok, em} = EventMap.create(%{action: "create", instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9", source: "source", source_idempk: "source_idempk",
+    iex> {:ok, em} = EventMap.create(%{action: "create_transaction", instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9", source: "source", source_idempk: "source_idempk",
     ...>   transaction_data: %{status: "pending", entries: [
     ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
     ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
@@ -191,7 +191,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   ## Examples
 
       iex> alias DoubleEntryLedger.Event.EventMap
-      iex> attrs = %{action: "create", instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      iex> attrs = %{action: "create_transaction", instance_id: "550e8400-e29b-41d4-a716-446655440000",
       ...>   source: "accounting_system", source_idempk: "invoice_123",
       ...>   transaction_data: %{status: "pending", entries: [
       ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},

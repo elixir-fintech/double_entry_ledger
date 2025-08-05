@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.EventStore do
 
       event_params(%{
         instance_id: instance.id,
-        action: :create,
+        action: :create_transaction,
         transaction_data: %{
           entries: [
             %{account_id: cash_account.id, amount: 100_00, type: :debit},

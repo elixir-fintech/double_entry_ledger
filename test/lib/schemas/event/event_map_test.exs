@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
     test "changeset invalid for empty transaction_data struct" do
       attrs = %{
         instance_id: Ecto.UUID.generate(),
-        action: "create",
+        action: "create_transaction",
         source: "local",
         source_idempk: "123",
         transaction_data: %{}
@@ -80,7 +80,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
     attrs
     |> Enum.into(%{
       instance_id: Ecto.UUID.generate(),
-      action: "create",
+      action: "create_transaction",
       source: "local",
       source_idempk: "123",
       transaction_data: transaction_data_attrs()

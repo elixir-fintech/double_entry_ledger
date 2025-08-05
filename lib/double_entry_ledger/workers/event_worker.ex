@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.EventWorker do
   1. Processing new event maps received from external systems
   2. Processing existing events already stored in the system by their UUID
 
-  The worker supports events with actions `:create` and `:update`, delegating the actual
+  The worker supports events with actions `:create_transaction` and `:update`, delegating the actual
   processing to specialized handler modules. Create events generate new transactions,
   while update events modify existing transactions.
 
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.EventWorker do
   ## Parameters
 
     - `event_map`: A structured map containing event data with fields like:
-      - `:action` - The event action (`:create` or `:update`)
+      - `:action` - The event action (`:create_transaction` or `:update`)
       - `:instance_id` - The instance this event belongs to
       - `:data` - The transaction data for processing
 
@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> {:ok, account1} = AccountStore.create(%{name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
       iex> event_map = %EventMap{instance_id: instance.id,
-      ...>  source: "s1", source_idempk: "1", action: :create,
+      ...>  source: "s1", source_idempk: "1", action: :create_transaction,
       ...>  transaction_data: %{status: :pending, entries: [
       ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
       ...>      %{account_id: account2.id, amount: 100, currency: :EUR},
@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> {:ok, account1} = AccountStore.create(%{name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
       iex> {:ok, event} = EventStore.create(%{instance_id: instance.id,
-      ...>  source: "s1", source_idempk: "1", action: :create,
+      ...>  source: "s1", source_idempk: "1", action: :create_transaction,
       ...>  transaction_data: %{status: :pending, entries: [
       ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
       ...>      %{account_id: account2.id, amount: 100, currency: :EUR},

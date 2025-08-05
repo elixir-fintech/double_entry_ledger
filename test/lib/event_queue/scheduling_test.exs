@@ -156,10 +156,10 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       test_message = "Test error"
 
       error = %AddUpdateEventError{
-        create_event: failed_create_event,
+        create_transaction_event: failed_create_event,
         update_event: event,
         message: test_message,
-        reason: :create_event_not_processed
+        reason: :create_transaction_event_not_processed
       }
 
       %{changes: %{event_queue_item: event_queue_item}} =

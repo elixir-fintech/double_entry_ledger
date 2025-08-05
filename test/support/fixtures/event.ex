@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   def event_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{
-      action: :create,
+      action: :create_transaction,
       source: "source",
       source_idempk: "source_idempk",
       transaction_data: pending_payload()
@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.EventFixtures do
 
   def event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}, trx_status \\ :pending) do
     %{
-      action: :create,
+      action: :create_transaction,
       instance_id: id,
       source: "source",
       source_data: %{},

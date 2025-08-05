@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.EventTest do
 
   doctest Event
 
-  describe "changeset/2 for action: :create" do
+  describe "changeset/2 for action: :create_transaction" do
     test "not valid for empty payload" do
       assert %Changeset{
                errors: [
@@ -26,9 +26,9 @@ defmodule DoubleEntryLedger.EventTest do
              } = Event.changeset(%Event{}, %{})
     end
 
-    test "valid with required attributes for action create" do
+    test "valid with required attributes for action create_transaction" do
       attrs = %{
-        action: :create,
+        action: :create_transaction,
         source: "source",
         instance_id: Ecto.UUID.generate(),
         source_idempk: "source_idempk",
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.EventTest do
 
       attrs = %{
         instance_id: inst.id,
-        action: :create,
+        action: :create_transaction,
         source: "source",
         source_idempk: "source_idempk",
         transaction_data: pending_payload()

@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   defp run_transaction(instance, params) do
     {:ok, event_map} =
       EventMap.create(%{
-        action: :create,
+        action: :create_transaction,
         status: :pending,
         source: "source",
         source_idempk: Ecto.UUID.generate(),
