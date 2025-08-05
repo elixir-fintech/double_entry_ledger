@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   alias DoubleEntryLedger.EventWorker.{
     UpdateTransactionEvent,
     UpdateTransactionEventMap,
-    UpdateEventMapNoSaveOnError,
+    UpdateTransactionEventMapNoSaveOnError,
     CreateTransactionEvent,
     CreateTransactionEventMap,
     CreateTransactionEventMapNoSaveOnError
@@ -124,7 +124,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   end
 
   def process_event_map_no_save_on_error(%{action: :update_transaction} = event_map) do
-    UpdateEventMapNoSaveOnError.process(event_map)
+    UpdateTransactionEventMapNoSaveOnError.process(event_map)
   end
 
   def process_event_map_no_save_on_error(_event_map) do

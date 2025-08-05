@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError do
   @moduledoc """
   Processes `EventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system, without saving on error.
 
