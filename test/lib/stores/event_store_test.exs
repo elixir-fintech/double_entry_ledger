@@ -57,7 +57,11 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "returns nil for non-existent event", %{instance: instance} do
       assert nil ==
-               EventStoreHelper.get_create_transaction_event_by_source("source", "source_idempk", instance.id)
+               EventStoreHelper.get_create_transaction_event_by_source(
+                 "source",
+                 "source_idempk",
+                 instance.id
+               )
     end
   end
 end

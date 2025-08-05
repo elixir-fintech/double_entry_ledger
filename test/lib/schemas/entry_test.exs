@@ -93,9 +93,10 @@ defmodule DoubleEntryLedger.EntryTest do
       e0 = Enum.find(entries, fn e -> e.type == :credit end)
       changeset = Entry.update_changeset(e0, %{value: Money.new(100, :EUR)}, :pending_to_posted)
 
-      [h , t | _] =
+      [h, t | _] =
         balance_history_entries =
         Ecto.Changeset.get_assoc(changeset, :balance_history_entries, :struct)
+
       assert 2 = length(balance_history_entries)
       assert h.account_id == e0.account_id
       assert t.pending == %Balance{amount: 100, debit: 0, credit: 100}

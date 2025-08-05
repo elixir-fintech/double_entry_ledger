@@ -123,7 +123,7 @@ defmodule DoubleEntryLedger.EventStore do
     - `{:error, reason}`: If processing failed for other reasons
   """
   @spec process_from_event_params(map()) ::
-    EventWorker.success_tuple() | EventWorker.error_tuple()
+          EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_from_event_params(event_params) do
     case EventMap.create(event_params) do
       {:ok, event_map} ->
@@ -138,7 +138,7 @@ defmodule DoubleEntryLedger.EventStore do
   Same as `process_from_event_params/1`, but does not save the event on error.
   """
   @spec process_from_event_params_no_save_on_error(map()) ::
-    EventWorker.success_tuple() | EventWorker.error_tuple()
+          EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_from_event_params_no_save_on_error(event_params) do
     case EventMap.create(event_params) do
       {:ok, event_map} ->

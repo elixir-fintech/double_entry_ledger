@@ -75,7 +75,8 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   ## Returns
     - `Event.t() | nil`: The found event with preloaded transaction and entries, or nil if not found
   """
-  @spec get_create_transaction_event_by_source(String.t(), String.t(), Ecto.UUID.t()) :: Event.t() | nil
+  @spec get_create_transaction_event_by_source(String.t(), String.t(), Ecto.UUID.t()) ::
+          Event.t() | nil
   def get_create_transaction_event_by_source(source, source_idempk, instance_id) do
     Event
     |> Repo.get_by(
@@ -114,11 +115,14 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         } = event
       ) do
     case get_create_transaction_event_by_source(source, source_idempk, id) do
-      %{transactions: [transaction | _], event_queue_item: %{status: :processed}} = create_transaction_event ->
+      %{transactions: [transaction | _], event_queue_item: %{status: :processed}} =
+          create_transaction_event ->
         {:ok, {transaction, create_transaction_event}}
 
       create_transaction_event ->
-        raise AddUpdateEventError, create_transaction_event: create_transaction_event, update_event: event
+        raise AddUpdateEventError,
+          create_transaction_event: create_transaction_event,
+          update_event: event
     end
   end
 

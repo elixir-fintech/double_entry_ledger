@@ -204,14 +204,19 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
         end)
 
       %{
-        get_create_transaction_event_error: %{reason: :create_transaction_event_not_processed} = exception,
+        get_create_transaction_event_error:
+          %{reason: :create_transaction_event_not_processed} = exception,
         new_event: event
       } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
         end)
 
-      %{get_create_transaction_event_error: %{reason: :create_transaction_event_failed} = exception, new_event: event} ->
+      %{
+        get_create_transaction_event_error:
+          %{reason: :create_transaction_event_failed} = exception,
+        new_event: event
+      } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_schedule_update_retry(event, exception)
         end)

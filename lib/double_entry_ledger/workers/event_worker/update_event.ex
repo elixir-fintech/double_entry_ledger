@@ -143,7 +143,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
   """
   def build_transaction(%Event{} = event, attr, repo) do
     Multi.new()
-    |> EventStoreHelper.build_get_create_transaction_event_transaction(:get_create_event_transaction, event)
+    |> EventStoreHelper.build_get_create_transaction_event_transaction(
+      :get_create_event_transaction,
+      event
+    )
     |> Multi.merge(fn
       %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
         Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
@@ -182,12 +185,18 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEvent do
           build_create_transaction_event_transaction_link(event, transaction)
         end)
 
-      %{get_create_transaction_event_error: %{reason: :create_transaction_event_not_processed} = exception} ->
+      %{
+        get_create_transaction_event_error:
+          %{reason: :create_transaction_event_not_processed} = exception
+      } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
         end)
 
-      %{get_create_transaction_event_error: %{reason: :create_transaction_event_failed} = exception} ->
+      %{
+        get_create_transaction_event_error:
+          %{reason: :create_transaction_event_failed} = exception
+      } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_schedule_update_retry(event, exception)
         end)

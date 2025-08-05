@@ -92,7 +92,10 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
     end
   end
 
-  defp pending_error(%{event_queue_item: %{status: status}} = create_transaction_event, update_event) do
+  defp pending_error(
+         %{event_queue_item: %{status: status}} = create_transaction_event,
+         update_event
+       ) do
     %AddUpdateEventError{
       message:
         "create_transaction Event (id: #{create_transaction_event.id}, status: #{status}) not yet processed for Update Event (id: #{update_event.id})",

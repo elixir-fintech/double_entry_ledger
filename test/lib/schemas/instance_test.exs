@@ -71,7 +71,6 @@ defmodule DoubleEntryLedger.InstanceTest do
     end
 
     test "it works for balanced accounts", %{instance: inst} = ctx do
-
       create_transaction(ctx)
       create_transaction(ctx, :posted)
 

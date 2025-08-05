@@ -80,7 +80,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
 
         {:error, changeset}
 
-      {:error, :create_transaction_event_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+      {:error, :create_transaction_event_error, %Changeset{data: %EventMap{}} = changeset,
+       _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Update event error",
           EventMap.log_trace(event_map, changeset.errors)

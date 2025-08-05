@@ -52,7 +52,10 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
 
       assert eqm.status == :failed
 
-      assert [%{message: "CreateTransactionEvent: Step :transaction failed. Error: :conflict"} | _] =
+      assert [
+               %{message: "CreateTransactionEvent: Step :transaction failed. Error: :conflict"}
+               | _
+             ] =
                eqm.errors
     end
 

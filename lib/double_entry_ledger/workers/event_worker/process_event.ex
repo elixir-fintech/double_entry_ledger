@@ -52,7 +52,9 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   """
   @spec process_event(Event.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process_event(%Event{event_queue_item: %{status: :processing}, action: :create_transaction} = event) do
+  def process_event(
+        %Event{event_queue_item: %{status: :processing}, action: :create_transaction} = event
+      ) do
     CreateTransactionEvent.process(event)
   end
 

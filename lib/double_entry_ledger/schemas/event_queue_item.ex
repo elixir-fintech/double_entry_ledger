@@ -139,7 +139,10 @@ defmodule DoubleEntryLedger.EventQueueItem do
         ) :: Ecto.Changeset.t()
   def schedule_update_retry_changeset(
         event_queue_item,
-        %AddUpdateEventError{create_transaction_event: create_transaction_event, message: message},
+        %AddUpdateEventError{
+          create_transaction_event: create_transaction_event,
+          message: message
+        },
         retry_delay
       ) do
     now = DateTime.utc_now()

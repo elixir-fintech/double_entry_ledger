@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
   """
   @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-def process(%{action: :create_transaction} = event_map, repo \\ Repo) do
+  def process(%{action: :create_transaction} = event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
       {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
         Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))

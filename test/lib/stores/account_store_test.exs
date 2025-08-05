@@ -40,6 +40,7 @@ defmodule DoubleEntryLedger.AccountStoreTest do
 
     test "returns error when account_ids do not match", %{instance: instance} do
       accounts = [Ecto.UUID.generate(), Ecto.UUID.generate()]
+
       assert {:error, :no_accounts_found} ==
                AccountStore.get_accounts_by_instance_id(instance.id, accounts)
     end
@@ -78,12 +79,15 @@ defmodule DoubleEntryLedger.AccountStoreTest do
         account_fixture(instance_id: instance.id)
       ]
 
-      {:ok, returned_accounts} = AccountStore.get_accounts_by_instance_id_and_type(instance.id, :asset)
+      {:ok, returned_accounts} =
+        AccountStore.get_accounts_by_instance_id_and_type(instance.id, :asset)
+
       assert MapSet.new(accounts) == MapSet.new(returned_accounts)
     end
 
     test "returns error when no accounts are found", %{instance: instance} do
       account_fixture(instance_id: instance.id, type: :liability)
+
       assert {:error, :no_accounts_found_for_provided_type} ==
                AccountStore.get_accounts_by_instance_id_and_type(instance.id, :asset)
     end
