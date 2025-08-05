@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
       DoubleEntryLedger.MockRepo
       |> expect(:insert, 5, fn changeset ->
         # simulate a conflict when adding the transaction
-        raise Ecto.StaleEntryError, action: :update, changeset: changeset
+        raise Ecto.StaleEntryError, action: :update_transaction, changeset: changeset
       end)
       |> expect(:transaction, 6, fn multi ->
         # the transaction has to be handled by the Repo

@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.EventFixtures do
 
   def create_update_event(source, source_idempk, instance_id, trx_status, entries \\ []) do
     event_attrs(%{
-      action: :update,
+      action: :update_transaction,
       source: source,
       source_idempk: source_idempk,
       instance_id: instance_id,
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.EventFixtures do
         trx_status \\ :posted
       ) do
     %{
-      action: :update,
+      action: :update_transaction,
       instance_id: id,
       source: create_event.source,
       source_data: %{},

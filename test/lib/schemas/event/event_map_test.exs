@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
     end
 
     test "changeset invalid for update action without update_idempk" do
-      attrs = event_map_attrs(%{action: "update"})
+      attrs = event_map_attrs(%{action: "update_transaction"})
 
       assert %Changeset{
                errors: [
@@ -50,7 +50,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
                ]
              } = EventMap.changeset(%EventMap{}, attrs)
 
-      attrs2 = event_map_attrs(%{action: :update})
+      attrs2 = event_map_attrs(%{action: :update_transaction})
 
       assert %Changeset{
                errors: [
@@ -61,7 +61,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
 
     test "changeset invalid for update action (key as string) without update_idempk" do
       attrs = %{
-        "action" => "update",
+        "action" => "update_transaction",
         "instance_id" => Ecto.UUID.generate(),
         "source" => "local",
         "source_idempk" => "123",

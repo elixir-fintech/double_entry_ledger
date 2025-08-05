@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create unique_index(:events, [:instance_id, :source, :source_idempk, :update_idempk],
       prefix: "double_entry_ledger",
       name: "unique_instance_source_source_idempk_update_idempk",
-      where: "action = 'update'"
+      where: "action = 'update_transaction'"
     )
   end
 end

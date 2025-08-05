@@ -57,10 +57,10 @@ defmodule DoubleEntryLedger.EventTest do
     end
   end
 
-  describe "changeset/2 for action: :update" do
+describe "changeset/2 for action: :update_transaction" do
     test "changeset valid for simple update action, without any entry information" do
       attrs = %{
-        action: :update,
+        action: :update_transaction,
         source: "source",
         instance_id: Ecto.UUID.generate(),
         source_idempk: "source_idempk",
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.EventTest do
 
       attrs = %{
         instance_id: inst.id,
-        action: :update,
+        action: :update_transaction,
         source: "source",
         source_idempk: "source_idempk",
         update_idempk: "update_idempk",

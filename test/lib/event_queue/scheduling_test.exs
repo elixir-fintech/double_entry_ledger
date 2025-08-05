@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, fn _changeset ->
-        raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
+        raise Ecto.StaleEntryError, action: :update_transaction, changeset: %Ecto.Changeset{}
       end)
 
       assert {:error, :event_already_claimed} =

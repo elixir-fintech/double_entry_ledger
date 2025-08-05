@@ -58,7 +58,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
     test "dead letter when create event does not exist", ctx do
       event_map = event_map(ctx, :pending)
-      update_event_map = %{event_map | update_idempk: Ecto.UUID.generate(), action: :update}
+      update_event_map = %{event_map | update_idempk: Ecto.UUID.generate(), action: :update_transaction}
 
       {:error, %{event_queue_item: %{status: status, errors: [error | _]}}} =
         UpdateEventMap.process(update_event_map)
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       DoubleEntryLedger.MockRepo
       |> expect(:update, 5, fn changeset ->
         # simulate a conflict when adding the transaction
-        raise Ecto.StaleEntryError, action: :update, changeset: changeset
+        raise Ecto.StaleEntryError, action: :update_transaction, changeset: changeset
       end)
       |> expect(:transaction, 6, fn multi ->
         # the transaction has to be handled by the Repo

@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, fn _changeset ->
-        raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
+        raise Ecto.StaleEntryError, action: :update_transaction, changeset: %Ecto.Changeset{}
       end)
 
       assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
@@ -68,7 +68,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, fn _changeset ->
-        raise Ecto.StaleEntryError, action: :update, changeset: %Ecto.Changeset{}
+        raise Ecto.StaleEntryError, action: :update_transaction, changeset: %Ecto.Changeset{}
       end)
 
       assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =

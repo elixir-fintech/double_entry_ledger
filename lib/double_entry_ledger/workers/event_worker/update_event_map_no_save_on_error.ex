@@ -70,7 +70,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
   """
   @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process(%{action: :update} = event_map, repo \\ Repo) do
+def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(event_map, repo) do
       {:error, :occ_timeout, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
         Logger.warning(

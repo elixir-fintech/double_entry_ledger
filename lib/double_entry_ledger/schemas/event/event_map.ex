@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   EventMap contains the following fields:
 
-  * `action`: The type of action to perform (:create_transaction or :update)
+  * `action`: The type of action to perform (:create_transaction or :update_transaction)
   * `instance_id`: UUID of the ledger instance this event belongs to
   * `source`: Identifier of the external system generating the event
   * `source_data`: Optional map containing additional metadata from the source system
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   * **Create actions**: Idempotency is enforced using a combination of `:create_transaction` action value,
     `source` and the `source_idempk`. This ensures the same external transaction is never created twice.
 
-  * **Update actions**: Idempotency uses a combination of `:update` action value, the original `source`
+  * **Update actions**: Idempotency uses a combination of `:update_transaction` action value, the original `source`
     and `source_idempk` (identifying which create action to update), and the `update_idempk`
     (identifying this specific update). This allows multiple distinct updates to the same
     original transaction.
@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   alias __MODULE__, as: EventMap
 
-  @update_actions [:update, "update"]
+  @update_actions [:update_transaction, "update_transaction"]
 
   @typedoc """
   Represents an EventMap structure for transaction creation or updates.
@@ -102,7 +102,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   ## Fields
 
-  * `action`: The operation type (:create_transaction or :update)
+  * `action`: The operation type (:create_transaction or :update_transaction)
   * `instance_id`: UUID of the ledger instance this event belongs to
   * `source`: Identifier of the external system generating the event
   * `source_data`: Optional metadata from the source system
@@ -209,13 +209,13 @@ defmodule DoubleEntryLedger.Event.EventMap do
       false
   """
   @spec changeset(t() | map(), map()) :: Ecto.Changeset.t()
-  def changeset(event_map, %{"action" => action} = attrs) when action in @update_actions do
-    update_changeset(event_map, attrs)
-  end
+def changeset(event_map, %{"action" => action} = attrs) when action in @update_actions do
+  update_changeset(event_map, attrs)
+end
 
-  def changeset(event_map, %{action: action} = attrs) when action in @update_actions do
-    update_changeset(event_map, attrs)
-  end
+def changeset(event_map, %{action: action} = attrs) when action in @update_actions do
+  update_changeset(event_map, attrs)
+end
 
   def changeset(event_map, attrs) do
     base_changeset(event_map, attrs)

@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.Event do
   ## Event Actions
 
   * `:create_transaction` - Request to create a new transaction
-  * `:update` - Request to update an existing transaction (requires update_idempk)
+  * `:update_transaction` - Request to update an existing transaction (requires update_idempk)
 
   ## Processing Flow
 
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Event do
   alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
   alias DoubleEntryLedger.Event.TransactionData
 
-  @actions [:create_transaction, :update]
+  @actions [:create_transaction, :update_transaction]
   @type action ::
           unquote(
             Enum.reduce(@actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.Event do
   ## Fields
 
   * `id`: UUID primary key
-  * `action`: The action type (:create_transaction or :update)
+  * `action`: The action type (:create_transaction or :update_transaction)
   * `source`: Identifier for the system that originated the event
   * `source_data`: Arbitrary JSON data from the source system
   * `source_idempk`: Idempotency key from source system
@@ -106,12 +106,12 @@ defmodule DoubleEntryLedger.Event do
 
   ## Returns
 
-  * A list of atoms representing the valid actions (:create_transaction, :update)
+  * A list of atoms representing the valid actions (:create_transaction, :update_transaction)
 
   ## Examples
 
       iex> DoubleEntryLedger.Event.actions()
-      [:create_transaction, :update]
+      [:create_transaction, :update_transaction]
   """
   @spec actions() :: [action()]
   def actions(), do: @actions
@@ -129,8 +129,8 @@ defmodule DoubleEntryLedger.Event do
 
   ## Special Handling
 
-  * For `:update` actions with `:pending` transaction status: Uses standard TransactionData changeset
-  * For other `:update` actions: Uses the special update_event_changeset for TransactionData
+  * For `:update_transaction` actions with `:pending` transaction status: Uses standard TransactionData changeset
+  * For other `:update_transaction` actions: Uses the special update_event_changeset for TransactionData
   * For `:create_transaction` actions: Uses standard TransactionData changeset
 
   ## Validations
@@ -161,14 +161,14 @@ defmodule DoubleEntryLedger.Event do
       true
   """
   @spec changeset(Event.t(), map()) :: Ecto.Changeset.t()
-  def changeset(event, %{action: :update, transaction_data: %{status: :pending}} = attrs) do
+  def changeset(event, %{action: :update_transaction, transaction_data: %{status: :pending}} = attrs) do
     event
     |> base_changeset(attrs)
     |> update_changeset()
     |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
   end
 
-  def changeset(event, %{action: :update} = attrs) do
+  def changeset(event, %{action: :update_transaction} = attrs) do
     event
     |> base_changeset(attrs)
     |> update_changeset()
