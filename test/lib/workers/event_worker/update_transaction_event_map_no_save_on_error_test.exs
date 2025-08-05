@@ -214,7 +214,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
       end)
 
       assert {:error, %Changeset{data: %EventMapSchema{}, errors: [occ_timeout: _]}} =
-               UpdateTransactionEventMapNoSaveOnError.process(update_event, DoubleEntryLedger.MockRepo)
+               UpdateTransactionEventMapNoSaveOnError.process(
+                 update_event,
+                 DoubleEntryLedger.MockRepo
+               )
     end
   end
 end

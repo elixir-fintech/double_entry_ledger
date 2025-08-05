@@ -108,12 +108,15 @@ defmodule DoubleEntryLedger.MixProject do
         EventWorker: [
           DoubleEntryLedger.EventWorker,
           DoubleEntryLedger.EventWorker.ProcessEvent,
-          DoubleEntryLedger.EventWorker.ProcessEventMap,
-          DoubleEntryLedger.EventWorker.CreateEvent,
-          DoubleEntryLedger.EventWorker.UpdateEvent,
+          DoubleEntryLedger.EventWorker.CreateTransactionEvent,
+          DoubleEntryLedger.EventWorker.CreateTransactionEventMap,
+          DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError,
+          DoubleEntryLedger.EventWorker.UpdateTransactionEvent,
+          DoubleEntryLedger.EventWorker.UpdateTransactionEventMap,
+          DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError,
           DoubleEntryLedger.EventWorker.EventTransformer,
           DoubleEntryLedger.EventWorker.AddUpdateEventError,
-          DoubleEntryLedger.EventWorker.ErrorHandler
+          DoubleEntryLedger.EventWorker.ResponseHandler
         ],
         EventQueue: [
           DoubleEntryLedger.EventQueue.Supervisor,
