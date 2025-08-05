@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.EventMapTest do
+defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
   @moduledoc """
   This module tests the EventMap module.
   """
@@ -13,12 +13,12 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.Event.EventMap, as: EventMapSchema
-  alias DoubleEntryLedger.EventWorker.UpdateEventMap
+  alias DoubleEntryLedger.EventWorker.UpdateTransactionEventMap
   alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventStore
 
-  doctest UpdateEventMap
+  doctest UpdateTransactionEventMap
 
   describe "process/1" do
     setup [:create_instance, :create_accounts]
@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
-        UpdateEventMap.process(update_event)
+        UpdateTransactionEventMap.process(update_event)
 
       assert evq.status == :processed
 
@@ -48,10 +48,10 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       # successfully create event
       %{event: pending_event} = create_event(ctx, :pending)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
-      UpdateEventMap.process(update_event)
+      UpdateTransactionEventMap.process(update_event)
 
       # process same update_event again which should fail
-      {:error, changeset} = UpdateEventMap.process(update_event)
+      {:error, changeset} = UpdateTransactionEventMap.process(update_event)
       assert %Changeset{data: %EventMapSchema{}} = changeset
       assert Keyword.has_key?(changeset.errors, :update_idempk)
     end
@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       }
 
       {:error, %{event_queue_item: %{status: status, errors: [error | _]}}} =
-        UpdateEventMap.process(update_event_map)
+        UpdateTransactionEventMap.process(update_event_map)
 
       assert status == :dead_letter
       assert error.message =~ "create_transaction Event not found for Update Event (id:"
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       {:error, %{event_queue_item: eqm} = update_event} =
-        UpdateEventMap.process(update_event)
+        UpdateTransactionEventMap.process(update_event)
 
       assert eqm.status == :pending
       assert update_event.id != pending_event.id
@@ -97,7 +97,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
 
-      {:error, %{event_queue_item: eqm}} = UpdateEventMap.process(update_event)
+      {:error, %{event_queue_item: eqm}} = UpdateTransactionEventMap.process(update_event)
 
       assert eqm.status == :pending
     end
@@ -113,7 +113,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
 
       update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
 
-      {:error, %{event_queue_item: evq}} = UpdateEventMap.process(update_event)
+      {:error, %{event_queue_item: evq}} = UpdateTransactionEventMap.process(update_event)
 
       assert evq.status == :dead_letter
     end
@@ -141,7 +141,7 @@ defmodule DoubleEntryLedger.EventWorker.EventMapTest do
       end)
 
       assert {:error, %Event{id: id, event_queue_item: %{status: :occ_timeout}}} =
-               UpdateEventMap.process(update_event, DoubleEntryLedger.MockRepo)
+               UpdateTransactionEventMap.process(update_event, DoubleEntryLedger.MockRepo)
 
       assert %Event{
                event_queue_item: %{status: :occ_timeout, occ_retry_count: 5, errors: errors},

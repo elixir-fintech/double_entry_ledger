@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError do
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
-    to: DoubleEntryLedger.EventWorker.UpdateEventMap,
+    to: DoubleEntryLedger.EventWorker.UpdateTransactionEventMap,
     as: :build_transaction
 
   @doc """
