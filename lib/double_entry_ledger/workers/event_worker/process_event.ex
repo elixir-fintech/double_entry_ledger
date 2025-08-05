@@ -19,21 +19,16 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   4. Update the event status to reflect the result
   """
 
-  alias DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError
-  alias DoubleEntryLedger.EventWorker.CreateEventMapNoSaveOnError
-  alias DoubleEntryLedger.{
-    CreateEvent,
-    Event,
-    EventWorker,
-    UpdateEvent
-  }
+  alias DoubleEntryLedger.{Event, EventWorker}
 
   alias DoubleEntryLedger.Event.EventMap
 
   alias DoubleEntryLedger.EventWorker.{
     UpdateEventMap,
     UpdateEvent,
-    CreateEvent,
+    UpdateEventMapNoSaveOnError,
+    CreateTransactionEvent,
+    CreateEventMapNoSaveOnError,
     CreateEventMap
   }
 
@@ -58,7 +53,7 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   @spec process_event(Event.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_event(%Event{event_queue_item: %{status: :processing}, action: :create_transaction} = event) do
-    CreateEvent.process(event)
+    CreateTransactionEvent.process(event)
   end
 
   def process_event(%Event{event_queue_item: %{status: :processing}, action: :update} = event) do

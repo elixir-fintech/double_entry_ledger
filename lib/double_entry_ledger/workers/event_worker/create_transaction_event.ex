@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateEvent do
+defmodule DoubleEntryLedger.EventWorker.CreateTransactionEvent do
   @moduledoc """
   Handles the processing of creation events in the double-entry ledger system.
 

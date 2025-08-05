@@ -3,13 +3,12 @@ defmodule DoubleEntryLedger.EventStoreTest do
   This module tests the EventStore module.
   """
   use ExUnit.Case, async: true
-  alias DoubleEntryLedger.CreateEvent
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   alias DoubleEntryLedger.{EventStore, EventStoreHelper, Event}
-  alias DoubleEntryLedger.EventWorker.CreateEvent
+  alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
 
   describe "create/1" do
     setup [:create_instance]
@@ -42,7 +41,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "returns processed_transaction", %{instance: instance} = ctx do
       %{event: event} = create_event(ctx, :pending)
-      {:ok, transaction, _} = CreateEvent.process(event)
+      {:ok, transaction, _} = CreateTransactionEvent.process(event)
 
       assert %Event{} =
                found_event =

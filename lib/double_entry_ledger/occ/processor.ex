@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
   ## Implementation Examples
 
   See implementations in:
-    * `DoubleEntryLedger.EventWorker.CreateEvent.build_transaction/3`
+    * `DoubleEntryLedger.EventWorker.CreateTransactionEvent.build_transaction/3`
     * `DoubleEntryLedger.EventWorker.UpdateEvent.build_transaction/3`
     * `DoubleEntryLedger.EventWorker.ProcessEventMap.build_transaction/3`
   """

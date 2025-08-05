@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.CreateEventTest do
+defmodule DoubleEntryLedger.CreateTransactionEventTest do
   @moduledoc """
-  This module tests the CreateEvent module.
+  This module tests the CreateTransactionEvent module.
   """
   use ExUnit.Case
   import Mox
@@ -12,9 +12,9 @@ defmodule DoubleEntryLedger.CreateEventTest do
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.EventWorker.CreateEvent
+  alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
 
-  doctest CreateEvent
+  doctest CreateTransactionEvent
 
   describe "process_create_event/2" do
     setup [:create_instance, :create_accounts]
@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
       %{event: event} = create_event(ctx)
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
-        CreateEvent.process(event)
+        CreateTransactionEvent.process(event)
 
       assert evq.status == :processed
 
@@ -48,11 +48,11 @@ defmodule DoubleEntryLedger.CreateEventTest do
       end)
 
       assert {:error, %Event{event_queue_item: eqm}} =
-               CreateEvent.process(event, DoubleEntryLedger.MockRepo)
+               CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
 
       assert eqm.status == :failed
 
-      assert [%{message: "CreateEvent: Step :transaction failed. Error: :conflict"} | _] =
+      assert [%{message: "CreateTransactionEvent: Step :transaction failed. Error: :conflict"} | _] =
                eqm.errors
     end
 
@@ -70,7 +70,7 @@ defmodule DoubleEntryLedger.CreateEventTest do
       end)
 
       {:error, %{event_queue_item: eqm} = updated_event} =
-        CreateEvent.process(event, DoubleEntryLedger.MockRepo)
+        CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
 
       %{transactions: []} = Repo.preload(updated_event, :transactions)
       assert eqm.processing_completed_at != nil

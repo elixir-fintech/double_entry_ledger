@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.UpdateEventTest do
   @moduledoc """
-  This module tests the CreateEvent module.
+  This module tests the CreateTransactionEvent module.
   """
   use ExUnit.Case
   import Mox
@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.EventWorker.{UpdateEvent, CreateEvent}
+  alias DoubleEntryLedger.EventWorker.{UpdateEvent, CreateTransactionEvent}
   alias DoubleEntryLedger.EventQueue.Scheduling
 
   doctest UpdateEvent
@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, pending_transaction, %{source: s, source_idempk: s_id}} =
-        CreateEvent.process(pending_event)
+        CreateTransactionEvent.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, pending_transaction, %{source: s, source_idempk: s_id}} =
-        CreateEvent.process(pending_event)
+        CreateTransactionEvent.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
@@ -61,7 +61,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, pending_transaction, %{source: s, source_idempk: s_id}} =
-        CreateEvent.process(pending_event)
+        CreateTransactionEvent.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
@@ -84,7 +84,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, pending_transaction, %{source: s, source_idempk: s_id}} =
-        CreateEvent.process(pending_event)
+        CreateTransactionEvent.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, pending_transaction, %{source: s, source_idempk: s_id}} =
-        CreateEvent.process(pending_event)
+        CreateTransactionEvent.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
@@ -197,7 +197,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, _pending_transaction, %{source: s, source_idempk: s_id}} =
-        CreateEvent.process(pending_event)
+        CreateTransactionEvent.process(pending_event)
 
       {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
 
@@ -234,7 +234,7 @@ defmodule DoubleEntryLedger.UpdateEventTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, _pending_transaction, %{source: s, source_idempk: s_id}} =
-        CreateEvent.process(pending_event)
+        CreateTransactionEvent.process(pending_event)
 
       {:ok, event} =
         create_update_event(s, s_id, inst.id, :posted)

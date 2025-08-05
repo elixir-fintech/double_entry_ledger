@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
   alias Ecto.Changeset
   alias DoubleEntryLedger.Event.EventMap, as: EventMapSchema
   alias DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnError
-  alias DoubleEntryLedger.EventWorker.CreateEvent
+  alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
 
   doctest UpdateEventMapNoSaveOnError
 
@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
       %{event: pending_event} = create_event(ctx, :pending)
 
       {:ok, pending_transaction, _} =
-        CreateEvent.process(pending_event)
+        CreateTransactionEvent.process(pending_event)
 
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
@@ -45,7 +45,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
     test "return EventMap changeset for duplicate update_idempk", ctx do
       # successfully create event
       %{event: pending_event} = create_event(ctx, :pending)
-      CreateEvent.process(pending_event)
+      CreateTransactionEvent.process(pending_event)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
       UpdateEventMapNoSaveOnError.process(update_event)
 
@@ -187,7 +187,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
 
     test "with last retry that fails", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      CreateEvent.process(pending_event)
+      CreateTransactionEvent.process(pending_event)
       update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       DoubleEntryLedger.MockRepo
