@@ -107,8 +107,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMap do
   """
   @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
-  case process_with_retry(event_map, repo) do
+  def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
+    case process_with_retry(event_map, repo) do
       {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
         Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
         {:error, event}
@@ -146,7 +146,7 @@ def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
 
     - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
-def build_transaction(%{action: :update_transaction} = event_map, transaction_map, repo) do
+  def build_transaction(%{action: :update_transaction} = event_map, transaction_map, repo) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()

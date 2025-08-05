@@ -209,13 +209,13 @@ defmodule DoubleEntryLedger.Event.EventMap do
       false
   """
   @spec changeset(t() | map(), map()) :: Ecto.Changeset.t()
-def changeset(event_map, %{"action" => action} = attrs) when action in @update_actions do
-  update_changeset(event_map, attrs)
-end
+  def changeset(event_map, %{"action" => action} = attrs) when action in @update_actions do
+    update_changeset(event_map, attrs)
+  end
 
-def changeset(event_map, %{action: action} = attrs) when action in @update_actions do
-  update_changeset(event_map, attrs)
-end
+  def changeset(event_map, %{action: action} = attrs) when action in @update_actions do
+    update_changeset(event_map, attrs)
+  end
 
   def changeset(event_map, attrs) do
     base_changeset(event_map, attrs)

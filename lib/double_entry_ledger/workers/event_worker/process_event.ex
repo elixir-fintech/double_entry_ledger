@@ -58,8 +58,10 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     CreateTransactionEvent.process(event)
   end
 
-def process_event(%Event{event_queue_item: %{status: :processing}, action: :update_transaction} = event) do
-  UpdateTransactionEvent.process(event)
+  def process_event(
+        %Event{event_queue_item: %{status: :processing}, action: :update_transaction} = event
+      ) do
+    UpdateTransactionEvent.process(event)
   end
 
   def process_event(%Event{event_queue_item: %{status: :processing}, action: _} = _event) do
@@ -92,8 +94,8 @@ def process_event(%Event{event_queue_item: %{status: :processing}, action: :upda
     CreateTransactionEventMap.process(event_map)
   end
 
-def process_event_map(%{action: :update_transaction} = event_map) do
-  UpdateEventMap.process(event_map)
+  def process_event_map(%{action: :update_transaction} = event_map) do
+    UpdateEventMap.process(event_map)
   end
 
   def process_event_map(_event_map) do
@@ -121,8 +123,8 @@ def process_event_map(%{action: :update_transaction} = event_map) do
     CreateTransactionEventMapNoSaveOnError.process(event_map)
   end
 
-def process_event_map_no_save_on_error(%{action: :update_transaction} = event_map) do
-  UpdateEventMapNoSaveOnError.process(event_map)
+  def process_event_map_no_save_on_error(%{action: :update_transaction} = event_map) do
+    UpdateEventMapNoSaveOnError.process(event_map)
   end
 
   def process_event_map_no_save_on_error(_event_map) do

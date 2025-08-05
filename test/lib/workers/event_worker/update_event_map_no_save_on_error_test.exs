@@ -57,7 +57,12 @@ defmodule DoubleEntryLedger.EventWorker.UpdateEventMapNoSaveOnErrorTest do
 
     test "dead letter when create event does not exist", ctx do
       event_map = event_map(ctx, :pending)
-      update_event_map = %{event_map | update_idempk: Ecto.UUID.generate(), action: :update_transaction}
+
+      update_event_map = %{
+        event_map
+        | update_idempk: Ecto.UUID.generate(),
+          action: :update_transaction
+      }
 
       assert {:error,
               %Changeset{

@@ -161,7 +161,10 @@ defmodule DoubleEntryLedger.Event do
       true
   """
   @spec changeset(Event.t(), map()) :: Ecto.Changeset.t()
-  def changeset(event, %{action: :update_transaction, transaction_data: %{status: :pending}} = attrs) do
+  def changeset(
+        event,
+        %{action: :update_transaction, transaction_data: %{status: :pending}} = attrs
+      ) do
     event
     |> base_changeset(attrs)
     |> update_changeset()

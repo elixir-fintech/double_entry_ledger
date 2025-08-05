@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.EventTest do
     end
   end
 
-describe "changeset/2 for action: :update_transaction" do
+  describe "changeset/2 for action: :update_transaction" do
     test "changeset valid for simple update action, without any entry information" do
       attrs = %{
         action: :update_transaction,
