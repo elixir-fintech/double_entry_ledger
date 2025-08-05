@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
+defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMap do
   @moduledoc """
   Processes `EventMap` structures for atomic creation and update of events and their
   associated transactions in the Double Entry Ledger system.
@@ -15,7 +15,6 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
     * Error Handling: Maps validation and dependency errors to the appropriate changeset or event state.
     * Retry Logic: Retries OCC conflicts and schedules retries for dependency errors.
     * OCC Integration: Integrates with the OCC processor behavior for safe, idempotent event processing.
-
   ## Main Functions
 
     * `process_map/2` — Entry point for processing event maps with error handling and OCC.
@@ -39,7 +38,6 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
   alias DoubleEntryLedger.Event.EventMap
 
   alias Ecto.Multi
-  import DoubleEntryLedger.Occ.Helper
 
   import DoubleEntryLedger.EventWorker.ResponseHandler,
     only: [default_event_map_response_handler: 3]
@@ -63,8 +61,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(event_map, error, repo),
-    to: DoubleEntryLedger.EventWorker.ResponseHandler,
-    as: :handle_transaction_map_error
+    as: :handle_transaction_map_error,
+    to: DoubleEntryLedger.EventWorker.ResponseHandler
 
   @impl true
   @doc """
@@ -82,8 +80,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateEventMap do
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.EventWorker.ResponseHandler,
-    as: :handle_occ_final_timeout
+    as: :handle_occ_final_timeout,
+    to: DoubleEntryLedger.EventWorker.ResponseHandler
 
   @doc """
   Processes an `EventMap` by creating both an event record and its associated transaction atomically.
