@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.Event do
     field(:update_idempk, :string)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData)
+    embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData, source: :payload)
     has_many(:event_transaction_links, EventTransactionLink)
     many_to_many(:transactions,Transaction, join_through: EventTransactionLink)
     has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
