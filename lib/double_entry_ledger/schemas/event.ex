@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.Event do
     belongs_to(:instance, Instance, type: Ecto.UUID)
     embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData)
     has_many(:event_transaction_links, EventTransactionLink)
-    has_many(:transactions, through: [:event_transaction_links, :transaction])
+    many_to_many(:transactions,Transaction, join_through: EventTransactionLink)
     has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
 
     timestamps(type: :utc_datetime_usec)
