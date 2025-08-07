@@ -1,6 +1,6 @@
 alias DoubleEntryLedger.Event
 alias DoubleEntryLedger.Event.ErrorMap
-alias DoubleEntryLedger.Event.EventMap
+alias DoubleEntryLedger.Event.TransactionEventMap
 alias DoubleEntryLedger.Occ.Helper
 alias Ecto.{Multi, Changeset}
 
@@ -103,39 +103,39 @@ defimpl DoubleEntryLedger.Occ.Occable, for: Event do
   end
 end
 
-defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
+defimpl DoubleEntryLedger.Occ.Occable, for: TransactionEventMap do
   @doc """
-  Updates an EventMap during OCC retry cycles.
+  Updates an TransactionEventMap during OCC retry cycles.
 
-  For EventMap, this is a no-op since EventMaps are transient and
+  For TransactionEventMap, this is a no-op since TransactionEventMaps are transient and
   not stored in the database.
 
   ## Parameters
-    - `event_map` - The EventMap struct
+    - `event_map` - The TransactionEventMap struct
     - `_error_map` - Contains retry count and errors (unused)
     - `_repo` - Ecto.Repo to use (unused)
 
   ## Returns
-    - The unchanged EventMap struct
+    - The unchanged TransactionEventMap struct
   """
-  @spec update!(EventMap.t(), ErrorMap.t(), Ecto.Repo.t()) :: EventMap.t()
+  @spec update!(TransactionEventMap.t(), ErrorMap.t(), Ecto.Repo.t()) :: TransactionEventMap.t()
   def update!(event_map, _error_map, _repo), do: event_map
 
   @doc """
-  Handles OCC timeout for an EventMap when maximum retries are reached.
+  Handles OCC timeout for an TransactionEventMap when maximum retries are reached.
 
-  Creates and stores a permanent Event record from the EventMap data
+  Creates and stores a permanent Event record from the TransactionEventMap data
   with timeout status, then returns an error tuple.
 
   ## Parameters
-    - `_event_map` - The EventMap that has reached maximum retries
+    - `_event_map` - The TransactionEventMap that has reached maximum retries
     - `error_map` - Contains retry count, errors, and created Event
     - `repo` - Ecto.Repo to use for storing the Event
 
   ## Returns
     - Error tuple containing the created Event and timeout indication
   """
-  @spec timed_out(EventMap.t(), atom(), ErrorMap.t()) ::
+  @spec timed_out(TransactionEventMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()
   def timed_out(_event_map, name, %{save_on_error: true} = error_map) do
     new_event_step = :new_event
@@ -155,7 +155,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: EventMap do
   def timed_out(event_map, _name, %{save_on_error: false}) do
     event_map_changeset =
       event_map
-      |> EventMap.changeset(%{})
+      |> TransactionEventMap.changeset(%{})
       |> Changeset.add_error(:occ_timeout, "OCC retries exhausted")
 
     Multi.new()

@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Event changesets from EventMaps or attribute maps
+  * **Changeset Building**: Create Event changesets from TransactionEventMaps or attribute maps
   * **Event Relationships**: Look up related events by source identifiers
   * **Transaction Linking**: Find transactions associated with events
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
   ## Usage Examples
 
-  Building a changeset from an EventMap:
+  Building a changeset from an TransactionEventMap:
 
       event_changeset = EventStoreHelper.build_create(event_map)
 
@@ -35,25 +35,25 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   share common functionality and reduce code duplication.
   """
   import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
   alias Ecto.Changeset
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Event, Transaction}
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
 
   @doc """
-  Builds an Event changeset from an EventMap or attribute map.
+  Builds an Event changeset from an TransactionEventMap or attribute map.
 
   ## Parameters
-    - event_map_or_attrs: Either an EventMap struct or a plain map of attributes
+    - event_map_or_attrs: Either an TransactionEventMap struct or a plain map of attributes
 
   ## Returns
     - Ecto.Changeset.t() A changeset for creating a new Event
   """
-  @spec build_create(EventMap.t() | map()) :: Changeset.t()
-  def build_create(%EventMap{} = event_map) do
+  @spec build_create(TransactionEventMap.t() | map()) :: Changeset.t()
+  def build_create(%TransactionEventMap{} = event_map) do
     %Event{}
-    |> Event.changeset(EventMap.to_map(event_map))
+    |> Event.changeset(TransactionEventMap.to_map(event_map))
   end
 
   def build_create(attrs) do

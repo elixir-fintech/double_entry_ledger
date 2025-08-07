@@ -1,15 +1,15 @@
-defmodule DoubleEntryLedger.Event.EventMap do
+defmodule DoubleEntryLedger.Event.TransactionEventMap do
   @moduledoc """
-  Defines the EventMap schema for representing event data in the Double Entry Ledger system.
+  Defines the TransactionEventMap schema for representing event data in the Double Entry Ledger system.
 
   This module provides an embedded schema and related functions for creating and validating
   event maps, which serve as the primary data structure for transaction creation and updates.
-  EventMap represents the pre-persistence state of an Event, containing all necessary data
+  TransactionEventMap represents the pre-persistence state of an Event, containing all necessary data
   to either create a new transaction or update an existing one.
 
   ## Structure
 
-  EventMap contains the following fields:
+  TransactionEventMap contains the following fields:
 
   * `action`: The type of action to perform (:create_transaction or :update_transaction)
   * `instance_id`: UUID of the ledger instance this event belongs to
@@ -22,10 +22,10 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   ## Key Functions
 
-  * `create/1`: Creates and validates an EventMap from a map of attributes
-  * `changeset/2`: Builds a changeset for validating EventMap data
-  * `to_map/1`: Converts an EventMap struct to a plain map representation
-  * `log_trace/1,2`: Builds a map of trace metadata for logging from an EventMap
+  * `create/1`: Creates and validates an TransactionEventMap from a map of attributes
+  * `changeset/2`: Builds a changeset for validating TransactionEventMap data
+  * `to_map/1`: Converts an TransactionEventMap struct to a plain map representation
+  * `log_trace/1,2`: Builds a map of trace metadata for logging from an TransactionEventMap
 
   ## Implementation Details
 
@@ -42,20 +42,20 @@ defmodule DoubleEntryLedger.Event.EventMap do
     original transaction.
 
   Both combinations are protected by unique indexes in the database to prevent duplicate processing.
-  The EventMap schema itself does not enforce these constraints, as it is not persisted directly.
+  The TransactionEventMap schema itself does not enforce these constraints, as it is not persisted directly.
   Instead, the Event schema handles this at the database level.
   Only transactions with status `:pending` can be updated.
 
   ## Workflow Integration
 
-  EventMaps are typically created from external input data, validated, and then processed
+  TransactionEventMaps are typically created from external input data, validated, and then processed
   by the EventWorker system to create or update transactions in the ledger.
 
   ## Examples
 
-  Creating an EventMap for a new transaction:
+  Creating an TransactionEventMap for a new transaction:
 
-      EventMap.create(%{
+      TransactionEventMap.create(%{
         action: "create_transaction",
         instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9",
         source: "accounting_system",
@@ -69,9 +69,9 @@ defmodule DoubleEntryLedger.Event.EventMap do
         }
       })
 
-  Creating an EventMap for updating an existing transaction:
+  Creating an TransactionEventMap for updating an existing transaction:
 
-      EventMap.create(%{
+      TransactionEventMap.create(%{
         action: "update",
         instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9",
         source: "accounting_system",
@@ -90,12 +90,12 @@ defmodule DoubleEntryLedger.Event.EventMap do
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Event.TransactionData
 
-  alias __MODULE__, as: EventMap
+  alias __MODULE__, as: TransactionEventMap
 
   @update_actions [:update_transaction, "update_transaction"]
 
   @typedoc """
-  Represents an EventMap structure for transaction creation or updates.
+  Represents an TransactionEventMap structure for transaction creation or updates.
 
   This is the primary data structure used for creating or updating transactions in the ledger system
   before they are persisted to the database.
@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   * `update_idempk`: Unique identifier for update operations to maintain idempotency
   * `transaction_data`: The embedded transaction data structure
   """
-  @type t :: %EventMap{
+  @type t :: %TransactionEventMap{
           action: Event.action(),
           instance_id: Ecto.UUID.t(),
           source: String.t(),
@@ -143,7 +143,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   end
 
   @doc """
-  Builds a validated EventMap or returns a changeset with errors.
+  Builds a validated TransactionEventMap or returns a changeset with errors.
 
   ## Parameters
     - `attrs`: A map containing the event data.
@@ -154,31 +154,31 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   ## Example
 
-    iex> alias DoubleEntryLedger.Event.EventMap
-    iex> {:ok, em} = EventMap.create(%{action: "create_transaction", instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9", source: "source", source_idempk: "source_idempk",
+    iex> alias DoubleEntryLedger.Event.TransactionEventMap
+    iex> {:ok, em} = TransactionEventMap.create(%{action: "create_transaction", instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9", source: "source", source_idempk: "source_idempk",
     ...>   transaction_data: %{status: "pending", entries: [
     ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
     ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
     ...>   ]}})
-    iex> is_struct(em, EventMap)
+    iex> is_struct(em, TransactionEventMap)
 
   """
   @spec create(map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) do
-    %EventMap{}
+    %TransactionEventMap{}
     |> changeset(attrs)
     |> Changeset.apply_action(:insert)
   end
 
   @doc """
-  Creates a changeset for validating EventMap attributes.
+  Creates a changeset for validating TransactionEventMap attributes.
 
   This function builds an Ecto changeset that validates the required fields and structure
-  of an EventMap. It applies different validation rules depending on the action type
+  of an TransactionEventMap. It applies different validation rules depending on the action type
   (create vs update).
 
   ## Parameters
-    - `event_map`: The EventMap struct to create a changeset for
+    - `event_map`: The TransactionEventMap struct to create a changeset for
     - `attrs`: Map of attributes to apply to the struct
 
   ## Returns
@@ -190,21 +190,21 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.EventMap
+      iex> alias DoubleEntryLedger.Event.TransactionEventMap
       iex> attrs = %{action: "create_transaction", instance_id: "550e8400-e29b-41d4-a716-446655440000",
       ...>   source: "accounting_system", source_idempk: "invoice_123",
       ...>   transaction_data: %{status: "pending", entries: [
       ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
       ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
       ...>   ]}}
-      iex> changeset = EventMap.changeset(%EventMap{}, attrs)
+      iex> changeset = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
       iex> changeset.valid?
       true
 
-      iex> alias DoubleEntryLedger.Event.EventMap
+      iex> alias DoubleEntryLedger.Event.TransactionEventMap
       iex> attrs = %{action: "update", instance_id: "550e8400-e29b-41d4-a716-446655440000",
       ...>   source: "accounting_system", source_idempk: "invoice_123"}
-      iex> changeset = EventMap.changeset(%EventMap{}, attrs)
+      iex> changeset = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
       iex> changeset.valid?
       false
   """
@@ -223,21 +223,21 @@ defmodule DoubleEntryLedger.Event.EventMap do
   end
 
   @doc """
-  Builds a map of trace metadata for logging from an EventMap.
+  Builds a map of trace metadata for logging from an TransactionEventMap.
 
-  This function extracts key fields from the given `EventMap` struct to provide
+  This function extracts key fields from the given `TransactionEventMap` struct to provide
   consistent, structured metadata for logging and tracing purposes. The returned map
   includes the action, source, and a composite trace ID.
 
   ## Parameters
 
-    - `event_map`: The `EventMap` struct to extract trace information from.
+    - `event_map`: The `TransactionEventMap` struct to extract trace information from.
 
   ## Returns
 
     - A map containing trace metadata for the event map.
   """
-  @spec log_trace(EventMap.t()) :: map()
+  @spec log_trace(TransactionEventMap.t()) :: map()
   def log_trace(event_map) do
     %{
       is_event_map: true,
@@ -251,21 +251,21 @@ defmodule DoubleEntryLedger.Event.EventMap do
   end
 
   @doc """
-  Builds a map of trace metadata for logging from an EventMap and an error.
+  Builds a map of trace metadata for logging from an TransactionEventMap and an error.
 
   This function extends `log_trace/1` by also including error information
   when an error value is provided.
 
   ## Parameters
 
-    - `event_map`: The `EventMap` struct to extract trace information from.
+    - `event_map`: The `TransactionEventMap` struct to extract trace information from.
     - `error`: Any error value to include in the trace metadata.
 
   ## Returns
 
     - A map containing trace metadata for the event map and the error.
   """
-  @spec log_trace(EventMap.t(), any()) :: map()
+  @spec log_trace(TransactionEventMap.t(), any()) :: map()
   def log_trace(event_map, error) do
     Map.put(
       log_trace(event_map),
@@ -284,9 +284,9 @@ defmodule DoubleEntryLedger.Event.EventMap do
   ## Example
 
     iex> alias DoubleEntryLedger.Event.TransactionData
-    iex> alias DoubleEntryLedger.Event.EventMap
-    iex> event = %EventMap{transaction_data: %TransactionData{}}
-    iex> is_map(EventMap.to_map(event))
+    iex> alias DoubleEntryLedger.Event.TransactionEventMap
+    iex> event = %TransactionEventMap{transaction_data: %TransactionData{}}
+    iex> is_map(TransactionEventMap.to_map(event))
     true
   """
   @spec to_map(t) :: map()

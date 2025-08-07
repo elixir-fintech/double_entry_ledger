@@ -21,15 +21,15 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
 
   alias DoubleEntryLedger.{Event, EventWorker}
 
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
 
   alias DoubleEntryLedger.EventWorker.{
     UpdateTransactionEvent,
-    UpdateTransactionEventMap,
-    UpdateTransactionEventMapNoSaveOnError,
+    UpdateTransactionTransactionEventMap,
+    UpdateTransactionTransactionEventMapNoSaveOnError,
     CreateTransactionEvent,
-    CreateTransactionEventMap,
-    CreateTransactionEventMapNoSaveOnError
+    CreateTransactionTransactionEventMap,
+    CreateTransactionTransactionEventMapNoSaveOnError
   }
 
   @doc """
@@ -88,14 +88,14 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     - `{:error, changeset}`: If validation failed
     - `{:error, reason}`: For other errors or unsupported actions
   """
-  @spec process_event_map(EventMap.t()) ::
+  @spec process_event_map(TransactionEventMap.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_event_map(%{action: :create_transaction} = event_map) do
-    CreateTransactionEventMap.process(event_map)
+    CreateTransactionTransactionEventMap.process(event_map)
   end
 
   def process_event_map(%{action: :update_transaction} = event_map) do
-    UpdateTransactionEventMap.process(event_map)
+    UpdateTransactionTransactionEventMap.process(event_map)
   end
 
   def process_event_map(_event_map) do
@@ -117,14 +117,14 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
     - `{:error, changeset}`: If validation failed
     - `{:error, reason}`: For other errors or unsupported actions
   """
-  @spec process_event_map_no_save_on_error(EventMap.t()) ::
+  @spec process_event_map_no_save_on_error(TransactionEventMap.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_event_map_no_save_on_error(%{action: :create_transaction} = event_map) do
-    CreateTransactionEventMapNoSaveOnError.process(event_map)
+    CreateTransactionTransactionEventMapNoSaveOnError.process(event_map)
   end
 
   def process_event_map_no_save_on_error(%{action: :update_transaction} = event_map) do
-    UpdateTransactionEventMapNoSaveOnError.process(event_map)
+    UpdateTransactionTransactionEventMapNoSaveOnError.process(event_map)
   end
 
   def process_event_map_no_save_on_error(_event_map) do

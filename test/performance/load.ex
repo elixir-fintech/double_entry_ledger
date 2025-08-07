@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   """
 
   alias DoubleEntryLedger.{Account, Balance, Instance, EventWorker, Repo}
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
   @destination_accounts 10
   @seconds_to_run 10
 
@@ -98,7 +98,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   # insert a single event and then create the transaction from it
   defp run_transaction(instance, params) do
     {:ok, event_map} =
-      EventMap.create(%{
+      TransactionEventMap.create(%{
         action: :create_transaction,
         status: :pending,
         source: "source",

@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSaveOnError do
   @moduledoc """
   Processes event maps for creating transactions, returning changesets on error instead of raising or saving invalid data.
 
@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError d
 
   alias DoubleEntryLedger.{EventWorker, Repo}
 
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
 
   alias Ecto.Changeset
 
@@ -29,12 +29,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError d
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
-    to: DoubleEntryLedger.EventWorker.CreateTransactionEventMap,
+    to: DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMap,
     as: :build_transaction
 
   @impl true
   defdelegate handle_build_transaction(multi, event_map, repo),
-    to: DoubleEntryLedger.EventWorker.CreateTransactionEventMap,
+    to: DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMap,
     as: :handle_build_transaction
 
   @doc """
@@ -47,22 +47,22 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError d
   - `{:error, changeset}` if validation or OCC fails (see changeset errors for details)
   - `{:error, string}` for unexpected errors
   """
-  @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
+  @spec process(TransactionEventMap.t(), Ecto.Repo.t() | nil) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process(%{action: :create_transaction} = event_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(event_map, repo) do
-      {:error, :occ_timeout, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+      {:error, :occ_timeout, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
         Logger.warning(
           "#{@module_name}: OCC timeout reached",
-          EventMap.log_trace(event_map, changeset.errors)
+          TransactionEventMap.log_trace(event_map, changeset.errors)
         )
 
         {:error, changeset}
 
-      {:error, :input_event_map_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Input event map error",
-          EventMap.log_trace(event_map, changeset.errors)
+          TransactionEventMap.log_trace(event_map, changeset.errors)
         )
 
         {:error, changeset}
@@ -76,7 +76,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError d
   def handle_transaction_map_error(event_map, error, _repo) do
     event_map_changeset =
       event_map
-      |> EventMap.changeset(%{})
+      |> TransactionEventMap.changeset(%{})
       |> Changeset.add_error(:input_event_map, to_string(error))
 
     Multi.new()

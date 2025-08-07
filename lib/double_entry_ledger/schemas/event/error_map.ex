@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
 
   * `build_error/1`: Creates a standardized error entry from various input types
   * `build_errors/2`: Adds a new error to an existing error list
-  * `create_error_map/1`: Initializes an ErrorMap from an Event or EventMap
+  * `create_error_map/1`: Initializes an ErrorMap from an Event or TransactionEventMap
 
   ## Usage Examples
 
@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
             save_on_error: false
 
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
   alias __MODULE__, as: ErrorMap
 
   @typedoc """
@@ -148,13 +148,13 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
   end
 
   @doc """
-  Initializes an ErrorMap from an Event or EventMap.
+  Initializes an ErrorMap from an Event or TransactionEventMap.
 
   Creates a new ErrorMap structure, preserving any existing errors from the
   event while initializing other tracking fields.
 
   ## Parameters
-    - `event`: Event or EventMap to initialize from
+    - `event`: Event or TransactionEventMap to initialize from
 
   ## Returns
     - A new ErrorMap struct with initialized fields
@@ -170,7 +170,7 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
       iex> length(error_map.errors)
       1
   """
-  @spec create_error_map(Event.t() | EventMap.t()) :: t()
+  @spec create_error_map(Event.t() | TransactionEventMap.t()) :: t()
   def create_error_map(%Event{event_queue_item: event_queue_item}) do
     %ErrorMap{
       errors: Map.get(event_queue_item, :errors, []),

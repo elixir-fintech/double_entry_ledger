@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.Event do
 
   * **Event Processing**: Events progress through states (:pending → :processing → :processed/:failed)
   * **Idempotency**: Idempotency is enforced using a combination of `action`, `source`, `source_idempk` and `update_idempk`. More details
-    are in the `EventMap` module.
+    are in the `TransactionEventMap` module.
   * **Transaction Data**: Each event contains embedded transaction_data describing the requested changes
   * **Queue Management**: Fields track processing attempts, retries, and completion status
 

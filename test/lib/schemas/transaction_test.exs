@@ -171,7 +171,7 @@ defmodule DoubleEntryLedger.TransactionTest do
       |> then(&assert length(&1) == 2)
     end
 
-    test "amount different, also add :amount error for EventMap use", %{
+    test "amount different, also add :amount error for TransactionEventMap use", %{
       instance: inst,
       accounts: [acc1, acc2, _, _]
     } do

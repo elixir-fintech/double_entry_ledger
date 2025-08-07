@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
   This module tests the EventWorker.
   """
   use ExUnit.Case
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -109,7 +109,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
             ]
           }
         }
-        |> EventMap.create()
+        |> TransactionEventMap.create()
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
         EventWorker.process_new_event(event_map)

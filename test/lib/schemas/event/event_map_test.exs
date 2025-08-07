@@ -1,15 +1,15 @@
-defmodule DoubleEntryLedger.Event.EventMapTest do
+defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
   @moduledoc """
-  Tests for the EventMap payload
+  Tests for the TransactionEventMap payload
   """
   use ExUnit.Case
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
   alias Ecto.Changeset
-  doctest EventMap
+  doctest TransactionEventMap
 
-  describe "Event.EventMap" do
+  describe "Event.TransactionEventMap" do
     test "changeset not valid for empty data" do
-      assert %Changeset{valid?: false} = EventMap.changeset(%EventMap{}, %{})
+      assert %Changeset{valid?: false} = TransactionEventMap.changeset(%TransactionEventMap{}, %{})
     end
 
     test "changeset not valid for missing action, instance_id, source, source_idempk and transaction_data" do
@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
                  source: {"can't be blank", [validation: :required]},
                  source_idempk: {"can't be blank", [validation: :required]}
                ]
-             } = EventMap.changeset(%EventMap{}, %{})
+             } = TransactionEventMap.changeset(%TransactionEventMap{}, %{})
     end
 
     test "changeset invalid for empty transaction_data struct" do
@@ -33,12 +33,12 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
         transaction_data: %{}
       }
 
-      assert %Changeset{valid?: false} = EventMap.changeset(%EventMap{}, attrs)
+      assert %Changeset{valid?: false} = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
     end
 
     test "changeset valid for valid entry data" do
       attrs = event_map_attrs()
-      assert %Changeset{valid?: true} = EventMap.changeset(%EventMap{}, attrs)
+      assert %Changeset{valid?: true} = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
     end
 
     test "changeset invalid for update action without update_idempk" do
@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
                errors: [
                  update_idempk: {"can't be blank", [validation: :required]}
                ]
-             } = EventMap.changeset(%EventMap{}, attrs)
+             } = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
 
       attrs2 = event_map_attrs(%{action: :update_transaction})
 
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
                errors: [
                  update_idempk: {"can't be blank", [validation: :required]}
                ]
-             } = EventMap.changeset(%EventMap{}, attrs2)
+             } = TransactionEventMap.changeset(%TransactionEventMap{}, attrs2)
     end
 
     test "changeset invalid for update action (key as string) without update_idempk" do
@@ -72,7 +72,7 @@ defmodule DoubleEntryLedger.Event.EventMapTest do
                errors: [
                  update_idempk: {"can't be blank", [validation: :required]}
                ]
-             } = EventMap.changeset(%EventMap{}, attrs)
+             } = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
     end
   end
 

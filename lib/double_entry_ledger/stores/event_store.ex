@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.EventStore do
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.{Repo, Event}
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
   alias DoubleEntryLedger.EventWorker
 
   @doc """
@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.EventStore do
   @doc """
   Processes an event from provided parameters, handling the entire workflow.
 
-  This function creates an EventMap from the parameters, then processes it through
+  This function creates an TransactionEventMap from the parameters, then processes it through
   the EventWorker to create both an event record in the EventStore and creates the necessary projections.
 
   If the processing fails, it will return an error tuple with details about the failure. The event is saved to the EventStore and then retried later.
@@ -125,7 +125,7 @@ defmodule DoubleEntryLedger.EventStore do
   @spec process_from_event_params(map()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_from_event_params(event_params) do
-    case EventMap.create(event_params) do
+    case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
         EventWorker.process_new_event(event_map)
 
@@ -140,7 +140,7 @@ defmodule DoubleEntryLedger.EventStore do
   @spec process_from_event_params_no_save_on_error(map()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_from_event_params_no_save_on_error(event_params) do
-    case EventMap.create(event_params) do
+    case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
         EventWorker.process_new_event_no_save_on_error(event_map)
 

@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.EventWorker do
     Transaction
   }
 
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
   alias DoubleEntryLedger.EventWorker.ProcessEvent
   alias DoubleEntryLedger.EventQueue.Scheduling
 
@@ -60,11 +60,11 @@ defmodule DoubleEntryLedger.EventWorker do
 
       # Process a create event for a new transaction
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, Transaction, Event}
-      iex> alias DoubleEntryLedger.Event.EventMap
+      iex> alias DoubleEntryLedger.Event.TransactionEventMap
       iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
-      iex> event_map = %EventMap{instance_id: instance.id,
+      iex> event_map = %TransactionEventMap{instance_id: instance.id,
       ...>  source: "s1", source_idempk: "1", action: :create_transaction,
       ...>  transaction_data: %{status: :pending, entries: [
       ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
@@ -73,15 +73,15 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> {:ok, %Transaction{status: :pending}, %Event{event_queue_item: %{status: :processed}}} = EventWorker.process_new_event(event_map)
 
   """
-  @spec process_new_event(EventMap.t()) ::
+  @spec process_new_event(TransactionEventMap.t()) ::
           success_tuple() | error_tuple()
-  def process_new_event(%EventMap{} = event_map) do
+  def process_new_event(%TransactionEventMap{} = event_map) do
     process_event_map(event_map)
   end
 
-  @spec process_new_event_no_save_on_error(EventMap.t()) ::
+  @spec process_new_event_no_save_on_error(TransactionEventMap.t()) ::
           success_tuple() | error_tuple()
-  def process_new_event_no_save_on_error(%EventMap{} = event_map) do
+  def process_new_event_no_save_on_error(%TransactionEventMap{} = event_map) do
     process_event_map_no_save_on_error(event_map)
   end
 
@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.EventWorker do
 
       # Process an existing pending event
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore, Transaction, Event}
-      iex> alias DoubleEntryLedger.Event.EventMap
+      iex> alias DoubleEntryLedger.Event.TransactionEventMap
       iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})

@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTest do
+defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSaveOnErrorTest do
   @moduledoc """
-  This module tests the UpdateTransactionEventMapNoSaveOnError module.
+  This module tests the UpdateTransactionTransactionEventMapNoSaveOnError module.
   """
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
@@ -12,11 +12,11 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
   import DoubleEntryLedger.InstanceFixtures
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.EventMap, as: EventMapSchema
-  alias DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError
+  alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
+  alias DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSaveOnError
   alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
 
-  doctest UpdateTransactionEventMapNoSaveOnError
+  doctest UpdateTransactionTransactionEventMapNoSaveOnError
 
   describe "process/1" do
     setup [:create_instance, :create_accounts]
@@ -27,10 +27,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
       {:ok, pending_transaction, _} =
         CreateTransactionEvent.process(pending_event)
 
-      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
-        UpdateTransactionEventMapNoSaveOnError.process(update_event)
+        UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
 
       assert evq.status == :processed
 
@@ -42,16 +42,16 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
       assert transaction.status == :posted
     end
 
-    test "return EventMap changeset for duplicate update_idempk", ctx do
+    test "return TransactionEventMap changeset for duplicate update_idempk", ctx do
       # successfully create event
       %{event: pending_event} = create_event(ctx, :pending)
       CreateTransactionEvent.process(pending_event)
-      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
-      UpdateTransactionEventMapNoSaveOnError.process(update_event)
+      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, pending_event, :posted))
+      UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
 
       # process same update_event again which should fail
-      {:error, changeset} = UpdateTransactionEventMapNoSaveOnError.process(update_event)
-      assert %Changeset{data: %EventMapSchema{}} = changeset
+      {:error, changeset} = UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
+      assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
       assert Keyword.has_key?(changeset.errors, :update_idempk)
     end
 
@@ -66,15 +66,15 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
 
       assert {:error,
               %Changeset{
-                data: %EventMapSchema{},
+                data: %TransactionEventMapSchema{},
                 errors: [
                   create_transaction_event_error: {"create_transaction_event_not_found", _}
                 ]
               }} =
-               UpdateTransactionEventMapNoSaveOnError.process(update_event_map)
+               UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event_map)
     end
 
-    test "return EventMap changeset for other errors", ctx do
+    test "return TransactionEventMap changeset for other errors", ctx do
       event_map = %{
         event_map(ctx, :pending)
         | update_idempk: Ecto.UUID.generate(),
@@ -88,12 +88,12 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
 
       # process same update_event again which should fail
       {:error, changeset} =
-        UpdateTransactionEventMapNoSaveOnError.process(struct(EventMapSchema, updated_event_map))
+        UpdateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
-      assert %Changeset{data: %EventMapSchema{}} = changeset
+      assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
     end
 
-    test "return EventMap changeset for invalid entry data currency", ctx do
+    test "return TransactionEventMap changeset for invalid entry data currency", ctx do
       event_map = %{
         event_map(ctx, :pending)
         | update_idempk: Ecto.UUID.generate(),
@@ -106,15 +106,15 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
         end)
 
       {:error, changeset} =
-        UpdateTransactionEventMapNoSaveOnError.process(struct(EventMapSchema, updated_event_map))
+        UpdateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{
-               data: %EventMapSchema{},
+               data: %TransactionEventMapSchema{},
                errors: [input_event_map: {"invalid_entry_data", []}]
              } = changeset
     end
 
-    test "return EventMap changeset for non existing account", ctx do
+    test "return TransactionEventMap changeset for non existing account", ctx do
       event_map = %{
         event_map(ctx, :pending)
         | update_idempk: Ecto.UUID.generate(),
@@ -127,26 +127,26 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
         end)
 
       {:error, changeset} =
-        UpdateTransactionEventMapNoSaveOnError.process(struct(EventMapSchema, updated_event_map))
+        UpdateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{
-               data: %EventMapSchema{},
+               data: %TransactionEventMapSchema{},
                errors: [input_event_map: {"some_accounts_not_found", []}]
              } = changeset
     end
 
     test "update event for event_map, when create event not yet processed", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       assert {:error,
               %Changeset{
-                data: %EventMapSchema{},
+                data: %TransactionEventMapSchema{},
                 errors: [
                   create_transaction_event_error: {"create_transaction_event_not_processed", _}
                 ]
               }} =
-               UpdateTransactionEventMapNoSaveOnError.process(update_event)
+               UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
     end
 
     test "update event is pending for event_map, when create event failed", ctx do
@@ -158,16 +158,16 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
         |> Ecto.Changeset.put_assoc(:event_queue_item, %{id: eqm1.id, status: :failed})
         |> Repo.update!()
 
-      update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, failed_event, :posted))
 
       assert {:error,
               %Changeset{
-                data: %EventMapSchema{},
+                data: %TransactionEventMapSchema{},
                 errors: [
                   create_transaction_event_error: {"create_transaction_event_not_processed", _}
                 ]
               }} =
-               UpdateTransactionEventMapNoSaveOnError.process(update_event)
+               UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
     end
 
     test "update event is dead_letter for event_map, when create event failed", ctx do
@@ -179,16 +179,16 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
 
       failed_event = Repo.preload(pending_event, :event_queue_item)
 
-      update_event = struct(EventMapSchema, update_event_map(ctx, failed_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, failed_event, :posted))
 
       assert {:error,
               %Changeset{
-                data: %EventMapSchema{},
+                data: %TransactionEventMapSchema{},
                 errors: [
                   create_transaction_event_error: {"create_transaction_event_in_dead_letter", _}
                 ]
               }} =
-               UpdateTransactionEventMapNoSaveOnError.process(update_event)
+               UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
     end
   end
 
@@ -201,7 +201,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
     test "with last retry that fails", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
       CreateTransactionEvent.process(pending_event)
-      update_event = struct(EventMapSchema, update_event_map(ctx, pending_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, pending_event, :posted))
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, 5, fn changeset ->
@@ -213,8 +213,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Changeset{data: %EventMapSchema{}, errors: [occ_timeout: _]}} =
-               UpdateTransactionEventMapNoSaveOnError.process(
+      assert {:error, %Changeset{data: %TransactionEventMapSchema{}, errors: [occ_timeout: _]}} =
+               UpdateTransactionTransactionEventMapNoSaveOnError.process(
                  update_event,
                  DoubleEntryLedger.MockRepo
                )

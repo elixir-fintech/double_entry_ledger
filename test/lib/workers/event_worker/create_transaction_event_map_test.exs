@@ -1,32 +1,32 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
+defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest do
   @moduledoc """
-  This module tests the CreateTransactionEventMap module, which processes event maps for atomic creation and update of events and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
+  This module tests the CreateTransactionTransactionEventMap module, which processes event maps for atomic creation and update of events and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
   """
   use ExUnit.Case
   import Mox
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.EventMap, as: EventMapSchema
+  alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventWorker.CreateTransactionEventMap
+  alias DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMap
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventStore
 
-  doctest CreateTransactionEventMap
+  doctest CreateTransactionTransactionEventMap
 
   describe "process_map/1" do
     setup [:create_instance, :create_accounts]
 
     test "create event for event_map, which must also create the event", ctx do
-      event_map = struct(EventMapSchema, event_map(ctx))
+      event_map = struct(TransactionEventMapSchema, event_map(ctx))
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
-        CreateTransactionEventMap.process(event_map)
+        CreateTransactionTransactionEventMap.process(event_map)
 
       assert evq.status == :processed
 
@@ -37,18 +37,18 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
       assert transaction.status == :pending
     end
 
-    test "return EventMap changeset for duplicate source_idempk", ctx do
+    test "return TransactionEventMap changeset for duplicate source_idempk", ctx do
       # successfully create event
-      event_map = struct(EventMapSchema, event_map(ctx))
-      CreateTransactionEventMap.process(event_map)
+      event_map = struct(TransactionEventMapSchema, event_map(ctx))
+      CreateTransactionTransactionEventMap.process(event_map)
 
       # process same event_map again which should fail
-      {:error, changeset} = CreateTransactionEventMap.process(event_map)
-      assert %Changeset{data: %EventMapSchema{}} = changeset
+      {:error, changeset} = CreateTransactionTransactionEventMap.process(event_map)
+      assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
       assert Keyword.has_key?(changeset.errors, :source_idempk)
     end
 
-    test "return EventMap changeset for other errors", ctx do
+    test "return TransactionEventMap changeset for other errors", ctx do
       # successfully create event
       event_map = event_map(ctx, :pending)
 
@@ -59,9 +59,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
 
       # process same update_event again which should fail
       {:error, changeset} =
-        CreateTransactionEventMap.process(struct(EventMapSchema, updated_event_map))
+        CreateTransactionTransactionEventMap.process(struct(TransactionEventMapSchema, updated_event_map))
 
-      assert %Changeset{data: %EventMapSchema{}} = changeset
+      assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
     end
   end
 
@@ -83,9 +83,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
       end)
 
       assert {:error, %Event{id: id, event_queue_item: %{status: :occ_timeout}}} =
-               CreateTransactionEventMap.process(
+               CreateTransactionTransactionEventMap.process(
                  struct(
-                   EventMapSchema,
+                   TransactionEventMapSchema,
                    event_map(ctx)
                  ),
                  DoubleEntryLedger.MockRepo

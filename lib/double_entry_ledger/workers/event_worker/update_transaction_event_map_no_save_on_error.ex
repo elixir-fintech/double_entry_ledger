@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSaveOnError do
   @moduledoc """
-  Processes `EventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system, without saving on error.
+  Processes `TransactionEventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system, without saving on error.
 
   Implements the Optimistic Concurrency Control (OCC) pattern to ensure safe concurrent processing of update events, providing robust error handling, retry logic, and transactional guarantees. This module ensures that update operations are performed atomically and consistently, and that all error and retry scenarios are handled transparently. Unlike the standard update event map processor, this variant does not persist changes on error, but instead returns changesets with error details for client handling.
 
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
     Repo
   }
 
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.TransactionEventMap
 
   alias Ecto.{Multi, Changeset}
 
@@ -49,17 +49,17 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
-    to: DoubleEntryLedger.EventWorker.UpdateTransactionEventMap,
+    to: DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMap,
     as: :build_transaction
 
   @doc """
-  Processes an `EventMap` by creating both an event record and its associated transaction atomically, without saving on error.
+  Processes an `TransactionEventMap` by creating both an event record and its associated transaction atomically, without saving on error.
 
   This function is designed for synchronous use, ensuring that both the event and the transaction are created or updated in one atomic operation. It handles both `:create_transaction` and `:update` action types, with appropriate transaction building logic for each case. The entire operation uses Optimistic Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively. If an error occurs, a changeset with error details is returned instead of persisting the error state.
 
   ## Parameters
 
-    - `event_map`: An `EventMap` struct containing all event and transaction data.
+    - `event_map`: An `TransactionEventMap` struct containing all event and transaction data.
     - `repo`: The repository to use for database operations (defaults to `Repo`).
 
   ## Returns
@@ -68,31 +68,31 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
     - `{:error, changeset}` if validation or dependency errors occur (not persisted).
     - `{:error, reason}` for other errors, with a string describing the error and the failing step.
   """
-  @spec process(EventMap.t(), Ecto.Repo.t() | nil) ::
+  @spec process(TransactionEventMap.t(), Ecto.Repo.t() | nil) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(event_map, repo) do
-      {:error, :occ_timeout, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+      {:error, :occ_timeout, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
         Logger.warning(
           "#{@module_name}: OCC timeout reached",
-          EventMap.log_trace(event_map, changeset.errors)
+          TransactionEventMap.log_trace(event_map, changeset.errors)
         )
 
         {:error, changeset}
 
-      {:error, :create_transaction_event_error, %Changeset{data: %EventMap{}} = changeset,
+      {:error, :create_transaction_event_error, %Changeset{data: %TransactionEventMap{}} = changeset,
        _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Update event error",
-          EventMap.log_trace(event_map, changeset.errors)
+          TransactionEventMap.log_trace(event_map, changeset.errors)
         )
 
         {:error, changeset}
 
-      {:error, :input_event_map_error, %Changeset{data: %EventMap{}} = changeset, _steps_so_far} ->
+      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Input event map error",
-          EventMap.log_trace(event_map, changeset.errors)
+          TransactionEventMap.log_trace(event_map, changeset.errors)
         )
 
         {:error, changeset}
@@ -140,7 +140,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
       %{get_create_transaction_event_error: %{reason: reason}, new_event: _event} ->
         event_map_changeset =
           cast_to_event_map(event_map)
-          |> EventMap.changeset(%{})
+          |> TransactionEventMap.changeset(%{})
           |> Changeset.add_error(:create_transaction_event_error, to_string(reason))
 
         Multi.new()
@@ -158,14 +158,14 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
   def handle_transaction_map_error(event_map, error, _repo) do
     event_map_changeset =
       cast_to_event_map(event_map)
-      |> EventMap.changeset(%{})
+      |> TransactionEventMap.changeset(%{})
       |> Changeset.add_error(:input_event_map, to_string(error))
 
     Multi.new()
     |> Multi.error(:input_event_map_error, event_map_changeset)
   end
 
-  defp cast_to_event_map(%EventMap{} = event_map), do: event_map
+  defp cast_to_event_map(%TransactionEventMap{} = event_map), do: event_map
   # Only cast if it's a plain map
-  defp cast_to_event_map(event_map) when is_map(event_map), do: struct(EventMap, event_map)
+  defp cast_to_event_map(event_map) when is_map(event_map), do: struct(TransactionEventMap, event_map)
 end

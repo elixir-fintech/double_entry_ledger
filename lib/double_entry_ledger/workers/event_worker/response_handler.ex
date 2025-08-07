@@ -47,18 +47,18 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
   alias DoubleEntryLedger.Event.{
     EntryData,
     TransactionData,
-    EventMap
+    TransactionEventMap
   }
 
   alias DoubleEntryLedger.Occ.Occable
 
   @spec default_event_map_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
-          EventMap.t(),
+          TransactionEventMap.t(),
           String.t()
         ) ::
           EventWorker.success_tuple() | {:error, Changeset.t() | String.t()}
-  def default_event_map_response_handler(response, %EventMap{} = event_map, module_name) do
+  def default_event_map_response_handler(response, %TransactionEventMap{} = event_map, module_name) do
     case response do
       {:ok, %{transaction: transaction, event_success: event}} ->
         Logger.info(
@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
       {:error, :new_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
         Logger.warning(
           "#{module_name}: Event changeset failed",
-          EventMap.log_trace(event_map, get_all_errors(event_changeset))
+          TransactionEventMap.log_trace(event_map, get_all_errors(event_changeset))
         )
 
         {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
@@ -79,7 +79,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
       {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
         Logger.warning(
           "#{module_name}: Transaction changeset failed",
-          EventMap.log_trace(event_map, get_all_errors(trx_changeset))
+          TransactionEventMap.log_trace(event_map, get_all_errors(trx_changeset))
         )
 
         {:error, transfer_errors_from_trx_to_event_map(event_map, trx_changeset)}
@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
 
         Logger.error(
           message,
-          EventMap.log_trace(event_map, error)
+          TransactionEventMap.log_trace(event_map, error)
         )
 
         {:error, "#{message} #{inspect(error)}"}
@@ -191,7 +191,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
 
     - `Ecto.Changeset.t()`: Event map changeset with propagated errors
   """
-  @spec transfer_errors_from_trx_to_event_map(EventMap.t(), Ecto.Changeset.t()) ::
+  @spec transfer_errors_from_trx_to_event_map(TransactionEventMap.t(), Ecto.Changeset.t()) ::
           Ecto.Changeset.t()
   def transfer_errors_from_trx_to_event_map(event_map, trx_changeset) do
     build_event_map_changeset(event_map)
@@ -218,7 +218,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
 
     - `Ecto.Changeset.t()`: Event map changeset with propagated errors
   """
-  @spec transfer_errors_from_event_to_event_map(EventMap.t(), Changeset.t()) :: Changeset.t()
+  @spec transfer_errors_from_event_to_event_map(TransactionEventMap.t(), Changeset.t()) :: Changeset.t()
   def transfer_errors_from_event_to_event_map(event_map, event_changeset) do
     build_event_map_changeset(event_map)
     |> add_event_errors(get_all_errors(event_changeset))
@@ -249,14 +249,14 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
   end
 
   @doc false
-  @spec build_event_map_changeset(EventMap.t()) :: Changeset.t()
+  @spec build_event_map_changeset(TransactionEventMap.t()) :: Changeset.t()
   defp build_event_map_changeset(event_map) do
-    %EventMap{}
-    |> EventMap.changeset(EventMap.to_map(event_map))
+    %TransactionEventMap{}
+    |> TransactionEventMap.changeset(TransactionEventMap.to_map(event_map))
   end
 
   @doc false
-  @spec build_transaction_data_changeset(EventMap.t(), Changeset.t()) :: Changeset.t()
+  @spec build_transaction_data_changeset(TransactionEventMap.t(), Changeset.t()) :: Changeset.t()
   defp build_transaction_data_changeset(%{transaction_data: transaction_data}, trx_changeset) do
     %TransactionData{}
     |> TransactionData.changeset(TransactionData.to_map(transaction_data))
