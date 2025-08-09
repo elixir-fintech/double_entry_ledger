@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Event do
   * **Event Processing**: Events progress through states (:pending → :processing → :processed/:failed)
   * **Idempotency**: Idempotency is enforced using a combination of `action`, `source`, `source_idempk` and `update_idempk`. More details
     are in the `TransactionEventMap` module.
-  * **Transaction Data**: Each event contains embedded transaction_data describing the requested changes
+  * **Transaction Data**: Each event contains embedded payload describing the requested changes
   * **Queue Management**: Fields track processing attempts, retries, and completion status
 
   ## Event States
@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.Event do
   * `source_data`: Arbitrary JSON data from the source system
   * `source_idempk`: Idempotency key from source system
   * `update_idempk`: Additional idempotency key for update operations
-  * `transaction_data`: Embedded struct with transaction changes to apply
+  * `payload`: Embedded struct with transaction changes to apply
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
   * `inserted_at`: Creation timestamp
@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.Event do
           source_data: map() | nil,
           source_idempk: String.t() | nil,
           update_idempk: String.t() | nil,
-          transaction_data: TransactionData.t() | nil,
+          payload: TransactionData.t() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.Event do
     field(:update_idempk, :string)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    embeds_one(:transaction_data, DoubleEntryLedger.Event.TransactionData, source: :payload)
+    embeds_one(:payload, DoubleEntryLedger.Event.TransactionData)
     has_many(:event_transaction_links, EventTransactionLink)
     many_to_many(:transactions,Transaction, join_through: EventTransactionLink)
     has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
@@ -151,7 +151,7 @@ defmodule DoubleEntryLedger.Event do
       ...>   source: "api",
       ...>   source_idempk: "order-123",
       ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
-      ...>   transaction_data: %{status: :pending, entries: [
+      ...>   payload: %{status: :pending, entries: [
       ...>     %{account_id: "550e8400-e29b-41d4-a716-446655440000", type: :debit, amount: 100, currency: :USD},
       ...>     %{account_id: "650e8400-e29b-41d4-a716-446655440000", type: :credit, amount: 100, currency: :USD}
       ...>   ]}
@@ -163,28 +163,34 @@ defmodule DoubleEntryLedger.Event do
   @spec changeset(Event.t(), map()) :: Ecto.Changeset.t()
   def changeset(
         event,
-        %{action: :update_transaction, transaction_data: %{status: :pending}} = attrs
+        %{action: :update_transaction, payload: %{status: :pending}} = attrs
       ) do
     event
     |> base_changeset(attrs)
     |> update_changeset()
-    |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
+    |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
   end
 
   def changeset(event, %{action: :update_transaction} = attrs) do
     event
     |> base_changeset(attrs)
     |> update_changeset()
-    |> cast_embed(:transaction_data,
+    |> cast_embed(:payload,
       with: &TransactionData.update_event_changeset/2,
       required: true
     )
   end
 
-  def changeset(event, attrs) do
+  def changeset(event, %{action: :create_transaction} = attrs) do
     event
     |> base_changeset(attrs)
-    |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
+    |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
+  end
+
+  def changeset(event, %{} = attrs) do
+    event
+    |> base_changeset(attrs)
+    |> validate_required([:payload])
   end
 
   @doc """

@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
     test "changeset not valid for missing action, instance_id, source, source_idempk and transaction_data" do
       assert %Changeset{
                errors: [
-                 transaction_data: {"can't be blank", [validation: :required]},
+                 payload: {"can't be blank", [validation: :required]},
                  action: {"can't be blank", [validation: :required]},
                  instance_id: {"can't be blank", [validation: :required]},
                  source: {"can't be blank", [validation: :required]},
@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
         action: "create_transaction",
         source: "local",
         source_idempk: "123",
-        transaction_data: %{}
+        payload: %{}
       }
 
       assert %Changeset{valid?: false} = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
         "instance_id" => Ecto.UUID.generate(),
         "source" => "local",
         "source_idempk" => "123",
-        "transaction_data" => transaction_data_attrs()
+        "payload" => transaction_data_attrs()
       }
 
       assert %Changeset{
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
       action: "create_transaction",
       source: "local",
       source_idempk: "123",
-      transaction_data: transaction_data_attrs()
+      payload: transaction_data_attrs()
     })
   end
 

@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.EventTest do
     test "not valid for empty payload" do
       assert %Changeset{
                errors: [
-                 transaction_data: {"can't be blank", [validation: :required]},
+                 payload: {"can't be blank", [validation: :required]},
                  action: {"can't be blank", [validation: :required]},
                  source: {"can't be blank", [validation: :required]},
                  source_idempk: {"can't be blank", [validation: :required]},
@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.EventTest do
         source: "source",
         instance_id: Ecto.UUID.generate(),
         source_idempk: "source_idempk",
-        transaction_data: pending_payload()
+        payload: pending_payload()
       }
 
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.EventTest do
         action: :create_transaction,
         source: "source",
         source_idempk: "source_idempk",
-        transaction_data: pending_payload()
+        payload: pending_payload()
       }
 
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
@@ -65,14 +65,14 @@ defmodule DoubleEntryLedger.EventTest do
         instance_id: Ecto.UUID.generate(),
         source_idempk: "source_idempk",
         update_idempk: "update_idempk",
-        transaction_data: %{
+        payload: %{
           status: :posted
         }
       }
 
       assert %Changeset{
                valid?: true,
-               changes: %{transaction_data: %{changes: %{status: :posted}}}
+               changes: %{payload: %{changes: %{status: :posted}}}
              } =
                Event.changeset(%Event{}, attrs)
     end
@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.EventTest do
         source: "source",
         source_idempk: "source_idempk",
         update_idempk: "update_idempk",
-        transaction_data: pending_payload()
+        payload: pending_payload()
       }
 
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
@@ -96,8 +96,8 @@ defmodule DoubleEntryLedger.EventTest do
                EventStore.create(attrs)
 
       # check it's true for posted and archived status as well
-      posted_payload = put_in(attrs, [:transaction_data, :status], :posted)
-      archived_payload = put_in(attrs, [:transaction_data, :status], :archived)
+      posted_payload = put_in(attrs, [:payload, :status], :posted)
+      archived_payload = put_in(attrs, [:payload, :status], :archived)
 
       assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
                EventStore.create(posted_payload)

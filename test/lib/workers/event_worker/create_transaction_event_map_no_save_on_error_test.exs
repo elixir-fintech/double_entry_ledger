@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
       event_map = event_map(ctx, :pending)
 
       updated_event_map =
-        update_in(event_map, [:transaction_data, :entries, Access.at(1), :currency], fn _ ->
+        update_in(event_map, [:payload, :entries, Access.at(1), :currency], fn _ ->
           "USD"
         end)
 
@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
       event_map = event_map(ctx, :pending)
 
       updated_event_map =
-        update_in(event_map, [:transaction_data, :entries, Access.at(1), :currency], fn _ ->
+        update_in(event_map, [:payload, :entries, Access.at(1), :currency], fn _ ->
           "XYZ"
         end)
 
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
       event_map = event_map(ctx, :pending)
 
       updated_event_map =
-        update_in(event_map, [:transaction_data, :entries, Access.at(1), :account_id], fn _ ->
+        update_in(event_map, [:payload, :entries, Access.at(1), :account_id], fn _ ->
           Ecto.UUID.generate()
         end)
 

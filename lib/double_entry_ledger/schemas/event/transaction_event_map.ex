@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   * `source_idempk`: Primary identifier from the source system (used for idempotency)
   * `update_idempk`: Unique identifier for update operations, enabling multiple distinct updates
      to the same original transaction while maintaining idempotency
-  * `transaction_data`: Embedded TransactionData containing entries and transaction details
+  * `payload`: Embedded TransactionData containing entries and transaction details
 
   ## Key Functions
 
@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9",
         source: "accounting_system",
         source_idempk: "invoice_123",
-        transaction_data: %{
+        payload: %{
           status: "pending",
           entries: [
             %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         source: "accounting_system",
         source_idempk: "invoice_123",
         update_idempk: "invoice_123_update_1",
-        transaction_data: %{
+        payload: %{
           status: "posted",
           description: "Updated invoice payment"
         }
@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   * `source_data`: Optional metadata from the source system
   * `source_idempk`: Primary identifier used for idempotency
   * `update_idempk`: Unique identifier for update operations to maintain idempotency
-  * `transaction_data`: The embedded transaction data structure
+  * `payload`: The embedded transaction data structure
   """
   @type t :: %TransactionEventMap{
           action: Event.action(),
@@ -117,7 +117,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
           source_data: map() | nil,
           source_idempk: String.t(),
           update_idempk: String.t() | nil,
-          transaction_data: TransactionData.t()
+          payload: TransactionData.t()
         }
 
   @derive {Jason.Encoder,
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
              :source_data,
              :source_idempk,
              :update_idempk,
-             :transaction_data
+             :payload
            ]}
 
   @primary_key false
@@ -139,7 +139,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
     field(:source_data, :map, default: %{})
     field(:source_idempk, :string)
     field(:update_idempk, :string)
-    embeds_one(:transaction_data, TransactionData, on_replace: :delete)
+    embeds_one(:payload, TransactionData, on_replace: :delete)
   end
 
   @doc """
@@ -156,7 +156,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
     iex> alias DoubleEntryLedger.Event.TransactionEventMap
     iex> {:ok, em} = TransactionEventMap.create(%{action: "create_transaction", instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9", source: "source", source_idempk: "source_idempk",
-    ...>   transaction_data: %{status: "pending", entries: [
+    ...>   payload: %{status: "pending", entries: [
     ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
     ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
     ...>   ]}})
@@ -185,7 +185,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
     - An Ecto.Changeset with validations applied
 
   ## Implementation Details
-    - For create actions: Validates basic fields and transaction_data
+    - For create actions: Validates basic fields and payload
     - For update actions: Additionally validates update_idempk is present
 
   ## Examples
@@ -193,7 +193,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> alias DoubleEntryLedger.Event.TransactionEventMap
       iex> attrs = %{action: "create_transaction", instance_id: "550e8400-e29b-41d4-a716-446655440000",
       ...>   source: "accounting_system", source_idempk: "invoice_123",
-      ...>   transaction_data: %{status: "pending", entries: [
+      ...>   payload: %{status: "pending", entries: [
       ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
       ...>     %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
       ...>   ]}}
@@ -219,7 +219,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   def changeset(event_map, attrs) do
     base_changeset(event_map, attrs)
-    |> cast_embed(:transaction_data, with: &TransactionData.changeset/2, required: true)
+    |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
   end
 
   @doc """
@@ -285,7 +285,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
     iex> alias DoubleEntryLedger.Event.TransactionData
     iex> alias DoubleEntryLedger.Event.TransactionEventMap
-    iex> event = %TransactionEventMap{transaction_data: %TransactionData{}}
+    iex> event = %TransactionEventMap{payload: %TransactionData{}}
     iex> is_map(TransactionEventMap.to_map(event))
     true
   """
@@ -298,14 +298,14 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       source_data: event_map.source_data,
       source_idempk: event_map.source_idempk,
       update_idempk: event_map.update_idempk,
-      transaction_data: TransactionData.to_map(event_map.transaction_data)
+      payload: TransactionData.to_map(event_map.payload)
     }
   end
 
   defp update_changeset(event_map, attrs) do
     base_changeset(event_map, attrs)
     |> validate_required([:update_idempk])
-    |> cast_embed(:transaction_data,
+    |> cast_embed(:payload,
       with: &TransactionData.update_event_changeset/2,
       required: true
     )

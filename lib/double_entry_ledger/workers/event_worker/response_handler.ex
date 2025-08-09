@@ -196,7 +196,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
   def transfer_errors_from_trx_to_event_map(event_map, trx_changeset) do
     build_event_map_changeset(event_map)
     |> Changeset.put_embed(
-      :transaction_data,
+      :payload,
       build_transaction_data_changeset(event_map, trx_changeset)
     )
     |> Map.put(:action, :insert)
@@ -257,7 +257,7 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
 
   @doc false
   @spec build_transaction_data_changeset(TransactionEventMap.t(), Changeset.t()) :: Changeset.t()
-  defp build_transaction_data_changeset(%{transaction_data: transaction_data}, trx_changeset) do
+  defp build_transaction_data_changeset(%{payload: transaction_data}, trx_changeset) do
     %TransactionData{}
     |> TransactionData.changeset(TransactionData.to_map(transaction_data))
     |> add_transaction_data_errors(trx_changeset)

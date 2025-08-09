@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.TransactionFixtures do
         source: "transaction",
         source_idempk: Ecto.UUID.generate(),
         instance_id: instance.id,
-        transaction_data: %{
+        payload: %{
           status: status,
           entries: [
             %{currency: "EUR", amount: 100, account_id: acc1.id},

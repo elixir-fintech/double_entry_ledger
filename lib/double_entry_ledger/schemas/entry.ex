@@ -239,7 +239,7 @@ defmodule DoubleEntryLedger.Entry do
       ...>    name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
       iex> {:ok, _, _} = EventStore.process_from_event_params(%{instance_id: instance.id,
       ...>  source: "s1", source_idempk: "1", action: :create_transaction,
-      ...>  transaction_data: %{status: :pending, entries: [
+      ...>  payload: %{status: :pending, entries: [
       ...>      %{account_id: account1.id, amount: 100, currency: :EUR},
       ...>      %{account_id: account2.id, amount: 100, currency: :EUR},
       ...>  ]}})

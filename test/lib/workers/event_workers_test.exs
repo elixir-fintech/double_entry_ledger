@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
           source_data: %{},
           source_idempk: "source_idempk",
           update_idempk: nil,
-          transaction_data: %{
+          payload: %{
             status: :pending,
             entries: [
               %{account_id: a1.id, amount: 100, currency: "EUR"},
