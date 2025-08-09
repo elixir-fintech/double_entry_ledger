@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   This module provides an embedded schema and related functions for creating and validating
   event maps, which serve as the primary data structure for transaction creation and updates.
-  TransactionEventMap represents the pre-persistence state of an Event, containing all necessary data
+  TransactionEventMap represents the pre-persistence state of an TransactionEvent, containing all necessary data
   to either create a new transaction or update an existing one.
 
   ## Structure
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   Both combinations are protected by unique indexes in the database to prevent duplicate processing.
   The TransactionEventMap schema itself does not enforce these constraints, as it is not persisted directly.
-  Instead, the Event schema handles this at the database level.
+  Instead, the TransactionEvent schema handles this at the database level.
   Only transactions with status `:pending` can be updated.
 
   ## Workflow Integration
