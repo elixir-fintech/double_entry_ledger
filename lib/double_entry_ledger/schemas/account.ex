@@ -72,11 +72,11 @@ defmodule DoubleEntryLedger.Account do
   ## Fields
 
   * `id`: UUID primary key
-  * `name`: Human-readable account name
+  * `name`: Account name must unique. Can't be changed after creation
   * `description`: Optional text description
-  * `currency`: Currency code atom (e.g., `:USD`, `:EUR`)
-  * `type`: Account classification
-  * `normal_balance`: Default balance direction
+  * `currency`: Currency code atom (e.g., `:USD`, `:EUR`). Can't be changed after creation
+  * `type`: Account classification. Can't be changed after creation
+  * `normal_balance`: Default balance direction. Can't be changed after creation
   * `available`: Calculated available balance
   * `allowed_negative`: Whether negative balances are allowed
   * `context`: Additional metadata as a map
@@ -192,7 +192,7 @@ defmodule DoubleEntryLedger.Account do
   @doc """
   Creates a changeset for updating an existing Account.
 
-  Limited to updating only the `name`, `description`, and `context` fields,
+  Limited to updating only the `description`, and `context` fields,
   protecting critical fields like type and currency from modification.
 
   ## Parameters
@@ -206,24 +206,20 @@ defmodule DoubleEntryLedger.Account do
 
   ## Examples
 
-      # Update account name and description
-      iex> account = %Account{name: "Old Name", instance_id: "inst-123"}
+      # Update account description
+      iex> account = %Account{description: "Old Description", instance_id: "inst-123"}
       iex> changeset = Account.update_changeset(account, %{
-      ...>   name: "New Name",
-      ...>   description: "Updated description"
+      ...>   description: "Updated Description"
       ...> })
       iex> changeset.valid?
       true
-      iex> Ecto.Changeset.get_change(changeset, :name)
-      "New Name"
+      iex> Ecto.Changeset.get_change(changeset, :description)
+      "Updated Description"
   """
   @spec update_changeset(Account.t(), map()) :: Changeset.t()
   def update_changeset(changeset, attrs) do
     changeset
-    |> cast(attrs, [:name, :description, :context])
-    |> validate_required([:name])
-    |> trim_name()
-    |> unique_constraint(:name, name: "unique_instance_name")
+    |> cast(attrs, [:description, :context])
   end
 
   @doc """

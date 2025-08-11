@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.AccountStore do
   end
 
   @doc """
-  Updates an account with the given attributes.
+  Updates an account with the given attributes, only allowing changes to the description and the context.
 
   ## Parameters
 
@@ -122,11 +122,11 @@ defmodule DoubleEntryLedger.AccountStore do
   ## Examples
 
       iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{name: "Sample Instance"})
-      iex> attrs = %{name: "Test Account", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> attrs = %{name: "Test Account", description: "Test Description", instance_id: instance_id, currency: :EUR, type: :asset}
       iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
-      iex> {:ok, updated_account} = DoubleEntryLedger.AccountStore.update(account.id, %{name: "Updated Account"})
-      iex> updated_account.name
-      "Updated Account"
+      iex> {:ok, updated_account} = DoubleEntryLedger.AccountStore.update(account.id, %{description: "Updated Description"})
+      iex> updated_account.description
+      "Updated Description"
 
   """
   @spec update(Ecto.UUID.t(), map()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
