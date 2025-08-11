@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.Event do
           source_data: map() | nil,
           source_idempk: String.t() | nil,
           update_idempk: String.t() | nil,
-          payload: TransactionData.t() | nil,
+          payload: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
@@ -91,9 +91,9 @@ defmodule DoubleEntryLedger.Event do
     field(:source_data, :map, default: %{})
     field(:source_idempk, :string)
     field(:update_idempk, :string)
+    field(:payload, :map)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    embeds_one(:payload, DoubleEntryLedger.Event.TransactionData)
     has_many(:event_transaction_links, EventTransactionLink)
     many_to_many(:transactions,Transaction, join_through: EventTransactionLink)
     has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
@@ -163,34 +163,31 @@ defmodule DoubleEntryLedger.Event do
   @spec changeset(Event.t(), map()) :: Ecto.Changeset.t()
   def changeset(
         event,
-        %{action: :update_transaction, payload: %{status: :pending}} = attrs
+        %{action: :update_transaction, payload: %{status: :pending} = payload} = attrs
       ) do
     event
     |> base_changeset(attrs)
     |> update_changeset()
-    |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
+    |> put_transaction_payload(payload, &TransactionData.changeset/2)
   end
 
-  def changeset(event, %{action: :update_transaction} = attrs) do
+  def changeset(event, %{action: :update_transaction, payload: payload} = attrs) do
     event
     |> base_changeset(attrs)
     |> update_changeset()
-    |> cast_embed(:payload,
-      with: &TransactionData.update_event_changeset/2,
-      required: true
-    )
+    |> put_transaction_payload(payload, &TransactionData.update_event_changeset/2)
+    #)
   end
 
-  def changeset(event, %{action: :create_transaction} = attrs) do
+  def changeset(event, %{action: :create_transaction, payload: payload} = attrs) do
     event
     |> base_changeset(attrs)
-    |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
+    |> put_transaction_payload(payload, &TransactionData.changeset/2)
   end
 
   def changeset(event, %{} = attrs) do
     event
     |> base_changeset(attrs)
-    |> validate_required([:payload])
   end
 
   @doc """
@@ -291,13 +288,24 @@ defmodule DoubleEntryLedger.Event do
     )
   end
 
+  defp put_transaction_payload(changeset, payload, changeset_func) do
+    trx_changeset = changeset_func.(%TransactionData{}, payload)
+    if trx_changeset.valid? do
+      changes = TransactionData.to_map(Ecto.Changeset.apply_changes(trx_changeset))
+      put_change(changeset, :payload, changes)
+    else
+      IO.inspect(trx_changeset, label: "Invalid TransactionData changeset")
+      put_change(changeset, :payload, trx_changeset)
+    end
+  end
+
   @spec base_changeset(Event.t(), map()) :: Ecto.Changeset.t()
   defp base_changeset(event, attrs) do
     attrs = Map.put_new(attrs, :event_queue_item, %{})
 
     event
-    |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id, :update_idempk])
-    |> validate_required([:action, :source, :source_idempk, :instance_id])
+    |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id, :update_idempk, :payload])
+    |> validate_required([:action, :source, :source_idempk, :instance_id, :payload])
     |> validate_inclusion(:action, @actions)
     |> cast_assoc(:event_queue_item, with: &EventQueueItem.changeset/2, required: true)
     |> unique_constraint(:source_idempk,

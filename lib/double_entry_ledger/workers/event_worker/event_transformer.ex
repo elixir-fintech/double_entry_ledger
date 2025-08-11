@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
       iex> EventTransformer.transaction_data_to_transaction_map(transaction_data, "instance-123")
       {:ok, %{instance_id: "instance-123", status: :pending}}
   """
-  @spec transaction_data_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) ::
+  @spec transaction_data_to_transaction_map(TransactionData.t() | map(), Ecto.UUID.t()) ::
           {:ok, transaction_map()}
           | {:error,
              :no_accounts_found
@@ -94,11 +94,11 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
              | :account_entries_mismatch
              | :missing_entry_for_account
              | :invalid_entry_data}
-  def transaction_data_to_transaction_map(%{entries: [], status: status}, instance_id) do
+  def transaction_data_to_transaction_map(%TransactionData{entries: [], status: status}, instance_id) do
     {:ok, %{instance_id: instance_id, status: status}}
   end
 
-  def transaction_data_to_transaction_map(%{entries: entries, status: status}, instance_id) do
+  def transaction_data_to_transaction_map(%TransactionData{entries: entries, status: status}, instance_id) do
     case validate_entries(entries) do
       :ok ->
         case get_accounts_with_entries(instance_id, entries) do
@@ -116,6 +116,18 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  def transaction_data_to_transaction_map(transaction_data_map, instance_id) do
+    td_cs = TransactionData.update_event_changeset(%TransactionData{}, transaction_data_map)
+    case td_cs.valid? do
+      true ->
+        transaction_data_struct = Ecto.Changeset.apply_changes(td_cs)
+        transaction_data_to_transaction_map(transaction_data_struct, instance_id)
+
+      false ->
+        {:error, :invalid_entry_data}
     end
   end
 
