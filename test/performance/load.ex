@@ -103,7 +103,7 @@ defmodule DoubleEntryLedger.LoadTesting do
         status: :pending,
         source: "source",
         source_idempk: Ecto.UUID.generate(),
-        transaction_data: params,
+        payload: params,
         instance_id: instance.id
       })
 
