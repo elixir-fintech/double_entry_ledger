@@ -143,7 +143,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     setup [:create_instance, :create_accounts]
 
     test "builds changeset to schedule update_retry", %{instance: instance} = ctx do
-      %{event: %{source: s, source_idempk: s_id} = pending_event} = create_event(ctx, :pending)
+      %{event: %{source: s, source_idempk: s_id} = pending_event} = new_create_transaction_event(ctx, :pending)
 
       {:error, failed_create_event} =
         DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(

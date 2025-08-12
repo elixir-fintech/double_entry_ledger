@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
     setup [:create_instance, :create_accounts]
 
     test "successful", ctx do
-      %{event: event} = create_event(ctx)
+      %{event: event} = new_create_transaction_event(ctx)
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
         CreateTransactionEvent.process(event)
@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
     end
 
     test "error when saving transaction", ctx do
-      %{event: event} = create_event(ctx)
+      %{event: event} = new_create_transaction_event(ctx)
 
       DoubleEntryLedger.MockRepo
       |> expect(:insert, fn _changeset ->
@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
     end
 
     test "occ timeout", ctx do
-      %{event: event} = create_event(ctx)
+      %{event: event} = new_create_transaction_event(ctx)
 
       DoubleEntryLedger.MockRepo
       |> expect(:insert, 5, fn changeset ->

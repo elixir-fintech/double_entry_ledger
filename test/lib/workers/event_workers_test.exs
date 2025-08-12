@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     setup [:create_instance, :create_accounts]
 
     test "process create event successfully", ctx do
-      %{event: event} = create_event(ctx)
+      %{event: event} = new_create_transaction_event(ctx)
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
         EventWorker.process_event_with_id(event.id)
@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
     test "update event for changing entries and to :posted",
          %{instance: inst, accounts: [a1, a2 | _]} = ctx do
-      %{event: pending_event} = create_event(ctx, :pending)
+      %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
       {:ok, pending_transaction, %{source: s, source_idempk: s_id}} =
         EventWorker.process_event_with_id(pending_event.id)
@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
     end
 
     test "don't process events with status [:processed, :dead_letter]", ctx do
-      %{event: event} = create_event(ctx)
+      %{event: event} = new_create_transaction_event(ctx)
       EventWorker.process_event_with_id(event.id)
 
       assert {:error, :event_not_claimable} =

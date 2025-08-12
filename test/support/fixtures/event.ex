@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     })
   end
 
-  def create_event(%{instance: inst, accounts: [a1, a2, _, _]} = ctx, trx_status \\ :posted) do
+  def new_create_transaction_event(%{instance: inst, accounts: [a1, a2, _, _]} = ctx, trx_status \\ :posted) do
     {:ok, event} =
       EventStore.create(
         transaction_event_attrs(
