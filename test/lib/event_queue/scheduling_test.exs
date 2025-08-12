@@ -152,7 +152,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
           :failed
         )
 
-      {:ok, event} = create_update_event(s, s_id, instance.id, :posted)
+      {:ok, event} = new_update_transaction_event(s, s_id, instance.id, :posted)
       test_message = "Test error"
 
       error = %AddUpdateEventError{

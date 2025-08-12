@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
-      {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
+      {:ok, event} = new_update_transaction_event(s, s_id, inst.id, :posted)
 
       {:ok, transaction, processed_event} = UpdateTransactionEvent.process(event)
       shared_event_asserts(transaction, processed_event, pending_transaction)
@@ -47,7 +47,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
-      {:ok, event} = create_update_event(s, s_id, inst.id, :archived)
+      {:ok, event} = new_update_transaction_event(s, s_id, inst.id, :archived)
 
       {:ok, transaction, processed_event} = UpdateTransactionEvent.process(event)
       shared_event_asserts(transaction, processed_event, pending_transaction)
@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       assert return_pending_balances(ctx) == [100, 100]
 
       {:ok, event} =
-        create_update_event(s, s_id, inst.id, :posted, [
+        new_update_transaction_event(s, s_id, inst.id, :posted, [
           %{account_id: a1.id, amount: 50, currency: "EUR"},
           %{account_id: a2.id, amount: 50, currency: "EUR"}
         ])
@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       assert return_pending_balances(ctx) == [100, 100]
 
       {:ok, event} =
-        create_update_event(s, s_id, inst.id, :pending, [
+        new_update_transaction_event(s, s_id, inst.id, :pending, [
           %{account_id: a1.id, amount: 50, currency: "EUR"},
           %{account_id: a2.id, amount: 50, currency: "EUR"}
         ])
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       assert return_pending_balances(ctx) == [100, 100]
 
       {:ok, event} =
-        create_update_event(s, s_id, inst.id, :archived, [
+        new_update_transaction_event(s, s_id, inst.id, :archived, [
           %{account_id: a1.id, amount: 50, currency: "EUR"},
           %{account_id: a2.id, amount: 50, currency: "EUR"}
         ])
@@ -124,7 +124,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
     end
 
     test "dead letter when create event does not exist", %{instance: inst} do
-      {:ok, event} = create_update_event("source", "1", inst.id, :posted)
+      {:ok, event} = new_update_transaction_event("source", "1", inst.id, :posted)
 
       {:error, %{event_queue_item: evq}} = UpdateTransactionEvent.process(event)
       assert evq.status == :dead_letter
@@ -137,7 +137,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
     test "back to pending when create event is still pending", %{instance: inst} = ctx do
       %{event: %{id: e_id, source: s, source_idempk: s_id}} = new_create_transaction_event(ctx, :pending)
-      {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
+      {:ok, event} = new_update_transaction_event(s, s_id, inst.id, :posted)
 
       {:ok, processing_event} = Scheduling.claim_event_for_processing(event.id, "manual")
 
@@ -160,7 +160,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
           :failed
         )
 
-      {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
+      {:ok, event} = new_update_transaction_event(s, s_id, inst.id, :posted)
 
       {:error, %{event_queue_item: eqm}} = UpdateTransactionEvent.process(event)
       assert eqm.status == :pending
@@ -182,7 +182,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       )
       |> DoubleEntryLedger.Repo.update!()
 
-      {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
+      {:ok, event} = new_update_transaction_event(s, s_id, inst.id, :posted)
 
       {:error, %{event_queue_item: eqm}} = UpdateTransactionEvent.process(event)
       assert eqm.status == :dead_letter
@@ -199,7 +199,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       {:ok, _pending_transaction, %{source: s, source_idempk: s_id}} =
         CreateTransactionEvent.process(pending_event)
 
-      {:ok, event} = create_update_event(s, s_id, inst.id, :posted)
+      {:ok, event} = new_update_transaction_event(s, s_id, inst.id, :posted)
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, 5, fn _changeset ->
@@ -237,7 +237,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
         CreateTransactionEvent.process(pending_event)
 
       {:ok, event} =
-        create_update_event(s, s_id, inst.id, :posted)
+        new_update_transaction_event(s, s_id, inst.id, :posted)
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, fn _changeset ->
