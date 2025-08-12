@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   alias DoubleEntryLedger.EventStore
   import DoubleEntryLedger.Event.TransactionDataFixtures
 
-  def event_attrs(attrs \\ %{}) do
+  def transaction_event_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{
       action: :create_transaction,
@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   def create_event(%{instance: inst, accounts: [a1, a2, _, _]} = ctx, trx_status \\ :posted) do
     {:ok, event} =
       EventStore.create(
-        event_attrs(
+        transaction_event_attrs(
           instance_id: inst.id,
           payload: %{
             status: trx_status,
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   end
 
   def create_update_event(source, source_idempk, instance_id, trx_status, entries \\ []) do
-    event_attrs(%{
+    transaction_event_attrs(%{
       action: :update_transaction,
       source: source,
       source_idempk: source_idempk,

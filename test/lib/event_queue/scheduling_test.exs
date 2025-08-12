@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     end
 
     test "returns error when event not claimable", %{instance: instance} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+      {:ok, event} = EventStore.create (transaction_event_attrs(instance_id: instance.id))
 
       event =
         event
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     end
 
     test "claims an event for processing", %{instance: instance} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+      {:ok, event} = EventStore.create (transaction_event_attrs(instance_id: instance.id))
 
       assert {:ok, %Event{event_queue_item: eqm} = claimed_event} =
                Scheduling.claim_event_for_processing(event.id, "manual")
@@ -53,7 +53,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     end
 
     test "returns an error when stale entry error occurs", %{instance: instance} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+      {:ok, event} = EventStore.create (transaction_event_attrs(instance_id: instance.id))
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, fn _changeset ->
@@ -73,7 +73,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     setup [:create_instance, :create_accounts]
 
     test "builds changeset to mark event as processed", %{instance: instance} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+      {:ok, event} = EventStore.create (transaction_event_attrs(instance_id: instance.id))
 
       %{changes: %{event_queue_item: event_queue_item}} =
         Scheduling.build_mark_as_processed(event)
@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     setup [:create_instance, :create_accounts]
 
     test "builds changeset to mark event as dead letter", %{instance: instance} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+      {:ok, event} = EventStore.create (transaction_event_attrs(instance_id: instance.id))
       error = "Test error"
 
       %{changes: %{event_queue_item: event_queue_item}} =
@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     setup [:create_instance, :create_accounts]
 
     test "builds changeset to revert event to pending", %{instance: instance} do
-      {:ok, pending_event} = EventStore.create(event_attrs(instance_id: instance.id))
+      {:ok, pending_event} = EventStore.create (transaction_event_attrs(instance_id: instance.id))
       {:ok, event} = Scheduling.claim_event_for_processing(pending_event.id, "manual")
       error = "Test error"
 
@@ -124,7 +124,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
     setup [:create_instance, :create_accounts]
 
     test "builds changeset to schedule retry with reason", %{instance: instance} do
-      {:ok, event} = EventStore.create(event_attrs(instance_id: instance.id))
+      {:ok, event} = EventStore.create (transaction_event_attrs(instance_id: instance.id))
       error = "Test error"
       reason = :failed
 
