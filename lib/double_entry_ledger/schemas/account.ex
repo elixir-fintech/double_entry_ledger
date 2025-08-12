@@ -95,8 +95,8 @@ defmodule DoubleEntryLedger.Account do
           name: String.t() | nil,
           normal_balance: Types.credit_or_debit() | nil,
           type: Types.account_type() | nil,
-          available: integer(),
           allowed_negative: boolean(),
+          available: integer(),
           posted: Balance.t() | nil,
           pending: Balance.t() | nil,
           lock_version: integer(),
@@ -114,9 +114,8 @@ defmodule DoubleEntryLedger.Account do
     field(:name, :string)
     field(:normal_balance, Ecto.Enum, values: @credit_and_debit)
     field(:type, Ecto.Enum, values: @account_types)
-    field(:available, :integer, default: 0)
     field(:allowed_negative, :boolean, default: false)
-    field(:lock_version, :integer, default: 1)
+    field(:available, :integer, default: 0)
 
     embeds_one(:posted, Balance, on_replace: :delete)
     embeds_one(:pending, Balance, on_replace: :delete)
@@ -126,6 +125,7 @@ defmodule DoubleEntryLedger.Account do
     has_many(:entries, Entry, foreign_key: :account_id)
     has_many(:balance_history_entries, BalanceHistoryEntry, foreign_key: :account_id)
 
+    field(:lock_version, :integer, default: 1)
     timestamps(type: :utc_datetime_usec)
   end
 
