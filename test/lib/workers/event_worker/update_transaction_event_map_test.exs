@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapTest
       {:ok, pending_transaction, _} =
         CreateTransactionEvent.process(pending_event)
 
-      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, pending_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
         UpdateTransactionTransactionEventMap.process(update_event)
@@ -47,7 +47,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapTest
     test "return TransactionEventMap changeset for duplicate update_idempk", ctx do
       # successfully create event
       %{event: pending_event} = create_event(ctx, :pending)
-      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, pending_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
       UpdateTransactionTransactionEventMap.process(update_event)
 
       # process same update_event again which should fail
@@ -59,14 +59,14 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapTest
     test "dead letter when create event does not exist", ctx do
       event_map = event_map(ctx, :pending)
 
-      update_event_map = %{
+      update_transaction_event_map = %{
         event_map
         | update_idempk: Ecto.UUID.generate(),
           action: :update_transaction
       }
 
       {:error, %{event_queue_item: %{status: status, errors: [error | _]}}} =
-        UpdateTransactionTransactionEventMap.process(update_event_map)
+        UpdateTransactionTransactionEventMap.process(update_transaction_event_map)
 
       assert status == :dead_letter
       assert error.message =~ "create_transaction Event not found for Update Event (id:"
@@ -74,7 +74,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapTest
 
     test "update event for event_map, when create event not yet processed", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
-      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, pending_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
 
       {:error, %{event_queue_item: eqm} = update_event} =
         UpdateTransactionTransactionEventMap.process(update_event)
@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapTest
         |> Ecto.Changeset.put_assoc(:event_queue_item, %{id: eqm1.id, status: :failed})
         |> Repo.update!()
 
-      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, failed_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, failed_event, :posted))
 
       {:error, %{event_queue_item: eqm}} = UpdateTransactionTransactionEventMap.process(update_event)
 
@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapTest
 
       failed_event = Repo.preload(pending_event, :event_queue_item)
 
-      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, failed_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, failed_event, :posted))
 
       {:error, %{event_queue_item: evq}} = UpdateTransactionTransactionEventMap.process(update_event)
 
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapTest
     test "with last retry that fails", ctx do
       %{event: pending_event} = create_event(ctx, :pending)
       CreateTransactionEvent.process(pending_event)
-      update_event = struct(TransactionEventMapSchema, update_event_map(ctx, pending_event, :posted))
+      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, 5, fn changeset ->

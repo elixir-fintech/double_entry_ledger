@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     }
   end
 
-  def update_event_map(
+  def update_transaction_event_map(
         %{instance: %{id: id}, accounts: [a1, a2, _, _]},
         create_event,
         trx_status \\ :posted
