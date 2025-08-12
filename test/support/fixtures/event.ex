@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     |> EventStore.create()
   end
 
-  def event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}, trx_status \\ :pending) do
+  def create_transaction_event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}, trx_status \\ :pending) do
     %{
       action: :create_transaction,
       instance_id: id,

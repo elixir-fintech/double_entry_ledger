@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
     end
 
     test "dead letter when create event does not exist", ctx do
-      event_map = event_map(ctx, :pending)
+      event_map = create_transaction_event_map(ctx, :pending)
 
       update_transaction_event_map = %{
         event_map
@@ -76,7 +76,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
 
     test "return TransactionEventMap changeset for other errors", ctx do
       event_map = %{
-        event_map(ctx, :pending)
+        create_transaction_event_map(ctx, :pending)
         | update_idempk: Ecto.UUID.generate(),
           action: :update_transaction
       }
@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
 
     test "return TransactionEventMap changeset for invalid entry data currency", ctx do
       event_map = %{
-        event_map(ctx, :pending)
+        create_transaction_event_map(ctx, :pending)
         | update_idempk: Ecto.UUID.generate(),
           action: :update_transaction
       }
@@ -116,7 +116,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
 
     test "return TransactionEventMap changeset for non existing account", ctx do
       event_map = %{
-        event_map(ctx, :pending)
+        create_transaction_event_map(ctx, :pending)
         | update_idempk: Ecto.UUID.generate(),
           action: :update_transaction
       }

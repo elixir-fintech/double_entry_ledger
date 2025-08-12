@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapTest
     end
 
     test "dead letter when create event does not exist", ctx do
-      event_map = event_map(ctx, :pending)
+      event_map = create_transaction_event_map(ctx, :pending)
 
       update_transaction_event_map = %{
         event_map

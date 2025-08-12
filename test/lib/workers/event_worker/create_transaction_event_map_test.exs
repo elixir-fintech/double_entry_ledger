@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
     setup [:create_instance, :create_accounts]
 
     test "create event for event_map, which must also create the event", ctx do
-      event_map = struct(TransactionEventMapSchema, event_map(ctx))
+      event_map = struct(TransactionEventMapSchema, create_transaction_event_map(ctx))
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
         CreateTransactionTransactionEventMap.process(event_map)
@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
 
     test "return TransactionEventMap changeset for duplicate source_idempk", ctx do
       # successfully create event
-      event_map = struct(TransactionEventMapSchema, event_map(ctx))
+      event_map = struct(TransactionEventMapSchema, create_transaction_event_map(ctx))
       CreateTransactionTransactionEventMap.process(event_map)
 
       # process same event_map again which should fail
@@ -50,7 +50,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
 
     test "return TransactionEventMap changeset for other errors", ctx do
       # successfully create event
-      event_map = event_map(ctx, :pending)
+      event_map = create_transaction_event_map(ctx, :pending)
 
       updated_event_map =
         update_in(event_map, [:payload, :entries, Access.at(1), :currency], fn _ ->
@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
                CreateTransactionTransactionEventMap.process(
                  struct(
                    TransactionEventMapSchema,
-                   event_map(ctx)
+                   create_transaction_event_map(ctx)
                  ),
                  DoubleEntryLedger.MockRepo
                )
