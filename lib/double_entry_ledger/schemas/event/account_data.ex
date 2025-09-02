@@ -84,4 +84,39 @@ defmodule DoubleEntryLedger.Event.AccountData do
     |> cast(attrs, [:currency, :name, :description, :context, :normal_balance, :type, :allowed_negative])
     |> validate_required([:currency, :name, :type])
   end
+
+  @doc """
+  Converts an AccountData struct into a plain map with the same fields.
+
+  The resulting map includes these keys:
+  :currency, :name, :description, :context, :normal_balance, :type, :allowed_negative
+
+  ## Examples
+
+      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.Currency
+      iex> alias DoubleEntryLedger.Types
+      iex> data = %AccountData{
+      ...>   currency: hd(Currency.currency_atoms()),
+      ...>   name: "Cash",
+      ...>   type: hd(Types.account_types())
+      ...> }
+      iex> map = AccountData.to_map(data)
+      iex> Map.keys(map) |> Enum.sort()
+      [:allowed_negative, :context, :currency, :description, :name, :normal_balance, :type]
+      iex> map.currency == data.currency and map.type == data.type and map.name == "Cash"
+      true
+  """
+  @spec to_map(t()) :: map()
+  def to_map(account_data) do
+    %{
+      currency: account_data.currency,
+      name: account_data.name,
+      description: account_data.description,
+      context: account_data.context,
+      normal_balance: account_data.normal_balance,
+      type: account_data.type,
+      allowed_negative: account_data.allowed_negative
+    }
+  end
 end

@@ -61,4 +61,54 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
       assert %Changeset{valid?: true} = AccountData.changeset(%AccountData{}, attrs)
     end
   end
+
+  describe "to_map/1" do
+    test "converts account data to map" do
+      account_data = %AccountData{
+        currency: :EUR,
+        name: "some_name",
+        description: "some_description",
+        context: %{"key" => "value"},
+        normal_balance: :debit,
+        type: :asset,
+        allowed_negative: false
+      }
+
+      expected_map = %{
+        currency: :EUR,
+        name: "some_name",
+        description: "some_description",
+        context: %{"key" => "value"},
+        normal_balance: :debit,
+        type: :asset,
+        allowed_negative: false
+      }
+
+      assert AccountData.to_map(account_data) == expected_map
+    end
+
+    test "converts account data with nil fields to map" do
+      account_data = %AccountData{
+        currency: :USD,
+        name: "another_name",
+        description: nil,
+        context: nil,
+        normal_balance: nil,
+        type: :liability,
+        allowed_negative: true
+      }
+
+      expected_map = %{
+        currency: :USD,
+        name: "another_name",
+        description: nil,
+        context: nil,
+        normal_balance: nil,
+        type: :liability,
+        allowed_negative: true
+      }
+
+      assert AccountData.to_map(account_data) == expected_map
+    end
+  end
 end
