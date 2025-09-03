@@ -15,7 +15,8 @@ defmodule DoubleEntryLedger.MixProject do
         plt_add_apps: [:mix]
         # flags: [:overspecs]
       ],
-      docs: docs()
+      docs: docs(),
+      consolidate_protocols: (if Mix.env() == :test, do: false, else: true)
     ]
   end
 
