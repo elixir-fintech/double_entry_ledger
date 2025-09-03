@@ -79,68 +79,37 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         update_idempk: "invoice_123_update_1",
         payload: %{
           status: "posted",
-          description: "Updated invoice payment"
         }
       })
   """
-  use Ecto.Schema
   import Ecto.Changeset
+  use DoubleEntryLedger.Event.EventMap,
+    payload: DoubleEntryLedger.Event.TransactionData
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Event.TransactionData
 
   alias __MODULE__, as: TransactionEventMap
 
-  @update_actions [:update_transaction, "update_transaction"]
-
   @typedoc """
   Represents an TransactionEventMap structure for transaction creation or updates.
 
-  This is the primary data structure used for creating or updating transactions in the ledger system
-  before they are persisted to the database.
+  This extends the parameterized EventMap type with TransactionData as the payload type.
 
   ## Fields
 
+  Inherits all fields from `EventMap.t/1`:
   * `action`: The operation type (:create_transaction or :update_transaction)
   * `instance_id`: UUID of the ledger instance this event belongs to
   * `source`: Identifier of the external system generating the event
   * `source_data`: Optional metadata from the source system
   * `source_idempk`: Primary identifier used for idempotency
   * `update_idempk`: Unique identifier for update operations to maintain idempotency
+
+  Plus the transaction-specific field:
   * `payload`: The embedded transaction data structure
   """
-  @type t :: %TransactionEventMap{
-          action: Event.action(),
-          instance_id: Ecto.UUID.t(),
-          source: String.t(),
-          source_data: map() | nil,
-          source_idempk: String.t(),
-          update_idempk: String.t() | nil,
-          payload: TransactionData.t()
-        }
-
-  @derive {Jason.Encoder,
-           only: [
-             :action,
-             :instance_id,
-             :source,
-             :source_data,
-             :source_idempk,
-             :update_idempk,
-             :payload
-           ]}
-
-  @primary_key false
-  embedded_schema do
-    field(:action, Ecto.Enum, values: Event.actions())
-    field(:instance_id, :string)
-    field(:source, :string)
-    field(:source_data, :map, default: %{})
-    field(:source_idempk, :string)
-    field(:update_idempk, :string)
-    embeds_one(:payload, TransactionData, on_replace: :delete)
-  end
+  @type t :: DoubleEntryLedger.Event.EventMap.t(TransactionData.t())
 
   @doc """
   Builds a validated TransactionEventMap or returns a changeset with errors.
@@ -163,7 +132,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
     iex> is_struct(em, TransactionEventMap)
 
   """
-  @spec create(map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
+  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t()}
   def create(attrs) do
     %TransactionEventMap{}
     |> changeset(attrs)
@@ -208,113 +177,23 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> changeset.valid?
       false
   """
-  @spec changeset(t() | map(), map()) :: Ecto.Changeset.t()
-  def changeset(event_map, %{"action" => action} = attrs) when action in @update_actions do
-    update_changeset(event_map, attrs)
-  end
-
-  def changeset(event_map, %{action: action} = attrs) when action in @update_actions do
-    update_changeset(event_map, attrs)
-  end
-
+  @spec changeset(t() | map(), map()) :: Changeset.t()
   def changeset(event_map, attrs) do
-    base_changeset(event_map, attrs)
-    |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
+    action = Map.get(attrs, "action") || Map.get(attrs, :action)
+
+    case normalize(action) do
+      :update_transaction ->
+        update_changeset(event_map, attrs)
+        |> cast_embed(:payload, with: &TransactionData.update_event_changeset/2, required: true)
+      _ ->
+        base_changeset(event_map, attrs)
+        |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
+    end
   end
 
-  @doc """
-  Builds a map of trace metadata for logging from an TransactionEventMap.
+  @impl true
+  def payload_to_map(payload), do: TransactionData.to_map(payload)
 
-  This function extracts key fields from the given `TransactionEventMap` struct to provide
-  consistent, structured metadata for logging and tracing purposes. The returned map
-  includes the action, source, and a composite trace ID.
-
-  ## Parameters
-
-    - `event_map`: The `TransactionEventMap` struct to extract trace information from.
-
-  ## Returns
-
-    - A map containing trace metadata for the event map.
-  """
-  @spec log_trace(TransactionEventMap.t()) :: map()
-  def log_trace(event_map) do
-    %{
-      is_event_map: true,
-      event_action: event_map.action,
-      event_source: event_map.source,
-      event_trace_id:
-        [event_map.source, event_map.source_idempk, event_map.update_idempk]
-        |> Enum.reject(&is_nil/1)
-        |> Enum.join("-")
-    }
-  end
-
-  @doc """
-  Builds a map of trace metadata for logging from an TransactionEventMap and an error.
-
-  This function extends `log_trace/1` by also including error information
-  when an error value is provided.
-
-  ## Parameters
-
-    - `event_map`: The `TransactionEventMap` struct to extract trace information from.
-    - `error`: Any error value to include in the trace metadata.
-
-  ## Returns
-
-    - A map containing trace metadata for the event map and the error.
-  """
-  @spec log_trace(TransactionEventMap.t(), any()) :: map()
-  def log_trace(event_map, error) do
-    Map.put(
-      log_trace(event_map),
-      :error,
-      inspect(error, label: "Error")
-    )
-  end
-
-  @doc """
-  Converts an event struct (of type t) into its map representation.
-  It also converts the nested transaction data into its map representation.
-
-  This function is useful for transforming the event structure into a plain map,
-  which can be easily serialized, inspected, or manipulated further.
-
-  ## Example
-
-    iex> alias DoubleEntryLedger.Event.TransactionData
-    iex> alias DoubleEntryLedger.Event.TransactionEventMap
-    iex> event = %TransactionEventMap{payload: %TransactionData{}}
-    iex> is_map(TransactionEventMap.to_map(event))
-    true
-  """
-  @spec to_map(t) :: map()
-  def to_map(event_map) do
-    %{
-      action: event_map.action,
-      instance_id: event_map.instance_id,
-      source: event_map.source,
-      source_data: event_map.source_data,
-      source_idempk: event_map.source_idempk,
-      update_idempk: event_map.update_idempk,
-      payload: TransactionData.to_map(event_map.payload)
-    }
-  end
-
-  defp update_changeset(event_map, attrs) do
-    base_changeset(event_map, attrs)
-    |> validate_required([:update_idempk])
-    |> cast_embed(:payload,
-      with: &TransactionData.update_event_changeset/2,
-      required: true
-    )
-  end
-
-  defp base_changeset(event_map, attrs) do
-    event_map
-    |> cast(attrs, [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk])
-    |> validate_required([:action, :instance_id, :source, :source_idempk])
-    |> validate_inclusion(:action, Event.actions())
-  end
+  defp normalize(action) when is_binary(action), do: String.to_existing_atom(action)
+  defp normalize(action), do: action
 end
