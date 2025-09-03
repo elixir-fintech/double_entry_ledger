@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
   import Ecto.Changeset
 
   alias __MODULE__, as: AccountData
-  alias DoubleEntryLedger.{ Currency, Types }
+  alias DoubleEntryLedger.{Currency, Types}
 
   @typedoc """
   Embedded account data captured with an event.
@@ -26,14 +26,14 @@ defmodule DoubleEntryLedger.Event.AccountData do
   - allowed_negative: Whether the account is allowed to have a negative balance
   """
   @type t :: %AccountData{
-    currency: Currency.currency_atom() | nil,
-    name: String.t() | nil,
-    description: String.t() | nil,
-    context: map() | nil,
-    normal_balance: Types.credit_and_debit() | nil,
-    type: Types.account_type() | nil,
-    allowed_negative: boolean(),
-  }
+          currency: Currency.currency_atom() | nil,
+          name: String.t() | nil,
+          description: String.t() | nil,
+          context: map() | nil,
+          normal_balance: Types.credit_and_debit() | nil,
+          type: Types.account_type() | nil,
+          allowed_negative: boolean()
+        }
 
   @currency_atoms Currency.currency_atoms()
   @credit_and_debit Types.credit_and_debit()
@@ -81,7 +81,15 @@ defmodule DoubleEntryLedger.Event.AccountData do
   @spec changeset(AccountData.t(), map()) :: Ecto.Changeset.t()
   def changeset(account_data, attrs) do
     account_data
-    |> cast(attrs, [:currency, :name, :description, :context, :normal_balance, :type, :allowed_negative])
+    |> cast(attrs, [
+      :currency,
+      :name,
+      :description,
+      :context,
+      :normal_balance,
+      :type,
+      :allowed_negative
+    ])
     |> validate_required([:currency, :name, :type])
   end
 
@@ -107,7 +115,6 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> map.currency == data.currency and map.type == data.type and map.name == "Cash"
       true
   """
-  @spec to_map(t()) :: map()
   def to_map(account_data) do
     %{
       currency: account_data.currency,

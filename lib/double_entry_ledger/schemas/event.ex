@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Event do
   alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
   alias DoubleEntryLedger.Event.TransactionData
 
-  @actions [:create_transaction, :update_transaction]
+  @actions [:create_transaction, :update_transaction, :create_account]
   @type action ::
           unquote(
             Enum.reduce(@actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.Event do
   ## Examples
 
       iex> DoubleEntryLedger.Event.actions()
-      [:create_transaction, :update_transaction]
+      [:create_transaction, :update_transaction, :create_account]
   """
   @spec actions() :: [action()]
   def actions(), do: @actions

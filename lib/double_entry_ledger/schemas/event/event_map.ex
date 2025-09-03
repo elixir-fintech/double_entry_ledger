@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Event.EventMap do
   @moduledoc """
-  A behavior module that provides shared functionality for EventMap-like schemas in the Double Entry Ledger system.
+  A behavior module that provides shared functionality for EventMap schemas in the Double Entry Ledger system.
 
   This module serves as a foundation for creating event map schemas that represent pre-persistence
   event data. It provides common field definitions, validation logic, and utility functions
@@ -12,16 +12,40 @@ defmodule DoubleEntryLedger.Event.EventMap do
   into persistent entities. They act as a validation layer that ensures incoming data
   meets the system's requirements before being committed to the database.
 
+  The EventMap pattern provides:
+  * **Type Safety**: Structured data with compile-time validation
+  * **Idempotency**: Built-in support for duplicate operation detection
+  * **Traceability**: Consistent logging and debugging metadata
+  * **Extensibility**: Pluggable payload validation for different event types
+
   ## Usage
 
   To create an EventMap module, use this module with the `use` macro and specify the payload type:
 
-      defmodule MyApp.SomeEventMap do
+      defmodule MyApp.TransactionEventMap do
         use DoubleEntryLedger.Event.EventMap,
-          payload: MyApp.SomePayloadSchema
+          payload: MyApp.TransactionData
 
+        # Must implement the behavior callback
         @impl true
-        def payload_to_map(payload), do: MyApp.SomePayloadSchema.to_map(payload)
+        def payload_to_map(payload), do: MyApp.TransactionData.to_map(payload)
+
+        # Optional: Custom changeset logic
+        def changeset(event_map, attrs) do
+          case fetch_action(attrs) do
+            :create_transaction ->
+              base_changeset(event_map, attrs)
+              |> cast_embed(:payload, with: &MyApp.TransactionData.changeset/2, required: true)
+
+            :update_transaction ->
+              update_changeset(event_map, attrs)
+              |> cast_embed(:payload, with: &MyApp.TransactionData.update_changeset/2)
+
+            _ ->
+              base_changeset(event_map, attrs)
+              |> add_error(:action, :invalid_in_context)
+          end
+        end
       end
 
   ## Provided Functionality
@@ -66,6 +90,9 @@ defmodule DoubleEntryLedger.Event.EventMap do
   * `base_changeset/2` - Validates common required fields for create operations
   * `update_changeset/2` - Extends base validation to require `update_idempk` for updates
 
+  Most implementations will want to define their own `changeset/2` function that calls
+  these base functions and adds payload-specific validation.
+
   ## Examples
 
       # Define a custom EventMap
@@ -75,16 +102,21 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
         @impl true
         def payload_to_map(payload), do: MyApp.OrderData.to_map(payload)
+
+        def changeset(event_map, attrs) do
+          base_changeset(event_map, attrs)
+          |> cast_embed(:payload, with: &MyApp.OrderData.changeset/2, required: true)
+        end
       end
 
       # Use the EventMap
-      {:ok, event_map} = MyApp.OrderEventMap.create(%{
+      {:ok, event_map} = MyApp.OrderEventMap.changeset(%MyApp.OrderEventMap{}, %{
         action: "create_order",
         instance_id: "550e8400-e29b-41d4-a716-446655440000",
         source: "web_app",
         source_idempk: "order_123",
         payload: %{...}
-      })
+      }) |> Ecto.Changeset.apply_action(:insert)
   """
   require Ecto.Schema
   import Ecto.Changeset, only: [cast: 3, validate_required: 2, validate_inclusion: 3]
@@ -118,6 +150,11 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
       # Generic usage in function signatures
       @spec process_event(EventMap.t(any())) :: {:ok, term()} | {:error, term()}
+
+      # Pattern matching with types
+      def handle_event(%{__struct__: mod} = event_map) when is_struct(event_map, EventMap) do
+        # Process the event
+      end
   """
   @type t(payload_type) :: %{
           __struct__: module(),
@@ -136,6 +173,9 @@ defmodule DoubleEntryLedger.Event.EventMap do
   This callback must be implemented by modules using EventMap. It defines how
   the payload should be serialized when converting the entire EventMap to a map.
 
+  The implementation should handle conversion of nested structs and ensure
+  the resulting map is serializable (e.g., for JSON encoding).
+
   ## Parameters
 
   * `payload` - The payload struct to convert
@@ -150,9 +190,14 @@ defmodule DoubleEntryLedger.Event.EventMap do
       def payload_to_map(%TransactionData{} = payload) do
         %{
           status: payload.status,
-          entries: Enum.map(payload.entries, &EntryData.to_map/1)
+          entries: Enum.map(payload.entries, &EntryData.to_map/1),
+          metadata: payload.metadata
         }
       end
+
+      # For simple payloads, you might just return the map directly
+      @impl true
+      def payload_to_map(payload) when is_map(payload), do: payload
   """
   @callback payload_to_map(any()) :: map()
 
@@ -503,26 +548,43 @@ defmodule DoubleEntryLedger.Event.EventMap do
   @doc """
   Fetches and normalizes the action value from a map.
 
-  Accepts both atom and string keys. When the action is a string, it is converted
-  using String.to_existing_atom/1. Returns nil when no action is present.
+  Accepts both atom and string keys ("action" and :action). When the action is a string,
+  it is converted using `String.to_existing_atom/1`. Returns `nil` when no action is present.
+
+  This function is useful for handling incoming data that may have string or atom keys,
+  which is common when dealing with external APIs or JSON data.
+
+  ## Parameters
+
+  * `attrs` - Map containing potential action data
+
+  ## Returns
+
+  * `atom()` - The normalized action as an atom
+  * `nil` - When no action is found
 
   ## Examples
 
       iex> alias DoubleEntryLedger.Event.EventMap
       iex> # Ensure atoms exist for to_existing_atom/1
       iex> :create_transaction
+      :create_transaction
       iex> :update_transaction
+      :update_transaction
       iex> EventMap.fetch_action(%{"action" => "create_transaction"})
       :create_transaction
       iex> EventMap.fetch_action(%{action: :update_transaction})
       :update_transaction
       iex> EventMap.fetch_action(%{})
       nil
+      iex> EventMap.fetch_action(%{"other_key" => "value"})
+      nil
   """
   @spec fetch_action(map()) :: atom() | nil
   def fetch_action(attrs), do: normalize(Map.get(attrs, "action") || Map.get(attrs, :action))
 
-  @spec normalize(atom() | String.t()) :: atom()
+  @spec normalize(atom() | String.t() | nil) :: atom() | nil
   defp normalize(action) when is_binary(action), do: String.to_existing_atom(action)
-  defp normalize(action), do: action
+  defp normalize(action) when is_atom(action), do: action
+  defp normalize(nil), do: nil
 end
