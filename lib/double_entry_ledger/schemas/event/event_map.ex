@@ -120,15 +120,15 @@ defmodule DoubleEntryLedger.Event.EventMap do
       @spec process_event(EventMap.t(any())) :: {:ok, term()} | {:error, term()}
   """
   @type t(payload_type) :: %{
-    __struct__: module(),
-    action: DoubleEntryLedger.Event.action(),
-    instance_id: Ecto.UUID.t(),
-    source: String.t(),
-    source_data: map() | nil,
-    source_idempk: String.t(),
-    update_idempk: String.t() | nil,
-    payload: payload_type
-  }
+          __struct__: module(),
+          action: DoubleEntryLedger.Event.action(),
+          instance_id: Ecto.UUID.t(),
+          source: String.t(),
+          source_data: map() | nil,
+          source_idempk: String.t(),
+          update_idempk: String.t() | nil,
+          payload: payload_type
+        }
 
   @doc """
   Callback to convert a payload struct to a plain map representation.
@@ -199,31 +199,36 @@ defmodule DoubleEntryLedger.Event.EventMap do
       @behaviour DoubleEntryLedger.Event.EventMap
 
       use Ecto.Schema
-      import DoubleEntryLedger.Event.EventMap, only: [
-        base_changeset: 2, update_changeset: 2]
+
+      import DoubleEntryLedger.Event.EventMap,
+        only: [
+          base_changeset: 2,
+          update_changeset: 2,
+          fetch_action: 1
+        ]
 
       @derive {Jason.Encoder,
-              only: [
-                :action,
-                :instance_id,
-                :source,
-                :source_data,
-                :source_idempk,
-                :update_idempk,
-                :payload
-              ]}
+               only: [
+                 :action,
+                 :instance_id,
+                 :source,
+                 :source_data,
+                 :source_idempk,
+                 :update_idempk,
+                 :payload
+               ]}
 
       @primary_key false
       embedded_schema do
-        field :action, Ecto.Enum, values: DoubleEntryLedger.Event.actions()
-        field :instance_id, :string
-        field :source, :string
-        field :source_data, :map, default: %{}
-        field :source_idempk, :string
-        field :update_idempk, :string
+        field(:action, Ecto.Enum, values: DoubleEntryLedger.Event.actions())
+        field(:instance_id, :string)
+        field(:source, :string)
+        field(:source_data, :map, default: %{})
+        field(:source_idempk, :string)
+        field(:update_idempk, :string)
 
         if unquote(payload_mod) == :map do
-          field :payload, :map
+          field(:payload, :map)
         else
           embeds_one(:payload, unquote(payload_mod), on_replace: :delete)
         end
@@ -396,7 +401,11 @@ defmodule DoubleEntryLedger.Event.EventMap do
       event_action: Map.get(event_map, :action),
       event_source: Map.get(event_map, :source),
       event_trace_id:
-        [Map.get(event_map, :source), Map.get(event_map, :source_idempk), Map.get(event_map, :update_idempk)]
+        [
+          Map.get(event_map, :source),
+          Map.get(event_map, :source_idempk),
+          Map.get(event_map, :update_idempk)
+        ]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("-")
     }
@@ -490,4 +499,30 @@ defmodule DoubleEntryLedger.Event.EventMap do
       payload: payload_map
     }
   end
+
+  @doc """
+  Fetches and normalizes the action value from a map.
+
+  Accepts both atom and string keys. When the action is a string, it is converted
+  using String.to_existing_atom/1. Returns nil when no action is present.
+
+  ## Examples
+
+      iex> alias DoubleEntryLedger.Event.EventMap
+      iex> # Ensure atoms exist for to_existing_atom/1
+      iex> :create_transaction
+      iex> :update_transaction
+      iex> EventMap.fetch_action(%{"action" => "create_transaction"})
+      :create_transaction
+      iex> EventMap.fetch_action(%{action: :update_transaction})
+      :update_transaction
+      iex> EventMap.fetch_action(%{})
+      nil
+  """
+  @spec fetch_action(map()) :: atom() | nil
+  def fetch_action(attrs), do: normalize(Map.get(attrs, "action") || Map.get(attrs, :action))
+
+  @spec normalize(atom() | String.t()) :: atom()
+  defp normalize(action) when is_binary(action), do: String.to_existing_atom(action)
+  defp normalize(action), do: action
 end

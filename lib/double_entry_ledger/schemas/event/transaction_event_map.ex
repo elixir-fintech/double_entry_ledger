@@ -108,12 +108,12 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         }
       })
   """
-  import Ecto.Changeset
-  use DoubleEntryLedger.Event.EventMap,
-    payload: DoubleEntryLedger.Event.TransactionData
+  import Ecto.Changeset, only: [cast_embed: 3, apply_action: 2]
 
+  alias DoubleEntryLedger.Event.{EventMap, TransactionData}
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.TransactionData
+
+  use EventMap, payload: TransactionData
 
   alias __MODULE__, as: TransactionEventMap
 
@@ -153,7 +153,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         # Implementation
       end
   """
-  @type t :: DoubleEntryLedger.Event.EventMap.t(TransactionData.t())
+  @type t :: EventMap.t(TransactionData.t())
 
   @doc """
   Builds a validated TransactionEventMap or returns a changeset with errors.
@@ -212,7 +212,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   def create(attrs) do
     %TransactionEventMap{}
     |> changeset(attrs)
-    |> Changeset.apply_action(:insert)
+    |> apply_action(:insert)
   end
 
   @doc """
@@ -291,12 +291,11 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   """
   @spec changeset(t() | map(), map()) :: Changeset.t()
   def changeset(event_map, attrs) do
-    action = Map.get(attrs, "action") || Map.get(attrs, :action)
-
-    case normalize(action) do
+    case fetch_action(attrs) do
       :update_transaction ->
         update_changeset(event_map, attrs)
         |> cast_embed(:payload, with: &TransactionData.update_event_changeset/2, required: true)
+
       _ ->
         base_changeset(event_map, attrs)
         |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
@@ -341,7 +340,4 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   """
   @impl true
   def payload_to_map(payload), do: TransactionData.to_map(payload)
-
-  defp normalize(action) when is_binary(action), do: String.to_existing_atom(action)
-  defp normalize(action), do: action
 end
