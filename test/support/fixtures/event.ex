@@ -4,6 +4,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   event entities.
   """
   alias DoubleEntryLedger.EventStore
+  alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
   import DoubleEntryLedger.Event.TransactionDataFixtures
 
   def transaction_event_attrs(attrs \\ %{}) do
@@ -14,6 +15,9 @@ defmodule DoubleEntryLedger.EventFixtures do
       source_idempk: "source_idempk",
       payload: pending_payload()
     })
+    |> then(fn attrs ->
+      struct(TransactionEventMap, attrs)
+    end)
   end
 
   def new_create_transaction_event(%{instance: inst, accounts: [a1, a2, _, _]} = ctx, trx_status \\ :posted) do
@@ -49,7 +53,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       source_idempk: source_idempk,
       instance_id: instance_id,
       update_idempk: Ecto.UUID.generate(),
-      payload: %{
+      payload: %TransactionData{
         status: trx_status,
         entries: entries
       }
@@ -58,14 +62,14 @@ defmodule DoubleEntryLedger.EventFixtures do
   end
 
   def create_transaction_event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}, trx_status \\ :pending) do
-    %{
+    %TransactionEventMap{
       action: :create_transaction,
       instance_id: id,
       source: "source",
       source_data: %{},
       source_idempk: "source_idempk",
       update_idempk: nil,
-      payload: %{
+      payload: %TransactionData{
         status: trx_status,
         entries: [
           %{account_id: a1.id, amount: 100, currency: "EUR"},
@@ -80,14 +84,14 @@ defmodule DoubleEntryLedger.EventFixtures do
         create_event,
         trx_status \\ :posted
       ) do
-    %{
+    %TransactionEventMap{
       action: :update_transaction,
       instance_id: id,
       source: create_event.source,
       source_data: %{},
       source_idempk: create_event.source_idempk,
       update_idempk: Ecto.UUID.generate(),
-      payload: %{
+      payload: %TransactionData{
         status: trx_status,
         entries: [
           %{account_id: a1.id, amount: 50, currency: "EUR"},

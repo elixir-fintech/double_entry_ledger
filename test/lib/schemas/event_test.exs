@@ -9,6 +9,7 @@ defmodule DoubleEntryLedger.EventTest do
 
   alias Ecto.Changeset
 
+  alias DoubleEntryLedger.Event.TransactionEventMap
   alias DoubleEntryLedger.{Event, EventStore}
 
   doctest Event
@@ -50,10 +51,11 @@ defmodule DoubleEntryLedger.EventTest do
       }
 
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
-      assert {:ok, _event} = EventStore.create(attrs)
+      transaction_event_map = struct(TransactionEventMap, attrs)
+      assert {:ok, _event} = EventStore.create(transaction_event_map)
 
       assert {:error, %{errors: [source_idempk: {_, [{:constraint, :unique}, _]}]}} =
-               EventStore.create(attrs)
+               EventStore.create(transaction_event_map)
     end
   end
 
@@ -79,7 +81,7 @@ defmodule DoubleEntryLedger.EventTest do
     test "idempotent: can't save the same update event twice" do
       %{instance: inst} = create_instance()
 
-      attrs = %{
+      attrs = %TransactionEventMap{
         instance_id: inst.id,
         action: :update_transaction,
         source: "source",
@@ -88,15 +90,14 @@ defmodule DoubleEntryLedger.EventTest do
         payload: pending_payload()
       }
 
-      assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
       assert {:ok, _event} = EventStore.create(attrs)
 
       assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
                EventStore.create(attrs)
 
       # check it's true for posted and archived status as well
-      posted_payload = put_in(attrs, [:payload, :status], :posted)
-      archived_payload = put_in(attrs, [:payload, :status], :archived)
+      posted_payload = put_in(attrs, [Access.key!(:payload), Access.key!(:status)], :posted)
+      archived_payload = put_in(attrs, [Access.key!(:payload), Access.key!(:status)], :archived)
 
       assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
                EventStore.create(posted_payload)

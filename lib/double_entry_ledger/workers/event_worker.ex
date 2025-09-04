@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
-      iex> {:ok, event} = EventStore.create(%{instance_id: instance.id,
+      iex> {:ok, event} = EventStore.create(%TransactionEventMap{instance_id: instance.id,
       ...>  source: "s1", source_idempk: "1", action: :create_transaction,
       ...>  payload: %{status: :pending, entries: [
       ...>      %{account_id: account1.id, amount: 100, currency: :EUR},

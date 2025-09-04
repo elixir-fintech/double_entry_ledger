@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
     setup [:create_instance, :create_accounts]
 
     test "create event for event_map, which must also create the event", ctx do
-      event_map = struct(TransactionEventMapSchema, create_transaction_event_map(ctx))
+      event_map = create_transaction_event_map(ctx)
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
         CreateTransactionEventMap.process(event_map)
@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
 
     test "return TransactionEventMap changeset for duplicate source_idempk", ctx do
       # successfully create event
-      event_map = struct(TransactionEventMapSchema, create_transaction_event_map(ctx))
+      event_map = create_transaction_event_map(ctx)
       CreateTransactionEventMap.process(event_map)
 
       # process same event_map again which should fail
@@ -53,13 +53,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
       event_map = create_transaction_event_map(ctx, :pending)
 
       updated_event_map =
-        update_in(event_map, [:payload, :entries, Access.at(1), :currency], fn _ ->
+        update_in(event_map, [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)], fn _ ->
           "USD"
         end)
 
       # process same update_event again which should fail
       {:error, changeset} =
-        CreateTransactionEventMap.process(struct(TransactionEventMapSchema, updated_event_map))
+        CreateTransactionEventMap.process(updated_event_map)
 
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
     end
@@ -84,10 +84,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
 
       assert {:error, %Event{id: id, event_queue_item: %{status: :occ_timeout}}} =
                CreateTransactionEventMap.process(
-                 struct(
-                   TransactionEventMapSchema,
-                   create_transaction_event_map(ctx)
-                 ),
+                 create_transaction_event_map(ctx),
                  DoubleEntryLedger.MockRepo
                )
 

@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
       {:ok, pending_transaction, _} =
         CreateTransactionEvent.process(pending_event)
 
-      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
+      update_event = update_transaction_event_map(ctx, pending_event, :posted)
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
         UpdateTransactionEventMap.process(update_event)
@@ -47,7 +47,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
     test "return TransactionEventMap changeset for duplicate update_idempk", ctx do
       # successfully create event
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
-      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
+      update_event = update_transaction_event_map(ctx, pending_event, :posted)
       UpdateTransactionEventMap.process(update_event)
 
       # process same update_event again which should fail
@@ -74,7 +74,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
 
     test "update event for event_map, when create event not yet processed", ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
-      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
+      update_event = update_transaction_event_map(ctx, pending_event, :posted)
 
       {:error, %{event_queue_item: eqm} = update_event} =
         UpdateTransactionEventMap.process(update_event)
@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
         |> Ecto.Changeset.put_assoc(:event_queue_item, %{id: eqm1.id, status: :failed})
         |> Repo.update!()
 
-      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, failed_event, :posted))
+      update_event = update_transaction_event_map(ctx, failed_event, :posted)
 
       {:error, %{event_queue_item: eqm}} = UpdateTransactionEventMap.process(update_event)
 
@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
 
       failed_event = Repo.preload(pending_event, :event_queue_item)
 
-      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, failed_event, :posted))
+      update_event = update_transaction_event_map(ctx, failed_event, :posted)
 
       {:error, %{event_queue_item: evq}} = UpdateTransactionEventMap.process(update_event)
 
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
     test "with last retry that fails", ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
       CreateTransactionEvent.process(pending_event)
-      update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
+      update_event = update_transaction_event_map(ctx, pending_event, :posted)
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, 5, fn changeset ->
