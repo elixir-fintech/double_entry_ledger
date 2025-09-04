@@ -1,17 +1,17 @@
-defmodule DoubleEntryLedger.EventTransformerTest do
+defmodule DoubleEntryLedger.TransactionEventTransformerTest do
   @moduledoc """
-  This module tests the EventTransformer.
+  This module tests the TransactionEventTransformer.
   """
 
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.EventWorker.EventTransformer
+  alias DoubleEntryLedger.EventWorker.TransactionEventTransformer
   alias DoubleEntryLedger.Event.{EntryData, TransactionData}
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  doctest EventTransformer
+  doctest TransactionEventTransformer
 
   describe "transaction_data_to_transaction_map/2" do
     setup [:create_instance, :create_accounts]
@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.EventTransformerTest do
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
       {:ok, transaction_map} =
-        EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+        TransactionEventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
 
       assert MapSet.new([
                %{account_id: a1.id, value: %Money{amount: 100, currency: :EUR}, type: :debit},
@@ -52,7 +52,7 @@ defmodule DoubleEntryLedger.EventTransformerTest do
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
       {:ok, transaction_map} =
-        EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+        TransactionEventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
 
       assert MapSet.new([
                %{account_id: a1.id, value: %Money{amount: 100, currency: :EUR}, type: :credit},
@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.EventTransformerTest do
       transaction_data = %TransactionData{status: :posted}
 
       {:ok, transaction_map} =
-        EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+        TransactionEventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
 
       assert !Map.has_key?(transaction_map, :entries)
     end
@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.EventTransformerTest do
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
       assert {:error, :no_accounts_found} =
-               EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+               TransactionEventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
     end
 
     test "returns error for mismatched accounts and entries", %{
@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.EventTransformerTest do
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
       assert {:error, :some_accounts_not_found} =
-               EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+               TransactionEventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
     end
 
     test "returns error for incomplete entry data", %{
@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.EventTransformerTest do
       transaction_data = %TransactionData{status: :posted, entries: entries}
 
       assert {:error, :invalid_entry_data} =
-               EventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
+               TransactionEventTransformer.transaction_data_to_transaction_map(transaction_data, instance.id)
     end
   end
 end

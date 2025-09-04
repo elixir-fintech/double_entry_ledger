@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.EventTransformer do
+defmodule DoubleEntryLedger.EventWorker.TransactionEventTransformer do
   @moduledoc """
   Transforms accounting events into ledger operations in the double-entry bookkeeping system.
 
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.EventWorker.EventTransformer do
   ## Examples
 
       iex> transaction_data = %TransactionData{entries: [], status: :pending}
-      iex> EventTransformer.transaction_data_to_transaction_map(transaction_data, "instance-123")
+      iex> TransactionEventTransformer.transaction_data_to_transaction_map(transaction_data, "instance-123")
       {:ok, %{instance_id: "instance-123", status: :pending}}
   """
   @spec transaction_data_to_transaction_map(TransactionData.t() | map(), Ecto.UUID.t()) ::

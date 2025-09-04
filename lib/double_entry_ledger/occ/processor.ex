@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
   alias Ecto.Multi
   alias DoubleEntryLedger.{Event, Transaction}
   alias DoubleEntryLedger.Event.ErrorMap
-  alias DoubleEntryLedger.EventWorker.EventTransformer
+  alias DoubleEntryLedger.EventWorker.TransactionEventTransformer
   alias DoubleEntryLedger.Occ.Occable
 
   @doc """
@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
   """
   @callback build_transaction(
               Occable.t(),
-              EventTransformer.transaction_map(),
+              TransactionEventTransformer.transaction_map(),
               Ecto.Repo.t()
             ) :: Ecto.Multi.t()
 
@@ -180,7 +180,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       import DoubleEntryLedger.Occ.Helper
       import DoubleEntryLedger.EventQueue.Scheduling
 
-      import DoubleEntryLedger.EventWorker.EventTransformer,
+      import DoubleEntryLedger.EventWorker.TransactionEventTransformer,
         only: [transaction_data_to_transaction_map: 2]
 
       @module_name __MODULE__ |> Module.split() |> List.last()
