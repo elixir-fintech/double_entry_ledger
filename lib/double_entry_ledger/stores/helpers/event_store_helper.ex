@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   share common functionality and reduce code duplication.
   """
   import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias Ecto.Changeset
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Event, Transaction}
@@ -50,10 +50,15 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   ## Returns
     - Ecto.Changeset.t() A changeset for creating a new Event
   """
-  @spec build_create(TransactionEventMap.t() | map()) :: Changeset.t()
+  @spec build_create(TransactionEventMap.t() | AccountEventMap.t() | map()) :: Changeset.t(Event.t())
   def build_create(%TransactionEventMap{} = event_map) do
     %Event{}
     |> Event.changeset(TransactionEventMap.to_map(event_map))
+  end
+
+  def build_create(%AccountEventMap{} = event_map) do
+    %Event{}
+    |> Event.changeset(AccountEventMap.to_map(event_map))
   end
 
   def build_create(attrs) do

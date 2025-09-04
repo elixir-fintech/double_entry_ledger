@@ -117,13 +117,13 @@ defmodule DoubleEntryLedger.Event.AccountData do
   """
   def to_map(account_data) do
     %{
-      currency: account_data.currency,
-      name: account_data.name,
-      description: account_data.description,
-      context: account_data.context,
-      normal_balance: account_data.normal_balance,
-      type: account_data.type,
-      allowed_negative: account_data.allowed_negative
+      currency: Map.get(account_data, :currency),
+      name: Map.get(account_data, :name),
+      description: Map.get(account_data, :description),
+      context: Map.get(account_data, :context),
+      normal_balance: Map.get(account_data, :normal_balance),
+      type: Map.get(account_data, :type),
+      allowed_negative: Map.get(account_data, :allowed_negative)
     }
   end
 end

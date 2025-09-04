@@ -103,7 +103,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for marking the event as processed
   """
-  @spec build_mark_as_processed(Event.t()) :: Changeset.t()
+  @spec build_mark_as_processed(Event.t()) :: Changeset.t(Event.t())
   def build_mark_as_processed(%{event_queue_item: event_queue_item} = event) do
     event_queue_changeset =
       event_queue_item
