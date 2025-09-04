@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSaveOnErrorTest do
+defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTest do
   @moduledoc """
-  This module tests the UpdateTransactionTransactionEventMapNoSaveOnError module.
+  This module tests the UpdateTransactionEventMapNoSaveOnError module.
   """
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
@@ -13,10 +13,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
-  alias DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSaveOnError
+  alias DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError
   alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
 
-  doctest UpdateTransactionTransactionEventMapNoSaveOnError
+  doctest UpdateTransactionEventMapNoSaveOnError
 
   describe "process/1" do
     setup [:create_instance, :create_accounts]
@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
       update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
-        UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
+        UpdateTransactionEventMapNoSaveOnError.process(update_event)
 
       assert evq.status == :processed
 
@@ -47,10 +47,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
       CreateTransactionEvent.process(pending_event)
       update_event = struct(TransactionEventMapSchema, update_transaction_event_map(ctx, pending_event, :posted))
-      UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
+      UpdateTransactionEventMapNoSaveOnError.process(update_event)
 
       # process same update_event again which should fail
-      {:error, changeset} = UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
+      {:error, changeset} = UpdateTransactionEventMapNoSaveOnError.process(update_event)
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
       assert Keyword.has_key?(changeset.errors, :update_idempk)
     end
@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
                   create_transaction_event_error: {"create_transaction_event_not_found", _}
                 ]
               }} =
-               UpdateTransactionTransactionEventMapNoSaveOnError.process(update_transaction_event_map)
+               UpdateTransactionEventMapNoSaveOnError.process(update_transaction_event_map)
     end
 
     test "return TransactionEventMap changeset for other errors", ctx do
@@ -88,7 +88,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
 
       # process same update_event again which should fail
       {:error, changeset} =
-        UpdateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
+        UpdateTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
     end
@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
         end)
 
       {:error, changeset} =
-        UpdateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
+        UpdateTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{
                data: %TransactionEventMapSchema{},
@@ -127,7 +127,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
         end)
 
       {:error, changeset} =
-        UpdateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
+        UpdateTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{
                data: %TransactionEventMapSchema{},
@@ -146,7 +146,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
                   create_transaction_event_error: {"create_transaction_event_not_processed", _}
                 ]
               }} =
-               UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
+               UpdateTransactionEventMapNoSaveOnError.process(update_event)
     end
 
     test "update event is pending for event_map, when create event failed", ctx do
@@ -167,7 +167,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
                   create_transaction_event_error: {"create_transaction_event_not_processed", _}
                 ]
               }} =
-               UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
+               UpdateTransactionEventMapNoSaveOnError.process(update_event)
     end
 
     test "update event is dead_letter for event_map, when create event failed", ctx do
@@ -188,7 +188,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
                   create_transaction_event_error: {"create_transaction_event_in_dead_letter", _}
                 ]
               }} =
-               UpdateTransactionTransactionEventMapNoSaveOnError.process(update_event)
+               UpdateTransactionEventMapNoSaveOnError.process(update_event)
     end
   end
 
@@ -214,7 +214,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
       end)
 
       assert {:error, %Changeset{data: %TransactionEventMapSchema{}, errors: [occ_timeout: _]}} =
-               UpdateTransactionTransactionEventMapNoSaveOnError.process(
+               UpdateTransactionEventMapNoSaveOnError.process(
                  update_event,
                  DoubleEntryLedger.MockRepo
                )

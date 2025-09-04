@@ -25,11 +25,11 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
 
   alias DoubleEntryLedger.EventWorker.{
     UpdateTransactionEvent,
-    UpdateTransactionTransactionEventMap,
-    UpdateTransactionTransactionEventMapNoSaveOnError,
+    UpdateTransactionEventMap,
+    UpdateTransactionEventMapNoSaveOnError,
     CreateTransactionEvent,
-    CreateTransactionTransactionEventMap,
-    CreateTransactionTransactionEventMapNoSaveOnError
+    CreateTransactionEventMap,
+    CreateTransactionEventMapNoSaveOnError
   }
 
   @doc """
@@ -91,11 +91,11 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   @spec process_event_map(TransactionEventMap.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_event_map(%{action: :create_transaction} = event_map) do
-    CreateTransactionTransactionEventMap.process(event_map)
+    CreateTransactionEventMap.process(event_map)
   end
 
   def process_event_map(%{action: :update_transaction} = event_map) do
-    UpdateTransactionTransactionEventMap.process(event_map)
+    UpdateTransactionEventMap.process(event_map)
   end
 
   def process_event_map(_event_map) do
@@ -120,11 +120,11 @@ defmodule DoubleEntryLedger.EventWorker.ProcessEvent do
   @spec process_event_map_no_save_on_error(TransactionEventMap.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_event_map_no_save_on_error(%{action: :create_transaction} = event_map) do
-    CreateTransactionTransactionEventMapNoSaveOnError.process(event_map)
+    CreateTransactionEventMapNoSaveOnError.process(event_map)
   end
 
   def process_event_map_no_save_on_error(%{action: :update_transaction} = event_map) do
-    UpdateTransactionTransactionEventMapNoSaveOnError.process(event_map)
+    UpdateTransactionEventMapNoSaveOnError.process(event_map)
   end
 
   def process_event_map_no_save_on_error(_event_map) do

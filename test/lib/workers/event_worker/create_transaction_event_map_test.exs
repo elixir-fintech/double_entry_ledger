@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest do
+defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
   @moduledoc """
-  This module tests the CreateTransactionTransactionEventMap module, which processes event maps for atomic creation and update of events and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
+  This module tests the CreateTransactionEventMap module, which processes event maps for atomic creation and update of events and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
   """
   use ExUnit.Case
   import Mox
@@ -13,11 +13,11 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMap
+  alias DoubleEntryLedger.EventWorker.CreateTransactionEventMap
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventStore
 
-  doctest CreateTransactionTransactionEventMap
+  doctest CreateTransactionEventMap
 
   describe "process_map/1" do
     setup [:create_instance, :create_accounts]
@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
       event_map = struct(TransactionEventMapSchema, create_transaction_event_map(ctx))
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
-        CreateTransactionTransactionEventMap.process(event_map)
+        CreateTransactionEventMap.process(event_map)
 
       assert evq.status == :processed
 
@@ -40,10 +40,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
     test "return TransactionEventMap changeset for duplicate source_idempk", ctx do
       # successfully create event
       event_map = struct(TransactionEventMapSchema, create_transaction_event_map(ctx))
-      CreateTransactionTransactionEventMap.process(event_map)
+      CreateTransactionEventMap.process(event_map)
 
       # process same event_map again which should fail
-      {:error, changeset} = CreateTransactionTransactionEventMap.process(event_map)
+      {:error, changeset} = CreateTransactionEventMap.process(event_map)
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
       assert Keyword.has_key?(changeset.errors, :source_idempk)
     end
@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
 
       # process same update_event again which should fail
       {:error, changeset} =
-        CreateTransactionTransactionEventMap.process(struct(TransactionEventMapSchema, updated_event_map))
+        CreateTransactionEventMap.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
     end
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapTest
       end)
 
       assert {:error, %Event{id: id, event_queue_item: %{status: :occ_timeout}}} =
-               CreateTransactionTransactionEventMap.process(
+               CreateTransactionEventMap.process(
                  struct(
                    TransactionEventMapSchema,
                    create_transaction_event_map(ctx)

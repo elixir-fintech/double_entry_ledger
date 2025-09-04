@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMap do
+defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMap do
   @moduledoc """
   Processes `TransactionEventMap` structures for atomic creation and update of events and their
   associated transactions in the Double Entry Ledger system.

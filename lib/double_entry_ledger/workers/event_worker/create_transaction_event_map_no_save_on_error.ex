@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError do
   @moduledoc """
   Processes event maps for creating transactions, returning changesets on error instead of raising or saving invalid data.
 
@@ -29,12 +29,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
-    to: DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMap,
+    to: DoubleEntryLedger.EventWorker.CreateTransactionEventMap,
     as: :build_transaction
 
   @impl true
   defdelegate handle_build_transaction(multi, event_map, repo),
-    to: DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMap,
+    to: DoubleEntryLedger.EventWorker.CreateTransactionEventMap,
     as: :handle_build_transaction
 
   @doc """

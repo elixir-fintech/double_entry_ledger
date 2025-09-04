@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSaveOnErrorTest do
+defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTest do
   @moduledoc """
-  This module tests the CreateTransactionTransactionEventMapNoSaveOnError module, which processes event maps for transaction creation without saving on error. It ensures that errors return changesets and no partial data is persisted.
+  This module tests the CreateTransactionEventMapNoSaveOnError module, which processes event maps for transaction creation without saving on error. It ensures that errors return changesets and no partial data is persisted.
   """
   use ExUnit.Case
   import Mox
@@ -13,9 +13,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSaveOnError
+  alias DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError
 
-  doctest CreateTransactionTransactionEventMapNoSaveOnError
+  doctest CreateTransactionEventMapNoSaveOnError
 
   describe "process/1" do
     setup [:create_instance, :create_accounts]
@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
       event_map = struct(TransactionEventMapSchema, create_transaction_event_map(ctx))
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
-        CreateTransactionTransactionEventMapNoSaveOnError.process(event_map)
+        CreateTransactionEventMapNoSaveOnError.process(event_map)
 
       assert evq.status == :processed
 
@@ -38,10 +38,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
     test "return TransactionEventMap changeset for duplicate source_idempk", ctx do
       # successfully create event
       event_map = struct(TransactionEventMapSchema, create_transaction_event_map(ctx))
-      CreateTransactionTransactionEventMapNoSaveOnError.process(event_map)
+      CreateTransactionEventMapNoSaveOnError.process(event_map)
 
       # process same event_map again which should fail
-      {:error, changeset} = CreateTransactionTransactionEventMapNoSaveOnError.process(event_map)
+      {:error, changeset} = CreateTransactionEventMapNoSaveOnError.process(event_map)
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
       assert Keyword.has_key?(changeset.errors, :source_idempk)
     end
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
 
       # process same update_event again which should fail
       {:error, changeset} =
-        CreateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
+        CreateTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
     end
@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
         end)
 
       {:error, changeset} =
-        CreateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
+        CreateTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{
                data: %TransactionEventMapSchema{},
@@ -88,7 +88,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
         end)
 
       {:error, changeset} =
-        CreateTransactionTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
+        CreateTransactionEventMapNoSaveOnError.process(struct(TransactionEventMapSchema, updated_event_map))
 
       assert %Changeset{
                data: %TransactionEventMapSchema{},
@@ -113,7 +113,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionTransactionEventMapNoSa
       end)
 
       assert {:error, %Changeset{data: %TransactionEventMapSchema{}, errors: [occ_timeout: _]}} =
-               CreateTransactionTransactionEventMapNoSaveOnError.process(
+               CreateTransactionEventMapNoSaveOnError.process(
                  struct(
                    TransactionEventMapSchema,
                    create_transaction_event_map(ctx)

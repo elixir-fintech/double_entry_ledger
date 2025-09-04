@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError do
   @moduledoc """
   Processes `TransactionEventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system, without saving on error.
 
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMapNoSa
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
-    to: DoubleEntryLedger.EventWorker.UpdateTransactionTransactionEventMap,
+    to: DoubleEntryLedger.EventWorker.UpdateTransactionEventMap,
     as: :build_transaction
 
   @doc """
