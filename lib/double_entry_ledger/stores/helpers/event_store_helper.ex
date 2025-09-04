@@ -34,7 +34,6 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   This module is primarily used internally by EventStore and EventWorker modules to
   share common functionality and reduce code duplication.
   """
-  import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias Ecto.Changeset
   alias Ecto.Multi
@@ -159,26 +158,5 @@ defmodule DoubleEntryLedger.EventStoreHelper do
           {:ok, {:error, e}}
       end
     end)
-  end
-
-  @doc """
-  Builds a changeset to add an error to an event.
-
-  This function appends a new error to the event's error list.
-
-  ## Parameters
-    - `event`: The Event struct to update
-    - `error`: The error to add
-
-  ## Returns
-    - `Ecto.Changeset.t()`: The changeset for adding the error
-  """
-  @spec build_add_error(Event.t(), any()) :: Changeset.t()
-  def build_add_error(event, error) do
-    if is_nil(error) do
-      Changeset.change(event)
-    else
-      Changeset.change(event, errors: [build_error(error) | event.errors])
-    end
   end
 end
