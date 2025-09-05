@@ -48,7 +48,8 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
         normal_balance: "invalid"
       }
 
-      assert %Changeset{errors: [normal_balance: {"is invalid", _}]} = AccountData.changeset(%AccountData{}, attrs)
+      assert %Changeset{errors: [normal_balance: {"is invalid", _}]} =
+               AccountData.changeset(%AccountData{}, attrs)
     end
 
     test "changeset valid for valid account data" do

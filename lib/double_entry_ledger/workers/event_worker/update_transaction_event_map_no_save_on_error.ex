@@ -80,8 +80,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
 
         {:error, changeset}
 
-      {:error, :create_transaction_event_error, %Changeset{data: %TransactionEventMap{}} = changeset,
-       _steps_so_far} ->
+      {:error, :create_transaction_event_error,
+       %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Update event error",
           TransactionEventMap.log_trace(event_map, changeset.errors)
@@ -89,7 +89,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
 
         {:error, changeset}
 
-      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
+      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset,
+       _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Input event map error",
           TransactionEventMap.log_trace(event_map, changeset.errors)
@@ -167,5 +168,6 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
 
   defp cast_to_event_map(%TransactionEventMap{} = event_map), do: event_map
   # Only cast if it's a plain map
-  defp cast_to_event_map(event_map) when is_map(event_map), do: struct(TransactionEventMap, event_map)
+  defp cast_to_event_map(event_map) when is_map(event_map),
+    do: struct(TransactionEventMap, event_map)
 end

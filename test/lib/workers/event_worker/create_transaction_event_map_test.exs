@@ -53,9 +53,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
       event_map = create_transaction_event_map(ctx, :pending)
 
       updated_event_map =
-        update_in(event_map, [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)], fn _ ->
-          "USD"
-        end)
+        update_in(
+          event_map,
+          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)],
+          fn _ ->
+            "USD"
+          end
+        )
 
       # process same update_event again which should fail
       {:error, changeset} =

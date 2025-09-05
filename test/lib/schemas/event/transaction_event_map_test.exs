@@ -9,7 +9,8 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
 
   describe "Event.TransactionEventMap" do
     test "changeset not valid for empty data" do
-      assert %Changeset{valid?: false} = TransactionEventMap.changeset(%TransactionEventMap{}, %{})
+      assert %Changeset{valid?: false} =
+               TransactionEventMap.changeset(%TransactionEventMap{}, %{})
     end
 
     test "changeset not valid for missing action, instance_id, source, source_idempk and transaction_data" do
@@ -33,12 +34,15 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
         payload: %{}
       }
 
-      assert %Changeset{valid?: false} = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
+      assert %Changeset{valid?: false} =
+               TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
     end
 
     test "changeset valid for valid entry data" do
       attrs = event_map_attrs()
-      assert %Changeset{valid?: true} = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
+
+      assert %Changeset{valid?: true} =
+               TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
     end
 
     test "changeset invalid for update action without update_idempk" do

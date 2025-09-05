@@ -82,9 +82,13 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
       }
 
       updated_event_map =
-        update_in(event_map, [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)], fn _ ->
-          "USD"
-        end)
+        update_in(
+          event_map,
+          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)],
+          fn _ ->
+            "USD"
+          end
+        )
 
       # process same update_event again which should fail
       {:error, changeset} =
@@ -101,9 +105,13 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
       }
 
       updated_event_map =
-        update_in(event_map, [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)], fn _ ->
-          "XYZ"
-        end)
+        update_in(
+          event_map,
+          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)],
+          fn _ ->
+            "XYZ"
+          end
+        )
 
       {:error, changeset} =
         UpdateTransactionEventMapNoSaveOnError.process(updated_event_map)
@@ -122,9 +130,13 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
       }
 
       updated_event_map =
-        update_in(event_map, [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:account_id)], fn _ ->
-          Ecto.UUID.generate()
-        end)
+        update_in(
+          event_map,
+          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:account_id)],
+          fn _ ->
+            Ecto.UUID.generate()
+          end
+        )
 
       {:error, changeset} =
         UpdateTransactionEventMapNoSaveOnError.process(updated_event_map)
@@ -150,7 +162,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
     end
 
     test "update event is pending for event_map, when create event failed", ctx do
-      %{event: %{event_queue_item: eqm1} = pending_event} = new_create_transaction_event(ctx, :pending)
+      %{event: %{event_queue_item: eqm1} = pending_event} =
+        new_create_transaction_event(ctx, :pending)
 
       failed_event =
         pending_event

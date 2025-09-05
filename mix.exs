@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.MixProject do
         # flags: [:overspecs]
       ],
       docs: docs(),
-      consolidate_protocols: (if Mix.env() == :test, do: false, else: true)
+      consolidate_protocols: if(Mix.env() == :test, do: false, else: true)
     ]
   end
 

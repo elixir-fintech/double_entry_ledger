@@ -4,5 +4,4 @@ defmodule DoubleEntryLedger.Event.AccountEventMapTest do
   alias DoubleEntryLedger.Event.AccountEventMap
 
   doctest AccountEventMap
-
 end

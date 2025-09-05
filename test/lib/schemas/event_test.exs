@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.EventTest do
                  source: {"can't be blank", [validation: :required]},
                  source_idempk: {"can't be blank", [validation: :required]},
                  instance_id: {"can't be blank", [validation: :required]},
-                 payload: {"can't be blank", [validation: :required]},
+                 payload: {"can't be blank", [validation: :required]}
                ]
              } = Event.changeset(%Event{}, %{})
     end
@@ -73,7 +73,7 @@ defmodule DoubleEntryLedger.EventTest do
       }
 
       assert %Changeset{
-               valid?: true,
+               valid?: true
              } =
                Event.changeset(%Event{}, attrs)
     end

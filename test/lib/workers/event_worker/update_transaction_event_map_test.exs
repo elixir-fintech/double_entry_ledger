@@ -87,7 +87,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
     end
 
     test "update event is pending for event_map, when create event failed", ctx do
-      %{event: %{event_queue_item: eqm1} = pending_event} = new_create_transaction_event(ctx, :pending)
+      %{event: %{event_queue_item: eqm1} = pending_event} =
+        new_create_transaction_event(ctx, :pending)
 
       failed_event =
         pending_event

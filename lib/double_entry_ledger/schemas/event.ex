@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.Event do
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_many(:event_transaction_links, EventTransactionLink)
-    many_to_many(:transactions,Transaction, join_through: EventTransactionLink)
+    many_to_many(:transactions, Transaction, join_through: EventTransactionLink)
     has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
 
     timestamps(type: :utc_datetime_usec)
@@ -289,6 +289,7 @@ defmodule DoubleEntryLedger.Event do
 
   defp put_transaction_payload(changeset, payload, changeset_func) do
     trx_changeset = changeset_func.(%TransactionData{}, payload)
+
     if trx_changeset.valid? do
       changes = TransactionData.to_map(Ecto.Changeset.apply_changes(trx_changeset))
       put_change(changeset, :payload, changes)
@@ -303,7 +304,15 @@ defmodule DoubleEntryLedger.Event do
     attrs = Map.put_new(attrs, :event_queue_item, %{})
 
     event
-    |> cast(attrs, [:action, :source, :source_data, :source_idempk, :instance_id, :update_idempk, :payload])
+    |> cast(attrs, [
+      :action,
+      :source,
+      :source_data,
+      :source_idempk,
+      :instance_id,
+      :update_idempk,
+      :payload
+    ])
     |> validate_required([:action, :source, :source_idempk, :instance_id, :payload])
     |> validate_inclusion(:action, @actions)
     |> cast_assoc(:event_queue_item, with: &EventQueueItem.changeset/2, required: true)

@@ -136,7 +136,9 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
     end
 
     test "back to pending when create event is still pending", %{instance: inst} = ctx do
-      %{event: %{id: e_id, source: s, source_idempk: s_id}} = new_create_transaction_event(ctx, :pending)
+      %{event: %{id: e_id, source: s, source_idempk: s_id}} =
+        new_create_transaction_event(ctx, :pending)
+
       {:ok, event} = new_update_transaction_event(s, s_id, inst.id, :posted)
 
       {:ok, processing_event} = Scheduling.claim_event_for_processing(event.id, "manual")
@@ -151,7 +153,8 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
     end
 
     test "back to pending when create event failed", %{instance: inst} = ctx do
-      %{event: %{source: s, source_idempk: s_id} = pending_event} = new_create_transaction_event(ctx, :pending)
+      %{event: %{source: s, source_idempk: s_id} = pending_event} =
+        new_create_transaction_event(ctx, :pending)
 
       {:error, failed_create_event} =
         DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(
@@ -174,7 +177,8 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
     end
 
     test "dead_letter when create event in dead_letter", %{instance: inst} = ctx do
-      %{event: %{source: s, source_idempk: s_id} = pending_event} = new_create_transaction_event(ctx, :pending)
+      %{event: %{source: s, source_idempk: s_id} = pending_event} =
+        new_create_transaction_event(ctx, :pending)
 
       DoubleEntryLedger.EventQueue.Scheduling.build_mark_as_dead_letter(
         pending_event,

@@ -99,7 +99,8 @@ defmodule DoubleEntryLedger.EventStore do
     - `{:ok, event}`: If the event was successfully created
     - `{:error, changeset}`: If validation failed
   """
-  @spec create(TransactionEventMap.t() | AccountEventMap.t()) :: {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
+  @spec create(TransactionEventMap.t() | AccountEventMap.t()) ::
+          {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) do
     build_create(attrs)
     |> Repo.insert()

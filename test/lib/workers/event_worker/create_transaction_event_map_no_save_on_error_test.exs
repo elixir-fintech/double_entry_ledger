@@ -51,9 +51,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
       event_map = create_transaction_event_map(ctx, :pending)
 
       updated_event_map =
-        update_in(event_map, [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)], fn _ ->
-          "USD"
-        end)
+        update_in(
+          event_map,
+          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)],
+          fn _ ->
+            "USD"
+          end
+        )
 
       # process same update_event again which should fail
       {:error, changeset} =
@@ -66,9 +70,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
       event_map = create_transaction_event_map(ctx, :pending)
 
       updated_event_map =
-        update_in(event_map, [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)], fn _ ->
-          "XYZ"
-        end)
+        update_in(
+          event_map,
+          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)],
+          fn _ ->
+            "XYZ"
+          end
+        )
 
       {:error, changeset} =
         CreateTransactionEventMapNoSaveOnError.process(updated_event_map)
@@ -83,9 +91,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
       event_map = create_transaction_event_map(ctx, :pending)
 
       updated_event_map =
-        update_in(event_map, [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:account_id)], fn _ ->
-          Ecto.UUID.generate()
-        end)
+        update_in(
+          event_map,
+          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:account_id)],
+          fn _ ->
+            Ecto.UUID.generate()
+          end
+        )
 
       {:error, changeset} =
         CreateTransactionEventMapNoSaveOnError.process(updated_event_map)

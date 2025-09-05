@@ -58,7 +58,11 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
           String.t()
         ) ::
           EventWorker.success_tuple() | {:error, Changeset.t() | String.t()}
-  def default_event_map_response_handler(response, %TransactionEventMap{} = event_map, module_name) do
+  def default_event_map_response_handler(
+        response,
+        %TransactionEventMap{} = event_map,
+        module_name
+      ) do
     case response do
       {:ok, %{transaction: transaction, event_success: event}} ->
         Logger.info(
@@ -218,7 +222,8 @@ defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
 
     - `Ecto.Changeset.t()`: Event map changeset with propagated errors
   """
-  @spec transfer_errors_from_event_to_event_map(TransactionEventMap.t(), Changeset.t()) :: Changeset.t()
+  @spec transfer_errors_from_event_to_event_map(TransactionEventMap.t(), Changeset.t()) ::
+          Changeset.t()
   def transfer_errors_from_event_to_event_map(event_map, event_changeset) do
     build_event_map_changeset(event_map)
     |> add_event_errors(get_all_errors(event_changeset))

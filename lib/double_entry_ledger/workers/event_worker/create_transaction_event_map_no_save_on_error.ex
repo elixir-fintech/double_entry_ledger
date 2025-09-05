@@ -59,7 +59,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError d
 
         {:error, changeset}
 
-      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
+      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset,
+       _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Input event map error",
           TransactionEventMap.log_trace(event_map, changeset.errors)

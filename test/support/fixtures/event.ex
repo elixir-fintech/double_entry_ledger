@@ -20,7 +20,10 @@ defmodule DoubleEntryLedger.EventFixtures do
     end)
   end
 
-  def new_create_transaction_event(%{instance: inst, accounts: [a1, a2, _, _]} = ctx, trx_status \\ :posted) do
+  def new_create_transaction_event(
+        %{instance: inst, accounts: [a1, a2, _, _]} = ctx,
+        trx_status \\ :posted
+      ) do
     {:ok, event} =
       EventStore.create(
         transaction_event_attrs(
@@ -61,7 +64,10 @@ defmodule DoubleEntryLedger.EventFixtures do
     |> EventStore.create()
   end
 
-  def create_transaction_event_map(%{instance: %{id: id}, accounts: [a1, a2, _, _]}, trx_status \\ :pending) do
+  def create_transaction_event_map(
+        %{instance: %{id: id}, accounts: [a1, a2, _, _]},
+        trx_status \\ :pending
+      ) do
     %TransactionEventMap{
       action: :create_transaction,
       instance_id: id,
@@ -101,9 +107,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     }
   end
 
-  def create_account_event_map(
-    %{instance: %{id: id}}
-  ) do
+  def create_account_event_map(%{instance: %{id: id}}) do
     %{
       action: :create_account,
       instance_id: id,
