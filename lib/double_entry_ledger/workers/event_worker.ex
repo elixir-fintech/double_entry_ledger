@@ -124,6 +124,7 @@ defmodule DoubleEntryLedger.EventWorker do
   }
 
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
+
   alias DoubleEntryLedger.EventWorker.{
     CreateTransactionEvent,
     UpdateTransactionEvent,
@@ -133,6 +134,7 @@ defmodule DoubleEntryLedger.EventWorker do
     CreateTransactionEventMapNoSaveOnError,
     UpdateTransactionEventMapNoSaveOnError
   }
+
   import DoubleEntryLedger.EventQueue.Scheduling, only: [claim_event_for_processing: 2]
 
   @typedoc """
@@ -394,11 +396,15 @@ defmodule DoubleEntryLedger.EventWorker do
   """
   @spec process_new_event_no_save_on_error(TransactionEventMap.t()) ::
           success_tuple() | error_tuple()
-  def process_new_event_no_save_on_error(%TransactionEventMap{action: :create_transaction} = event_map) do
+  def process_new_event_no_save_on_error(
+        %TransactionEventMap{action: :create_transaction} = event_map
+      ) do
     CreateTransactionEventMapNoSaveOnError.process(event_map)
   end
 
-  def process_new_event_no_save_on_error(%TransactionEventMap{action: :update_transaction} = event_map) do
+  def process_new_event_no_save_on_error(
+        %TransactionEventMap{action: :update_transaction} = event_map
+      ) do
     UpdateTransactionEventMapNoSaveOnError.process(event_map)
   end
 
