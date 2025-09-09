@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapTest do
       assert {:error, changeset} = CreateAccountEventMap.process(event_map)
       assert %Ecto.Changeset{} = changeset
       assert changeset.valid? == false
-      assert Keyword.has_key?(changeset.errors, :name)
+      assert Keyword.has_key?(changeset.changes.payload.errors, :name)
     end
   end
 end

@@ -2,8 +2,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
   @moduledoc """
   Processes event maps for creating accounts.
   """
+  require Logger
+
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [build_mark_as_processed: 1]
+
+  import DoubleEntryLedger.Event.TransferErrors,
+    only: [transfer_errors_from_event_to_event_map: 2, transfer_errors_from_account_to_event_map: 2]
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Event.AccountEventMap
@@ -16,8 +21,21 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
       {:ok, %{create_account: account, event_success: event}} ->
         {:ok, account, event}
 
-      {:error, _step, changeset, _changes} ->
-        {:error, changeset}
+      {:error, :new_event, changeset, _changes} ->
+        {:error, transfer_errors_from_event_to_event_map(event_map, changeset)}
+
+      {:error, :create_account, changeset, _changes} ->
+        {:error, transfer_errors_from_account_to_event_map(event_map, changeset)}
+
+      {:error, step, error, _steps_so_far} ->
+        message = "AccountEventMap: Step :#{step} failed."
+
+        Logger.error(
+          message,
+          AccountEventMap.log_trace(event_map, error)
+        )
+
+        {:error, "#{message} #{inspect(error)}"}
     end
   end
 
@@ -30,4 +48,5 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
       build_mark_as_processed(event)
     end)
   end
+
 end

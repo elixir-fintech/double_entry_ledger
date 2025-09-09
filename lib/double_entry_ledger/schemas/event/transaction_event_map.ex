@@ -289,7 +289,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> changeset.valid?
       false
   """
-  @spec changeset(t() | map(), map()) :: Changeset.t()
+  @spec changeset(t() | map(), map()) :: Changeset.t(TransactionEventMap.t())
   def changeset(event_map, attrs) do
     case fetch_action(attrs) do
       :update_transaction ->

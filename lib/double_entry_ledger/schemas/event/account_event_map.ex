@@ -206,7 +206,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       iex> Keyword.has_key?(changeset.errors, :action)
       true
   """
-  @spec changeset(t() | map(), map()) :: Changeset.t()
+  @spec changeset(t() | map(), map()) :: Changeset.t(AccountEventMap.t())
   def changeset(event_map, attrs) do
     case fetch_action(attrs) do
       :create_account ->

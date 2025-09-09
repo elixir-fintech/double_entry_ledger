@@ -63,6 +63,10 @@ defmodule DoubleEntryLedger.Account do
   @credit_and_debit Types.credit_and_debit()
   @account_types Types.account_types()
 
+  def account_types do
+    @account_types
+  end
+
   @typedoc """
   Represents a financial account in the double-entry ledger system.
 

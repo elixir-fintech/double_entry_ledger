@@ -125,6 +125,16 @@ defmodule DoubleEntryLedger.EventStore do
   """
   @spec process_from_event_params(map()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
+  def process_from_event_params(%{"action" => "create_account"} = event_params) do
+    case AccountEventMap.create(event_params) do
+      {:ok, event_map} ->
+        EventWorker.process_new_event(event_map)
+
+      {:error, event_map_changeset} ->
+        {:error, event_map_changeset}
+    end
+  end
+
   def process_from_event_params(event_params) do
     case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
