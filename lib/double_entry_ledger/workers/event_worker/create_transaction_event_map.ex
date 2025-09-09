@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMap do
 
   alias Ecto.Multi
 
-  import DoubleEntryLedger.EventWorker.ResponseHandler,
+  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   import DoubleEntryLedger.EventQueue.Scheduling
@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMap do
   @doc """
   Handles errors that occur when converting event map data to a transaction map.
 
-  Delegates to `DoubleEntryLedger.EventWorker.ResponseHandler.handle_transaction_map_error/3`.
+  Delegates to `DoubleEntryLedger.EventWorker.TransactionEventResponseHandler.handle_transaction_map_error/3`.
 
   ## Parameters
 
@@ -62,13 +62,13 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMap do
   """
   defdelegate handle_transaction_map_error(event_map, error, repo),
     as: :handle_transaction_map_error,
-    to: DoubleEntryLedger.EventWorker.ResponseHandler
+    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler
 
   @impl true
   @doc """
   Handles the case when OCC retries are exhausted for an event map.
 
-  Delegates to `DoubleEntryLedger.EventWorker.ResponseHandler.handle_occ_final_timeout/2`.
+  Delegates to `DoubleEntryLedger.EventWorker.TransactionEventResponseHandler.handle_occ_final_timeout/2`.
 
   ## Parameters
 
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMap do
   """
   defdelegate handle_occ_final_timeout(event_map, repo),
     as: :handle_occ_final_timeout,
-    to: DoubleEntryLedger.EventWorker.ResponseHandler
+    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler
 
   @doc """
   Processes an `TransactionEventMap` by creating both an event record and its associated transaction atomically.

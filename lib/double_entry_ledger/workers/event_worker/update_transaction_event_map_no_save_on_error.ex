@@ -25,10 +25,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
 
   use DoubleEntryLedger.Occ.Processor
   import DoubleEntryLedger.Occ.Helper
-  import DoubleEntryLedger.EventWorker.ResponseHandler
+  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler
   import DoubleEntryLedger.EventQueue.Scheduling
 
-  import DoubleEntryLedger.EventWorker.ResponseHandler,
+  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
   # but we need to implement it to satisfy the behaviour
   @impl true
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.EventWorker.ResponseHandler,
+    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
     as: :handle_occ_final_timeout
 
   @impl true

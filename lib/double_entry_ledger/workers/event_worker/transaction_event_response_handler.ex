@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.ResponseHandler do
+defmodule DoubleEntryLedger.EventWorker.TransactionEventResponseHandler do
   @moduledoc """
   Specialized error handling for the event processing pipeline in the double-entry ledger system.
 

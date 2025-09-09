@@ -23,10 +23,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
 
   use DoubleEntryLedger.Occ.Processor
   import DoubleEntryLedger.Occ.Helper
-  import DoubleEntryLedger.EventWorker.ResponseHandler
+  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler
   import DoubleEntryLedger.EventQueue.Scheduling
 
-  import DoubleEntryLedger.EventWorker.ResponseHandler,
+  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{
@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
   @doc """
   Handles errors that occur when converting event map data to a transaction map.
 
-  Delegates to `DoubleEntryLedger.EventWorker.ResponseHandler.handle_transaction_map_error/3`.
+  Delegates to `DoubleEntryLedger.EventWorker.TransactionEventResponseHandler.handle_transaction_map_error/3`.
 
   ## Parameters
 
@@ -59,14 +59,14 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(event_map, error, repo),
-    to: DoubleEntryLedger.EventWorker.ResponseHandler,
+    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
   @doc """
   Handles the case when OCC retries are exhausted for an event map.
 
-  Delegates to `DoubleEntryLedger.EventWorker.ResponseHandler.handle_occ_final_timeout/2`.
+  Delegates to `DoubleEntryLedger.EventWorker.TransactionEventResponseHandler.handle_occ_final_timeout/2`.
 
   ## Parameters
 
@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.EventWorker.ResponseHandler,
+    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
     as: :handle_occ_final_timeout
 
   @doc """
