@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.EventStore do
   def get_by_id(id) do
     Event
     |> where(id: ^id)
-    |> preload([:event_queue_item, :transactions])
+    |> preload([:event_queue_item, :transactions, :account])
     |> Repo.one()
   end
 
@@ -183,7 +183,7 @@ defmodule DoubleEntryLedger.EventStore do
       offset: ^offset,
       select: e
     )
-    |> preload([:event_queue_item, :transactions])
+    |> preload([:event_queue_item, :transactions, :account])
     |> Repo.all()
   end
 
@@ -204,7 +204,28 @@ defmodule DoubleEntryLedger.EventStore do
       select: e,
       order_by: [desc: e.inserted_at]
     )
-    |> preload([:event_queue_item, :transactions])
+    |> preload([:event_queue_item, :transactions, :account])
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists all events associated with a specific account.
+
+  ## Parameters
+    - `account_id`: ID of the account to list events for
+
+  ## Returns
+    - List of Event structs, ordered by insertion time descending
+  """
+  @spec list_all_for_account(Ecto.UUID.t()) :: list(Event.t())
+  def list_all_for_account(account_id) do
+    from(e in Event,
+      join: evt in assoc(e, :event_account_link),
+      where: evt.account_id == ^account_id,
+      select: e,
+      order_by: [desc: e.inserted_at]
+    )
+    |> preload([:event_queue_item, :transactions, :account])
     |> Repo.all()
   end
 

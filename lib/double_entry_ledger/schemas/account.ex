@@ -54,8 +54,10 @@ defmodule DoubleEntryLedger.Account do
     BalanceHistoryEntry,
     Currency,
     Entry,
+    Event,
     Instance,
-    Types
+    Types,
+    EventAccountLink
   }
 
   alias __MODULE__, as: Account
@@ -128,6 +130,8 @@ defmodule DoubleEntryLedger.Account do
 
     has_many(:entries, Entry, foreign_key: :account_id)
     has_many(:balance_history_entries, BalanceHistoryEntry, foreign_key: :account_id)
+    has_many(:event_account_links, EventAccountLink, foreign_key: :account_id)
+    many_to_many(:events, Event, join_through: EventAccountLink)
 
     field(:lock_version, :integer, default: 1)
     timestamps(type: :utc_datetime_usec)

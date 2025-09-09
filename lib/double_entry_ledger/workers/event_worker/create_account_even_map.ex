@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
   require Logger
 
   import DoubleEntryLedger.EventQueue.Scheduling,
-    only: [build_mark_as_processed: 1]
+    only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
 
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
@@ -49,6 +49,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
     |> Multi.insert(:create_account, AccountStoreHelper.build_create(payload, instance_id))
     |> Multi.update(:event_success, fn %{new_event: event} ->
       build_mark_as_processed(event)
+    end)
+    |> Multi.insert(:create_account_link, fn %{event_success: event, create_account: account} ->
+      build_create_account_event_account_link(event, account)
     end)
   end
 end

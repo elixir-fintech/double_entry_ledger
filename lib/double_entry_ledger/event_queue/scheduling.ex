@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
   alias DoubleEntryLedger.EventWorker.AddUpdateEventError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
-  alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, Transaction, EventStore}
+  alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, EventAccountLink, Account, Transaction, EventStore}
   alias DoubleEntryLedger.EventQueueItem
   alias Ecto.Changeset
 
@@ -123,6 +123,15 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     |> EventTransactionLink.changeset(%{
       event_id: event_id,
       transaction_id: transaction_id
+    })
+  end
+
+  @spec build_create_account_event_account_link(Event.t(), Account.t()) :: Changeset.t()
+  def build_create_account_event_account_link(%Event{id: event_id}, %Account{id: account_id}) do
+    %EventAccountLink{}
+    |> EventAccountLink.changeset(%{
+      event_id: event_id,
+      account_id: account_id
     })
   end
 

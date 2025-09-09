@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Event do
 
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Transaction, Instance, EventTransactionLink, EventQueueItem}
+  alias DoubleEntryLedger.{Transaction, Instance, Account, EventTransactionLink, EventAccountLink, EventQueueItem}
   alias DoubleEntryLedger.Event.TransactionData
 
   @actions [:create_transaction, :update_transaction, :create_account]
@@ -80,6 +80,8 @@ defmodule DoubleEntryLedger.Event do
           instance_id: Ecto.UUID.t() | nil,
           event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
           transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
+          event_account_link: EventAccountLink.t() | Ecto.Association.NotLoaded.t(),
+          account: Account.t() | Ecto.Association.NotLoaded.t(),
           event_queue_item: EventQueueItem.t() | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
@@ -97,6 +99,8 @@ defmodule DoubleEntryLedger.Event do
     has_many(:event_transaction_links, EventTransactionLink)
     many_to_many(:transactions, Transaction, join_through: EventTransactionLink)
     has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
+    has_one(:event_account_link, DoubleEntryLedger.EventAccountLink)
+    has_one(:account, through: [:event_account_link, :account])
 
     timestamps(type: :utc_datetime_usec)
   end
