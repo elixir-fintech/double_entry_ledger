@@ -7,7 +7,14 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
           | DoubleEntryLedger.Event.TransactionEventMap.t()
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.{AccountEventMap, TransactionEventMap, AccountData, TransactionData, EntryData}
+
+  alias DoubleEntryLedger.Event.{
+    AccountEventMap,
+    TransactionEventMap,
+    AccountData,
+    TransactionData,
+    EntryData
+  }
 
   @spec transfer_errors_from_account_to_event_map(AccountEventMap.t(), Ecto.Changeset.t()) ::
           Ecto.Changeset.t(AccountEventMap.t())

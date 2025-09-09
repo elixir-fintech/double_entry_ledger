@@ -37,7 +37,11 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventResponseHandler do
     only: [build_schedule_retry_with_reason: 3, schedule_retry_with_reason: 3]
 
   import DoubleEntryLedger.Event.TransferErrors,
-    only: [transfer_errors_from_event_to_event_map: 2, transfer_errors_from_transaction_to_event_map: 2, get_all_errors: 1]
+    only: [
+      transfer_errors_from_event_to_event_map: 2,
+      transfer_errors_from_transaction_to_event_map: 2,
+      get_all_errors: 1
+    ]
 
   alias Ecto.{Changeset, Multi}
 

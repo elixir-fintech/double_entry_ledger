@@ -8,7 +8,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
     only: [build_mark_as_processed: 1]
 
   import DoubleEntryLedger.Event.TransferErrors,
-    only: [transfer_errors_from_event_to_event_map: 2, transfer_errors_from_account_to_event_map: 2]
+    only: [
+      transfer_errors_from_event_to_event_map: 2,
+      transfer_errors_from_account_to_event_map: 2
+    ]
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Event.AccountEventMap
@@ -48,5 +51,4 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
       build_mark_as_processed(event)
     end)
   end
-
 end
