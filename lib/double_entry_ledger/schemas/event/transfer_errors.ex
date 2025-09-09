@@ -14,16 +14,6 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   - Extracting and formatting error messages from changesets
   """
 
-  @typedoc """
-  Union type representing either an AccountEventMap or TransactionEventMap.
-
-  These are the two main event map types that can contain validation errors
-  that need to be transferred and properly attributed.
-  """
-  @type event_map ::
-          DoubleEntryLedger.Event.AccountEventMap.t()
-          | DoubleEntryLedger.Event.TransactionEventMap.t()
-
   alias Ecto.Changeset
 
   alias DoubleEntryLedger.Event.{
@@ -33,6 +23,23 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     TransactionData,
     EntryData
   }
+
+  alias DoubleEntryLedger.{Account, Event, Transaction}
+
+  @typedoc """
+  Union type representing either an AccountEventMap or TransactionEventMap.
+
+  These are the two main event map types that can contain validation errors
+  that need to be transferred and properly attributed.
+  """
+  @type event_map :: AccountEventMap.t() | TransactionEventMap.t()
+
+  @typedoc """
+  Union type representing either AccountData or TransactionData.
+  """
+  @type payload :: AccountData.t() | TransactionData.t()
+
+  @type event_related :: event_map | payload
 
   @doc """
   Transfers validation errors from an account changeset to an event map changeset.
@@ -50,7 +57,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
 
     - `Ecto.Changeset.t()`: Event map changeset with propagated account errors
   """
-  @spec transfer_errors_from_account_to_event_map(AccountEventMap.t(), Ecto.Changeset.t()) ::
+  @spec transfer_errors_from_account_to_event_map(AccountEventMap.t(), Ecto.Changeset.t(Account.t())) ::
           Ecto.Changeset.t(AccountEventMap.t())
   def transfer_errors_from_account_to_event_map(event_map, account_changeset) do
     build_event_map_changeset(event_map)
@@ -77,8 +84,9 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
 
     - `Ecto.Changeset.t()`: Event map changeset with propagated errors
   """
-  @spec transfer_errors_from_event_to_event_map(event_map, Changeset.t()) ::
-          Changeset.t()
+  @spec transfer_errors_from_event_to_event_map(em, Changeset.t(Event.t())) ::
+          Changeset.t(em)
+        when em: event_map
   def transfer_errors_from_event_to_event_map(event_map, event_changeset) do
     build_event_map_changeset(event_map)
     |> transfer_errors_between_changesets(event_changeset, [:update_idempk, :source_idempk])
@@ -101,8 +109,8 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
 
     - `Ecto.Changeset.t()`: Event map changeset with propagated errors
   """
-  @spec transfer_errors_from_transaction_to_event_map(TransactionEventMap.t(), Ecto.Changeset.t()) ::
-          Ecto.Changeset.t()
+  @spec transfer_errors_from_transaction_to_event_map(TransactionEventMap.t(), Ecto.Changeset.t(Transaction.t())) ::
+          Ecto.Changeset.t(TransactionEventMap.t())
   def transfer_errors_from_transaction_to_event_map(event_map, trx_changeset) do
     build_event_map_changeset(event_map)
     |> Changeset.put_embed(
@@ -143,6 +151,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     end)
   end
 
+  @doc false
   @spec add_errors_to_changeset(Changeset.t(), atom(), map()) :: Changeset.t()
   defp add_errors_to_changeset(changeset, field, errors) do
     if Map.has_key?(errors, field) do
@@ -153,12 +162,14 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     end
   end
 
+  @doc false
   @spec transfer_errors_between_changesets(
-          Changeset.t(),
+          Changeset.t(er),
           Changeset.t(),
           list(atom())
         ) ::
-          Changeset.t()
+          Changeset.t(er)
+        when er: event_related
   defp transfer_errors_between_changesets(changeset, entity_changeset, keys) do
     errors = get_all_errors(entity_changeset)
 
@@ -166,18 +177,24 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     |> Enum.reduce(changeset, &add_errors_to_changeset(&2, &1, errors))
   end
 
-  @spec build_event_map_changeset(event_map) :: Changeset.t()
+  @doc false
+  @spec build_event_map_changeset(em) :: Changeset.t(em) when em: event_map
   defp build_event_map_changeset(%AccountEventMap{} = event_map) do
     %AccountEventMap{}
     |> AccountEventMap.changeset(AccountEventMap.to_map(event_map))
   end
 
+  @doc false
   defp build_event_map_changeset(%TransactionEventMap{} = event_map) do
     %TransactionEventMap{}
     |> TransactionEventMap.changeset(TransactionEventMap.to_map(event_map))
   end
 
-  @spec build_payload_changeset(event_map, Changeset.t()) :: Changeset.t()
+  @doc false
+  @spec build_payload_changeset(AccountEventMap.t(), Changeset.t()) ::
+          Changeset.t(AccountData.t())
+  @spec build_payload_changeset(TransactionEventMap.t(), Changeset.t()) ::
+          Changeset.t(TransactionData.t())
   defp build_payload_changeset(%{payload: %AccountData{} = payload}, account_changeset) do
     %AccountData{}
     |> AccountData.changeset(AccountData.to_map(payload))
@@ -185,6 +202,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     |> Map.put(:action, :insert)
   end
 
+  @doc false
   defp build_payload_changeset(%{payload: %TransactionData{} = payload}, transaction_changeset) do
     %TransactionData{}
     |> TransactionData.changeset(TransactionData.to_map(payload))
@@ -197,14 +215,16 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   end
 
   @doc false
-  @spec add_entry_data_errors(Changeset.t(), map()) :: Changeset.t()
+  @spec add_entry_data_errors(Changeset.t(EntryData.t()), map()) :: Changeset.t(EntryData.t())
   defp add_entry_data_errors(changeset, entry_errors) do
     [:currency, :amount, :account_id]
     |> Enum.reduce(changeset, &add_errors_to_changeset(&2, &1, entry_errors))
   end
 
   @doc false
-  @spec get_entry_changesets_with_errors(TransactionData.t(), map()) :: [Changeset.t()]
+  @spec get_entry_changesets_with_errors(TransactionData.t(), map()) :: [
+          Changeset.t(EntryData.t())
+        ]
   defp get_entry_changesets_with_errors(%{entries: entries}, trx_changeset) do
     entry_errors = get_entry_errors(trx_changeset)
 
@@ -214,7 +234,8 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   end
 
   @doc false
-  @spec build_entry_data_changeset({EntryData.t(), integer()}, list()) :: Changeset.t()
+  @spec build_entry_data_changeset({EntryData.t(), integer()}, list()) ::
+          Changeset.t(EntryData.t())
   defp build_entry_data_changeset({entry_data, index}, entry_errors) do
     %EntryData{}
     |> EntryData.changeset(EntryData.to_map(entry_data))
@@ -223,7 +244,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   end
 
   @doc false
-  @spec get_entry_errors(Changeset.t()) :: [map()]
+  @spec get_entry_errors(Changeset.t(TransactionEventMap.t())) :: [map()]
   defp get_entry_errors(trx_changeset) do
     get_all_errors(trx_changeset)
     |> Map.get(:entries, [])
