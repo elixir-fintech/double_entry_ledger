@@ -115,6 +115,7 @@ defmodule DoubleEntryLedger.EventWorker do
   - Processing is idempotent based on source identifiers
   - Retry logic and error tracking handled through EventQueueItem state management
   """
+  alias DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError
   alias Ecto.Changeset
 
   alias DoubleEntryLedger.{
@@ -128,9 +129,9 @@ defmodule DoubleEntryLedger.EventWorker do
   alias DoubleEntryLedger.EventWorker.{
     CreateTransactionEvent,
     UpdateTransactionEvent,
-    CreateAccountEventMap,
     CreateTransactionEventMap,
     UpdateTransactionEventMap,
+    CreateAccountEventMapNoSaveOnError,
     CreateTransactionEventMapNoSaveOnError,
     UpdateTransactionEventMapNoSaveOnError
   }
@@ -267,26 +268,6 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> event.event_queue_item.status
       :processed
 
-      # Create a new account
-      iex> alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{name: "instance 1"})
-      iex> event_map = %AccountEventMap{
-      ...>   action: :create_account,
-      ...>   instance_id: instance.id,
-      ...>   source: "admin_panel",
-      ...>   source_idempk: "acc_create_456",
-      ...>   payload: %AccountData{
-      ...>     name: "Petty Cash",
-      ...>     type: :asset,
-      ...>     currency: "USD"
-      ...>   }
-      ...> }
-      iex> {:ok, account, event} = EventWorker.process_new_event(event_map)
-      iex> account.name
-      "Petty Cash"
-      iex> event.event_queue_item.status
-      :processed
-
       # Unsupported action
       iex> invalid_map = %TransactionEventMap{action: :delete_transaction}
       iex> EventWorker.process_new_event(invalid_map)
@@ -306,7 +287,7 @@ defmodule DoubleEntryLedger.EventWorker do
       # System error
       {:error, "Database connection timeout"}
   """
-  @spec process_new_event(TransactionEventMap.t() | AccountEventMap.t()) ::
+  @spec process_new_event(TransactionEventMap.t()) ::
           success_tuple() | error_tuple()
   def process_new_event(%TransactionEventMap{action: :create_transaction} = event_map) do
     CreateTransactionEventMap.process(event_map)
@@ -314,10 +295,6 @@ defmodule DoubleEntryLedger.EventWorker do
 
   def process_new_event(%TransactionEventMap{action: :update_transaction} = event_map) do
     UpdateTransactionEventMap.process(event_map)
-  end
-
-  def process_new_event(%AccountEventMap{action: :create_account} = event_map) do
-    CreateAccountEventMap.process(event_map)
   end
 
   def process_new_event(_event_map), do: {:error, :action_not_supported}
@@ -377,6 +354,26 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> event.event_queue_item.status
       :processed
 
+      # Create a new account
+      iex> alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
+      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{name: "instance 1"})
+      iex> event_map = %AccountEventMap{
+      ...>   action: :create_account,
+      ...>   instance_id: instance.id,
+      ...>   source: "admin_panel",
+      ...>   source_idempk: "acc_create_456",
+      ...>   payload: %AccountData{
+      ...>     name: "Petty Cash",
+      ...>     type: :asset,
+      ...>     currency: "USD"
+      ...>   }
+      ...> }
+      iex> {:ok, account, event} = EventWorker.process_new_event_no_save_on_error(event_map)
+      iex> account.name
+      "Petty Cash"
+      iex> event.event_queue_item.status
+      :processed
+
       iex> # Unsupported action
       iex> unsupported = %TransactionEventMap{action: :invalid_action}
       iex> EventWorker.process_new_event_no_save_on_error(unsupported)
@@ -394,8 +391,8 @@ defmodule DoubleEntryLedger.EventWorker do
           {:error, format_validation_errors(changeset)}
       end
   """
-  @spec process_new_event_no_save_on_error(TransactionEventMap.t()) ::
-          success_tuple() | error_tuple()
+  @spec process_new_event_no_save_on_error(em) ::
+          success_tuple() | {:error, Changeset.t(em) | String.t() } when em: TransactionEventMap.t() | AccountEventMap.t()
   def process_new_event_no_save_on_error(
         %TransactionEventMap{action: :create_transaction} = event_map
       ) do
@@ -406,6 +403,10 @@ defmodule DoubleEntryLedger.EventWorker do
         %TransactionEventMap{action: :update_transaction} = event_map
       ) do
     UpdateTransactionEventMapNoSaveOnError.process(event_map)
+  end
+
+  def process_new_event_no_save_on_error(%AccountEventMap{action: :create_account} = event_map) do
+    CreateAccountEventMapNoSaveOnError.process(event_map)
   end
 
   def process_new_event_no_save_on_error(_event_map), do: {:error, :action_not_supported}

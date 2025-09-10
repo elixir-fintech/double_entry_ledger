@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
     - `{:error, reason}` for other errors, with a string describing the error and the failing step.
   """
   @spec process(TransactionEventMap.t(), Ecto.Repo.t() | nil) ::
-          EventWorker.success_tuple() | EventWorker.error_tuple()
+          EventWorker.success_tuple() | {:error, Changeset.t(TransactionEventMap.t()) | String.t()}
   def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(event_map, repo) do
       {:error, :occ_timeout, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->

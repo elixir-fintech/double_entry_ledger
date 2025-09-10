@@ -1,9 +1,9 @@
-defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapTest do
+defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnErrorTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
-  alias DoubleEntryLedger.EventWorker.CreateAccountEventMap
+  alias DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError
 
   import DoubleEntryLedger.InstanceFixtures
 
@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapTest do
         }
       }
 
-      {:ok, account, event} = CreateAccountEventMap.process(event_map)
+      {:ok, account, event} = CreateAccountEventMapNoSaveOnError.process(event_map)
       assert account.currency == :USD
       assert account.name == "Test Account"
       assert account.type == :asset
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapTest do
         }
       }
 
-      assert {:error, changeset} = CreateAccountEventMap.process(event_map)
+      assert {:error, changeset} = CreateAccountEventMapNoSaveOnError.process(event_map)
       assert %Ecto.Changeset{} = changeset
       assert changeset.valid? == false
       assert Keyword.has_key?(changeset.changes.payload.errors, :name)

@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventResponseHandler do
           TransactionEventMap.t(),
           String.t()
         ) ::
-          EventWorker.success_tuple() | {:error, Changeset.t() | String.t()}
+          EventWorker.success_tuple() | {:error, Changeset.t(TransactionEventMap.t()) | String.t()}
   def default_event_map_response_handler(
         response,
         %TransactionEventMap{} = event_map,

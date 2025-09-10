@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
+defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
   @moduledoc """
   Processes event maps for creating accounts.
   """
@@ -13,12 +13,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMap do
       transfer_errors_from_account_to_event_map: 2
     ]
 
-  alias Ecto.Multi
+  alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.{Account, Event, EventStoreHelper, AccountStoreHelper, Repo}
 
   @spec process(AccountEventMap.t()) ::
-          {:ok, Account.t(), Event.t()} | {:error, term()}
+          {:ok, Account.t(), Event.t()} | {:error, Changeset.t(AccountEventMap.t()) | String.t()}
   def process(%AccountEventMap{action: :create_account} = event_map) do
     case build_account(event_map) |> Repo.transaction() do
       {:ok, %{create_account: account, event_success: event}} ->
