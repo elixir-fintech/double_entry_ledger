@@ -3,33 +3,31 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventResponseHandler do
   Specialized error handling for the event processing pipeline in the double-entry ledger system.
 
   This module provides utilities for processing, transforming, and propagating errors that occur
-  during event processing. It handles complex error mapping between different data structures
+  during event processing. It handles error mapping between different data structures
   (transactions, events, event maps) while maintaining detailed error context.
 
-  ## Key Responsibilities
+  Key responsibilities:
+  - Transfer validation errors from event/transaction changesets to event map changesets
+  - Maintain error context and traceability for audit and troubleshooting
+  - Build structured error responses for client consumption and retry logic
 
-    * Transferring validation errors between different system layers (transaction, event, event map)
-    * Maintaining error context and traceability for audit and troubleshooting
-    * Handling dependency errors between related events (e.g., update events depending on create events)
-    * Building properly structured error changesets for client consumption and retry logic
+  Examples
 
-  ## Examples
+      # Map event validation errors to an event map changeset
+      iex> default_event_map_response_handler(
+      ...>   {:error, :new_event, event_changeset, %{}},
+      ...>   event_map,
+      ...>   "MyWorker"
+      ...> )
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}}}
 
-      # Handling a transaction map conversion error
-      iex> ErrorHandler.handle_transaction_map_error(event, "invalid data", Repo)
-      #Ecto.Multi<...>
-
-      # Mapping transaction validation errors to an event map changeset
-      iex> ErrorHandler.transfer_errors_from_trx_to_event_map(event_map, trx_changeset)
-      #Ecto.Changeset<...>
-
-      # Mapping event validation errors to an event map changeset
-      iex> ErrorHandler.transfer_errors_from_event_to_event_map(event_map, event_changeset)
-      #Ecto.Changeset<...>
-
-  The error handler ensures that all validation failures, processing errors, and
-  dependency issues are properly captured for troubleshooting, auditing, and potential
-  retry operations.
+      # Map transaction validation errors to an event map changeset
+      iex> default_event_map_response_handler(
+      ...>   {:error, :transaction, trx_changeset, %{}},
+      ...>   event_map,
+      ...>   "MyWorker"
+      ...> )
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}}}
   """
   require Logger
 
@@ -38,9 +36,9 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventResponseHandler do
 
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
-      transfer_errors_from_event_to_event_map: 2,
-      transfer_errors_from_transaction_to_event_map: 2,
-      get_all_errors: 1
+      from_event_to_event_map: 2,
+      from_transaction_to_event_map_payload: 2,
+      get_all_errors_with_opts: 1
     ]
 
   alias Ecto.{Changeset, Multi}
@@ -55,12 +53,22 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventResponseHandler do
 
   alias DoubleEntryLedger.Occ.Occable
 
+  @doc """
+  Default response handler for functions that operate on a TransactionEventMap.
+
+  Returns:
+  - `{:ok, transaction, event}` on success
+  - `{:error, changeset}` when either the event or transaction changeset fails,
+    with errors mapped onto an event map changeset
+  - `{:error, message}` for other failures
+  """
   @spec default_event_map_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
           TransactionEventMap.t(),
           String.t()
         ) ::
-          EventWorker.success_tuple() | {:error, Changeset.t(TransactionEventMap.t()) | String.t()}
+          EventWorker.success_tuple()
+          | {:error, Changeset.t(TransactionEventMap.t()) | String.t()}
   def default_event_map_response_handler(
         response,
         %TransactionEventMap{} = event_map,
@@ -78,18 +86,18 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventResponseHandler do
       {:error, :new_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
         Logger.warning(
           "#{module_name}: Event changeset failed",
-          TransactionEventMap.log_trace(event_map, get_all_errors(event_changeset))
+          TransactionEventMap.log_trace(event_map, get_all_errors_with_opts(event_changeset))
         )
 
-        {:error, transfer_errors_from_event_to_event_map(event_map, event_changeset)}
+        {:error, from_event_to_event_map(event_map, event_changeset)}
 
       {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
         Logger.warning(
           "#{module_name}: Transaction changeset failed",
-          TransactionEventMap.log_trace(event_map, get_all_errors(trx_changeset))
+          TransactionEventMap.log_trace(event_map, get_all_errors_with_opts(trx_changeset))
         )
 
-        {:error, transfer_errors_from_transaction_to_event_map(event_map, trx_changeset)}
+        {:error, from_transaction_to_event_map_payload(event_map, trx_changeset)}
 
       {:error, step, error, _steps_so_far} ->
         message = "#{module_name}: Step :#{step} failed."
@@ -103,6 +111,14 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventResponseHandler do
     end
   end
 
+  @doc """
+  Default response handler when starting from a stored Event.
+
+  Returns:
+  - `{:ok, transaction, event}` on success
+  - `{:error, event}` when the event pipeline returns a structured failure
+  - schedules a retry and returns `{:error, message}` for other failures
+  """
   @spec default_event_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
           Event.t(),

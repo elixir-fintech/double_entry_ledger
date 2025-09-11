@@ -195,6 +195,8 @@ defmodule DoubleEntryLedger.Event.TransactionData do
     }
   end
 
+  def to_map(_), do: %{}
+
   defp validate_entries_count(changeset) do
     entries = get_field(changeset, :entries, [])
 

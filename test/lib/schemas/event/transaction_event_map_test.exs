@@ -14,15 +14,16 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
     end
 
     test "changeset not valid for missing action, instance_id, source, source_idempk and transaction_data" do
-      assert %Changeset{
-               errors: [
-                 payload: {"can't be blank", [validation: :required]},
-                 action: {"can't be blank", [validation: :required]},
-                 instance_id: {"can't be blank", [validation: :required]},
-                 source: {"can't be blank", [validation: :required]},
-                 source_idempk: {"can't be blank", [validation: :required]}
-               ]
-             } = TransactionEventMap.changeset(%TransactionEventMap{}, %{})
+      %{errors: errors} = TransactionEventMap.changeset(%TransactionEventMap{}, %{})
+
+      assert Keyword.equal?(errors,
+               payload: {"can't be blank", [validation: :required]},
+               action: {"can't be blank", [validation: :required]},
+               action: {"invalid in this context", [value: ""]},
+               instance_id: {"can't be blank", [validation: :required]},
+               source: {"can't be blank", [validation: :required]},
+               source_idempk: {"can't be blank", [validation: :required]}
+             )
     end
 
     test "changeset invalid for empty transaction_data struct" do

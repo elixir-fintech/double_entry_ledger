@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         }
       })
   """
-  import Ecto.Changeset, only: [cast_embed: 3, apply_action: 2]
+  import Ecto.Changeset, only: [cast_embed: 3, apply_action: 2, add_error: 4]
 
   alias DoubleEntryLedger.Event.{EventMap, TransactionData}
   alias Ecto.Changeset
@@ -296,9 +296,14 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         update_changeset(event_map, attrs)
         |> cast_embed(:payload, with: &TransactionData.update_event_changeset/2, required: true)
 
-      _ ->
+      :create_transaction ->
         base_changeset(event_map, attrs)
         |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
+
+      val ->
+        base_changeset(event_map, attrs)
+        |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
+        |> add_error(:action, "invalid in this context", value: "#{val}")
     end
   end
 

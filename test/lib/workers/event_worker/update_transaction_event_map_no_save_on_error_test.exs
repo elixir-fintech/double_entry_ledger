@@ -68,7 +68,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
               %Changeset{
                 data: %TransactionEventMapSchema{},
                 errors: [
-                  create_transaction_event_error: {"create_transaction_event_not_found", _}
+                  create_transaction_event_error: {"create_transaction_event_not_found", _},
+                  action: {"invalid in this context", [value: ""]}
                 ]
               }} =
                UpdateTransactionEventMapNoSaveOnError.process(update_transaction_event_map)
@@ -118,7 +119,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
 
       assert %Changeset{
                data: %TransactionEventMapSchema{},
-               errors: [input_event_map: {"invalid_entry_data", []}]
+               errors: [
+                 input_event_map: {"invalid_entry_data", []},
+                 action: {"invalid in this context", [value: ""]}
+               ]
              } = changeset
     end
 
@@ -143,7 +147,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
 
       assert %Changeset{
                data: %TransactionEventMapSchema{},
-               errors: [input_event_map: {"some_accounts_not_found", []}]
+               errors: [
+                 input_event_map: {"some_accounts_not_found", []},
+                 action: {"invalid in this context", [value: ""]}
+               ]
              } = changeset
     end
 
@@ -155,7 +162,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
               %Changeset{
                 data: %TransactionEventMapSchema{},
                 errors: [
-                  create_transaction_event_error: {"create_transaction_event_not_processed", _}
+                  create_transaction_event_error: {"create_transaction_event_not_processed", _},
+                  action: {"invalid in this context", [value: ""]}
                 ]
               }} =
                UpdateTransactionEventMapNoSaveOnError.process(update_event)
@@ -177,7 +185,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
               %Changeset{
                 data: %TransactionEventMapSchema{},
                 errors: [
-                  create_transaction_event_error: {"create_transaction_event_not_processed", _}
+                  create_transaction_event_error: {"create_transaction_event_not_processed", _},
+                  action: {"invalid in this context", [value: ""]}
                 ]
               }} =
                UpdateTransactionEventMapNoSaveOnError.process(update_event)
@@ -198,7 +207,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
               %Changeset{
                 data: %TransactionEventMapSchema{},
                 errors: [
-                  create_transaction_event_error: {"create_transaction_event_in_dead_letter", _}
+                  create_transaction_event_error: {"create_transaction_event_in_dead_letter", _},
+                  action: {"invalid in this context", [value: ""]}
                 ]
               }} =
                UpdateTransactionEventMapNoSaveOnError.process(update_event)
@@ -226,7 +236,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Changeset{data: %TransactionEventMapSchema{}, errors: [occ_timeout: _]}} =
+      assert {:error,
+              %Changeset{data: %TransactionEventMapSchema{}, errors: [occ_timeout: _, action: _]}} =
                UpdateTransactionEventMapNoSaveOnError.process(
                  update_event,
                  DoubleEntryLedger.MockRepo

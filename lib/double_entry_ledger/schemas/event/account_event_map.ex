@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
 
   This ensures that the payload is always of type `AccountData.t()`.
   """
-  import Ecto.Changeset, only: [cast_embed: 3, apply_action: 2, add_error: 3]
+  import Ecto.Changeset, only: [cast_embed: 3, apply_action: 2, add_error: 4]
 
   alias DoubleEntryLedger.Event.{EventMap, AccountData}
   alias Ecto.Changeset
@@ -154,7 +154,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       iex> changeset.valid?
       false
       iex> changeset.errors[:action]
-      {"invalid in this context", []}
+      {"invalid in this context", [{:value, "invalid_action"}]}
   """
   @spec create(map()) :: {:ok, t()} | {:error, Changeset.t()}
   def create(attrs) do
@@ -213,9 +213,9 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
         base_changeset(event_map, attrs)
         |> cast_embed(:payload, with: &AccountData.changeset/2, required: true)
 
-      _ ->
+      val ->
         base_changeset(event_map, attrs)
-        |> add_error(:action, "invalid in this context")
+        |> add_error(:action, "invalid in this context", value: "#{val}")
     end
   end
 

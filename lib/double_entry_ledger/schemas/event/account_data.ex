@@ -115,7 +115,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> map.currency == data.currency and map.type == data.type and map.name == "Cash"
       true
   """
-  def to_map(account_data) do
+  def to_map(%{} = account_data) do
     %{
       currency: Map.get(account_data, :currency),
       name: Map.get(account_data, :name),
@@ -126,4 +126,6 @@ defmodule DoubleEntryLedger.Event.AccountData do
       allowed_negative: Map.get(account_data, :allowed_negative)
     }
   end
+
+  def to_map(_), do: %{}
 end

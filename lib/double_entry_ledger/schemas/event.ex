@@ -37,7 +37,15 @@ defmodule DoubleEntryLedger.Event do
 
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Transaction, Instance, Account, EventTransactionLink, EventAccountLink, EventQueueItem}
+  alias DoubleEntryLedger.{
+    Transaction,
+    Instance,
+    Account,
+    EventTransactionLink,
+    EventAccountLink,
+    EventQueueItem
+  }
+
   alias DoubleEntryLedger.Event.TransactionData
 
   @actions [:create_transaction, :update_transaction, :create_account]
@@ -274,12 +282,20 @@ defmodule DoubleEntryLedger.Event do
 
     - A map containing trace metadata for the event and transaction or error
   """
-  @spec log_trace(Event.t(), Transaction.t() | any()) :: map()
+  @spec log_trace(Event.t(), Transaction.t() | Account.t() | any()) :: map()
   def log_trace(event, %Transaction{} = transaction) do
     Map.put(
       log_trace(event),
       :transaction_id,
       transaction.id
+    )
+  end
+
+  def log_trace(event, %Account{} = account) do
+    Map.put(
+      log_trace(event),
+      :account_id,
+      account.id
     )
   end
 
@@ -298,7 +314,6 @@ defmodule DoubleEntryLedger.Event do
       changes = TransactionData.to_map(Ecto.Changeset.apply_changes(trx_changeset))
       put_change(changeset, :payload, changes)
     else
-      IO.inspect(trx_changeset, label: "Invalid TransactionData changeset")
       put_change(changeset, :payload, trx_changeset)
     end
   end

@@ -83,7 +83,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
 
       assert %Changeset{
                data: %TransactionEventMapSchema{},
-               errors: [input_event_map: {"invalid_entry_data", []}]
+               errors: [
+                 input_event_map: {"invalid_entry_data", []},
+                 action: {"invalid in this context", [value: ""]}
+               ]
              } = changeset
     end
 
@@ -104,7 +107,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
 
       assert %Changeset{
                data: %TransactionEventMapSchema{},
-               errors: [input_event_map: {"some_accounts_not_found", []}]
+               errors: [
+                 input_event_map: {"some_accounts_not_found", []},
+                 action: {"invalid in this context", [value: ""]}
+               ]
              } = changeset
     end
   end
@@ -124,7 +130,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Changeset{data: %TransactionEventMapSchema{}, errors: [occ_timeout: _]}} =
+      assert {:error,
+              %Changeset{data: %TransactionEventMapSchema{}, errors: [occ_timeout: _, action: _]}} =
                CreateTransactionEventMapNoSaveOnError.process(
                  create_transaction_event_map(ctx),
                  DoubleEntryLedger.MockRepo
