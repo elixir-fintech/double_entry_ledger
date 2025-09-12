@@ -7,6 +7,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnErrorTest d
 
   import DoubleEntryLedger.InstanceFixtures
 
+  doctest CreateAccountEventMapNoSaveOnError
+
   describe "process/1" do
     setup [:create_instance]
 
