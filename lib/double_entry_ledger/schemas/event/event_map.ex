@@ -201,6 +201,9 @@ defmodule DoubleEntryLedger.Event.EventMap do
   """
   @callback payload_to_map(any()) :: map()
 
+  @callback base_changeset(Ecto.Schema.t(), map()) :: Ecto.Changeset.t()
+  @callback update_changeset(Ecto.Schema.t(), map()) :: Ecto.Changeset.t()
+
   @doc """
   Macro that injects EventMap functionality into the using module.
 
@@ -247,8 +250,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
       import DoubleEntryLedger.Event.EventMap,
         only: [
-          base_changeset: 2,
-          update_changeset: 2,
           fetch_action: 1
         ]
 
@@ -265,7 +266,11 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
       @primary_key false
       embedded_schema do
-        field(:action, Ecto.Enum, values: DoubleEntryLedger.Event.actions())
+        field(:action, Ecto.Enum, values: case "#{unquote(payload_mod)}" do
+          "AccountData" -> DoubleEntryLedger.Event.actions(:account)
+          "TransactionData" -> DoubleEntryLedger.Event.actions(:transaction)
+          _ -> DoubleEntryLedger.Event.actions()
+        end)
         field(:instance_id, :string)
         field(:source, :string)
         field(:source_data, :map, default: %{})
@@ -277,6 +282,67 @@ defmodule DoubleEntryLedger.Event.EventMap do
         else
           embeds_one(:payload, unquote(payload_mod), on_replace: :delete)
         end
+      end
+
+      @doc """
+      Creates a base changeset for validating common EventMap fields.
+
+      This function provides validation for the core fields that are required for all
+      EventMap operations. It handles type casting and validates required fields and
+      acceptable action values.
+
+      ## Parameters
+
+      * `struct` - The EventMap struct to build the changeset for
+      * `attrs` - Map of attributes to validate and apply
+
+      ## Returns
+
+      * An `Ecto.Changeset` with validations applied
+
+      ## Validations Applied
+
+      * Casts all common fields from the attributes
+      * Requires: `action`, `instance_id`, `source`, `source_idempk`
+      * Validates `action` is in the allowed list from `DoubleEntryLedger.Event.actions(type)`
+
+      """
+      def base_changeset(struct, attrs) do
+        struct
+        |> cast(attrs, [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk])
+        |> validate_required([:action, :instance_id, :source, :source_idempk])
+        |> validate_inclusion(:action, case "#{unquote(payload_mod)}" do
+             "AccountData" -> DoubleEntryLedger.Event.actions(:account)
+             "TransactionData" -> DoubleEntryLedger.Event.actions(:transaction)
+            _  -> DoubleEntryLedger.Event.actions()
+           end)
+      end
+
+      @doc """
+      Creates a changeset for update operations with additional validation.
+
+      This function extends `base_changeset/2` by adding validation for the `update_idempk`
+      field, which is required for update operations to maintain idempotency.
+
+      ## Parameters
+
+      * `struct` - The EventMap struct to build the changeset for
+      * `attrs` - Map of attributes to validate and apply
+
+      ## Returns
+
+      * An `Ecto.Changeset` with base validations plus update-specific requirements
+
+      ## Additional Validations
+
+      All validations from `base_changeset/2` plus:
+      * Requires `update_idempk` to be present
+
+      """
+      def update_changeset(struct, attrs) do
+        struct
+        |> base_changeset(attrs)
+        |> validate_required([:update_idempk])
       end
 
       @doc false
@@ -293,104 +359,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
       defoverridable log_trace: 1, log_trace: 2, to_map: 1
     end
-  end
-
-  @doc """
-  Creates a base changeset for validating common EventMap fields.
-
-  This function provides validation for the core fields that are required for all
-  EventMap operations. It handles type casting and validates required fields and
-  acceptable action values.
-
-  ## Parameters
-
-  * `struct` - The EventMap struct to build the changeset for
-  * `attrs` - Map of attributes to validate and apply
-
-  ## Returns
-
-  * An `Ecto.Changeset` with validations applied
-
-  ## Validations Applied
-
-  * Casts all common fields from the attributes
-  * Requires: `action`, `instance_id`, `source`, `source_idempk`
-  * Validates `action` is in the allowed list from `DoubleEntryLedger.Event.actions()`
-
-  ## Examples
-
-      iex> defmodule Elixir.TestEventMap do
-      ...>   use DoubleEntryLedger.Event.EventMap, payload: :map
-      ...>   def payload_to_map(payload), do: payload
-      ...> end
-      iex> attrs = %{action: :create_transaction, instance_id: "550e8400-e29b-41d4-a716-446655440000", source: "test", source_idempk: "123"}
-      iex> changeset = DoubleEntryLedger.Event.EventMap.base_changeset(struct!(TestEventMap, %{}), attrs)
-      iex> changeset.valid?
-      true
-
-      iex> alias DoubleEntryLedger.Event.EventMap
-      iex> defmodule Elixir.TestEventMap2 do
-      ...>   use EventMap, payload: :map
-      ...>   def payload_to_map(payload), do: payload
-      ...> end
-      iex> attrs = %{action: :invalid_action, source: "test"}
-      iex> changeset = EventMap.base_changeset(struct!(TestEventMap2, %{}), attrs)
-      iex> changeset.valid?
-      false
-  """
-  def base_changeset(struct, attrs) do
-    struct
-    |> cast(attrs, [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk])
-    |> validate_required([:action, :instance_id, :source, :source_idempk])
-    |> validate_inclusion(:action, DoubleEntryLedger.Event.actions())
-  end
-
-  @doc """
-  Creates a changeset for update operations with additional validation.
-
-  This function extends `base_changeset/2` by adding validation for the `update_idempk`
-  field, which is required for update operations to maintain idempotency.
-
-  ## Parameters
-
-  * `struct` - The EventMap struct to build the changeset for
-  * `attrs` - Map of attributes to validate and apply
-
-  ## Returns
-
-  * An `Ecto.Changeset` with base validations plus update-specific requirements
-
-  ## Additional Validations
-
-  All validations from `base_changeset/2` plus:
-  * Requires `update_idempk` to be present
-
-  ## Examples
-
-      iex> alias DoubleEntryLedger.Event.EventMap
-      iex> defmodule Elixir.TestEventMap3 do
-      ...>   use EventMap, payload: :map
-      ...>   def payload_to_map(payload), do: payload
-      ...> end
-      iex> attrs = %{action: :update_transaction, instance_id: "550e8400-e29b-41d4-a716-446655440000", source: "test", source_idempk: "123", update_idempk: "update_456"}
-      iex> changeset = EventMap.update_changeset(struct!(TestEventMap3, %{}), attrs)
-      iex> changeset.valid?
-      true
-
-      iex> alias DoubleEntryLedger.Event.EventMap
-      iex> defmodule Elixir.TestEventMap4 do
-      ...>   use EventMap, payload: :map
-      ...>   def payload_to_map(payload), do: payload
-      ...> end
-      iex> attrs = %{action: :update_transaction, instance_id: "550e8400-e29b-41d4-a716-446655440000", source: "test", source_idempk: "123"}
-      iex> changeset = EventMap.update_changeset(struct!(TestEventMap4, %{}), attrs)
-      iex> changeset.valid?
-      false
-  """
-  def update_changeset(struct, attrs) do
-    struct
-    |> base_changeset(attrs)
-    |> validate_required([:update_idempk])
   end
 
   @doc """
