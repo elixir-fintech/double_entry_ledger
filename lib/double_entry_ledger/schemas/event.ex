@@ -48,11 +48,19 @@ defmodule DoubleEntryLedger.Event do
 
   alias DoubleEntryLedger.Event.TransactionData
 
-  @actions [:create_transaction, :update_transaction, :create_account]
-  @type action ::
-          unquote(
-            Enum.reduce(@actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
-          )
+  @transaction_actions [:create_transaction, :update_transaction]
+  @account_actions [:create_account]
+  @actions @transaction_actions ++ @account_actions
+
+  @type transaction_action :: unquote(
+          Enum.reduce(@transaction_actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
+        )
+
+  @type account_action :: unquote(
+          Enum.reduce(@account_actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
+        )
+
+  @type action :: transaction_action() | account_action()
 
   alias __MODULE__, as: Event
 
@@ -127,6 +135,11 @@ defmodule DoubleEntryLedger.Event do
   """
   @spec actions() :: [action()]
   def actions(), do: @actions
+
+  @spec actions(:transaction) :: [transaction_action()]
+  @spec actions(:account) :: [account_action()]
+  def actions(:transaction), do: @transaction_actions
+  def actions(:account), do: @account_actions
 
   @doc """
   Creates a changeset for validating and creating/updating an Event.
