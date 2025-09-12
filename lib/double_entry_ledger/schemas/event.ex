@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.Event do
   alias DoubleEntryLedger.Event.TransactionData
 
   @transaction_actions [:create_transaction, :update_transaction]
-  @account_actions [:create_account]
+  @account_actions [:create_account, :update_account]
   @actions @transaction_actions ++ @account_actions
 
   @type transaction_action :: unquote(
@@ -131,7 +131,7 @@ defmodule DoubleEntryLedger.Event do
   ## Examples
 
       iex> DoubleEntryLedger.Event.actions()
-      [:create_transaction, :update_transaction, :create_account]
+      [:create_transaction, :update_transaction, :create_account, :update_account]
   """
   @spec actions() :: [action()]
   def actions(), do: @actions

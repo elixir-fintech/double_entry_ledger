@@ -225,8 +225,8 @@ defmodule DoubleEntryLedger.Account do
       "Updated Description"
   """
   @spec update_changeset(Account.t(), map()) :: Changeset.t()
-  def update_changeset(changeset, attrs) do
-    changeset
+  def update_changeset(account, attrs) do
+    account
     |> cast(attrs, [:description, :context])
   end
 

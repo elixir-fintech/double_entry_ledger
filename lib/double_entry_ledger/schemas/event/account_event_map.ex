@@ -184,6 +184,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
   The function switches on the action to determine validation:
 
   * `:create_account` - Validates base fields + requires valid AccountData payload
+  * `:update_account` - Validates base fields + requires valid AccountData payload for updates
   * Other actions - Adds error indicating invalid action for account context
 
   ## Examples
@@ -196,6 +197,18 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>   payload: %{name: "Test", type: :asset, currency: "USD"}
       ...> }
       iex> changeset = DoubleEntryLedger.Event.AccountEventMap.changeset(%DoubleEntryLedger.Event.AccountEventMap{}, attrs)
+      iex> changeset.valid?
+      true
+
+      iex> update_attrs = %{
+      ...>   action: :update_account,
+      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   source: "test",
+      ...>   source_idempk: "123",
+      ...>   update_idempk: "upd_456",
+      ...>   payload: %{description: "Updated Test Account"}
+      ...> }
+      iex> changeset = DoubleEntryLedger.Event.AccountEventMap.changeset(%DoubleEntryLedger.Event.AccountEventMap{}, update_attrs)
       iex> changeset.valid?
       true
 
@@ -213,11 +226,16 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
         base_changeset(event_map, attrs)
         |> cast_embed(:payload, with: &AccountData.changeset/2, required: true)
 
+      :update_account ->
+        update_changeset(event_map, attrs)
+        |> cast_embed(:payload, with: &AccountData.update_changeset/2, required: true)
+
       val ->
         base_changeset(event_map, attrs)
         |> add_error(:action, "invalid in this context", value: "#{val}")
     end
   end
+
 
   @doc """
   Converts an AccountData payload to a plain map representation.
