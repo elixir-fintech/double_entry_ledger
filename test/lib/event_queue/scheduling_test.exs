@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
   use ExUnit.Case, async: true
   import Mox
   alias Ecto.Changeset
-  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
+  alias DoubleEntryLedger.EventWorker.UpdateEventError
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.InstanceFixtures
@@ -156,7 +156,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       {:ok, event} = new_update_transaction_event(s, s_id, instance.id, :posted)
       test_message = "Test error"
 
-      error = %AddUpdateEventError{
+      error = %UpdateEventError{
         create_transaction_event: failed_create_event,
         update_event: event,
         message: test_message,

@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
 
   use DoubleEntryLedger.BaseSchema
   import Ecto.Changeset
-  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
+  alias DoubleEntryLedger.EventWorker.UpdateEventError
   alias DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.Event
   import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
@@ -134,12 +134,12 @@ defmodule DoubleEntryLedger.EventQueueItem do
 
   @spec schedule_update_retry_changeset(
           EventQueueItem.t(),
-          AddUpdateEventError.t(),
+          UpdateEventError.t(),
           non_neg_integer()
         ) :: Ecto.Changeset.t()
   def schedule_update_retry_changeset(
         event_queue_item,
-        %AddUpdateEventError{
+        %UpdateEventError{
           create_transaction_event: create_transaction_event,
           message: message
         },

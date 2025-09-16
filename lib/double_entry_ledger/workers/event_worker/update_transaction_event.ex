@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEvent do
     Repo
   }
 
-  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
+  alias DoubleEntryLedger.EventWorker.UpdateEventError
   import DoubleEntryLedger.EventQueue.Scheduling
 
   import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
@@ -148,7 +148,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEvent do
       event
     )
     |> Multi.merge(fn
-      %{get_create_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
+      %{get_create_event_transaction: {:error, %UpdateEventError{} = exception}} ->
         Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
 
       %{get_create_event_transaction: create_transaction} ->

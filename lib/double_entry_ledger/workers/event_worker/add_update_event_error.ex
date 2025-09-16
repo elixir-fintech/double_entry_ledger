@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
+defmodule DoubleEntryLedger.EventWorker.UpdateEventError do
   @moduledoc """
   Custom exception for handling errors when update events can't be processed due to issues
   with their corresponding create events.
@@ -12,10 +12,10 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
 
   This exception is typically raised in the EventWorker when processing an update event:
 
-      iex> raise AddUpdateEventError,
+      iex> raise UpdateEventError,
       ...>   update_event: update_event,
       ...>   create_transaction_event: create_transaction_event
-      ** (AddUpdateEventError) Create event (id: ...) not yet processed for Update Event (id: ...)
+      ** (UpdateEventError) Create event (id: ...) not yet processed for Update Event (id: ...)
 
   ## Reasons
 
@@ -35,9 +35,9 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
   ## Example
 
       try do
-        # ...code that may raise AddUpdateEventError...
+        # ...code that may raise UpdateEventError...
       rescue
-        e in AddUpdateEventError ->
+        e in UpdateEventError ->
           IO.inspect(e.reason)
           IO.inspect(e.message)
       end
@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
   defexception [:message, :create_transaction_event, :update_event, :reason]
 
   alias DoubleEntryLedger.Event
-  alias __MODULE__, as: AddUpdateEventError
+  alias __MODULE__, as: UpdateEventError
 
   @type t :: %__MODULE__{
           message: String.t(),
@@ -74,7 +74,7 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
         pending_error(create_transaction_event, update_event)
 
       %{event_queue_item: %{status: :dead_letter}} ->
-        %AddUpdateEventError{
+        %UpdateEventError{
           message:
             "create_transaction Event (id: #{create_transaction_event.id}) in dead_letter for Update Event (id: #{update_event.id})",
           create_transaction_event: create_transaction_event,
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
         }
 
       nil ->
-        %AddUpdateEventError{
+        %UpdateEventError{
           message: "create_transaction Event not found for Update Event (id: #{update_event.id})",
           create_transaction_event: nil,
           update_event: update_event,
@@ -96,7 +96,7 @@ defmodule DoubleEntryLedger.EventWorker.AddUpdateEventError do
          %{event_queue_item: %{status: status}} = create_transaction_event,
          update_event
        ) do
-    %AddUpdateEventError{
+    %UpdateEventError{
       message:
         "create_transaction Event (id: #{create_transaction_event.id}, status: #{status}) not yet processed for Update Event (id: #{update_event.id})",
       create_transaction_event: create_transaction_event,

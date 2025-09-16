@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
 
   alias DoubleEntryLedger.Event.TransactionEventMap
 
-  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
+  alias DoubleEntryLedger.EventWorker.UpdateEventError
   alias Ecto.Multi
 
   @impl true
@@ -156,7 +156,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
       :new_event
     )
     |> Multi.merge(fn
-      %{get_create_transaction_event_transaction: {:error, %AddUpdateEventError{} = exception}} ->
+      %{get_create_transaction_event_transaction: {:error, %UpdateEventError{} = exception}} ->
         Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
 
       %{get_create_transaction_event_transaction: create_transaction} ->

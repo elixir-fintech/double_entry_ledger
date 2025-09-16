@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   alias Ecto.Changeset
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Event, Transaction}
-  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
+  alias DoubleEntryLedger.EventWorker.UpdateEventError
 
   @doc """
   Builds an Event changeset from an TransactionEventMap or attribute map.
@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
   ## Returns
     - `{:ok, {Transaction.t(), Event.t()}}`: The transaction and create event if found and processed
-    - Raises `AddUpdateEventError` if the create event doesn't exist or isn't processed
+    - Raises `UpdateEventError` if the create event doesn't exist or isn't processed
 
   ## Implementation Notes
   This is typically used when processing update events to find the original transaction to modify.
@@ -131,8 +131,30 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         {:ok, {transaction, create_transaction_event}}
 
       create_transaction_event ->
-        raise AddUpdateEventError,
+        raise UpdateEventError,
           create_transaction_event: create_transaction_event,
+          update_event: event
+    end
+  end
+
+  @spec get_create_account_event_account(Event.t()) ::
+          {:ok, {Account.t(), Event.t()}}
+          | {:error | :pending_error, String.t(), Event.t() | nil}
+  def get_create_account_event_account(
+        %{
+          source: source,
+          source_idempk: source_idempk,
+          instance_id: id
+        } = event
+      ) do
+    case get_event_by(:create_account, source, source_idempk, id) do
+      %{account: account, event_queue_item: %{status: :processed}} =
+        create_account_event ->
+          {:ok, {account, create_account_event}}
+
+      create_account_event ->
+        raise UpdateEventError,
+          create_transaction_event: create_account_event,
           update_event: event
     end
   end
@@ -166,7 +188,30 @@ defmodule DoubleEntryLedger.EventStoreHelper do
         {:ok, {transaction, _}} = get_create_transaction_event_transaction(event)
         {:ok, transaction}
       rescue
-        e in AddUpdateEventError ->
+        e in UpdateEventError ->
+          {:ok, {:error, e}}
+      end
+    end)
+  end
+
+  def build_get_create_account_event_account(
+        multi,
+        step,
+        event_or_step
+      ) do
+    multi
+    |> Multi.run(step, fn _, changes ->
+      event =
+        cond do
+          is_struct(event_or_step, Event) -> event_or_step
+          is_atom(event_or_step) -> Map.fetch!(changes, event_or_step)
+        end
+
+      try do
+        {:ok, {account, _}} = get_create_account_event_account(event)
+        {:ok, account}
+      rescue
+        e in UpdateEventError ->
           {:ok, {:error, e}}
       end
     end)

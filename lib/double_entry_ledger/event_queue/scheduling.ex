@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   * Jitter to prevent thundering herd problems during retries
   """
 
-  alias DoubleEntryLedger.EventWorker.AddUpdateEventError
+  alias DoubleEntryLedger.EventWorker.UpdateEventError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
   alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, EventAccountLink, Account, Transaction, EventStore}
   alias DoubleEntryLedger.EventQueueItem
@@ -217,12 +217,12 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
   ## Parameters
     - `event` - The update event that needs to be retried
-    - `error` - An AddUpdateEventError struct containing the create event and error details
+    - `error` - An UpdateEventError struct containing the create event and error details
 
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
-  @spec build_schedule_update_retry(Event.t(), AddUpdateEventError.t()) :: Changeset.t()
+  @spec build_schedule_update_retry(Event.t(), UpdateEventError.t()) :: Changeset.t()
   def build_schedule_update_retry(%{event_queue_item: event_queue_item} = event, error) do
     event_queue_item_changeset =
       event_queue_item
