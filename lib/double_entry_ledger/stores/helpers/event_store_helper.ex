@@ -61,30 +61,42 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   end
 
   @doc """
-  Gets an event by its source identifiers.
+  Retrieves an event by its action and source identifiers with preloaded associations.
 
-  This function looks up a create event using its source, source_idempk, and instance_id,
-  preloading the associated transaction and its entries.
+  This function looks up an event using its action, source system identifier,
+  source-specific identifier, and instance ID. The returned event includes preloaded
+  associations for event_queue_item, account, and transactions with their entries.
 
   ## Parameters
-    - `source`: The source system identifier (e.g., "accounting_system")
-    - `source_idempk`: The source-specific identifier (e.g., "invoice_123")
-    - `instance_id`: The instance UUID
+
+    - `action`: The event action atom (e.g., `:create_transaction`, `:create_account`)
+    - `source`: The source system identifier (e.g., "accounting_system", "api")
+    - `source_idempk`: The source-specific identifier (e.g., "invoice_123", "tx_456")
+    - `instance_id`: The instance UUID that groups related events
 
   ## Returns
-    - `Event.t() | nil`: The found event with preloaded transaction and entries, or nil if not found
+
+    - `Event.t() | nil`: The found event with preloaded associations, or nil if not found
+
+  ## Preloaded Associations
+
+  The returned event includes:
+  - `:event_queue_item` - Processing status and retry information
+  - `:account` - Associated account (for account-related events)
+  - `transactions: [entries: :account]` - Transactions with their entries and accounts
+
   """
-  @spec get_create_transaction_event_by_source(String.t(), String.t(), Ecto.UUID.t()) ::
+  @spec get_event_by(atom(), String.t(), String.t(), Ecto.UUID.t()) ::
           Event.t() | nil
-  def get_create_transaction_event_by_source(source, source_idempk, instance_id) do
+  def get_event_by(action, source, source_idempk, instance_id) do
     Event
     |> Repo.get_by(
-      action: :create_transaction,
+      action: action,
       source: source,
       source_idempk: source_idempk,
       instance_id: instance_id
     )
-    |> Repo.preload([:event_queue_item, transactions: [entries: :account]])
+    |> Repo.preload([:event_queue_item, :account, transactions: [entries: :account]])
   end
 
   @doc """
@@ -113,7 +125,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
           instance_id: id
         } = event
       ) do
-    case get_create_transaction_event_by_source(source, source_idempk, id) do
+    case get_event_by(:create_transaction, source, source_idempk, id) do
       %{transactions: [transaction | _], event_queue_item: %{status: :processed}} =
           create_transaction_event ->
         {:ok, {transaction, create_transaction_event}}

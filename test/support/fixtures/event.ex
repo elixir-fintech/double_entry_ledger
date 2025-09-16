@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   event entities.
   """
   alias DoubleEntryLedger.EventStore
-  alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
+  alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData, AccountEventMap, AccountData}
   import DoubleEntryLedger.Event.TransactionDataFixtures
 
   def transaction_event_attrs(attrs \\ %{}) do
@@ -108,19 +108,18 @@ defmodule DoubleEntryLedger.EventFixtures do
   end
 
   def create_account_event_map(%{instance: %{id: id}}) do
-    %{
+    %AccountEventMap{
       action: :create_account,
       instance_id: id,
       source: "source",
       source_data: %{},
       source_idempk: "source_idempk",
       update_idempk: nil,
-      payload: %{
+      payload: %AccountData{
         name: "Test Account",
         description: "Test Description",
         currency: "EUR",
         type: "asset",
-        allow_negative: false
       }
     }
   end

@@ -9,6 +9,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
   import DoubleEntryLedger.InstanceFixtures
   alias DoubleEntryLedger.{EventStore, EventStoreHelper, Event}
   alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
+  alias DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError
 
   describe "create/1" do
     setup [:create_instance]
@@ -22,7 +23,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
     end
   end
 
-  describe "get_create_transaction_event_by_source/3" do
+  describe "get_event_by/4" do
     setup [:create_instance, :create_accounts]
 
     test "gets an event by source", %{instance: instance} do
@@ -30,7 +31,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
       assert %Event{} =
                found_event =
-               EventStoreHelper.get_create_transaction_event_by_source(
+               EventStoreHelper.get_event_by(
+                 :create_transaction,
                  event.source,
                  event.source_idempk,
                  instance.id
@@ -45,7 +47,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
       assert %Event{} =
                found_event =
-               EventStoreHelper.get_create_transaction_event_by_source(
+               EventStoreHelper.get_event_by(
+                 :create_transaction,
                  event.source,
                  event.source_idempk,
                  instance.id
@@ -55,9 +58,28 @@ defmodule DoubleEntryLedger.EventStoreTest do
       assert processed_transaction.id == transaction.id
     end
 
+    test "returns processed created account", %{instance: %{id: id}} = ctx do
+      event_map = create_account_event_map(ctx)
+
+      {:ok, account, event} = CreateAccountEventMapNoSaveOnError.process(event_map)
+
+      assert %Event{} =
+               found_event =
+               EventStoreHelper.get_event_by(
+                 :create_account,
+                 event.source,
+                 event.source_idempk,
+                 id
+               )
+
+      assert found_event.id == event.id
+      assert found_event.account.id == account.id
+    end
+
     test "returns nil for non-existent event", %{instance: instance} do
       assert nil ==
-               EventStoreHelper.get_create_transaction_event_by_source(
+               EventStoreHelper.get_event_by(
+                 :create_transaction,
                  "source",
                  "source_idempk",
                  instance.id
