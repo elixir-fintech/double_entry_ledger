@@ -68,7 +68,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
               %Changeset{
                 data: %TransactionEventMapSchema{},
                 errors: [
-                  create_transaction_event_error: {"create_transaction_event_not_found", _},
+                  create_transaction_event_error: {"create_event_not_found", _},
                   action: {"invalid in this context", [value: ""]}
                 ]
               }} =
@@ -162,7 +162,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
               %Changeset{
                 data: %TransactionEventMapSchema{},
                 errors: [
-                  create_transaction_event_error: {"create_transaction_event_not_processed", _},
+                  create_transaction_event_error: {"create_event_not_processed", _},
                   action: {"invalid in this context", [value: ""]}
                 ]
               }} =
@@ -185,7 +185,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
               %Changeset{
                 data: %TransactionEventMapSchema{},
                 errors: [
-                  create_transaction_event_error: {"create_transaction_event_not_processed", _},
+                  create_transaction_event_error: {"create_event_not_processed", _},
                   action: {"invalid in this context", [value: ""]}
                 ]
               }} =
@@ -207,7 +207,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
               %Changeset{
                 data: %TransactionEventMapSchema{},
                 errors: [
-                  create_transaction_event_error: {"create_transaction_event_in_dead_letter", _},
+                  create_transaction_event_error: {"create_event_in_dead_letter", _},
                   action: {"invalid in this context", [value: ""]}
                 ]
               }} =

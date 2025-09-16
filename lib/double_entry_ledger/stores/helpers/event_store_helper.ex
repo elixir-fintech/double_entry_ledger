@@ -132,7 +132,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
       create_transaction_event ->
         raise UpdateEventError,
-          create_transaction_event: create_transaction_event,
+          create_event: create_transaction_event,
           update_event: event
     end
   end
@@ -154,7 +154,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
       create_account_event ->
         raise UpdateEventError,
-          create_transaction_event: create_account_event,
+          create_event: create_account_event,
           update_event: event
     end
   end

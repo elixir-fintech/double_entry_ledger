@@ -140,14 +140,14 @@ defmodule DoubleEntryLedger.EventQueueItem do
   def schedule_update_retry_changeset(
         event_queue_item,
         %UpdateEventError{
-          create_transaction_event: create_transaction_event,
+          create_event: create_event,
           message: message
         },
         retry_delay
       ) do
     now = DateTime.utc_now()
 
-    %{event_queue_item: %{next_retry_after: ce_next_retry_after}} = create_transaction_event
+    %{event_queue_item: %{next_retry_after: ce_next_retry_after}} = create_event
 
     next_retry_after =
       DateTime.add(ce_next_retry_after || now, retry_delay, :second)
