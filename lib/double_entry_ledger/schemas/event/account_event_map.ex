@@ -236,7 +236,6 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
     end
   end
 
-
   @doc """
   Converts an AccountData payload to a plain map representation.
 

@@ -121,7 +121,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
   end
 
   @spec build_create_account(AccountEventMap.t()) :: Ecto.Multi.t()
-  defp build_create_account(%AccountEventMap{payload: payload, instance_id: instance_id} = event_map) do
+  defp build_create_account(
+         %AccountEventMap{payload: payload, instance_id: instance_id} = event_map
+       ) do
     Multi.new()
     |> Multi.insert(:new_event, EventStoreHelper.build_create(event_map))
     |> Multi.insert(:account, AccountStoreHelper.build_create(payload, instance_id))

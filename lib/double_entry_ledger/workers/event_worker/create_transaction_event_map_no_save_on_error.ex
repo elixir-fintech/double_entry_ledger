@@ -48,7 +48,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError d
   - `{:error, string}` for unexpected errors
   """
   @spec process(TransactionEventMap.t(), Ecto.Repo.t() | nil) ::
-          EventWorker.success_tuple() | {:errors, Changeset.t(TransactionEventMap.t()) | String.t()}
+          EventWorker.success_tuple()
+          | {:errors, Changeset.t(TransactionEventMap.t()) | String.t()}
   def process(%{action: :create_transaction} = event_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(event_map, repo) do
       {:error, :occ_timeout, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->

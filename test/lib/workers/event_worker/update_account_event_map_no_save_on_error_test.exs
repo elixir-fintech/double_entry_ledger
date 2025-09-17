@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnErrorTest d
         source_idempk: event.source_idempk,
         update_idempk: "update_456",
         payload: %AccountData{
-          description: "Updated Description",
+          description: "Updated Description"
         }
       }
 
@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnErrorTest d
         source: event.source,
         source_idempk: event.source_idempk,
         payload: %AccountData{
-          description: "Updated Description",
+          description: "Updated Description"
         }
       }
 
@@ -61,6 +61,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnErrorTest d
         description: "Initial Description"
       }
     }
+
     {:ok, account, event} = CreateAccountEventMapNoSaveOnError.process(event_map)
 
     Map.put(ctx, :account, account)

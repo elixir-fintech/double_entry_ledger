@@ -52,13 +52,19 @@ defmodule DoubleEntryLedger.Event do
   @account_actions [:create_account, :update_account]
   @actions @transaction_actions ++ @account_actions
 
-  @type transaction_action :: unquote(
-          Enum.reduce(@transaction_actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
-        )
+  @type transaction_action ::
+          unquote(
+            Enum.reduce(@transaction_actions, fn state, acc ->
+              quote do: unquote(state) | unquote(acc)
+            end)
+          )
 
-  @type account_action :: unquote(
-          Enum.reduce(@account_actions, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
-        )
+  @type account_action ::
+          unquote(
+            Enum.reduce(@account_actions, fn state, acc ->
+              quote do: unquote(state) | unquote(acc)
+            end)
+          )
 
   @type action :: transaction_action() | account_action()
 

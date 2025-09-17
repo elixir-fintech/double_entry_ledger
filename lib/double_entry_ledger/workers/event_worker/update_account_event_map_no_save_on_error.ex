@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
     |> default_event_map_response_handler(event_map, @module_name)
   end
 
-  #TODO update accordingly; check out UpdateTransactionEventMapNoSaveOnError for reference
+  # TODO update accordingly; check out UpdateTransactionEventMapNoSaveOnError for reference
   @spec build_update_account(AccountEventMap.t()) :: Ecto.Multi.t()
   def build_update_account(%AccountEventMap{payload: payload} = event_map) do
     Multi.new()
@@ -81,6 +81,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
           event_map
           |> AccountEventMap.changeset(%{})
           |> Changeset.add_error(:create_account_event_error, to_string(reason))
+
         Multi.error(Multi.new(), :create_account_event_error, event_map_changeset)
     end)
   end

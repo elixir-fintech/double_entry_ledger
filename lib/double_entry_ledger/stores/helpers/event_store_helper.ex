@@ -149,8 +149,8 @@ defmodule DoubleEntryLedger.EventStoreHelper do
       ) do
     case get_event_by(:create_account, source, source_idempk, id) do
       %{account: account, event_queue_item: %{status: :processed}} =
-        create_account_event ->
-          {:ok, {account, create_account_event}}
+          create_account_event ->
+        {:ok, {account, create_account_event}}
 
       create_account_event ->
         raise UpdateEventError,
@@ -194,7 +194,8 @@ defmodule DoubleEntryLedger.EventStoreHelper do
     end)
   end
 
-  @spec build_get_create_account_event_account(Ecto.Multi.t(), atom(), Event.t() | atom()) :: Ecto.Multi.t()
+  @spec build_get_create_account_event_account(Ecto.Multi.t(), atom(), Event.t() | atom()) ::
+          Ecto.Multi.t()
   def build_get_create_account_event_account(
         multi,
         step,

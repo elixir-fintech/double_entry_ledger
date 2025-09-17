@@ -392,7 +392,8 @@ defmodule DoubleEntryLedger.EventWorker do
       end
   """
   @spec process_new_event_no_save_on_error(em) ::
-          success_tuple() | {:error, Changeset.t(em) | String.t() } when em: TransactionEventMap.t() | AccountEventMap.t()
+          success_tuple() | {:error, Changeset.t(em) | String.t()}
+        when em: TransactionEventMap.t() | AccountEventMap.t()
   def process_new_event_no_save_on_error(
         %TransactionEventMap{action: :create_transaction} = event_map
       ) do

@@ -266,11 +266,15 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
       @primary_key false
       embedded_schema do
-        field(:action, Ecto.Enum, values: case "#{unquote(payload_mod)}" do
-          "AccountData" -> DoubleEntryLedger.Event.actions(:account)
-          "TransactionData" -> DoubleEntryLedger.Event.actions(:transaction)
-          _ -> DoubleEntryLedger.Event.actions()
-        end)
+        field(:action, Ecto.Enum,
+          values:
+            case "#{unquote(payload_mod)}" do
+              "AccountData" -> DoubleEntryLedger.Event.actions(:account)
+              "TransactionData" -> DoubleEntryLedger.Event.actions(:transaction)
+              _ -> DoubleEntryLedger.Event.actions()
+            end
+        )
+
         field(:instance_id, :string)
         field(:source, :string)
         field(:source_data, :map, default: %{})
@@ -309,13 +313,23 @@ defmodule DoubleEntryLedger.Event.EventMap do
       """
       def base_changeset(struct, attrs) do
         struct
-        |> cast(attrs, [:action, :instance_id, :source, :source_data, :source_idempk, :update_idempk])
+        |> cast(attrs, [
+          :action,
+          :instance_id,
+          :source,
+          :source_data,
+          :source_idempk,
+          :update_idempk
+        ])
         |> validate_required([:action, :instance_id, :source, :source_idempk])
-        |> validate_inclusion(:action, case "#{unquote(payload_mod)}" do
-             "AccountData" -> DoubleEntryLedger.Event.actions(:account)
-             "TransactionData" -> DoubleEntryLedger.Event.actions(:transaction)
-            _  -> DoubleEntryLedger.Event.actions()
-           end)
+        |> validate_inclusion(
+          :action,
+          case "#{unquote(payload_mod)}" do
+            "AccountData" -> DoubleEntryLedger.Event.actions(:account)
+            "TransactionData" -> DoubleEntryLedger.Event.actions(:transaction)
+            _ -> DoubleEntryLedger.Event.actions()
+          end
+        )
       end
 
       @doc """

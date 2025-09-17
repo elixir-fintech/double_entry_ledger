@@ -4,7 +4,14 @@ defmodule DoubleEntryLedger.EventFixtures do
   event entities.
   """
   alias DoubleEntryLedger.EventStore
-  alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData, AccountEventMap, AccountData}
+
+  alias DoubleEntryLedger.Event.{
+    TransactionEventMap,
+    TransactionData,
+    AccountEventMap,
+    AccountData
+  }
+
   import DoubleEntryLedger.Event.TransactionDataFixtures
 
   def transaction_event_attrs(attrs \\ %{}) do
@@ -119,7 +126,7 @@ defmodule DoubleEntryLedger.EventFixtures do
         name: "Test Account",
         description: "Test Description",
         currency: "EUR",
-        type: "asset",
+        type: "asset"
       }
     }
   end

@@ -1,5 +1,4 @@
 defmodule DoubleEntryLedger.EventWorker.AccountEventResponseHandler do
-
   require Logger
 
   import DoubleEntryLedger.Event.TransferErrors,

@@ -18,7 +18,17 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
   alias DoubleEntryLedger.EventWorker.UpdateEventError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
-  alias DoubleEntryLedger.{Repo, Event, EventTransactionLink, EventAccountLink, Account, Transaction, EventStore}
+
+  alias DoubleEntryLedger.{
+    Repo,
+    Event,
+    EventTransactionLink,
+    EventAccountLink,
+    Account,
+    Transaction,
+    EventStore
+  }
+
   alias DoubleEntryLedger.EventQueueItem
   alias Ecto.Changeset
 
