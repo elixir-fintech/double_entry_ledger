@@ -1,27 +1,49 @@
 defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
   @moduledoc """
-  Processes `AccountEventMap` structures for atomic update of events and their associated accounts in the Double Entry Ledger system, without saving on error.
+  Processes AccountEventMap structures for atomic update of events and their associated accounts.
 
-  Implements the Optimistic Concurrency Control (OCC) pattern to ensure safe concurrent processing of update events, providing robust error handling, retry logic, and transactional guarantees. This module ensures that update operations are performed atomically and consistently, and that all error and retry scenarios are handled transparently. Unlike the standard update event map processor, this variant does not persist changes on error, but instead returns changesets with error details for client handling.
+  This module handles the update of accounts based on validated AccountEventMap data within
+  the Double Entry Ledger system. Unlike standard update event processors, this variant
+  does not persist error states to the database, instead returning changesets with error
+  details for client handling.
 
-  ## Features
+  ## Key Features
 
-    * Account Processing: Handles update of accounts based on the event map's action.
-    * Atomic Operations: Ensures all event and account changes are performed in a single database transaction.
-    * Error Handling: Maps validation and dependency errors to the appropriate changeset or event state, but does not persist on error.
-    * Retry Logic: Retries OCC conflicts and schedules retries for dependency errors.
-    * OCC Integration: Integrates with the OCC processor behavior for safe, idempotent event processing.
+  * **Account Processing**: Handles update of accounts based on the event map's action
+  * **Atomic Operations**: Ensures all event and account changes are performed in a single database transaction
+  * **Error Handling**: Maps validation and dependency errors to appropriate changesets without persistence
+  * **Optimistic Concurrency Control**: Integrates with OCC patterns for safe concurrent processing
+  * **Dependency Resolution**: Locates original create events and their associated accounts
 
-  ## Main Functions
+  ## Processing Flow
 
-    * `process/2` — Entry point for processing update event maps with error handling and OCC.
-    * `build_account/3` — Constructs Ecto.Multi operations for update actions.
-    * `handle_build_account/3` — Adds event update or error handling steps to the Multi.
-    * `handle_account_map_error/3` — Returns a changeset with error details, does not persist.
-    * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion, does not persist.
+  1. **Event Creation**: Creates an Event record from the AccountEventMap for audit purposes
+  2. **Dependency Resolution**: Locates the original create account event and its account
+  3. **Account Update**: Updates the account using the payload data
+  4. **Event Completion**: Marks the event as processed upon successful account update
+  5. **Linking**: Creates a link between the event and the updated account for traceability
 
-  This module ensures that update events are processed exactly once, even in high-concurrency environments, and that all error and retry scenarios are handled transparently and returned to the caller for further handling.
+  ## Error Handling
+
+  The module provides comprehensive error handling:
+  - Event validation errors are mapped back to AccountEventMap changesets
+  - Account validation errors are propagated to the event map payload
+  - Dependency errors (missing create events) are handled gracefully
+  - All errors are returned as changesets without database persistence
+  - Database transaction ensures atomicity (all-or-nothing)
+
+  ## Supported Actions
+
+  Currently supports:
+  - `:update_account` - Updates an existing account from AccountEventMap payload
+
+  ## Usage
+
+  This module is designed for scenarios where error persistence should be managed
+  externally, allowing clients to handle validation errors and retry logic according
+  to their specific requirements.
   """
+
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
 
@@ -29,14 +51,48 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
     only: [default_event_map_response_handler: 3]
 
   alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.EventWorker.UpdateEventError
+  alias DoubleEntryLedger.EventWorker.{AccountEventResponseHandler, UpdateEventError}
   alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.{Account, Event, Repo, EventStoreHelper, AccountStoreHelper}
+  alias DoubleEntryLedger.{Repo, EventStoreHelper, AccountStoreHelper}
 
   @module_name __MODULE__ |> Module.split() |> List.last()
 
-  @spec process(AccountEventMap.t()) ::
-          {:ok, Account.t(), Event.t()} | {:error, Changeset.t(AccountEventMap.t()) | String.t()}
+  @doc """
+  Processes an AccountEventMap to update an existing account in the ledger system.
+
+  This function orchestrates the update of both an Event record (for audit trail)
+  and an Account record within a single database transaction. It first locates the
+  original create account event and its associated account, then applies the updates
+  from the event map's payload.
+
+  ## Parameters
+
+  * `event_map` - AccountEventMap struct containing validated account update data.
+    Must have `:update_account` action.
+
+  ## Returns
+
+  * `{:ok, Account.t(), Event.t()}` - Success tuple containing the updated Account and Event
+  * `{:error, Changeset.t(AccountEventMap.t())}` - AccountEventMap changeset with validation errors
+  * `{:error, String.t()}` - String error message for unexpected failures
+
+  ## Transaction Steps
+
+  1. Creates Event record from AccountEventMap
+  2. Locates original create account event and its account
+  3. Updates Account record with payload data
+  4. Marks Event as processed
+  5. Creates Event-Account link for traceability
+
+  ## Error Scenarios
+
+  - Event validation errors → AccountEventMap changeset with event-level errors
+  - Missing create account event → AccountEventMap changeset with dependency error
+  - Account validation errors → AccountEventMap changeset with payload-level errors
+  - Other failures → String error message with details
+
+  """
+  @spec process(AccountEventMap.t()) :: AccountEventResponseHandler.process_response()
   def process(%AccountEventMap{action: :update_account} = event_map) do
     build_update_account(event_map)
     |> handle_build_update_account(event_map)
@@ -44,9 +100,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
     |> default_event_map_response_handler(event_map, @module_name)
   end
 
-  # TODO update accordingly; check out UpdateTransactionEventMapNoSaveOnError for reference
   @spec build_update_account(AccountEventMap.t()) :: Ecto.Multi.t()
-  def build_update_account(%AccountEventMap{payload: payload} = event_map) do
+  defp build_update_account(%AccountEventMap{payload: payload} = event_map) do
     Multi.new()
     |> Multi.insert(:new_event, EventStoreHelper.build_create(event_map))
     |> EventStoreHelper.build_get_create_account_event_account(
@@ -66,7 +121,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
           Ecto.Multi.t(),
           AccountEventMap.t()
         ) :: Ecto.Multi.t()
-  def handle_build_update_account(multi, %AccountEventMap{} = event_map) do
+  defp handle_build_update_account(multi, %AccountEventMap{} = event_map) do
     Multi.merge(multi, fn
       %{account: account, new_event: event} ->
         Multi.update(Multi.new(), :event_success, fn _ ->

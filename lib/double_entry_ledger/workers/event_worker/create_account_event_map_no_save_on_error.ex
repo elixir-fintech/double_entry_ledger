@@ -6,6 +6,10 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
   It coordinates the creation of both the Event record (for audit trail) and the Account
   record (the actual ledger account) within a single database transaction.
 
+  Unlike standard event processors, this module does not persist error states to the database.
+  Instead, it returns validation errors as changesets for client handling, making it suitable
+  for scenarios where error persistence should be managed externally.
+
   ## Processing Flow
 
   1. **Event Creation**: Creates an Event record from the AccountEventMap for audit purposes
@@ -20,6 +24,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
   - Account validation errors are propagated to the event map payload
   - All processing steps are logged with appropriate trace information
   - Database transaction ensures atomicity (all-or-nothing)
+  - Errors are returned as changesets rather than persisted to the database
 
   ## Key Features
 
@@ -27,6 +32,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
   - **Error Propagation**: Maps validation errors back to appropriate changeset structures
   - **Audit Trail**: Creates event records for all account creation attempts
   - **Traceability**: Links events to created accounts for audit purposes
+  - **No Error Persistence**: Returns error changesets without database persistence
 
   ## Supported Actions
 
@@ -40,9 +46,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
   import DoubleEntryLedger.EventWorker.AccountEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
-  alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.{Account, Event, EventStoreHelper, AccountStoreHelper, Repo}
+  alias Ecto.Multi
+  alias DoubleEntryLedger.Event.{AccountEventMap, AccountEventResponseHandler}
+  alias DoubleEntryLedger.{EventStoreHelper, AccountStoreHelper, Repo}
 
   @module_name __MODULE__ |> Module.split() |> List.last()
 
@@ -112,8 +118,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
       iex> changeset.valid?
       false
   """
-  @spec process(AccountEventMap.t()) ::
-          {:ok, Account.t(), Event.t()} | {:error, Changeset.t(AccountEventMap.t()) | String.t()}
+  @spec process(AccountEventMap.t()) :: AccountEventResponseHandler.process_response()
   def process(%AccountEventMap{action: :create_account} = event_map) do
     build_create_account(event_map)
     |> Repo.transaction()

@@ -11,6 +11,9 @@ defmodule DoubleEntryLedger.EventStoreTest do
   alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
   alias DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError
 
+  doctest EventStoreHelper
+  doctest EventStore
+
   describe "create/1" do
     setup [:create_instance]
 

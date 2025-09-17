@@ -8,15 +8,15 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Event changesets from TransactionEventMaps or attribute maps
+  * **Changeset Building**: Create Event changesets from TransactionEventMaps or AccountEventMaps
   * **Event Relationships**: Look up related events by source identifiers
-  * **Transaction Linking**: Find transactions associated with events
+  * **Transaction Linking**: Find transactions and accounts associated with events
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
   * **Status Management**: Create changesets to update event status and error information
 
   ## Usage Examples
 
-  Building a changeset from an TransactionEventMap:
+  Building a changeset from an EventMap:
 
       event_changeset = EventStoreHelper.build_create(event_map)
 
@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
       multi =
         Ecto.Multi.new()
-        |> EventStoreHelper.build_get_create_event_transaction(:transaction, update_event)
+        |> EventStoreHelper.build_get_create_transaction_event_transaction(:transaction, update_event)
         |> Ecto.Multi.update(:event, fn %{transaction: transaction} ->
           EventStoreHelper.build_mark_as_processed(update_event, transaction.id)
         end)
@@ -41,13 +41,19 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   alias DoubleEntryLedger.EventWorker.UpdateEventError
 
   @doc """
-  Builds an Event changeset from an TransactionEventMap or attribute map.
+  Builds an Event changeset from a TransactionEventMap or AccountEventMap.
+
+  Creates a new Event changeset suitable for database insertion, converting the
+  provided event map structure into the appropriate Event attributes.
 
   ## Parameters
-    - event_map_or_attrs: Either an TransactionEventMap struct or a plain map of attributes
+
+  * `event_map` - Either a TransactionEventMap or AccountEventMap struct containing event data
 
   ## Returns
-    - Ecto.Changeset.t() A changeset for creating a new Event
+
+  * `Ecto.Changeset.t(Event.t())` - A changeset for creating a new Event
+
   """
   @spec build_create(TransactionEventMap.t() | AccountEventMap.t()) :: Changeset.t(Event.t())
   def build_create(%TransactionEventMap{} = event_map) do
@@ -100,20 +106,21 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   end
 
   @doc """
-  Gets the transaction associated with a create event.
+  Gets the transaction associated with a create transaction event.
 
-  This function finds the original create event corresponding to an update event
-  and returns its associated transaction.
+  This function finds the original create transaction event corresponding to an update event
+  and returns its associated transaction. Used primarily when processing update events
+  to locate the original transaction to modify.
 
   ## Parameters
-    - `event`: An Event struct containing source, source_idempk, and instance_id
+
+  * `event` - An Event struct containing source, source_idempk, and instance_id
 
   ## Returns
-    - `{:ok, {Transaction.t(), Event.t()}}`: The transaction and create event if found and processed
-    - Raises `UpdateEventError` if the create event doesn't exist or isn't processed
 
-  ## Implementation Notes
-  This is typically used when processing update events to find the original transaction to modify.
+  * `{:ok, {Transaction.t(), Event.t()}}` - The transaction and create event if found and processed
+  * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
+
   """
   @spec get_create_transaction_event_transaction(Event.t()) ::
           {:ok, {Transaction.t(), Event.t()}}
@@ -137,6 +144,23 @@ defmodule DoubleEntryLedger.EventStoreHelper do
     end
   end
 
+  @doc """
+  Gets the account associated with a create account event.
+
+  This function finds the original create account event corresponding to an update event
+  and returns its associated account. Used primarily when processing account update events
+  to locate the original account to modify.
+
+  ## Parameters
+
+  * `event` - An Event struct containing source, source_idempk, and instance_id
+
+  ## Returns
+
+  * `{:ok, {Account.t(), Event.t()}}` - The account and create event if found and processed
+  * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
+
+  """
   @spec get_create_account_event_account(Event.t()) ::
           {:ok, {Account.t(), Event.t()}}
           | {:error | :pending_error, String.t(), Event.t() | nil}
@@ -160,18 +184,22 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   end
 
   @doc """
-  Builds an Ecto.Multi step to get a create event's transaction.
+  Builds an Ecto.Multi step to get a create transaction event's transaction.
 
   This function adds a step to an Ecto.Multi that retrieves the transaction associated with
-  the create event corresponding to an update event.
+  the create event corresponding to an update event. Handles error cases by wrapping
+  exceptions in the result tuple.
 
   ## Parameters
-    - `multi`: The Ecto.Multi instance
-    - `step`: The atom representing the step name
-    - `event_or_step`: Either an Event struct or the name of a previous step in the Multi
+
+  * `multi` - The Ecto.Multi instance to add the step to
+  * `step` - The atom representing the step name in the Multi
+  * `event_or_step` - Either an Event struct or the name of a previous step in the Multi
 
   ## Returns
-    - `Ecto.Multi.t()`: The updated Multi instance with the new step added
+
+  * `Ecto.Multi.t()` - The updated Multi instance with the new step added
+
   """
   @spec build_get_create_transaction_event_transaction(Ecto.Multi.t(), atom(), Event.t() | atom()) ::
           Ecto.Multi.t()
@@ -194,6 +222,24 @@ defmodule DoubleEntryLedger.EventStoreHelper do
     end)
   end
 
+  @doc """
+  Builds an Ecto.Multi step to get a create account event's account.
+
+  This function adds a step to an Ecto.Multi that retrieves the account associated with
+  the create event corresponding to an update event. Handles error cases by wrapping
+  exceptions in the result tuple.
+
+  ## Parameters
+
+  * `multi` - The Ecto.Multi instance to add the step to
+  * `step` - The atom representing the step name in the Multi
+  * `event_or_step` - Either an Event struct or the name of a previous step in the Multi
+
+  ## Returns
+
+  * `Ecto.Multi.t()` - The updated Multi instance with the new step added
+
+  """
   @spec build_get_create_account_event_account(Ecto.Multi.t(), atom(), Event.t() | atom()) ::
           Ecto.Multi.t()
   def build_get_create_account_event_account(
