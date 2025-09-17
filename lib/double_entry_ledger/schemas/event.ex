@@ -209,6 +209,12 @@ defmodule DoubleEntryLedger.Event do
     |> put_transaction_payload(payload, &TransactionData.changeset/2)
   end
 
+  def changeset(event, %{action: :update_account} = attrs) do
+    event
+    |> base_changeset(attrs)
+    |> update_changeset()
+  end
+
   def changeset(event, %{} = attrs) do
     event
     |> base_changeset(attrs)

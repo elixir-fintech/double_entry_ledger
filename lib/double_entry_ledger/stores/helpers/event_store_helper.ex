@@ -194,6 +194,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
     end)
   end
 
+  @spec build_get_create_account_event_account(Ecto.Multi.t(), atom(), Event.t() | atom()) :: Ecto.Multi.t()
   def build_get_create_account_event_account(
         multi,
         step,
@@ -201,11 +202,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
       ) do
     multi
     |> Multi.run(step, fn _, changes ->
-      event =
-        cond do
-          is_struct(event_or_step, Event) -> event_or_step
-          is_atom(event_or_step) -> Map.fetch!(changes, event_or_step)
-        end
+      event = get_event(event_or_step, changes)
 
       try do
         {:ok, {account, _}} = get_create_account_event_account(event)
@@ -215,5 +212,13 @@ defmodule DoubleEntryLedger.EventStoreHelper do
           {:ok, {:error, e}}
       end
     end)
+  end
+
+  @spec get_event(Event.t() | atom(), map()) :: Event.t()
+  defp get_event(event_or_step, changes) do
+    cond do
+      is_struct(event_or_step, Event) -> event_or_step
+      is_atom(event_or_step) -> Map.fetch!(changes, event_or_step)
+    end
   end
 end

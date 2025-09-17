@@ -9,4 +9,10 @@ defmodule DoubleEntryLedger.AccountStoreHelper do
     %Account{}
     |> Account.changeset(account_params)
   end
+
+  @spec build_update(Account.t(), AccountData.t()) :: Ecto.Changeset.t(Account.t())
+  def build_update(%Account{} = account, account_data) do
+    account
+    |> Account.update_changeset(AccountData.to_map(account_data))
+  end
 end
