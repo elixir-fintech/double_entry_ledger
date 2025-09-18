@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
       # Successful account creation
       iex> alias DoubleEntryLedger.Event.AccountEventMap
       iex> alias DoubleEntryLedger.{Account, Event}
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{name: "Main Instance"})
+      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Main:Instance"})
       iex> event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",
@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
       true
 
       iex> alias DoubleEntryLedger.Event.AccountEventMap
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{name: "Main Instance"})
+      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Main:Instance"})
       iex> invalid_event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",

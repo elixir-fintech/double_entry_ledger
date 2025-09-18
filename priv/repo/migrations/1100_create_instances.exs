@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateInstances do
   def change do
     create table(:instances, primary_key: false, prefix: "double_entry_ledger") do
       add :id, :binary_id, primary_key: true
-      add :name, :string
+      add :address, :string
       add :description, :string
       add :config, :map, default: %{}
 

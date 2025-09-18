@@ -127,7 +127,7 @@ defmodule DoubleEntryLedger.Entry do
 
       # Create a posted debit entry
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
-      iex> {:ok, instance} = InstanceStore.create(%{name: "Test Instance"})
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Test:Instance"})
       iex> {:ok, account} = AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD})
       iex> attrs = %{
       ...>   type: :debit,
@@ -232,7 +232,7 @@ defmodule DoubleEntryLedger.Entry do
       # Update a pending entry to be posted
       # An entry has to be created first using an event
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
-      iex> {:ok, instance} = InstanceStore.create(%{name: "instance1"})
+      iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{
       ...>    name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{

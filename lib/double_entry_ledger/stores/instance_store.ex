@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.InstanceStore do
   Creating a new ledger instance:
 
       {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{
-        name: "Business Ledger",
+        address: "Business Ledger",
         metadata: %{owner: "ACME Corp"}
       })
 
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.InstanceStore do
       instance = DoubleEntryLedger.InstanceStore.get_by_id(instance_id)
       {:ok, updated_instance} = DoubleEntryLedger.InstanceStore.update(
         instance.id,
-        %{name: "Updated Ledger Name"}
+        %{address: "Updated:Ledger:address"}
       )
 
   Verifying ledger balance integrity:
@@ -62,10 +62,10 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   ## Examples
 
-      iex> attrs = %{name: "Test Ledger"}
+      iex> attrs = %{address: "Test:Ledger"}
       iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(attrs)
-      iex> instance.name
-      "Test Ledger"
+      iex> instance.address
+      "Test:Ledger"
 
   """
   @spec create(map()) :: {:ok, Instance.t()} | {:error, Ecto.Changeset.t()}
@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{name: "Sample Ledger"})
+      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Ledger"})
       iex> retrieved = DoubleEntryLedger.InstanceStore.get_by_id(instance.id)
       iex> retrieved.id == instance.id
       true
@@ -118,10 +118,10 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{name: "Ledger"})
-      iex> {:ok, updated_instance} = DoubleEntryLedger.InstanceStore.update(instance.id, %{name: "Updated Ledger"})
-      iex> updated_instance.name
-      "Updated Ledger"
+      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Ledger"})
+      iex> {:ok, updated_instance} = DoubleEntryLedger.InstanceStore.update(instance.id, %{address: "Updated:Ledger"})
+      iex> updated_instance.address
+      "Updated:Ledger"
 
   """
   @spec update(Ecto.UUID.t(), map()) :: {:ok, Instance.t()} | {:error, Ecto.Changeset.t()}
@@ -147,7 +147,7 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{name: "Temporary Ledger"})
+      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Temporary:Ledger"})
       iex> {:ok, _} = DoubleEntryLedger.InstanceStore.delete(instance.id)
       iex> DoubleEntryLedger.InstanceStore.get_by_id(instance.id) == nil
       true

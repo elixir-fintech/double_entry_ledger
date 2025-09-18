@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.InstanceTest do
       assert %Ecto.Changeset{
                valid?: false,
                errors: [
-                 name: {"can't be blank", [validation: :required]}
+                 address: {"can't be blank", [validation: :required]}
                ]
              } = Instance.changeset(%Instance{}, %{})
     end
@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.InstanceTest do
     test "sets the config and metadata to empty maps at insert" do
       {:ok, instance} =
         Repo.insert(
-          Instance.changeset(%Instance{}, %{name: "some name"}),
+          Instance.changeset(%Instance{}, %{address: "some name"}),
           returning: true
         )
 

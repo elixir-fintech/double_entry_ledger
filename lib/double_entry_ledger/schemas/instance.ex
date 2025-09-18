@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Instance do
 
   ## Schema Structure
 
-  The instance schema contains basic metadata (name, description) along with
+  The instance schema contains basic metadata (address, description) along with
   configuration settings and associations to its accounts and transactions.
   """
   use DoubleEntryLedger.BaseSchema
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Instance do
   * `id`: UUID primary key
   * `config`: Map of configuration settings for this instance
   * `description`: Optional text description
-  * `name`: Human-readable instance name (required)
+  * `address`: Human-readable instance address (required)
   * `accounts`: List of accounts belonging to this instance
   * `transactions`: List of transactions belonging to this instance
   * `inserted_at`: Creation timestamp
@@ -50,7 +50,7 @@ defmodule DoubleEntryLedger.Instance do
           id: binary() | nil,
           config: map() | nil,
           description: String.t() | nil,
-          name: String.t() | nil,
+          address: String.t() | nil,
           accounts: [Account.t()] | Ecto.Association.NotLoaded.t(),
           transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.Instance do
   schema "instances" do
     field(:config, :map)
     field(:description, :string)
-    field(:name, :string)
+    field(:address, :string)
     has_many(:accounts, Account, foreign_key: :instance_id)
     has_many(:transactions, Transaction, foreign_key: :instance_id)
 
@@ -106,13 +106,13 @@ defmodule DoubleEntryLedger.Instance do
 
   ## Validations
 
-  * Required fields: `:name`
+  * Required fields: `:address`
   * Optional fields: `:description`, `:config`
 
   ## Examples
 
       iex> instance = %Instance{}
-      iex> changeset = Instance.changeset(instance, %{name: "New Ledger"})
+      iex> changeset = Instance.changeset(instance, %{address: "New Ledger"})
       iex> changeset.valid?
       true
 
@@ -124,8 +124,8 @@ defmodule DoubleEntryLedger.Instance do
   @spec changeset(Instance.t(), map()) :: Ecto.Changeset.t()
   def changeset(instance, attrs) do
     instance
-    |> cast(attrs, [:name, :description, :config])
-    |> validate_required([:name])
+    |> cast(attrs, [:address, :description, :config])
+    |> validate_required([:address])
   end
 
   @doc """
@@ -149,12 +149,12 @@ defmodule DoubleEntryLedger.Instance do
 
   ## Examples
 
-      iex> {:ok, instance} = Repo.insert(%Instance{name: "Temporary Ledger"})
+      iex> {:ok, instance} = Repo.insert(%Instance{address: "Temporary Ledger"})
       iex> changeset = Instance.delete_changeset(instance)
       iex> {:ok, _} = Repo.delete(changeset)
 
 
-      iex> {:ok, instance} = Repo.insert(%Instance{name: "Temporary Ledger"})
+      iex> {:ok, instance} = Repo.insert(%Instance{address: "Temporary:Ledger"})
       iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD})
       iex> changeset = Instance.delete_changeset(instance)
       iex> {:error, _} = Repo.delete(changeset)
@@ -185,7 +185,7 @@ defmodule DoubleEntryLedger.Instance do
 
   ## Example
 
-      iex> {:ok, instance} = Repo.insert(%Instance{name: "Balanced Ledger"})
+      iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
       iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}})
       iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account 2", instance_id: instance.id, type: :liability, currency: :USD, posted: %{amount: 10, debit: 0, credit: 10}})
       iex> instance = Repo.preload(instance, [:accounts])
@@ -198,7 +198,7 @@ defmodule DoubleEntryLedger.Instance do
       }}
 
       iex> alias DoubleEntryLedger.{AccountStore, Balance}
-      iex> {:ok, instance} = Repo.insert(%Instance{name: "Balanced Ledger"})
+      iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
       iex> AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}})
       iex> AccountStore.create(%{name: "Test Account 2", instance_id: instance.id, type: :liability, currency: :USD})
       iex> instance = Repo.preload(instance, [:accounts])
@@ -238,7 +238,7 @@ defmodule DoubleEntryLedger.Instance do
 
   ## Example
 
-      iex> {:ok, instance} = Repo.insert(%Instance{name: "Value Ledger"})
+      iex> {:ok, instance} = Repo.insert(%Instance{address: "Value Ledger"})
       iex> instance = Repo.preload(instance, [:accounts])
       iex> Instance.ledger_value(instance)
       %{

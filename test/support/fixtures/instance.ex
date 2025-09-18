@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.InstanceFixtures do
         config: %{},
         description: "some description",
         metadata: %{},
-        name: "some name"
+        address: "some:address"
       })
 
     {:ok, instance} =
