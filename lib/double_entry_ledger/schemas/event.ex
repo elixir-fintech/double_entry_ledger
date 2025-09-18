@@ -376,25 +376,25 @@ defmodule DoubleEntryLedger.Event do
     case action do
       :create_transaction ->
         unique_constraint(changeset, :source_idempk,
-          name: "unique_instance_source_source_idempk",
+          name: "unique_for_create_transaction",
           message: "already exists for this instance"
         )
 
       :update_transaction ->
         unique_constraint(changeset, :update_idempk,
-          name: "unique_instance_source_source_idempk_update_idempk",
+          name: "unique_for_update_transaction",
           message: "already exists for this source_idempk"
         )
 
       :create_account ->
         unique_constraint(changeset, :source_idempk,
-          name: "unique_instance_source_source_idempk_for_create_account",
+          name: "unique_for_create_account",
           message: "already exists for this instance"
         )
 
       :update_account ->
         unique_constraint(changeset, :update_idempk,
-          name: "unique_instance_source_source_idempk_update_idempk_for_update_account",
+          name: "unique_for_update_account",
           message: "already exists for this source_idempk"
         )
 

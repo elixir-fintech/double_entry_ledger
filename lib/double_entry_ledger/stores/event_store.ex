@@ -233,14 +233,19 @@ defmodule DoubleEntryLedger.EventStore do
   """
   @spec list_all_for_transaction(Ecto.UUID.t()) :: list(Event.t())
   def list_all_for_transaction(transaction_id) do
-    from(e in Event,
-      join: evt in assoc(e, :event_transaction_links),
-      where: evt.transaction_id == ^transaction_id,
-      select: e,
-      order_by: [desc: e.inserted_at]
-    )
-    |> preload([:event_queue_item, :transactions, :account])
+    base_transaction_query(transaction_id)
+    |> order_by([desc: :inserted_at])
     |> Repo.all()
+  end
+
+  @spec get_create_transaction_event(Ecto.UUID.t()) :: Event.t()
+  def get_create_transaction_event(transaction_id) do
+    base_transaction_query(transaction_id)
+    |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
+    |> where([e], e.action == :create_transaction)
+    |> where([_,_, eqi], eqi.status == :processed)
+    |> order_by([asc: :inserted_at])
+    |> Repo.one()
   end
 
   @doc """
@@ -254,14 +259,19 @@ defmodule DoubleEntryLedger.EventStore do
   """
   @spec list_all_for_account(Ecto.UUID.t()) :: list(Event.t())
   def list_all_for_account(account_id) do
-    from(e in Event,
-      join: evt in assoc(e, :event_account_link),
-      where: evt.account_id == ^account_id,
-      select: e,
-      order_by: [desc: e.inserted_at]
-    )
-    |> preload([:event_queue_item, :transactions, :account])
+    base_account_query(account_id)
+    |> order_by([desc: :inserted_at])
     |> Repo.all()
+  end
+
+  @spec get_create_account_event(Ecto.UUID.t()) :: Event.t()
+  def get_create_account_event(account_id) do
+    base_account_query(account_id)
+    |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
+    |> where([e], e.action == :create_account)
+    |> where([_,_, eqi], eqi.status == :processed)
+    |> order_by([asc: :inserted_at])
+    |> Repo.one()
   end
 
   @doc """
@@ -287,5 +297,25 @@ defmodule DoubleEntryLedger.EventStore do
     event
     |> Changeset.change(errors: errors, status: status, occ_retry_count: retries)
     |> Repo.insert()
+  end
+
+  @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
+  defp base_transaction_query(transaction_id) do
+    from(e in Event,
+      join: evt in assoc(e, :event_transaction_links),
+      where: evt.transaction_id == ^transaction_id,
+      select: e
+    )
+    |> preload([:event_queue_item, :account, transactions: :entries])
+  end
+
+  @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
+  defp base_account_query(account_id) do
+    from(e in Event,
+      join: evt in assoc(e, :event_account_link),
+      where: evt.account_id == ^account_id,
+      select: e
+    )
+    |> preload([:event_queue_item, :transactions, :account])
   end
 end
