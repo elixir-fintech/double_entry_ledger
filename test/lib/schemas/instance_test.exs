@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.InstanceTest do
     test "sets the config and metadata to empty maps at insert" do
       {:ok, instance} =
         Repo.insert(
-          Instance.changeset(%Instance{}, %{address: "some name"}),
+          Instance.changeset(%Instance{}, %{address: "some:name"}),
           returning: true
         )
 

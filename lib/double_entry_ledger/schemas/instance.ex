@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Instance do
   ## Examples
 
       iex> instance = %Instance{}
-      iex> changeset = Instance.changeset(instance, %{address: "New Ledger"})
+      iex> changeset = Instance.changeset(instance, %{address: "New:Ledger"})
       iex> changeset.valid?
       true
 
@@ -126,6 +126,7 @@ defmodule DoubleEntryLedger.Instance do
     instance
     |> cast(attrs, [:address, :description, :config])
     |> validate_required([:address])
+    |> validate_format(:address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/, message: "is not a valid address")
   end
 
   @doc """
