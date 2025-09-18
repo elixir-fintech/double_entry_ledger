@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
   - Other failures → String error message with details
 
   """
-  @spec process(AccountEventMap.t()) :: AccountEventResponseHandler.process_response()
+  @spec process(AccountEventMap.t()) :: AccountEventResponseHandler.response()
   def process(%AccountEventMap{action: :update_account} = event_map) do
     build_update_account(event_map)
     |> handle_build_update_account(event_map)

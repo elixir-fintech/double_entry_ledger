@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.EventWorker.AccountEventResponseHandler do
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.{Event, Account}
 
   @typedoc """
   Success response tuple containing the processed account and associated event.

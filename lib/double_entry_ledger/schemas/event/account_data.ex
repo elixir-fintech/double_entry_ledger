@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
           context: map() | nil,
           normal_balance: Types.credit_and_debit() | nil,
           type: Types.account_type() | nil,
-          allowed_negative: boolean()
+          allowed_negative: boolean() | nil
         }
 
   @currency_atoms Currency.currency_atoms()
@@ -47,7 +47,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
     field(:context, :map)
     field(:normal_balance, Ecto.Enum, values: @credit_and_debit)
     field(:type, Ecto.Enum, values: @account_types)
-    field(:allowed_negative, :boolean, default: false)
+    field(:allowed_negative, :boolean)
   end
 
   @doc """
