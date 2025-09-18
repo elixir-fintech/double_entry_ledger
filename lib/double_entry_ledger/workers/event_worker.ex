@@ -19,10 +19,11 @@ defmodule DoubleEntryLedger.EventWorker do
 
   ### TransactionEventMap
   - `:create_transaction` - Creates new double-entry transactions with balanced entries
-  - `:update_transaction` - Update pending transactions only.
+  - `:update_transaction` - Updates pending transactions only
 
   ### AccountEventMap
   - `:create_account` - Creates new ledger accounts with specified types and currencies
+  - `:update_account` - Updates existing account properties
 
   ## Event Processing Flow
 
@@ -75,11 +76,12 @@ defmodule DoubleEntryLedger.EventWorker do
 
   - `CreateTransactionEventMap` - New transaction creation from event maps
   - `UpdateTransactionEventMap` - Transaction updates from event maps
-  - `CreateAccountEventMap` - Account creation from event maps
   - `CreateTransactionEvent` - Transaction creation from stored events
   - `UpdateTransactionEvent` - Transaction updates from stored events
   - `CreateTransactionEventMapNoSaveOnError` - Transaction creation without error persistence
   - `UpdateTransactionEventMapNoSaveOnError` - Transaction updates without error persistence
+  - `CreateAccountEventMapNoSaveOnError` - Account creation without error persistence
+  - `UpdateAccountEventMapNoSaveOnError` - Account updates without error persistence
 
   ## Examples
 
@@ -132,6 +134,7 @@ defmodule DoubleEntryLedger.EventWorker do
     CreateTransactionEventMap,
     UpdateTransactionEventMap,
     CreateAccountEventMapNoSaveOnError,
+    UpdateAccountEventMapNoSaveOnError,
     CreateTransactionEventMapNoSaveOnError,
     UpdateTransactionEventMapNoSaveOnError
   }
@@ -222,7 +225,7 @@ defmodule DoubleEntryLedger.EventWorker do
   ## Parameters
 
   - `event_map` - A validated event map struct with the following key fields:
-    - `:action` - The operation type (`:create_transaction`, `:update_transaction`, `:create_account`)
+    - `:action` - The operation type (`:create_transaction`, `:update_transaction`, `:create_account`, `:update_account`)
     - `:instance_id` - UUID of the ledger instance
     - `:source` - External system identifier
     - `:source_idempk` - Idempotency key from source system
@@ -241,6 +244,7 @@ defmodule DoubleEntryLedger.EventWorker do
 
   ### Account Events
   - `:create_account` - Creates new ledger accounts with specified types and currencies
+  - `:update_account` - Updates existing account properties
 
   ## Examples
 
@@ -408,6 +412,10 @@ defmodule DoubleEntryLedger.EventWorker do
 
   def process_new_event_no_save_on_error(%AccountEventMap{action: :create_account} = event_map) do
     CreateAccountEventMapNoSaveOnError.process(event_map)
+  end
+
+  def process_new_event_no_save_on_error(%AccountEventMap{action: :update_account} = event_map) do
+    UpdateAccountEventMapNoSaveOnError.process(event_map)
   end
 
   def process_new_event_no_save_on_error(_event_map), do: {:error, :action_not_supported}

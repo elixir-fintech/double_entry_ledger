@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.EventStore do
 
     * **Event Management**: Create, retrieve, and track events.
     * **Event Processing**: Claim events for processing, mark events as processed or failed.
-    * **Event Queries**: Find events by instance, transaction ID, or other criteria.
+    * **Event Queries**: Find events by instance, transaction ID, account ID, or other criteria.
     * **Error Handling**: Track and manage errors that occur during event processing.
 
   ## Usage Examples
@@ -20,18 +20,19 @@ defmodule DoubleEntryLedger.EventStore do
   If the event is processed immediately, it will create the associated transaction
   and update the event status. If the event processing fails, it will be queued and retried.
 
-      event_params(%{
-        instance_id: instance.id,
-        action: :create_transaction,
-        transaction_data: %{
-          entries: [
-            %{account_id: cash_account.id, amount: 100_00, type: :debit},
-            %{account_id: revenue_account.id, amount: 100_00, type: :credit}
-          ],
-          description: "Cash sale",
-          metadata: %{reference_number: "INV-001"}
+      event_params = %{
+        "instance_id" => instance.id,
+        "action" => "create_transaction",
+        "source" => "payment_system",
+        "source_idempk" => "txn_123",
+        "payload" => %{
+          "status" => "pending",
+          "entries" => [
+            %{"account_id" => cash_account.id, "amount" => 100_00, "currency" => "USD"},
+            %{"account_id" => revenue_account.id, "amount" => 100_00, "currency" => "USD"}
+          ]
         }
-      })
+      }
 
       # create and process the event immediately
       {:ok, transaction, event} = DoubleEntryLedger.EventStore.process_from_event_params(event_params)
@@ -46,6 +47,10 @@ defmodule DoubleEntryLedger.EventStore do
   ### Retrieving events for a transaction
 
       events = DoubleEntryLedger.EventStore.list_all_for_transaction(transaction.id)
+
+  ### Retrieving events for an account
+
+      events = DoubleEntryLedger.EventStore.list_all_for_account(account.id)
 
   ### Process event without saving it in the EventStore on error
   If you want more control over error handling, you can process an event without saving it
@@ -68,6 +73,9 @@ defmodule DoubleEntryLedger.EventStore do
   alias DoubleEntryLedger.{Repo, Event}
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.EventWorker
+
+  @account_actions Event.actions(:account) |> Enum.map(&Atom.to_string/1)
+  @transaction_actions Event.actions(:transaction) |> Enum.map(&Atom.to_string/1)
 
   @doc """
   Retrieves an event by its unique ID.
@@ -109,23 +117,30 @@ defmodule DoubleEntryLedger.EventStore do
   @doc """
   Processes an event from provided parameters, handling the entire workflow.
 
-  This function creates an TransactionEventMap from the parameters, then processes it through
+  This function creates a TransactionEventMap from the parameters, then processes it through
   the EventWorker to create both an event record in the EventStore and creates the necessary projections.
 
   If the processing fails, it will return an error tuple with details about the failure. The event is saved to the EventStore and then retried later.
 
+  ## Supported Actions
+
+  ### Transaction Actions
+  - `"create_transaction"` - Creates new double-entry transactions with balanced entries
+  - `"update_transaction"` - Updates existing pending transactions
+
   ## Parameters
-    - `event_params`: Map containing event parameters including action and transaction data
+    - `event_params`: Map containing event parameters including action and payload data
 
   ## Returns
-    - `{:ok, transaction, event}`: If the event was successfully processed
+    - `{:ok, transaction, event}`: If a transaction event was successfully processed
     - `{:error, event}`: If the event processing failed
     - `{:error, changeset}`: If validation failed
     - `{:error, reason}`: If processing failed for other reasons
   """
   @spec process_from_event_params(map()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process_from_event_params(event_params) do
+  def process_from_event_params(%{"action" => action} = event_params)
+      when action in @transaction_actions do
     case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
         EventWorker.process_new_event(event_map)
@@ -137,10 +152,29 @@ defmodule DoubleEntryLedger.EventStore do
 
   @doc """
   Same as `process_from_event_params/1`, but does not save the event on error.
+
+  This function provides an alternative processing strategy for scenarios where you want
+  to validate and process events but avoid storing error states in the EventQueueItem records.
+  Using this version means that if processing fails, the event will not be saved,
+  allowing for custom error handling or debugging without polluting the event store.
+
+  ## Supported Actions
+
+  Same as `process_from_event_params/1` - supports both transaction and account actions.
+
+  ## Parameters
+    - `event_params`: Map containing event parameters including action and payload data
+
+  ## Returns
+    - `{:ok, transaction, event}`: If a transaction event was successfully processed
+    - `{:ok, account, event}`: If an account event was successfully processed
+    - `{:error, changeset}`: If validation failed
+    - `{:error, reason}`: If processing failed for other reasons
   """
   @spec process_from_event_params_no_save_on_error(map()) ::
           EventWorker.success_tuple() | {:error, Ecto.Changeset.t() | String.t()}
-  def process_from_event_params_no_save_on_error(%{"action" => "create_account"} = event_params) do
+  def process_from_event_params_no_save_on_error(%{"action" => action} = event_params)
+      when action in @account_actions do
     case AccountEventMap.create(event_params) do
       {:ok, event_map} ->
         EventWorker.process_new_event_no_save_on_error(event_map)
@@ -150,7 +184,8 @@ defmodule DoubleEntryLedger.EventStore do
     end
   end
 
-  def process_from_event_params_no_save_on_error(event_params) do
+  def process_from_event_params_no_save_on_error(%{"action" => action} = event_params)
+      when action in @transaction_actions do
     case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
         EventWorker.process_new_event_no_save_on_error(event_map)

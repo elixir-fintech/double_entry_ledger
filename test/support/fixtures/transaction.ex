@@ -22,15 +22,15 @@ defmodule DoubleEntryLedger.TransactionFixtures do
       ) do
     event =
       %{
-        action: :create_transaction,
-        source: "transaction",
-        source_idempk: Ecto.UUID.generate(),
-        instance_id: instance.id,
-        payload: %{
-          status: status,
-          entries: [
-            %{currency: "EUR", amount: 100, account_id: acc1.id},
-            %{currency: "EUR", amount: 100, account_id: acc2.id}
+        "action" => "create_transaction",
+        "source" => "transaction",
+        "source_idempk" => Ecto.UUID.generate(),
+        "instance_id" => instance.id,
+        "payload" => %{
+          "status" => status,
+          "entries" => [
+            %{"currency" => "EUR", "amount" => 100, "account_id" => acc1.id},
+            %{"currency" => "EUR", "amount" => 100, "account_id" => acc2.id}
           ]
         }
       }
@@ -39,6 +39,6 @@ defmodule DoubleEntryLedger.TransactionFixtures do
     Map.put(ctx, :transaction, transaction)
   end
 
-  def create_pending_transaction(ctx), do: create_transaction(ctx, :pending)
-  def create_posted_transaction(ctx), do: create_transaction(ctx, :posted)
+  def create_pending_transaction(ctx), do: create_transaction(ctx, "pending")
+  def create_posted_transaction(ctx), do: create_transaction(ctx, "posted")
 end

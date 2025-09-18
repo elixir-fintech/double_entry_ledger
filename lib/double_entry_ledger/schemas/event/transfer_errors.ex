@@ -192,7 +192,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   defp build_payload_changeset(%{payload: %AccountData{} = payload}, account_changeset) do
     %AccountData{}
     |> AccountData.changeset(AccountData.to_map(payload))
-    |> transfer_errors_between_changesets(account_changeset, [:name, :type, :currency])
+    |> transfer_errors_between_changesets(account_changeset, [:name, :type, :currency, :allowed_negative, :description, :normal_balance, :context])
     |> Map.put(:action, :insert)
   end
 
