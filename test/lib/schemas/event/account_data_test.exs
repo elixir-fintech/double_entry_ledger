@@ -102,9 +102,6 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
       expected_map = %{
         currency: :USD,
         name: "another_name",
-        description: nil,
-        context: nil,
-        normal_balance: nil,
         type: :liability,
         allowed_negative: true
       }

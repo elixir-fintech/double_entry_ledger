@@ -10,6 +10,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
       add :source_idempk, :string, null: false
       add :source_data, :map, null: false, default: %{}
       add :update_idempk, :string
+      add :update_source, :string
 
       add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
 
@@ -22,6 +23,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create index(:events, [:inserted_at], prefix: "double_entry_ledger")
     create index(:events, [:source], prefix: "double_entry_ledger")
     create index(:events, [:source_idempk], prefix: "double_entry_ledger")
+    create index(:events, [:update_source], prefix: "double_entry_ledger")
     create index(:events, [:instance_id], prefix: "double_entry_ledger")
     create index(:events, [:instance_id, :action], prefix: "double_entry_ledger")
     create unique_index(:events, [:instance_id, :source, :source_idempk],
@@ -33,6 +35,16 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
       prefix: "double_entry_ledger",
       name: "unique_for_update_transaction",
       where: "action = 'update_transaction'"
+    )
+    create unique_index(:events, [:instance_id, :source, :source_idempk],
+      prefix: "double_entry_ledger",
+      name: "unique_for_create_account",
+      where: "action = 'create_account'"
+    )
+    create unique_index(:events, [:instance_id, :source, :source_idempk, :update_idempk],
+      prefix: "double_entry_ledger",
+      name: "unique_for_update_account",
+      where: "action = 'update_account'"
     )
   end
 end

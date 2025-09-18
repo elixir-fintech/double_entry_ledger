@@ -97,6 +97,7 @@ defmodule DoubleEntryLedger.Event do
           source_data: map() | nil,
           source_idempk: String.t() | nil,
           update_idempk: String.t() | nil,
+          update_source: String.t() | nil,
           payload: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
@@ -115,6 +116,7 @@ defmodule DoubleEntryLedger.Event do
     field(:source_data, :map, default: %{})
     field(:source_idempk, :string)
     field(:update_idempk, :string)
+    field(:update_source, :string)
     field(:payload, :map)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
@@ -197,15 +199,13 @@ defmodule DoubleEntryLedger.Event do
         %{action: :update_transaction, payload: %{status: :pending} = payload} = attrs
       ) do
     event
-    |> base_changeset(attrs)
-    |> update_changeset()
+    |> update_changeset(attrs)
     |> put_transaction_payload(payload, &TransactionData.changeset/2)
   end
 
   def changeset(event, %{action: :update_transaction, payload: payload} = attrs) do
     event
-    |> base_changeset(attrs)
-    |> update_changeset()
+    |> update_changeset(attrs)
     |> put_transaction_payload(payload, &TransactionData.update_event_changeset/2)
   end
 
@@ -217,8 +217,7 @@ defmodule DoubleEntryLedger.Event do
 
   def changeset(event, %{action: :update_account} = attrs) do
     event
-    |> base_changeset(attrs)
-    |> update_changeset()
+    |> update_changeset(attrs)
   end
 
   def changeset(event, %{} = attrs) do
@@ -286,7 +285,7 @@ defmodule DoubleEntryLedger.Event do
       event_action: event.action,
       event_source: event.source,
       event_trace_id:
-        [event.source, event.source_idempk, event.update_idempk]
+        [event.source, event.source_idempk, event.update_idempk, event.update_source]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("-")
     }
@@ -343,7 +342,7 @@ defmodule DoubleEntryLedger.Event do
     end
   end
 
-  @spec base_changeset(Event.t(), map()) :: Ecto.Changeset.t()
+  @spec base_changeset(Event.t() | Ecto.Changeset.t(Event.t()), map()) :: Ecto.Changeset.t()
   defp base_changeset(event, attrs) do
     attrs = Map.put_new(attrs, :event_queue_item, %{})
 
@@ -354,7 +353,6 @@ defmodule DoubleEntryLedger.Event do
       :source_data,
       :source_idempk,
       :instance_id,
-      :update_idempk,
       :payload
     ])
     |> validate_required([:action, :source, :source_idempk, :instance_id, :payload])
@@ -363,11 +361,12 @@ defmodule DoubleEntryLedger.Event do
     |> choose_unique_constraint()
   end
 
-  @spec update_changeset(Ecto.Changeset.t()) :: Ecto.Changeset.t()
-  defp update_changeset(changeset) do
-    changeset
+  @spec update_changeset(Event.t(), map()) :: Ecto.Changeset.t()
+  defp update_changeset(struct, attrs) do
+    struct
+    |> cast(attrs, [:update_idempk, :update_source])
     |> validate_required([:update_idempk])
-    |> choose_unique_constraint()
+    |> base_changeset(attrs)
   end
 
   defp choose_unique_constraint(changeset) do

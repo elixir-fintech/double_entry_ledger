@@ -158,9 +158,9 @@ defmodule DoubleEntryLedger.Event.AccountData do
   end
 
   @doc """
-  Converts an AccountData struct into a plain map with the same fields.
+  Converts an AccountData struct into a plain map with the same fields unless they are nil.
 
-  The resulting map includes these keys:
+  The resulting map may include these keys:
   :currency, :name, :description, :context, :normal_balance, :type, :allowed_negative
 
   ## Examples
@@ -175,7 +175,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       ...> }
       iex> map = AccountData.to_map(data)
       iex> Map.keys(map) |> Enum.sort()
-      [:allowed_negative, :context, :currency, :description, :name, :normal_balance, :type]
+      [:currency, :name,:type]
       iex> map.currency == data.currency and map.type == data.type and map.name == "Cash"
       true
   """
@@ -189,6 +189,8 @@ defmodule DoubleEntryLedger.Event.AccountData do
       type: Map.get(account_data, :type),
       allowed_negative: Map.get(account_data, :allowed_negative)
     }
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Enum.into(%{})
   end
 
   def to_map(_), do: %{}

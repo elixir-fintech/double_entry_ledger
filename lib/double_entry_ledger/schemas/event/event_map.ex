@@ -164,6 +164,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
           source_data: map() | nil,
           source_idempk: String.t(),
           update_idempk: String.t() | nil,
+          update_source: String.t() | nil,
           payload: payload_type
         }
 
@@ -261,6 +262,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
                  :source_data,
                  :source_idempk,
                  :update_idempk,
+                 :update_source,
                  :payload
                ]}
 
@@ -280,6 +282,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
         field(:source_data, :map, default: %{})
         field(:source_idempk, :string)
         field(:update_idempk, :string)
+        field(:update_source, :string)
 
         if unquote(payload_mod) == :map do
           field(:payload, :map)
@@ -319,7 +322,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
           :source,
           :source_data,
           :source_idempk,
-          :update_idempk
         ])
         |> validate_required([:action, :instance_id, :source, :source_idempk])
         |> validate_inclusion(
@@ -355,6 +357,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
       """
       def update_changeset(struct, attrs) do
         struct
+        |> cast(attrs, [:update_idempk, :update_source])
         |> base_changeset(attrs)
         |> validate_required([:update_idempk])
       end
@@ -431,7 +434,8 @@ defmodule DoubleEntryLedger.Event.EventMap do
         [
           Map.get(event_map, :source),
           Map.get(event_map, :source_idempk),
-          Map.get(event_map, :update_idempk)
+          Map.get(event_map, :update_idempk),
+          Map.get(event_map, :update_source)
         ]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("-")
@@ -523,6 +527,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
       source_data: Map.get(event_map, :source_data),
       source_idempk: Map.get(event_map, :source_idempk),
       update_idempk: Map.get(event_map, :update_idempk),
+      update_source: Map.get(event_map, :update_source),
       payload: payload_map
     }
   end
