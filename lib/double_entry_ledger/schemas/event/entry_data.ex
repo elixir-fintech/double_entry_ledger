@@ -123,9 +123,9 @@ defmodule DoubleEntryLedger.Event.EntryData do
   @spec to_map(t) :: map()
   def to_map(entry_data) do
     %{
-      account_id: entry_data.account_id,
-      amount: entry_data.amount,
-      currency: entry_data.currency
+      account_id: Map.get(entry_data, :account_id),
+      amount: Map.get(entry_data, :amount),
+      currency: Map.get(entry_data, :currency)
     }
   end
 end

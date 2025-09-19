@@ -188,14 +188,14 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
   """
   @spec to_map(t()) :: map()
-  def to_map(%{status: status, entries: entries}) do
+  def to_map(nil), do: %{}
+  def to_map(td) do
     %{
-      status: status,
-      entries: Enum.map(entries, &EntryData.to_map/1)
+      status: Map.get(td, :status),
+      entries: Enum.map(Map.get(td, :entries, []), &EntryData.to_map/1)
     }
   end
 
-  def to_map(_), do: %{}
 
   defp validate_entries_count(changeset) do
     entries = get_field(changeset, :entries, [])
