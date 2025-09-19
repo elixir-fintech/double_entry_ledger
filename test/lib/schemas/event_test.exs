@@ -22,19 +22,22 @@ defmodule DoubleEntryLedger.EventTest do
                  source: {"can't be blank", [validation: :required]},
                  source_idempk: {"can't be blank", [validation: :required]},
                  instance_id: {"can't be blank", [validation: :required]},
-                 payload: {"can't be blank", [validation: :required]}
+                 payload: {"can't be blank", [validation: :required]},
+                 event_map: {"can't be blank", [validation: :required]},
                ]
              } = Event.changeset(%Event{}, %{})
     end
 
     test "valid with required attributes for action create_transaction" do
-      attrs = %{
+      event_map = %{
         action: :create_transaction,
         source: "source",
         instance_id: Ecto.UUID.generate(),
         source_idempk: "source_idempk",
         payload: pending_payload()
       }
+
+      attrs = Map.put(event_map, :event_map, event_map)
 
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
     end
@@ -61,7 +64,7 @@ defmodule DoubleEntryLedger.EventTest do
 
   describe "changeset/2 for action: :update_transaction" do
     test "changeset valid for simple update action, without any entry information" do
-      attrs = %{
+      event_map = %{
         action: :update_transaction,
         source: "source",
         instance_id: Ecto.UUID.generate(),
@@ -72,6 +75,7 @@ defmodule DoubleEntryLedger.EventTest do
         }
       }
 
+      attrs = Map.put(event_map, :event_map, event_map)
       assert %Changeset{
                valid?: true
              } =

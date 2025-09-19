@@ -35,6 +35,8 @@ defmodule DoubleEntryLedger.Event.AccountData do
           allowed_negative: boolean() | nil
         }
 
+  @derive {Jason.Encoder, only: [:name, :currency, :description, :context, :normal_balance, :type, :allowed_negative]}
+
   @currency_atoms Currency.currency_atoms()
   @credit_and_debit Types.credit_and_debit()
   @account_types Types.account_types()

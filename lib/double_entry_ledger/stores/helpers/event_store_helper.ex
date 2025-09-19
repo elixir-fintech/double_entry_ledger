@@ -61,6 +61,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
       event_map
       |> TransactionEventMap.to_map()
       |> Map.put(:instance_id, instance_id)
+      |> Map.put(:event_map, event_map)
 
     %Event{}
     |> Event.changeset(attrs)
@@ -71,6 +72,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
       event_map
       |> AccountEventMap.to_map()
       |> Map.put(:instance_id, instance_id)
+      |> Map.put(:event_map, event_map)
 
     %Event{}
     |> Event.changeset(attrs)
@@ -79,7 +81,11 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   @doc """
   Retrieves an event by its action and source identifiers with preloaded associations.
 
-  This function looks up an event using its action, source system identifier,
+  This function looks up an event using i
+      event_map
+      |> TransactionEventMap.to_map()
+      |> Map.put(:instance_id, instance_id)
+      |> Mts action, source system identifier,
   source-specific identifier, and instance ID. The returned event includes preloaded
   associations for event_queue_item, account, and transactions with their entries.
 

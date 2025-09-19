@@ -99,6 +99,7 @@ defmodule DoubleEntryLedger.Event do
           update_idempk: String.t() | nil,
           update_source: String.t() | nil,
           payload: map() | nil,
+          event_map: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
@@ -118,6 +119,7 @@ defmodule DoubleEntryLedger.Event do
     field(:update_idempk, :string)
     field(:update_source, :string)
     field(:payload, :map)
+    field(:event_map, :map)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_many(:event_transaction_links, EventTransactionLink)
@@ -179,7 +181,7 @@ defmodule DoubleEntryLedger.Event do
   ## Examples
 
       # Create event changeset
-      iex> attrs = %{
+      iex> event_map = %{
       ...>   action: :create_transaction,
       ...>   source: "api",
       ...>   source_idempk: "order-123",
@@ -189,6 +191,7 @@ defmodule DoubleEntryLedger.Event do
       ...>     %{account_id: "650e8400-e29b-41d4-a716-446655440000", type: :credit, amount: 100, currency: :USD}
       ...>   ]}
       ...> }
+      ...> attrs = Map.put(event_map, :event_map, event_map)
       iex> changeset = Event.changeset(%Event{}, attrs)
       iex> changeset.valid?
       true
@@ -353,9 +356,10 @@ defmodule DoubleEntryLedger.Event do
       :source_data,
       :source_idempk,
       :instance_id,
-      :payload
+      :payload,
+      :event_map
     ])
-    |> validate_required([:action, :source, :source_idempk, :instance_id, :payload])
+    |> validate_required([:action, :source, :source_idempk, :instance_id, :payload, :event_map])
     |> validate_inclusion(:action, @actions)
     |> cast_assoc(:event_queue_item, with: &EventQueueItem.changeset/2, required: true)
     |> choose_unique_constraint()
