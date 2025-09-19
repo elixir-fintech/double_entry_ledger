@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   """
   def run_load_test(concurrency) do
     debit_sum = 100_000
-    {:ok, instance} = %Instance{} |> Repo.insert()
+    {:ok, instance} = %Instance{address: "instance_#{System.unique_integer()}"} |> Repo.insert()
     sources = create_debit_sources(concurrency, instance, debit_sum)
     destination_arrays = create_debit_destinations(concurrency, instance)
     # Necessary to balance the ledger
@@ -104,7 +104,7 @@ defmodule DoubleEntryLedger.LoadTesting do
         source: "source",
         source_idempk: Ecto.UUID.generate(),
         payload: params,
-        instance_id: instance.id
+        instance_address: instance.address
       })
 
     EventWorker.process_new_event(event_map)
