@@ -13,13 +13,26 @@ defmodule DoubleEntryLedger.InstanceTest do
   doctest Instance
 
   describe "changeset/2" do
-    test "Name is only required field" do
+    test "Address is only required field" do
       assert %Ecto.Changeset{
                valid?: false,
                errors: [
                  address: {"can't be blank", [validation: :required]}
                ]
              } = Instance.changeset(%Instance{}, %{})
+    end
+
+    test "it enforces unique address" do
+      instance_fixture(%{address: "some:address"})
+      assert {:error, changeset} =
+               Repo.insert(Instance.changeset(%Instance{}, %{address: "some:address"}))
+
+      assert %Ecto.Changeset{
+               valid?: false,
+               errors: [
+                 address: {"has already been taken", [constraint: :unique, constraint_name: "unique_address"]}
+               ]
+             } = changeset
     end
 
     test "sets the config and metadata to empty maps at insert" do

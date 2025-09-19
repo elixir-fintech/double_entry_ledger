@@ -127,6 +127,7 @@ defmodule DoubleEntryLedger.Instance do
     |> cast(attrs, [:address, :description, :config])
     |> validate_required([:address])
     |> validate_format(:address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/, message: "is not a valid address")
+    |> unique_constraint(:address, name: :unique_address, message: "has already been taken")
   end
 
   @doc """

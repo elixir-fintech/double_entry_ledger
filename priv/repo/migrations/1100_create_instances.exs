@@ -10,5 +10,10 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateInstances do
 
       timestamps(type: :utc_datetime_usec)
     end
+
+    create unique_index(:instances, [:address],
+      prefix: "double_entry_ledger",
+      name: "unique_address"
+    )
   end
 end

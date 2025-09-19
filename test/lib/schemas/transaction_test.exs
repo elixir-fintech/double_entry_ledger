@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.TransactionTest do
     end
 
     test "one account on a different ledgers", ctx do
-      instance2 = instance_fixture()
+      instance2 = instance_fixture(%{address: "Other:Ledger"})
       a1 = account_fixture(instance_id: ctx.instance.id, type: :asset)
       a2 = account_fixture(instance_id: instance2.id, type: :liability, normal_balance: :credit)
 
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.TransactionTest do
     end
 
     test "all accounts on different ledgers", ctx do
-      instance2 = instance_fixture()
+      instance2 = instance_fixture(%{address: "Other:Ledger"})
       a1 = account_fixture(instance_id: ctx.instance.id, type: :asset)
 
       a2 =
