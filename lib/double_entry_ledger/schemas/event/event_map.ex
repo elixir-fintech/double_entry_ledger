@@ -52,7 +52,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   When you `use` this module, it automatically provides:
 
-  * **Schema Definition**: Common fields like `action`, `instance_id`, `source`, etc.
+  * **Schema Definition**: Common fields like `action`, `instance_address`, `source`, etc.
   * **JSON Encoding**: Automatic `Jason.Encoder` derivation for all fields
   * **Base Validation**: Common changeset validations via `base_changeset/2` and `update_changeset/2`
   * **Utility Functions**: Default implementations of `log_trace/1,2` and `to_map/1`
@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   All EventMap modules include these fields:
 
   * `action` - The type of operation to perform (atom from predefined list)
-  * `instance_id` - UUID of the ledger instance
+  * `instance_address` - Unique address of the ledger instance
   * `source` - Identifier of the external system generating the event
   * `source_data` - Optional metadata from the source system
   * `source_idempk` - Primary identifier for idempotency
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
       # Use the EventMap
       {:ok, event_map} = MyApp.OrderEventMap.changeset(%MyApp.OrderEventMap{}, %{
         action: "create_order",
-        instance_id: "550e8400-e29b-41d4-a716-446655440000",
+        instance_address: "some:ledger",
         source: "web_app",
         source_idempk: "order_123",
         payload: %{...}
@@ -136,7 +136,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   * `__struct__` - The module name of the implementing EventMap
   * `action` - The operation type as defined in `DoubleEntryLedger.Event.actions()`
-  * `instance_id` - UUID string identifying the ledger instance
+  * `instance_address` - Unique address of the ledger instance
   * `source` - String identifier of the external system
   * `source_data` - Optional map containing additional metadata
   * `source_idempk` - String identifier for idempotency (primary key from source)
@@ -159,7 +159,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   @type t(payload_type) :: %{
           __struct__: module(),
           action: DoubleEntryLedger.Event.action(),
-          instance_id: Ecto.UUID.t(),
+          instance_address: Ecto.UUID.t(),
           source: String.t(),
           source_data: map() | nil,
           source_idempk: String.t(),
@@ -257,7 +257,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
       @derive {Jason.Encoder,
                only: [
                  :action,
-                 :instance_id,
+                 :instance_address,
                  :source,
                  :source_data,
                  :source_idempk,
@@ -277,7 +277,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
             end
         )
 
-        field(:instance_id, :string)
+        field(:instance_address, :string)
         field(:source, :string)
         field(:source_data, :map, default: %{})
         field(:source_idempk, :string)
@@ -310,7 +310,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
       ## Validations Applied
 
       * Casts all common fields from the attributes
-      * Requires: `action`, `instance_id`, `source`, `source_idempk`
+      * Requires: `action`, `instance_address`, `source`, `source_idempk`
       * Validates `action` is in the allowed list from `DoubleEntryLedger.Event.actions(type)`
 
       """
@@ -318,12 +318,12 @@ defmodule DoubleEntryLedger.Event.EventMap do
         struct
         |> cast(attrs, [
           :action,
-          :instance_id,
+          :instance_address,
           :source,
           :source_data,
           :source_idempk,
         ])
-        |> validate_required([:action, :instance_id, :source, :source_idempk])
+        |> validate_required([:action, :instance_address, :source, :source_idempk])
         |> validate_inclusion(
           :action,
           case "#{unquote(payload_mod)}" do
@@ -509,7 +509,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
       ...>   use EventMap, payload: :map
       ...>   def payload_to_map(payload), do: payload
       ...> end
-      iex> event_map = struct!(TestEventMap8, %{action: :create_transaction, instance_id: "550e8400-e29b-41d4-a716-446655440000", source: "test", source_idempk: "123", payload: %{amount: 100}})
+      iex> event_map = struct!(TestEventMap8, %{action: :create_transaction, instance_address: "some:ledger", source: "test", source_idempk: "123", payload: %{amount: 100}})
       iex> map = EventMap.to_map(event_map)
       iex> map.action
       :create_transaction
@@ -522,7 +522,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
     %{
       action: Map.get(event_map, :action),
-      instance_id: Map.get(event_map, :instance_id),
+      instance_address: Map.get(event_map, :instance_address),
       source: Map.get(event_map, :source),
       source_data: Map.get(event_map, :source_data),
       source_idempk: Map.get(event_map, :source_idempk),

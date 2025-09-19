@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.TransactionFixtures do
         "action" => "create_transaction",
         "source" => "transaction",
         "source_idempk" => Ecto.UUID.generate(),
-        "instance_id" => instance.id,
+        "instance_address" => instance.address,
         "payload" => %{
           "status" => status,
           "entries" => [

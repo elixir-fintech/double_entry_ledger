@@ -61,7 +61,7 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
       expected_errors = [
         action: {"invalid in this context", [value: ""]},
         action: {"can't be blank", [validation: :required]},
-        instance_id: {"can't be blank", [validation: :required]},
+        instance_address: {"can't be blank", [validation: :required]},
         source: {"can't be blank", [validation: :required]},
         source_idempk: {"can't be blank", [validation: :required]}
       ]
@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
       assert Map.equal?(
                TransferErrors.get_all_errors_with_opts(changeset),
                %{
-                 instance_id: [{"can't be blank", [validation: :required]}],
+                 instance_address: [{"can't be blank", [validation: :required]}],
                  source: [{"can't be blank", [validation: :required]}],
                  source_idempk: [{"can't be blank", [validation: :required]}],
                  payload: %{

@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       assert return_pending_balances(ctx) == [100, 100]
 
       {:ok, event} =
-        new_update_transaction_event(s, s_id, inst.id, :posted, [
+        new_update_transaction_event(s, s_id, inst.address, :posted, [
           %{account_id: a1.id, amount: 50, currency: "EUR"},
           %{account_id: a2.id, amount: 50, currency: "EUR"}
         ])
@@ -96,7 +96,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
       {:ok, event_map} =
         %{
           action: :create_transaction,
-          instance_id: inst.id,
+          instance_address: inst.address,
           source: "source",
           source_data: %{},
           source_idempk: "source_idempk",

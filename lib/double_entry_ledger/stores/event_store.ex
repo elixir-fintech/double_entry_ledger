@@ -69,8 +69,8 @@ defmodule DoubleEntryLedger.EventStore do
   import Ecto.Query
   import DoubleEntryLedger.EventStoreHelper
 
-  alias Ecto.Changeset
-  alias DoubleEntryLedger.{Repo, Event}
+  alias Ecto.{Changeset, Multi}
+  alias DoubleEntryLedger.{Repo, Event, InstanceStoreHelper}
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.EventWorker
 
@@ -108,10 +108,18 @@ defmodule DoubleEntryLedger.EventStore do
     - `{:error, changeset}`: If validation failed
   """
   @spec create(TransactionEventMap.t() | AccountEventMap.t()) ::
-          {:ok, Event.t()} | {:error, Ecto.Changeset.t()}
-  def create(attrs) do
-    build_create(attrs)
-    |> Repo.insert()
+          {:ok, Event.t()} | {:error, Ecto.Changeset.t() | :instance_not_found}
+  def create(%{instance_address: address} = attrs) do
+    case Multi.new()
+    |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
+    |> Multi.insert(:event, fn %{instance: instance} ->
+      build_create(attrs, instance.id)
+    end)
+    |> Repo.transaction() do
+      {:ok, %{event: event}} -> {:ok, event}
+      {:error, :instance, _reason, _changes} -> {:error, :instance_not_found}
+      {:error, :event, changeset, _changes} -> {:error, changeset}
+    end
   end
 
   @doc """

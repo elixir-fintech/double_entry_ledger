@@ -207,7 +207,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
         - `Ecto.Multi.failure()` on unrecoverable error
       """
       def process_with_retry(
-            %{instance_id: id, payload: td} = occable_item,
+            occable_item,
             repo \\ Repo
           ) do
         %ErrorMap{} = error_map = create_error_map(occable_item)
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       @impl true
       def process_with_retry_no_save_on_error(
-            %{instance_id: id, payload: td} = occable_item,
+            occable_item,
             repo \\ Repo
           ) do
         %ErrorMap{} = error_map = %{create_error_map(occable_item) | save_on_error: false}
@@ -263,17 +263,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       """
       @spec build_multi(module(), Occable.t(), Ecto.Repo.t()) :: Multi.t()
       def build_multi(module, occable_item, repo) do
-        Multi.new()
-        |> Multi.put(:occable_item, occable_item)
-        |> Multi.run(:transaction_map, fn _,
-                                          %{
-                                            occable_item: %{instance_id: id, payload: td}
-                                          } ->
-          case transaction_data_to_transaction_map(td, id) do
-            {:ok, transaction_map} -> {:ok, transaction_map}
-            {:error, error} -> {:ok, {:error, error}}
-          end
-        end)
+        Occable.build_multi(occable_item)
         |> Multi.merge(fn
           %{transaction_map: {:error, error}, occable_item: item} ->
             module.handle_transaction_map_error(item, error, repo)

@@ -131,7 +131,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
 
       iex> attrs = %{
       ...>   action: :create_account,
-      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   instance_address: "Test:Ledger",
       ...>   source: "web_app",
       ...>   source_idempk: "acc_123",
       ...>   payload: %{
@@ -191,7 +191,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
 
       iex> attrs = %{
       ...>   action: :create_account,
-      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   instance_address: "Test:Ledger",
       ...>   source: "test",
       ...>   source_idempk: "123",
       ...>   payload: %{name: "Test", type: :asset, currency: "USD"}
@@ -202,7 +202,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
 
       iex> update_attrs = %{
       ...>   action: :update_account,
-      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   instance_address: "Test:Ledger",
       ...>   source: "test",
       ...>   source_idempk: "123",
       ...>   update_idempk: "upd_456",

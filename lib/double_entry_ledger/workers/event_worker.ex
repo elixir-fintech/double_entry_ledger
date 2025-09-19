@@ -255,7 +255,7 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> {:ok, cash_account} = DoubleEntryLedger.AccountStore.create(%{name: "Cash", type: :asset, currency: :USD, instance_id: instance.id})
       iex> event_map = %TransactionEventMap{
       ...>   action: :create_transaction,
-      ...>   instance_id: instance.id,
+      ...>   instance_address: instance.address,
       ...>   source: "payment_api",
       ...>   source_idempk: "payment_123",
       ...>   payload: %{
@@ -344,7 +344,7 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> {:ok, revenue_account} = DoubleEntryLedger.AccountStore.create(%{name: "Revenue", type: :liability, currency: :USD, instance_id: instance.id})
       iex> {:ok, cash_account} = DoubleEntryLedger.AccountStore.create(%{name: "Cash", type: :asset, currency: :USD, instance_id: instance.id})
       iex> valid_event = %TransactionEventMap{action: :create_transaction,
-      ...>   instance_id: instance.id,
+      ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
       ...>   source_idempk: "acc_create_456",
       ...>   payload: %{
@@ -363,7 +363,7 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
       iex> event_map = %AccountEventMap{
       ...>   action: :create_account,
-      ...>   instance_id: instance.id,
+      ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
       ...>   source_idempk: "acc_create_456",
       ...>   payload: %AccountData{

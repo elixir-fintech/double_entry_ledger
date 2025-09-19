@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.InstanceStore do
   to ensure consistency when concurrent operations are taking place.
   """
   import Ecto.Query, only: [from: 2]
-  alias DoubleEntryLedger.{Instance, Repo, Account}
+  alias DoubleEntryLedger.{Instance, Repo, Account, InstanceStoreHelper}
 
   @doc """
   Creates a new ledger instance with the given attributes.
@@ -101,6 +101,11 @@ defmodule DoubleEntryLedger.InstanceStore do
   @spec get_by_id(Ecto.UUID.t()) :: Instance.t() | nil
   def get_by_id(id) do
     Repo.get(Instance, id)
+  end
+
+  @spec get_by_address(String.t()) :: Instance.t() | nil
+  def get_by_address(address) do
+    Repo.one(InstanceStoreHelper.build_get_by_address(address))
   end
 
   @doc """
@@ -200,4 +205,5 @@ defmodule DoubleEntryLedger.InstanceStore do
       isolation: :repeatable_read
     )
   end
+
 end

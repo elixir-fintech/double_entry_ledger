@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
                payload: {"can't be blank", [validation: :required]},
                action: {"can't be blank", [validation: :required]},
                action: {"invalid in this context", [value: ""]},
-               instance_id: {"can't be blank", [validation: :required]},
+               instance_address: {"can't be blank", [validation: :required]},
                source: {"can't be blank", [validation: :required]},
                source_idempk: {"can't be blank", [validation: :required]}
              )
@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
 
     test "changeset invalid for empty transaction_data struct" do
       attrs = %{
-        instance_id: Ecto.UUID.generate(),
+        instance_address: "some:address",
         action: "create_transaction",
         source: "local",
         source_idempk: "123",
@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
     test "changeset invalid for update action (key as string) without update_idempk" do
       attrs = %{
         "action" => "update_transaction",
-        "instance_id" => Ecto.UUID.generate(),
+        "instance_address" => "some:address",
         "source" => "local",
         "source_idempk" => "123",
         "payload" => transaction_data_attrs()
@@ -84,7 +84,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
   def event_map_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{
-      instance_id: Ecto.UUID.generate(),
+      instance_address: "some:address",
       action: "create_transaction",
       source: "local",
       source_idempk: "123",

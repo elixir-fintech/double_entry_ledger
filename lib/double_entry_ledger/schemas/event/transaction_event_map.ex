@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   It contains the following fields:
 
   * `action`: The type of action to perform (`:create_transaction` or `:update_transaction`)
-  * `instance_id`: UUID of the ledger instance this event belongs to
+  * `instance_address`:  unique address of the instance this event belongs to
   * `source`: Identifier of the external system generating the event
   * `source_data`: Optional map containing additional metadata from the source system
   * `source_idempk`: Primary identifier from the source system (used for idempotency)
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
       {:ok, event_map} = TransactionEventMap.create(%{
         action: "create_transaction",
-        instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9",
+        instance_address: "some:address",
         source: "accounting_system",
         source_idempk: "invoice_123",
         payload: %{
@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
       {:ok, update_map} = TransactionEventMap.create(%{
         action: "update_transaction",
-        instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9",
+        instance_address: "some:address",
         source: "accounting_system",
         source_idempk: "invoice_123",
         update_idempk: "invoice_123_update_1",
@@ -130,7 +130,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   ## Inherited Fields (from EventMap)
 
   * `action`: The operation type (`:create_transaction` or `:update_transaction`)
-  * `instance_id`: UUID of the ledger instance this event belongs to
+  * `instance_address`: UUID of the ledger instance this event belongs to
   * `source`: Identifier of the external system generating the event
   * `source_data`: Optional metadata from the source system (default: `%{}`)
   * `source_idempk`: Primary identifier used for idempotency
@@ -175,7 +175,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   The function applies comprehensive validation including:
 
-  1. Common EventMap field validation (action, instance_id, source, etc.)
+  1. Common EventMap field validation (action, instance_address, source, etc.)
   2. Action-specific requirements (update_idempk for updates)
   3. TransactionData payload validation appropriate to the action type
   4. Cross-field validation and business rule enforcement
@@ -185,7 +185,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> alias DoubleEntryLedger.Event.TransactionEventMap
       iex> attrs = %{
       ...>   action: "create_transaction",
-      ...>   instance_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db9",
+      ...>   instance_address: "some:address",
       ...>   source: "accounting_system",
       ...>   source_idempk: "invoice_123",
       ...>   payload: %{
@@ -236,7 +236,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   The function uses action-aware validation:
 
   ### Create Transaction Validation
-  * Applies base EventMap validation (action, instance_id, source, source_idempk required)
+  * Applies base EventMap validation (action, instance_address, source, source_idempk required)
   * Validates payload using `TransactionData.changeset/2` (requires complete transaction data)
   * Does not require `update_idempk`
 
@@ -255,7 +255,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> alias DoubleEntryLedger.Event.TransactionEventMap
       iex> attrs = %{
       ...>   action: "create_transaction",
-      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   instance_address: "some:address",
       ...>   source: "accounting_system",
       ...>   source_idempk: "invoice_123",
       ...>   payload: %{
@@ -273,7 +273,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> alias DoubleEntryLedger.Event.TransactionEventMap
       iex> update_attrs = %{
       ...>   action: "update_transaction",
-      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   instance_address: "some:address",
       ...>   source: "accounting_system",
       ...>   source_idempk: "invoice_123",
       ...>   update_idempk: "update_1",

@@ -263,7 +263,7 @@ defmodule DoubleEntryLedger.Account do
       ...>    name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{
       ...>    name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
-      iex> {:ok, _, _} = EventStore.process_from_event_params(%{"instance_id" => instance.id,
+      iex> {:ok, _, _} = EventStore.process_from_event_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => "pending", "entries" => [
       ...>      %{"account_id" => account1.id, "amount" => 100, "currency" => "EUR"},

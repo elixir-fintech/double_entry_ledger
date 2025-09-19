@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
 
     test "inserts a new event and adds an event_queue_item", %{instance: instance} do
       assert {:ok, %Event{id: id} = event} =
-               EventStore.create(transaction_event_attrs(instance_id: instance.id))
+               EventStore.create(transaction_event_attrs(instance_address: instance.address))
 
       assert %{id: evq_id, event_id: ^id, status: :pending} = event.event_queue_item
       assert evq_id != nil
@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.EventStoreTest do
     setup [:create_instance, :create_accounts]
 
     test "gets an event by source", %{instance: instance} do
-      {:ok, event} = EventStore.create(transaction_event_attrs(instance_id: instance.id))
+      {:ok, event} = EventStore.create(transaction_event_attrs(instance_address: instance.address))
 
       assert %Event{} =
                found_event =

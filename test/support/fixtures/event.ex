@@ -34,7 +34,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     {:ok, event} =
       EventStore.create(
         transaction_event_attrs(
-          instance_id: inst.id,
+          instance_address: inst.address,
           payload: %{
             status: trx_status,
             entries: [
@@ -56,12 +56,12 @@ defmodule DoubleEntryLedger.EventFixtures do
     Map.put(ctx, :event, event)
   end
 
-  def new_update_transaction_event(source, source_idempk, instance_id, trx_status, entries \\ []) do
+  def new_update_transaction_event(source, source_idempk, instance_address, trx_status, entries \\ []) do
     transaction_event_attrs(%{
       action: :update_transaction,
       source: source,
       source_idempk: source_idempk,
-      instance_id: instance_id,
+      instance_address: instance_address,
       update_idempk: Ecto.UUID.generate(),
       payload: %TransactionData{
         status: trx_status,
@@ -72,12 +72,12 @@ defmodule DoubleEntryLedger.EventFixtures do
   end
 
   def create_transaction_event_map(
-        %{instance: %{id: id}, accounts: [a1, a2, _, _]},
+        %{instance: %{address: address}, accounts: [a1, a2, _, _]},
         trx_status \\ :pending
       ) do
     %TransactionEventMap{
       action: :create_transaction,
-      instance_id: id,
+      instance_address: address,
       source: "source",
       source_data: %{},
       source_idempk: "source_idempk",
@@ -93,13 +93,13 @@ defmodule DoubleEntryLedger.EventFixtures do
   end
 
   def update_transaction_event_map(
-        %{instance: %{id: id}, accounts: [a1, a2, _, _]},
+        %{instance: %{address: address}, accounts: [a1, a2, _, _]},
         create_event,
         trx_status \\ :posted
       ) do
     %TransactionEventMap{
       action: :update_transaction,
-      instance_id: id,
+      instance_address: address,
       source: create_event.source,
       source_data: %{},
       source_idempk: create_event.source_idempk,
@@ -114,10 +114,10 @@ defmodule DoubleEntryLedger.EventFixtures do
     }
   end
 
-  def create_account_event_map(%{instance: %{id: id}}) do
+  def create_account_event_map(%{instance: %{address: address}}) do
     %AccountEventMap{
       action: :create_account,
-      instance_id: id,
+      instance_address: address,
       source: "source",
       source_data: %{},
       source_idempk: "source_idempk",

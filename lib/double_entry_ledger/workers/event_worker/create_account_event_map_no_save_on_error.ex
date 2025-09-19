@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
   alias Ecto.Multi
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.EventWorker.AccountEventResponseHandler
-  alias DoubleEntryLedger.{EventStoreHelper, AccountStoreHelper, Repo}
+  alias DoubleEntryLedger.{InstanceStoreHelper, EventStoreHelper, AccountStoreHelper, Repo}
 
   @module_name __MODULE__ |> Module.split() |> List.last()
 
@@ -90,12 +90,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
       # Successful account creation
       iex> alias DoubleEntryLedger.Event.AccountEventMap
       iex> alias DoubleEntryLedger.{Account, Event}
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Main:Instance"})
+      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Main:Instance"})
       iex> event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",
       ...>   source_idempk: "unique_id_123",
-      ...>   instance_id: instance_id,
+      ...>   instance_address: instance.address,
       ...>   payload: %AccountData{
       ...>     name: "Cash Account",
       ...>     type: :asset,
@@ -107,12 +107,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
       true
 
       iex> alias DoubleEntryLedger.Event.AccountEventMap
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Main:Instance"})
+      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Main:Instance"})
       iex> invalid_event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",
       ...>   source_idempk: "unique_id_124",
-      ...>   instance_id: instance_id,
+      ...>   instance_address: instance.address,
       ...>   payload: %AccountData{name: "", type: nil}  # missing required fields
       ...> }
       iex> {:error, changeset} = CreateAccountEventMapNoSaveOnError.process(invalid_event_map)
@@ -128,11 +128,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
 
   @spec build_create_account(AccountEventMap.t()) :: Ecto.Multi.t()
   defp build_create_account(
-         %AccountEventMap{payload: payload, instance_id: instance_id} = event_map
+         %AccountEventMap{payload: payload, instance_address: address} = event_map
        ) do
     Multi.new()
-    |> Multi.insert(:new_event, EventStoreHelper.build_create(event_map))
-    |> Multi.insert(:account, AccountStoreHelper.build_create(payload, instance_id))
+    |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
+    |> Multi.insert(:new_event, fn %{instance: %{id: id}} -> EventStoreHelper.build_create(event_map, id) end)
+    |> Multi.insert(:account, fn %{instance: %{id: id}} -> AccountStoreHelper.build_create(payload, id) end)
     |> Multi.update(:event_success, fn %{new_event: event} ->
       build_mark_as_processed(event)
     end)

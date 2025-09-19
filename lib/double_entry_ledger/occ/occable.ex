@@ -1,9 +1,3 @@
-alias DoubleEntryLedger.Event
-alias DoubleEntryLedger.Event.ErrorMap
-alias DoubleEntryLedger.Event.TransactionEventMap
-alias DoubleEntryLedger.Occ.Helper
-alias Ecto.{Multi, Changeset}
-
 defprotocol DoubleEntryLedger.Occ.Occable do
   @moduledoc """
   Protocol for handling Optimistic Concurrency Control (OCC) in the double-entry ledger system.
@@ -32,8 +26,11 @@ defprotocol DoubleEntryLedger.Occ.Occable do
   ## Returns
     - The updated struct with retry information
   """
-  @spec update!(t(), ErrorMap.t(), Ecto.Repo.t()) :: t()
+  @spec update!(t(), DoubleEntryLedger.Event.ErrorMap.t(), Ecto.Repo.t()) :: t()
   def update!(impl_struct, error_map, repo)
+
+  @spec build_multi(t()) :: Ecto.Multi.t()
+  def build_multi(impl_struct)
 
   @doc """
   Handles the timeout scenario when maximum OCC retries are reached.
@@ -50,13 +47,17 @@ defprotocol DoubleEntryLedger.Occ.Occable do
   ## Returns
     - A tuple containing error details and the final state of the entity
   """
-  @spec timed_out(t(), atom(), ErrorMap.t()) ::
-          Multi.t()
+  @spec timed_out(t(), atom(), DoubleEntryLedger.Event.ErrorMap.t()) ::
+          Ecto.Multi.t()
   def timed_out(impl_struct, name, error_map)
 end
 
-defimpl DoubleEntryLedger.Occ.Occable, for: Event do
-  alias Ecto.Multi
+defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
+  alias Ecto.{Multi, Repo, Changeset}
+  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Event.ErrorMap
+  alias DoubleEntryLedger.Occ.Helper
+  alias DoubleEntryLedger.EventWorker.TransactionEventTransformer
 
   @doc """
   Updates an Event with retry information during OCC retry cycles.
@@ -71,11 +72,26 @@ defimpl DoubleEntryLedger.Occ.Occable, for: Event do
   ## Returns
     - The updated Event struct
   """
-  @spec update!(Event.t(), ErrorMap.t(), Ecto.Repo.t()) :: Event.t()
+  @spec update!(Event.t(), ErrorMap.t(), Repo.t()) :: Event.t()
   def update!(event, error_map, repo) do
     event
-    |> Ecto.Changeset.change(occ_retry_count: error_map.retries, errors: error_map.errors)
+    |> Changeset.change(occ_retry_count: error_map.retries, errors: error_map.errors)
     |> repo.update!()
+  end
+
+  @spec build_multi(Event.t()) :: Multi.t()
+  def build_multi(event) do
+    Multi.new()
+    |> Multi.put(:occable_item, event)
+    |> Multi.run(:transaction_map, fn _,
+                                      %{
+                                        occable_item: %{instance_id: id, payload: td}
+                                      } ->
+      case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
+        {:ok, transaction_map} -> {:ok, transaction_map}
+        {:error, error} -> {:ok, {:error, error}}
+      end
+    end)
   end
 
   @doc """
@@ -103,7 +119,12 @@ defimpl DoubleEntryLedger.Occ.Occable, for: Event do
   end
 end
 
-defimpl DoubleEntryLedger.Occ.Occable, for: TransactionEventMap do
+defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionEventMap do
+  alias Ecto.{Multi, Repo, Changeset}
+  alias DoubleEntryLedger.Event.{ErrorMap, TransactionEventMap}
+  alias DoubleEntryLedger.InstanceStoreHelper
+  alias DoubleEntryLedger.Occ.Helper
+  alias DoubleEntryLedger.EventWorker.TransactionEventTransformer
   @doc """
   Updates an TransactionEventMap during OCC retry cycles.
 
@@ -118,8 +139,25 @@ defimpl DoubleEntryLedger.Occ.Occable, for: TransactionEventMap do
   ## Returns
     - The unchanged TransactionEventMap struct
   """
-  @spec update!(TransactionEventMap.t(), ErrorMap.t(), Ecto.Repo.t()) :: TransactionEventMap.t()
+  @spec update!(TransactionEventMap.t(), ErrorMap.t(), Repo.t()) :: TransactionEventMap.t()
   def update!(event_map, _error_map, _repo), do: event_map
+
+  @spec build_multi(TransactionEventMap.t()) :: Multi.t()
+  def build_multi(%TransactionEventMap{instance_address: address} = event_map) do
+    Multi.new()
+    |> Multi.put(:occable_item, event_map)
+    |> Multi.one(:inst_local, InstanceStoreHelper.build_get_by_address(address))
+    |> Multi.run(:transaction_map, fn _,
+                                      %{
+                                        occable_item: %{payload: td},
+                                        inst_local: %{id: id}
+                                      } ->
+      case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
+        {:ok, transaction_map} -> {:ok, transaction_map}
+        {:error, error} -> {:ok, {:error, error}}
+      end
+    end)
+  end
 
   @doc """
   Handles OCC timeout for an TransactionEventMap when maximum retries are reached.

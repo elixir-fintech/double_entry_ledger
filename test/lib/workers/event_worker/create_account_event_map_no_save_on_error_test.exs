@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnErrorTest d
     test "successfully processes a valid account event map", %{instance: instance} do
       event_map = %AccountEventMap{
         action: :create_account,
-        instance_id: instance.id,
+        instance_address: instance.address,
         source: "manual",
         source_idempk: "acc_123",
         payload: %AccountData{
@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnErrorTest d
     test "returns an error for an invalid account event map", %{instance: instance} do
       event_map = %AccountEventMap{
         action: :create_account,
-        instance_id: instance.id,
+        instance_address: instance.address,
         source: "manual",
         source_idempk: "acc_123",
         payload: %AccountData{
