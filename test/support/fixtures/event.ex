@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       source_idempk: source_idempk,
       instance_address: instance_address,
       update_idempk: Ecto.UUID.generate(),
-      payload: %TransactionData{
+      payload: %{
         status: trx_status,
         entries: entries
       }

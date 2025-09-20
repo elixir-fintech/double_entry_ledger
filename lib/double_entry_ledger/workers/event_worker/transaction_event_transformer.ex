@@ -102,6 +102,13 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventTransformer do
   end
 
   def transaction_data_to_transaction_map(
+        %TransactionData{entries: nil, status: status},
+        instance_id
+      ) do
+    {:ok, %{instance_id: instance_id, status: status}}
+  end
+
+  def transaction_data_to_transaction_map(
         %TransactionData{entries: entries, status: status},
         instance_id
       ) do
@@ -122,19 +129,6 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventTransformer do
 
       {:error, reason} ->
         {:error, reason}
-    end
-  end
-
-  def transaction_data_to_transaction_map(transaction_data_map, instance_id) do
-    td_cs = TransactionData.update_event_changeset(%TransactionData{}, transaction_data_map)
-
-    case td_cs.valid? do
-      true ->
-        transaction_data_struct = Ecto.Changeset.apply_changes(td_cs)
-        transaction_data_to_transaction_map(transaction_data_struct, instance_id)
-
-      false ->
-        {:error, :invalid_entry_data}
     end
   end
 

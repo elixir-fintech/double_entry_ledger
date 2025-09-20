@@ -30,6 +30,7 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
       %{transactions: [processed_transaction | []]} = EventStore.get_by_id(processed_event.id)
 
+      assert return_available_balances(ctx) == [100, 100]
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
       assert transaction.status == :posted

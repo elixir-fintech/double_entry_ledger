@@ -31,6 +31,8 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
       %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
+
+      assert return_pending_balances(ctx) == [100, 100]
       assert evq.processing_completed_at != nil
       assert transaction.status == :pending
     end

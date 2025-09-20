@@ -249,7 +249,7 @@ defmodule DoubleEntryLedger.EventWorker do
   ## Examples
 
       # Create a new transaction
-      iex> alias DoubleEntryLedger.Event.TransactionEventMap
+      iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "instance1"})
       iex> {:ok, revenue_account} = DoubleEntryLedger.AccountStore.create(%{name: "Revenue", type: :liability, currency: :USD, instance_id: instance.id})
       iex> {:ok, cash_account} = DoubleEntryLedger.AccountStore.create(%{name: "Cash", type: :asset, currency: :USD, instance_id: instance.id})
@@ -258,7 +258,7 @@ defmodule DoubleEntryLedger.EventWorker do
       ...>   instance_address: instance.address,
       ...>   source: "payment_api",
       ...>   source_idempk: "payment_123",
-      ...>   payload: %{
+      ...>   payload: %TransactionData{
       ...>     status: :pending,
       ...>     entries: [
       ...>       %{account_id: cash_account.id, amount: 100, currency: "USD"},
@@ -340,6 +340,7 @@ defmodule DoubleEntryLedger.EventWorker do
   ## Examples
 
       iex> # Valid event processes successfully
+      iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
       iex> {:ok, revenue_account} = DoubleEntryLedger.AccountStore.create(%{name: "Revenue", type: :liability, currency: :USD, instance_id: instance.id})
       iex> {:ok, cash_account} = DoubleEntryLedger.AccountStore.create(%{name: "Cash", type: :asset, currency: :USD, instance_id: instance.id})
@@ -347,7 +348,7 @@ defmodule DoubleEntryLedger.EventWorker do
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
       ...>   source_idempk: "acc_create_456",
-      ...>   payload: %{
+      ...>   payload: %TransactionData{
       ...>      status: :pending,
       ...>      entries: [
       ...>        %{account_id: revenue_account.id, amount: 100, currency: :USD},
@@ -517,7 +518,8 @@ defmodule DoubleEntryLedger.EventWorker do
           success_tuple() | error_tuple()
   def process_event_with_id(uuid, processor_id \\ "manual") do
     case claim_event_for_processing(uuid, processor_id) do
-      {:ok, event} -> process_event(event)
+      {:ok, event} ->
+        process_event(event)
       {:error, error} -> {:error, error}
     end
   end
