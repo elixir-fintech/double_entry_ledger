@@ -245,15 +245,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
     payload_mod = Keyword.get(opts, :payload, nil)
 
     quote do
-      @behaviour DoubleEntryLedger.Event.EventMap
-
-      use Ecto.Schema
-
-      import DoubleEntryLedger.Event.EventMap,
-        only: [
-          fetch_action: 1
-        ]
-
       @derive {Jason.Encoder,
                only: [
                  :action,
@@ -265,6 +256,16 @@ defmodule DoubleEntryLedger.Event.EventMap do
                  :update_source,
                  :payload
                ]}
+
+      @behaviour DoubleEntryLedger.Event.EventMap
+
+      use Ecto.Schema
+
+      import DoubleEntryLedger.Event.EventMap,
+        only: [
+          fetch_action: 1
+        ]
+
 
       @primary_key false
       embedded_schema do
