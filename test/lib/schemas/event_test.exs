@@ -22,7 +22,6 @@ defmodule DoubleEntryLedger.EventTest do
                  source: {"can't be blank", [validation: :required]},
                  source_idempk: {"can't be blank", [validation: :required]},
                  instance_id: {"can't be blank", [validation: :required]},
-                 payload: {"can't be blank", [validation: :required]},
                  event_map: {"can't be blank", [validation: :required]},
                ]
              } = Event.changeset(%Event{}, %{})
@@ -53,7 +52,6 @@ defmodule DoubleEntryLedger.EventTest do
         payload: pending_payload()
       }
 
-      #assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
       transaction_event_map = struct(TransactionEventMap, attrs)
       assert {:ok, _event} = EventStore.create(transaction_event_map)
 

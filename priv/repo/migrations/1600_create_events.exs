@@ -14,7 +14,6 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
 
       add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
 
-      add :payload, :map, null: false
       add :event_map, :map, null: false
 
       timestamps(type: :utc_datetime_usec)
