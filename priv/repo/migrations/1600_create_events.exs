@@ -8,7 +8,6 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
       add :action, :string, null: false
       add :source, :string, null: false
       add :source_idempk, :string, null: false
-      add :source_data, :map, null: false, default: %{}
       add :update_idempk, :string
       add :update_source, :string
 

@@ -79,7 +79,6 @@ defmodule DoubleEntryLedger.Event do
   * `id`: UUID primary key
   * `action`: The action type (:create_transaction or :update_transaction)
   * `source`: Identifier for the system that originated the event
-  * `source_data`: Arbitrary JSON data from the source system
   * `source_idempk`: Idempotency key from source system
   * `update_idempk`: Additional idempotency key for update operations
   * `event_map`: map containing the event payload
@@ -92,7 +91,6 @@ defmodule DoubleEntryLedger.Event do
           id: Ecto.UUID.t() | nil,
           action: action() | nil,
           source: String.t() | nil,
-          source_data: map() | nil,
           source_idempk: String.t() | nil,
           update_idempk: String.t() | nil,
           update_source: String.t() | nil,
@@ -111,7 +109,6 @@ defmodule DoubleEntryLedger.Event do
   schema "events" do
     field(:action, Ecto.Enum, values: @actions)
     field(:source, :string)
-    field(:source_data, :map, default: %{})
     field(:source_idempk, :string)
     field(:update_idempk, :string)
     field(:update_source, :string)
@@ -327,7 +324,6 @@ defmodule DoubleEntryLedger.Event do
     |> cast(attrs, [
       :action,
       :source,
-      :source_data,
       :source_idempk,
       :instance_id,
       :event_map
