@@ -79,7 +79,6 @@ defmodule DoubleEntryLedger.EventFixtures do
       action: :create_transaction,
       instance_address: address,
       source: "source",
-      source_data: %{},
       source_idempk: "source_idempk",
       update_idempk: nil,
       payload: %TransactionData{
@@ -101,7 +100,6 @@ defmodule DoubleEntryLedger.EventFixtures do
       action: :update_transaction,
       instance_address: address,
       source: create_event.source,
-      source_data: %{},
       source_idempk: create_event.source_idempk,
       update_idempk: Ecto.UUID.generate(),
       payload: %TransactionData{
@@ -119,7 +117,6 @@ defmodule DoubleEntryLedger.EventFixtures do
       action: :create_account,
       instance_address: address,
       source: "source",
-      source_data: %{},
       source_idempk: "source_idempk",
       update_idempk: nil,
       payload: %AccountData{

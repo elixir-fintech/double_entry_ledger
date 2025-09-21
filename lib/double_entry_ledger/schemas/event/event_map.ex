@@ -65,7 +65,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
   * `action` - The type of operation to perform (atom from predefined list)
   * `instance_address` - Unique address of the ledger instance
   * `source` - Identifier of the external system generating the event
-  * `source_data` - Optional metadata from the source system
   * `source_idempk` - Primary identifier for idempotency
   * `update_idempk` - Secondary identifier for update operation idempotency
   * `payload` - The embedded payload schema (type specified in `use` options)
@@ -138,7 +137,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
   * `action` - The operation type as defined in `DoubleEntryLedger.Event.actions()`
   * `instance_address` - Unique address of the ledger instance
   * `source` - String identifier of the external system
-  * `source_data` - Optional map containing additional metadata
   * `source_idempk` - String identifier for idempotency (primary key from source)
   * `update_idempk` - Optional string identifier for update operation idempotency
   * `payload` - The embedded payload data of the specified type
@@ -161,7 +159,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
           action: DoubleEntryLedger.Event.action(),
           instance_address: Ecto.UUID.t(),
           source: String.t(),
-          source_data: map() | nil,
           source_idempk: String.t(),
           update_idempk: String.t() | nil,
           update_source: String.t() | nil,
@@ -250,7 +247,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
                  :action,
                  :instance_address,
                  :source,
-                 :source_data,
                  :source_idempk,
                  :update_idempk,
                  :update_source,
@@ -280,7 +276,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
         field(:instance_address, :string)
         field(:source, :string)
-        field(:source_data, :map, default: %{})
         field(:source_idempk, :string)
         field(:update_idempk, :string)
         field(:update_source, :string)
@@ -321,7 +316,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
           :action,
           :instance_address,
           :source,
-          :source_data,
           :source_idempk,
         ])
         |> validate_required([:action, :instance_address, :source, :source_idempk])
@@ -525,7 +519,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
       action: Map.get(event_map, :action),
       instance_address: Map.get(event_map, :instance_address),
       source: Map.get(event_map, :source),
-      source_data: Map.get(event_map, :source_data),
       source_idempk: Map.get(event_map, :source_idempk),
       update_idempk: Map.get(event_map, :update_idempk),
       update_source: Map.get(event_map, :update_source),
