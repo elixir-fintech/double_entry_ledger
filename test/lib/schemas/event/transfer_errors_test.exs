@@ -25,7 +25,6 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
 
       assert Keyword.equal?(errors,
                currency: {"can't be blank", [validation: :required]},
-               name: {"can't be blank", [validation: :required]},
                address: {"can't be blank", [validation: :required]},
                type: {"invalid account type: ", []},
                type: {"can't be blank", [validation: :required]}
@@ -112,7 +111,6 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
                  source_idempk: [{"can't be blank", [validation: :required]}],
                  payload: %{
                    currency: [{"can't be blank", [validation: :required]}],
-                   name: [{"can't be blank", [validation: :required]}],
                    type: [{"can't be blank", [validation: :required]}],
                    address: [{"can't be blank", [validation: :required]}]
                  }

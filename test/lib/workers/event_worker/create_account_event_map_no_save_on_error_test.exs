@@ -41,7 +41,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnErrorTest d
         source_idempk: "acc_123",
         payload: %AccountData{
           currency: "USD",
-          name: nil,
+          address: nil,
           type: "asset"
         }
       }
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnErrorTest d
       assert {:error, changeset} = CreateAccountEventMapNoSaveOnError.process(event_map)
       assert %Ecto.Changeset{} = changeset
       assert changeset.valid? == false
-      assert Keyword.has_key?(changeset.changes.payload.errors, :name)
+      assert Keyword.has_key?(changeset.changes.payload.errors, :address)
     end
   end
 end

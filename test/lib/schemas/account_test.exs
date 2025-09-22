@@ -20,7 +20,6 @@ defmodule DoubleEntryLedger.AccountTest do
                valid?: false,
                errors: [
                  type: {"invalid account type: ", []},
-                 name: {"can't be blank", [validation: :required]},
                  address: {"can't be blank", [validation: :required]},
                  currency: {"can't be blank", [validation: :required]},
                  instance_id: {"can't be blank", [validation: :required]},

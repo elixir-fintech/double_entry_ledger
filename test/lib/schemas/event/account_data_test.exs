@@ -20,7 +20,6 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
       assert %Changeset{
                errors: [
                  currency: {"can't be blank", [validation: :required]},
-                 name: {"can't be blank", [validation: :required]},
                  address: {"can't be blank", [validation: :required]},
                  type: {"can't be blank", [validation: :required]}
                ]

@@ -22,10 +22,6 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateAccounts do
     end
 
     create index(:accounts, [:instance_id], prefix: "double_entry_ledger")
-    create unique_index(:accounts, [:instance_id, :name],
-      prefix: "double_entry_ledger",
-      name: "unique_instance_name"
-    )
     create unique_index(:accounts, [:instance_id, :address],
       prefix: "double_entry_ledger",
       name: "unique_address_per_instance"

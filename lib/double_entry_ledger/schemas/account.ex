@@ -16,7 +16,8 @@ defmodule DoubleEntryLedger.Account do
   ## Schema Fields
 
   * `id`: UUID primary key
-  * `name`: Human-readable account name (required)
+  * `address`: Human-readable account address in the format "abc1:def2:(:[a-zA-Z_0-9]+){0,}" (required)
+  * `name`: Human-readable account name
   * `description`: Optional text description
   * `currency`: The currency code as an atom (e.g., `:USD`, `:EUR`)
   * `type`: Account classification (`:asset`, `:liability`, `:equity`, `:revenue`, `:expense`)
@@ -159,7 +160,6 @@ defmodule DoubleEntryLedger.Account do
 
       # Create a valid asset account
       iex> changeset = Account.changeset(%Account{}, %{
-      ...>   name: "Cash Account",
       ...>   address: "cash:main:1",
       ...>   currency: :USD,
       ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
@@ -175,7 +175,7 @@ defmodule DoubleEntryLedger.Account do
       iex> changeset.valid?
       false
       iex> MapSet.new(Keyword.keys(changeset.errors))
-      MapSet.new([:name, :currency, :address, :instance_id, :type])
+      MapSet.new([:currency, :address, :instance_id, :type])
   """
   @spec changeset(Account.t(), map()) :: Changeset.t()
   def changeset(account, attrs) do
@@ -191,7 +191,7 @@ defmodule DoubleEntryLedger.Account do
       :allowed_negative,
       :instance_id
     ])
-    |> validate_required([:name, :address, :currency, :instance_id, :type])
+    |> validate_required([:address, :currency, :instance_id, :type])
     |> validate_format(:address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/, message: "is not a valid address")
     |> validate_inclusion(:type, @account_types)
     |> set_normal_balance_based_on_type()
@@ -200,7 +200,6 @@ defmodule DoubleEntryLedger.Account do
     |> cast_embed(:posted, with: &Balance.changeset/2)
     |> cast_embed(:pending, with: &Balance.changeset/2)
     |> trim_name()
-    |> unique_constraint(:name, name: "unique_instance_name")
     |> unique_constraint(:address, name: :unique_address, message: "has already been taken")
   end
 

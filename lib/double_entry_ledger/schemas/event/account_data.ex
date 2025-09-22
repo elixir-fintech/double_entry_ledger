@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
   Builds an Ecto.Changeset for AccountData.
 
   Casts: [:currency, :address, :name, :description, :context, :normal_balance, :type, :allowed_negative]
-  Validates required: [:currency, address, :name, :type]
+  Validates required: [:currency, address, :type]
 
   ## Examples
 
@@ -69,7 +69,6 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> attrs = %{
       ...>   currency: hd(Currency.currency_atoms()),
       ...>   address: "account:main",
-      ...>   name: "Cash",
       ...>   type: hd(Types.account_types())
       ...> }
       iex> changeset = AccountData.changeset(%AccountData{}, attrs)
@@ -80,7 +79,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> changeset = AccountData.changeset(%AccountData{}, %{})
       iex> changeset.valid?
       false
-      iex> required = [:currency, :name, :address, :type]
+      iex> required = [:currency, :address, :type]
       iex> required -- Keyword.keys(changeset.errors)
       []
   """
@@ -97,7 +96,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       :type,
       :allowed_negative
     ])
-    |> validate_required([:currency, :name, :address, :type])
+    |> validate_required([:currency, :address, :type])
   end
 
   @doc """
