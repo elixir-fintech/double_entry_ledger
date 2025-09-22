@@ -98,6 +98,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
       ...>   instance_address: instance.address,
       ...>   payload: %AccountData{
       ...>     name: "Cash Account",
+      ...>     address: "account:main",
       ...>     type: :asset,
       ...>     currency: :USD
       ...>   }

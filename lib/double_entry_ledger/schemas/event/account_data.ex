@@ -19,6 +19,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
   Fields:
   - currency: ISO currency code represented as an enum (from Currency.currency_atoms/0)
   - name: Human-readable account name
+  - address: Unique account identifier (e.g. "account:main")
   - description: Optional description
   - context: Arbitrary metadata map for additional context
   - normal_balance: Either :debit or :credit (from Types.credit_and_debit/0)
@@ -28,6 +29,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
   @type t :: %AccountData{
           currency: Currency.currency_atom() | nil,
           name: String.t() | nil,
+          address: String.t() | nil,
           description: String.t() | nil,
           context: map() | nil,
           normal_balance: Types.credit_and_debit() | nil,
@@ -35,7 +37,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
           allowed_negative: boolean() | nil
         }
 
-  @derive {Jason.Encoder, only: [:name, :currency, :description, :context, :normal_balance, :type, :allowed_negative]}
+  @derive {Jason.Encoder, only: [:name, :address, :currency, :description, :context, :normal_balance, :type, :allowed_negative]}
 
   @currency_atoms Currency.currency_atoms()
   @credit_and_debit Types.credit_and_debit()
@@ -45,6 +47,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
   embedded_schema do
     field(:currency, Ecto.Enum, values: @currency_atoms)
     field(:name, :string)
+    field(:address, :string)
     field(:description, :string)
     field(:context, :map)
     field(:normal_balance, Ecto.Enum, values: @credit_and_debit)
@@ -55,8 +58,8 @@ defmodule DoubleEntryLedger.Event.AccountData do
   @doc """
   Builds an Ecto.Changeset for AccountData.
 
-  Casts: [:currency, :name, :description, :context, :normal_balance, :type, :allowed_negative]
-  Validates required: [:currency, :name, :type]
+  Casts: [:currency, :address, :name, :description, :context, :normal_balance, :type, :allowed_negative]
+  Validates required: [:currency, address, :name, :type]
 
   ## Examples
 
@@ -65,6 +68,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> alias DoubleEntryLedger.Types
       iex> attrs = %{
       ...>   currency: hd(Currency.currency_atoms()),
+      ...>   address: "account:main",
       ...>   name: "Cash",
       ...>   type: hd(Types.account_types())
       ...> }
@@ -76,7 +80,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> changeset = AccountData.changeset(%AccountData{}, %{})
       iex> changeset.valid?
       false
-      iex> required = [:currency, :name, :type]
+      iex> required = [:currency, :name, :address, :type]
       iex> required -- Keyword.keys(changeset.errors)
       []
   """
@@ -86,13 +90,14 @@ defmodule DoubleEntryLedger.Event.AccountData do
     |> cast(attrs, [
       :currency,
       :name,
+      :address,
       :description,
       :context,
       :normal_balance,
       :type,
       :allowed_negative
     ])
-    |> validate_required([:currency, :name, :type])
+    |> validate_required([:currency, :name, :address, :type])
   end
 
   @doc """
@@ -119,6 +124,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> alias DoubleEntryLedger.Event.AccountData
       iex> existing_data = %AccountData{
       ...>   currency: :USD,
+      ...>   address: "account:main",
       ...>   name: "Cash Account",
       ...>   type: :asset,
       ...>   description: "Old description"
@@ -140,6 +146,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> # Attempting to update restricted fields should have no effect
       iex> invalid_update = %{
       ...>   name: "New Name",
+      ...>   address: "account:main2",
       ...>   currency: :EUR,
       ...>   type: :liability,
       ...>   description: "Valid update"
@@ -173,18 +180,20 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> data = %AccountData{
       ...>   currency: hd(Currency.currency_atoms()),
       ...>   name: "Cash",
-      ...>   type: hd(Types.account_types())
+      ...>   type: hd(Types.account_types()),
+      ...>   address: "account:main"
       ...> }
       iex> map = AccountData.to_map(data)
       iex> Map.keys(map) |> Enum.sort()
-      [:currency, :name,:type]
-      iex> map.currency == data.currency and map.type == data.type and map.name == "Cash"
+      [:address, :currency, :name, :type]
+      iex> map.address == data.address and map.currency == data.currency and map.type == data.type and map.name == "Cash"
       true
   """
   def to_map(%{} = account_data) do
     %{
       currency: Map.get(account_data, :currency),
       name: Map.get(account_data, :name),
+      address: Map.get(account_data, :address),
       description: Map.get(account_data, :description),
       context: Map.get(account_data, :context),
       normal_balance: Map.get(account_data, :normal_balance),

@@ -57,6 +57,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnErrorTest d
       payload: %AccountData{
         currency: "USD",
         name: "Test Account",
+        address: "account:main#{:rand.uniform(1000)}",
         type: "asset",
         description: "Initial Description"
       }

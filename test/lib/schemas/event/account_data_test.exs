@@ -21,6 +21,7 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
                errors: [
                  currency: {"can't be blank", [validation: :required]},
                  name: {"can't be blank", [validation: :required]},
+                 address: {"can't be blank", [validation: :required]},
                  type: {"can't be blank", [validation: :required]}
                ]
              } = AccountData.changeset(%AccountData{}, %{})
@@ -37,12 +38,13 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
                  currency: {"is invalid", _},
                  type: {"is invalid", _}
                ]
-             } = AccountData.changeset(%AccountData{name: "some_name"}, attrs)
+             } = AccountData.changeset(%AccountData{name: "some_name", address: "some:address"}, attrs)
     end
 
     test "changeset invalid for normal_balance not equal to type" do
       attrs = %{
         name: "some_name",
+        address: "some:address",
         type: "asset",
         currency: "EUR",
         normal_balance: "invalid"
@@ -55,6 +57,7 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
     test "changeset valid for valid account data" do
       attrs = %{
         name: "some_name",
+        address: "some:address",
         type: "asset",
         currency: "EUR"
       }

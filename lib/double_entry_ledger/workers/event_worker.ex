@@ -251,8 +251,8 @@ defmodule DoubleEntryLedger.EventWorker do
       # Create a new transaction
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "instance1"})
-      iex> {:ok, revenue_account} = DoubleEntryLedger.AccountStore.create(%{name: "Revenue", type: :liability, currency: :USD, instance_id: instance.id})
-      iex> {:ok, cash_account} = DoubleEntryLedger.AccountStore.create(%{name: "Cash", type: :asset, currency: :USD, instance_id: instance.id})
+      iex> {:ok, revenue_account} = DoubleEntryLedger.AccountStore.create(%{name: "Revenue", address: "account:revenue", type: :liability, currency: :USD, instance_id: instance.id})
+      iex> {:ok, cash_account} = DoubleEntryLedger.AccountStore.create(%{name: "Cash", address: "account:cash", type: :asset, currency: :USD, instance_id: instance.id})
       iex> event_map = %TransactionEventMap{
       ...>   action: :create_transaction,
       ...>   instance_address: instance.address,
@@ -342,8 +342,8 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> # Valid event processes successfully
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:ok, revenue_account} = DoubleEntryLedger.AccountStore.create(%{name: "Revenue", type: :liability, currency: :USD, instance_id: instance.id})
-      iex> {:ok, cash_account} = DoubleEntryLedger.AccountStore.create(%{name: "Cash", type: :asset, currency: :USD, instance_id: instance.id})
+      iex> {:ok, revenue_account} = DoubleEntryLedger.AccountStore.create(%{name: "Revenue", address: "account:revenue", type: :liability, currency: :USD, instance_id: instance.id})
+      iex> {:ok, cash_account} = DoubleEntryLedger.AccountStore.create(%{name: "Cash", address: "account:cash", type: :asset, currency: :USD, instance_id: instance.id})
       iex> valid_event = %TransactionEventMap{action: :create_transaction,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
@@ -369,6 +369,7 @@ defmodule DoubleEntryLedger.EventWorker do
       ...>   source_idempk: "acc_create_456",
       ...>   payload: %AccountData{
       ...>     name: "Petty Cash",
+      ...>     address: "account:petty_cash",
       ...>     type: :asset,
       ...>     currency: "USD"
       ...>   }

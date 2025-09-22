@@ -122,6 +122,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       payload: %AccountData{
         name: "Test Account",
         description: "Test Description",
+        address: "account:main1",
         currency: "EUR",
         type: "asset"
       }

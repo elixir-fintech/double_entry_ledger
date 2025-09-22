@@ -26,6 +26,7 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
       assert Keyword.equal?(errors,
                currency: {"can't be blank", [validation: :required]},
                name: {"can't be blank", [validation: :required]},
+               address: {"can't be blank", [validation: :required]},
                type: {"invalid account type: ", []},
                type: {"can't be blank", [validation: :required]}
              )
@@ -45,9 +46,9 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
     end
 
     test "does not transfer errors when account changeset is valid" do
-      account_changeset = Account.changeset(%Account{}, %{name: "Valid Name", type: :asset, currency: "USD"})
+      account_changeset = Account.changeset(%Account{}, %{name: "Valid Name", type: :asset, currency: "USD", address: "account:main"})
 
-      event_map = %AccountEventMap{payload: %AccountData{name: "Valid Name", type: :asset, currency: "USD"}}
+      event_map = %AccountEventMap{payload: %AccountData{name: "Valid Name", type: :asset, currency: "USD", address: "account:main"}}
 
       %{changes: %{payload: %{errors: errors}}} =
         TransferErrors.from_account_to_event_map_payload(event_map, account_changeset)
@@ -112,7 +113,8 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
                  payload: %{
                    currency: [{"can't be blank", [validation: :required]}],
                    name: [{"can't be blank", [validation: :required]}],
-                   type: [{"can't be blank", [validation: :required]}]
+                   type: [{"can't be blank", [validation: :required]}],
+                   address: [{"can't be blank", [validation: :required]}]
                  }
                }
              )

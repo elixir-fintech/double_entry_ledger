@@ -20,6 +20,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnErrorTest d
         source_idempk: "acc_123",
         payload: %AccountData{
           currency: "USD",
+          address: "account:main1",
           name: "Test Account",
           type: "asset"
         }

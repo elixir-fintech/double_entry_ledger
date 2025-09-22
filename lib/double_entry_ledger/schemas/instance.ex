@@ -157,7 +157,7 @@ defmodule DoubleEntryLedger.Instance do
 
 
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Temporary:Ledger"})
-      iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD})
+      iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account", address: "account:main1", instance_id: instance.id, type: :asset, currency: :USD})
       iex> changeset = Instance.delete_changeset(instance)
       iex> {:error, _} = Repo.delete(changeset)
   """
@@ -188,8 +188,8 @@ defmodule DoubleEntryLedger.Instance do
   ## Example
 
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
-      iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}})
-      iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account 2", instance_id: instance.id, type: :liability, currency: :USD, posted: %{amount: 10, debit: 0, credit: 10}})
+      iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account", address: "account:main1", instance_id: instance.id, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}})
+      iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account 2", address: "account:main2", instance_id: instance.id, type: :liability, currency: :USD, posted: %{amount: 10, debit: 0, credit: 10}})
       iex> instance = Repo.preload(instance, [:accounts])
       iex> Instance.validate_account_balances(instance)
       {:ok, %{
@@ -201,8 +201,8 @@ defmodule DoubleEntryLedger.Instance do
 
       iex> alias DoubleEntryLedger.{AccountStore, Balance}
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
-      iex> AccountStore.create(%{name: "Test Account", instance_id: instance.id, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}})
-      iex> AccountStore.create(%{name: "Test Account 2", instance_id: instance.id, type: :liability, currency: :USD})
+      iex> AccountStore.create(%{name: "Test Account", address: "account:main1", instance_id: instance.id, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}})
+      iex> AccountStore.create(%{name: "Test Account 2", address: "account:main2", instance_id: instance.id, type: :liability, currency: :USD})
       iex> instance = Repo.preload(instance, [:accounts])
       iex> Instance.validate_account_balances(instance)
       {:error, %{

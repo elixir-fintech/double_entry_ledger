@@ -79,6 +79,7 @@ defmodule DoubleEntryLedger.Account do
 
   * `id`: UUID primary key
   * `name`: Account name must unique. Can't be changed after creation
+  * `address`: Human-readable account address in the format "abc1:def2:(:[a-zA-Z_0-9]+){0,}" (required)
   * `description`: Optional text description
   * `currency`: Currency code atom (e.g., `:USD`, `:EUR`). Can't be changed after creation
   * `type`: Account classification. Can't be changed after creation
@@ -97,6 +98,7 @@ defmodule DoubleEntryLedger.Account do
           id: binary() | nil,
           currency: Currency.currency_atom() | nil,
           description: String.t() | nil,
+          address: String.t() | nil,
           context: map() | nil,
           name: String.t() | nil,
           normal_balance: Types.credit_or_debit() | nil,
@@ -116,6 +118,7 @@ defmodule DoubleEntryLedger.Account do
   schema "accounts" do
     field(:currency, Ecto.Enum, values: @currency_atoms)
     field(:description, :string)
+    field(:address, :string)
     field(:context, :map)
     field(:name, :string)
     field(:normal_balance, Ecto.Enum, values: @credit_and_debit)
@@ -157,6 +160,7 @@ defmodule DoubleEntryLedger.Account do
       # Create a valid asset account
       iex> changeset = Account.changeset(%Account{}, %{
       ...>   name: "Cash Account",
+      ...>   address: "cash:main:1",
       ...>   currency: :USD,
       ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
       ...>   type: :asset
@@ -171,13 +175,14 @@ defmodule DoubleEntryLedger.Account do
       iex> changeset.valid?
       false
       iex> MapSet.new(Keyword.keys(changeset.errors))
-      MapSet.new([:name, :currency, :instance_id, :type])
+      MapSet.new([:name, :currency, :address, :instance_id, :type])
   """
   @spec changeset(Account.t(), map()) :: Changeset.t()
   def changeset(account, attrs) do
     account
     |> cast(attrs, [
       :name,
+      :address,
       :description,
       :currency,
       :normal_balance,
@@ -186,7 +191,8 @@ defmodule DoubleEntryLedger.Account do
       :allowed_negative,
       :instance_id
     ])
-    |> validate_required([:name, :currency, :instance_id, :type])
+    |> validate_required([:name, :address, :currency, :instance_id, :type])
+    |> validate_format(:address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/, message: "is not a valid address")
     |> validate_inclusion(:type, @account_types)
     |> set_normal_balance_based_on_type()
     |> validate_inclusion(:normal_balance, @credit_and_debit)
@@ -195,6 +201,7 @@ defmodule DoubleEntryLedger.Account do
     |> cast_embed(:pending, with: &Balance.changeset/2)
     |> trim_name()
     |> unique_constraint(:name, name: "unique_instance_name")
+    |> unique_constraint(:address, name: :unique_address, message: "has already been taken")
   end
 
   @doc """
@@ -250,7 +257,7 @@ defmodule DoubleEntryLedger.Account do
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account} = AccountStore.create(%{
-      ...>    name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
+      ...>    name: "account1", address: "cash:main:1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, %{id: account_id}} = Repo.delete(Account.delete_changeset(account))
       iex> account.id == account_id
       true
@@ -260,9 +267,9 @@ defmodule DoubleEntryLedger.Account do
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{
-      ...>    name: "account1", instance_id: instance.id, type: :asset, currency: :EUR})
+      ...>    name: "account1", address: "cash:main:1", instance_id: instance.id, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{
-      ...>    name: "account2", instance_id: instance.id, type: :liability, currency: :EUR})
+      ...>    name: "account2", address: "cash:main:2", instance_id: instance.id, type: :liability, currency: :EUR})
       iex> {:ok, _, _} = EventStore.process_from_event_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => "pending", "entries" => [

@@ -4,6 +4,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateAccounts do
   def change do
     create table(:accounts, primary_key: false, prefix: "double_entry_ledger") do
       add :id, :binary_id, primary_key: true
+      add :address, :string, null: false
       add :name, :string
       add :description, :string
       add :currency, :string, null: false
@@ -25,5 +26,10 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateAccounts do
       prefix: "double_entry_ledger",
       name: "unique_instance_name"
     )
+    create unique_index(:accounts, [:instance_id, :address],
+      prefix: "double_entry_ledger",
+      name: "unique_address_per_instance"
+    )
+
   end
 end

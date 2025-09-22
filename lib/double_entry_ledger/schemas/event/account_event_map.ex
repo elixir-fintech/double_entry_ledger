@@ -136,6 +136,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>   source_idempk: "acc_123",
       ...>   payload: %{
       ...>     name: "Test Account",
+      ...>     address: "account:main",
       ...>     type: :asset,
       ...>     currency: "USD"
       ...>   }
@@ -194,7 +195,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>   instance_address: "Test:Ledger",
       ...>   source: "test",
       ...>   source_idempk: "123",
-      ...>   payload: %{name: "Test", type: :asset, currency: "USD"}
+      ...>   payload: %{name: "Test", address: "account:main", type: :asset, currency: "USD"}
       ...> }
       iex> changeset = DoubleEntryLedger.Event.AccountEventMap.changeset(%DoubleEntryLedger.Event.AccountEventMap{}, attrs)
       iex> changeset.valid?
