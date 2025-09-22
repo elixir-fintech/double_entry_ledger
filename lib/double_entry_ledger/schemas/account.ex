@@ -233,7 +233,7 @@ defmodule DoubleEntryLedger.Account do
   @spec update_changeset(Account.t(), map()) :: Changeset.t()
   def update_changeset(account, attrs) do
     account
-    |> cast(attrs, [:description, :context])
+    |> cast(attrs, [:name, :description, :context])
   end
 
   @doc """

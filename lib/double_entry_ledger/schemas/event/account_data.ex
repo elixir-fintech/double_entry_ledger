@@ -153,16 +153,16 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> changeset = AccountData.update_changeset(existing_data, invalid_update)
       iex> changeset.valid?
       true
-      iex> # Only description should be in changes, not the restricted fields
+      iex> # description and name should be in changes, not the restricted fields
       iex> Map.keys(changeset.changes)
-      [:description]
+      [:description, :name]
       iex> changeset.changes.description
       "Valid update"
   """
   @spec update_changeset(AccountData.t(), map()) :: Ecto.Changeset.t()
   def update_changeset(account_data, attrs) do
     account_data
-    |> cast(attrs, [:description, :context])
+    |> cast(attrs, [:name, :description, :context])
   end
 
   @doc """
