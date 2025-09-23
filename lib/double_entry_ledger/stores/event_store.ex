@@ -246,11 +246,40 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.all()
   end
 
+  @doc """
+  Gets the create transaction event associated with a specific transaction.
+
+  ## Parameters
+    - `transaction_id`: ID of the transaction to get the create event for
+
+  ## Returns
+
+    - `Event.t() | nil`: The create transaction event if found and processed
+  """
   @spec get_create_transaction_event(Ecto.UUID.t()) :: Event.t()
   def get_create_transaction_event(transaction_id) do
     base_transaction_query(transaction_id)
     |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
     |> where([e], e.action == :create_transaction)
+    |> where([_,_, eqi], eqi.status == :processed)
+    |> order_by([asc: :inserted_at])
+    |> Repo.one()
+  end
+
+  @doc """
+  Gets the create account event associated with a specific account.
+
+  ## Parameters
+    - `account_id`: ID of the account to get the create event for
+
+  ## Returns
+    - `Event.t() | nil`: The create account event if found and processed
+  """
+  @spec get_create_account_event(Ecto.UUID.t()) :: Event.t()
+  def get_create_account_event(account_id) do
+    base_account_query(account_id)
+    |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
+    |> where([e], e.action == :create_account)
     |> where([_,_, eqi], eqi.status == :processed)
     |> order_by([asc: :inserted_at])
     |> Repo.one()
@@ -272,15 +301,6 @@ defmodule DoubleEntryLedger.EventStore do
     |> Repo.all()
   end
 
-  @spec get_create_account_event(Ecto.UUID.t()) :: Event.t()
-  def get_create_account_event(account_id) do
-    base_account_query(account_id)
-    |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
-    |> where([e], e.action == :create_account)
-    |> where([_,_, eqi], eqi.status == :processed)
-    |> order_by([asc: :inserted_at])
-    |> Repo.one()
-  end
 
   @doc """
   Creates a new event record after a processing failure, preserving error information.

@@ -8,8 +8,10 @@ defmodule DoubleEntryLedger.AccountStoreTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   alias DoubleEntryLedger.AccountStore
+  alias DoubleEntryLedger.AccountStoreHelper
 
   doctest AccountStore
+  doctest AccountStoreHelper
 
   describe "get_accounts_by_instance_id" do
     setup [:create_instance]

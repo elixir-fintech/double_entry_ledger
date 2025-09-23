@@ -26,8 +26,9 @@ defmodule DoubleEntryLedger.AccountStoreHelper do
       # Building an update changeset
       changeset = AccountStoreHelper.build_update(existing_account, updated_data)
   """
+  import Ecto.Query, only: [from: 2]
 
-  alias DoubleEntryLedger.Account
+  alias DoubleEntryLedger.{Account, Repo}
   alias DoubleEntryLedger.Event.AccountData
 
   @doc """
@@ -47,7 +48,10 @@ defmodule DoubleEntryLedger.AccountStoreHelper do
 
   ## Examples
 
-      iex> account_data = %AccountData{name: "Cash Account", type: :asset, currency: :USD}
+      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.AccountStoreHelper
+      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %AccountData{address: "Cash:Account", type: :asset, currency: :USD}
       iex> changeset = AccountStoreHelper.build_create(account_data, instance_id)
       iex> changeset.valid?
       true
@@ -77,6 +81,8 @@ defmodule DoubleEntryLedger.AccountStoreHelper do
 
   ## Examples
 
+      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.{Account, AccountStoreHelper}
       iex> existing_account = %Account{name: "Old Name", type: :asset, currency: :USD}
       iex> new_data = %AccountData{description: "Updated Description"}
       iex> changeset = AccountStoreHelper.build_update(existing_account, new_data)
@@ -87,5 +93,36 @@ defmodule DoubleEntryLedger.AccountStoreHelper do
   def build_update(%Account{} = account, account_data) do
     account
     |> Account.update_changeset(AccountData.to_map(account_data))
+  end
+
+  @doc """
+  Retrieves an Account by its address and associated instance ID.
+  Returns nil if no matching account is found.
+
+  ## Parameters
+  * `address` - The unique address string of the account
+  * `instance_id` - The UUID of the instance the account belongs to
+
+  ## Returns
+  * `Account.t() | nil` - The found Account struct or nil if not found
+
+  ## Examples
+      iex> {:ok, %{address: address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{address: "account:main1", description: "Test Description", instance_address: address, currency: :EUR, type: :asset}
+      iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
+      iex> found_account = DoubleEntryLedger.AccountStoreHelper.get_by_address_and_instance("account:main1", account.instance_id)
+      iex> found_account.id == account.id
+      true
+
+      iex> DoubleEntryLedger.AccountStoreHelper.get_by_address_and_instance("nonexistent:account", Ecto.UUID.generate())
+      nil
+
+  """
+  @spec get_by_address_and_instance(String.t(), Ecto.UUID.t()) :: Account.t() | nil
+  def get_by_address_and_instance(address, instance_id) do
+    from(a in Account,
+      where: a.address == ^address and a.instance_id == ^instance_id
+    )
+    |> Repo.one()
   end
 end

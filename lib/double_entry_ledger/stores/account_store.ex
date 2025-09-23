@@ -44,14 +44,44 @@ defmodule DoubleEntryLedger.AccountStore do
   """
   import Ecto.Query, only: [from: 2]
 
+  import DoubleEntryLedger.AccountStoreHelper,
+    only: [get_by_address_and_instance: 2]
+
   alias DoubleEntryLedger.{
     Repo,
     Account,
     Types,
     BalanceHistoryEntry,
     EventStore,
-    Entry
+    Entry,
+    InstanceStore
   }
+
+  @doc """
+  Retrieves an account by its ID.
+
+  ## Parameters
+
+    - `id` (Ecto.UUID.t()): The ID of the account.
+
+  ## Returns
+
+    - `account`: The account struct, or `nil` if not found.
+
+  ## Examples
+
+      iex> {:ok, %{address: instance_address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
+      iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
+      iex> retrieved = DoubleEntryLedger.AccountStore.get_by_id(account.id)
+      iex> retrieved.id == account.id
+      true
+
+  """
+  @spec get_by_id(Ecto.UUID.t()) :: Account.t() | nil
+  def get_by_id(id) do
+    Repo.get(Account, id, preload: [:events])
+  end
 
   @doc """
   Creates a new account with the given attributes.
@@ -92,32 +122,6 @@ defmodule DoubleEntryLedger.AccountStore do
   end
 
   @doc """
-  Retrieves an account by its ID.
-
-  ## Parameters
-
-    - `id` (Ecto.UUID.t()): The ID of the account.
-
-  ## Returns
-
-    - `account`: The account struct, or `nil` if not found.
-
-  ## Examples
-
-      iex> {:ok, %{address: instance_address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
-      iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
-      iex> retrieved = DoubleEntryLedger.AccountStore.get_by_id(account.id)
-      iex> retrieved.id == account.id
-      true
-
-  """
-  @spec get_by_id(Ecto.UUID.t()) :: Account.t() | nil
-  def get_by_id(id) do
-    Repo.get(Account, id, preload: [:events])
-  end
-
-  @doc """
   Updates an account with the given attributes, only allowing changes to the description and the context.
 
   ## Parameters
@@ -135,16 +139,32 @@ defmodule DoubleEntryLedger.AccountStore do
       iex> {:ok, %{address: address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
       iex> attrs = %{name: "Test Account", address: "account:main1", description: "Test Description", instance_address: address, currency: :EUR, type: :asset}
       iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
-      iex> {:ok, updated_account} = DoubleEntryLedger.AccountStore.update(account.id, %{description: "Updated Description"})
+      iex> {:ok, updated_account} = DoubleEntryLedger.AccountStore.update(account.address, %{instance_address: address, description: "Updated Description"})
       iex> updated_account.description
       "Updated Description"
 
   """
   @spec update(Ecto.UUID.t(), map()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
-  def update(id, attrs) do
-    get_by_id(id)
-    |> Account.update_changeset(attrs)
-    |> Repo.update()
+  def update(address, %{instance_address: instance_address} = attrs, source \\ "AccountStore.update/2") do
+    instance = InstanceStore.get_by_address(instance_address)
+    account = get_by_address_and_instance(address, instance.id)
+    event = EventStore.get_create_account_event(account.id)
+
+    response = EventStore.process_from_event_params_no_save_on_error(
+      %{
+        "instance_address" => instance_address,
+        "action" => "update_account",
+        "source" => event.source,
+        "source_idempk" => event.source_idempk,
+        "update_idempk" => Ecto.UUID.generate(),
+        "update_source" => source,
+        "payload" => Map.delete(attrs, :instance_address)
+      }
+    )
+    case response do
+      {:ok, account, _event} -> {:ok, account}
+      {:error, changeset} -> {:error, changeset}
+    end
   end
 
   @doc """
