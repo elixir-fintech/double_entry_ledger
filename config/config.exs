@@ -6,7 +6,8 @@ config :logger,
 config :double_entry_ledger,
   ecto_repos: [DoubleEntryLedger.Repo],
   max_retries: 5,
-  retry_interval: 200
+  retry_interval: 200,
+  schema_prefix: "double_entry_ledger"
 
 # Event queue configuration
 config :double_entry_ledger, :event_queue,

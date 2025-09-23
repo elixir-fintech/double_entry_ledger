@@ -1,8 +1,10 @@
 defmodule DoubleEntryLedger.Repo.Migrations.AddBalanceHistoryEntriesTable do
   use Ecto.Migration
 
+  @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)
+
   def change do
-    create table(:balance_history_entries, primary_key: false, prefix: "double_entry_ledger") do
+    create table(:balance_history_entries, primary_key: false, prefix: @schema_prefix) do
       add :id, :binary_id, primary_key: true
       add :posted, :map, default: %{}
       add :pending, :map, default: %{}
@@ -13,7 +15,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.AddBalanceHistoryEntriesTable do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create index(:balance_history_entries, [:account_id], prefix: "double_entry_ledger")
-    create index(:balance_history_entries, [:entry_id], prefix: "double_entry_ledger")
+    create index(:balance_history_entries, [:account_id], prefix: @schema_prefix)
+    create index(:balance_history_entries, [:entry_id], prefix: @schema_prefix)
   end
 end

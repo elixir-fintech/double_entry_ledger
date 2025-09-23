@@ -21,6 +21,8 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
   alias DoubleEntryLedger.{EventWorker, Repo, Event}
   import Ecto.Query
 
+  @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)
+
   # Client API
 
   @doc """
@@ -116,7 +118,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
     # Find an event for this instance that's ready to be processed
     from(e in Event,
       join: eqi in assoc(e, :event_queue_item),
-      prefix: "double_entry_ledger",
+      prefix: ^@schema_prefix,
       where:
         eqi.status in [:pending, :occ_timeout, :failed] and
           e.instance_id == ^instance_id and

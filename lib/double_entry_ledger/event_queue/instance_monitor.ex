@@ -36,6 +36,8 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
 
   import Ecto.Query
 
+  @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)
+
   # Client API
 
   @doc """
@@ -83,7 +85,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
     # Find distinct instance IDs with pending events
     from(e in Event,
       join: eqi in EventQueueItem,
-      prefix: "double_entry_ledger",
+      prefix: ^@schema_prefix,
       on: e.id == eqi.event_id,
       where:
         eqi.status in [:pending, :occ_timeout, :failed] and
