@@ -154,8 +154,8 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> changeset.valid?
       true
       iex> # description and name should be in changes, not the restricted fields
-      iex> Map.keys(changeset.changes)
-      [:description, :name]
+      iex> Keyword.equal?(Map.keys(changeset.changes), [:description, :name])
+      true
       iex> changeset.changes.description
       "Valid update"
   """

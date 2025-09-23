@@ -256,7 +256,7 @@ defmodule DoubleEntryLedger.Account do
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account} = AccountStore.create(%{
-      ...>    name: "account1", address: "cash:main:1", instance_id: instance.id, type: :asset, currency: :EUR})
+      ...>    name: "account1", address: "cash:main:1", instance_address: instance.address, type: :asset, currency: :EUR})
       iex> {:ok, %{id: account_id}} = Repo.delete(Account.delete_changeset(account))
       iex> account.id == account_id
       true
@@ -266,9 +266,9 @@ defmodule DoubleEntryLedger.Account do
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{
-      ...>    name: "account1", address: "cash:main:1", instance_id: instance.id, type: :asset, currency: :EUR})
+      ...>    name: "account1", address: "cash:main:1", instance_address: instance.address, type: :asset, currency: :EUR})
       iex> {:ok, account2} = AccountStore.create(%{
-      ...>    name: "account2", address: "cash:main:2", instance_id: instance.id, type: :liability, currency: :EUR})
+      ...>    name: "account2", address: "cash:main:2", instance_address: instance.address, type: :liability, currency: :EUR})
       iex> {:ok, _, _} = EventStore.process_from_event_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => "pending", "entries" => [

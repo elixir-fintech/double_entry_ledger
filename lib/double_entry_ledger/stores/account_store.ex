@@ -49,6 +49,7 @@ defmodule DoubleEntryLedger.AccountStore do
     Account,
     Types,
     BalanceHistoryEntry,
+    EventStore,
     Entry
   }
 
@@ -66,18 +67,28 @@ defmodule DoubleEntryLedger.AccountStore do
 
   ## Examples
 
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, %{address: address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: address, currency: :EUR, type: :asset}
       iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
       iex> account.name
       "Test Account"
 
   """
   @spec create(map()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
-  def create(attrs) do
-    %Account{}
-    |> Account.changeset(attrs)
-    |> Repo.insert()
+  def create(%{instance_address: address} = attrs, source \\ "AccountStore.create/1") do
+    response = EventStore.process_from_event_params_no_save_on_error(
+      %{
+        "instance_address" => address,
+        "action" => "create_account",
+        "source" => source,
+        "source_idempk" => Ecto.UUID.generate(),
+        "payload" => Map.delete(attrs, :instance_address)
+      }
+    )
+    case response do
+      {:ok, account, _event} -> {:ok, account}
+      {:error, changeset} -> {:error, changeset}
+    end
   end
 
   @doc """
@@ -93,8 +104,8 @@ defmodule DoubleEntryLedger.AccountStore do
 
   ## Examples
 
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, %{address: instance_address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
       iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
       iex> retrieved = DoubleEntryLedger.AccountStore.get_by_id(account.id)
       iex> retrieved.id == account.id
@@ -121,8 +132,8 @@ defmodule DoubleEntryLedger.AccountStore do
 
   ## Examples
 
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", description: "Test Description", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, %{address: address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", description: "Test Description", instance_address: address, currency: :EUR, type: :asset}
       iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
       iex> {:ok, updated_account} = DoubleEntryLedger.AccountStore.update(account.id, %{description: "Updated Description"})
       iex> updated_account.description
@@ -150,8 +161,8 @@ defmodule DoubleEntryLedger.AccountStore do
 
   ## Examples
 
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, %{address: instance_address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
       iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
       iex> {:ok, _} = DoubleEntryLedger.AccountStore.delete(account.id)
       iex> DoubleEntryLedger.AccountStore.get_by_id(account.id) == nil
@@ -181,8 +192,8 @@ defmodule DoubleEntryLedger.AccountStore do
 
   ## Examples
 
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, %{address: instance_address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
       iex> {:ok, account} = DoubleEntryLedger.AccountStore.create(attrs)
       iex> {:ok, balance_history} = DoubleEntryLedger.AccountStore.get_balance_history(account.id)
       iex> is_list(balance_history)
@@ -245,8 +256,8 @@ defmodule DoubleEntryLedger.AccountStore do
 
   ## Examples
 
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, %{address: instance_address, id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
       iex> {:ok, account1} = DoubleEntryLedger.AccountStore.create(attrs)
       iex> {:ok, account2} = DoubleEntryLedger.AccountStore.create(%{attrs | name: "Account 2", address: "account:main2"})
       iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main3", name: "Account 3"})
@@ -295,8 +306,8 @@ defmodule DoubleEntryLedger.AccountStore do
 
   ## Examples
 
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, %{address: instance_address, id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
       iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(attrs)
       iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main2", name: "Account 2"})
       iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main3", name: "Account 3", type: :liability})
@@ -337,13 +348,13 @@ defmodule DoubleEntryLedger.AccountStore do
 
   ## Examples
 
-      iex> {:ok, %{id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:ok, %{id: instance_id2}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance2"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_id: instance_id, currency: :EUR, type: :asset}
+      iex> {:ok, %{id: instance_id, address: instance_address}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> {:ok, %{address: instance_address2}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance2"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
       iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(attrs)
       iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main2", name: "Account 2"})
       iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main3", name: "Account 3"})
-      iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main3", name: "Account 3", instance_id: instance_id2})
+      iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main3", name: "Account 3", instance_address: instance_address2})
       iex> {:ok, accounts} = DoubleEntryLedger.AccountStore.get_all_accounts_by_instance_id(instance_id)
       iex> length(accounts)
       3
