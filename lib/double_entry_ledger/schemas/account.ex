@@ -192,7 +192,9 @@ defmodule DoubleEntryLedger.Account do
       :instance_id
     ])
     |> validate_required([:address, :currency, :instance_id, :type])
-    |> validate_format(:address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/, message: "is not a valid address")
+    |> validate_format(:address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/,
+      message: "is not a valid address"
+    )
     |> validate_inclusion(:type, @account_types)
     |> set_normal_balance_based_on_type()
     |> validate_inclusion(:normal_balance, @credit_and_debit)

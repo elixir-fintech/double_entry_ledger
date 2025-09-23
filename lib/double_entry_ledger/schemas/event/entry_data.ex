@@ -106,7 +106,9 @@ defmodule DoubleEntryLedger.Event.EntryData do
     entry_data
     |> cast(attrs, [:account_address, :amount, :currency])
     |> validate_required([:account_address, :amount, :currency])
-    |> validate_format(:account_address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/, message: "is not a valid account address")
+    |> validate_format(:account_address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/,
+      message: "is not a valid account address"
+    )
     |> validate_inclusion(:currency, @currency_atoms)
   end
 

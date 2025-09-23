@@ -189,13 +189,13 @@ defmodule DoubleEntryLedger.Event.TransactionData do
   """
   @spec to_map(t()) :: map()
   def to_map(nil), do: %{}
+
   def to_map(td) do
     %{
       status: Map.get(td, :status),
       entries: Enum.map(Map.get(td, :entries, []), &EntryData.to_map/1)
     }
   end
-
 
   defp validate_entries_count(changeset) do
     entries = get_field(changeset, :entries, [])
@@ -222,7 +222,12 @@ defmodule DoubleEntryLedger.Event.TransactionData do
       |> Enum.map(fn {id, _} -> id end)
 
     if duplicate_addresses != [] do
-      add_errors_to_entries(changeset, :account_address, "account addresses must be distinct", duplicate_addresses)
+      add_errors_to_entries(
+        changeset,
+        :account_address,
+        "account addresses must be distinct",
+        duplicate_addresses
+      )
     else
       changeset
     end

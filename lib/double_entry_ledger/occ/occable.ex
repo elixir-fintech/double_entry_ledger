@@ -87,8 +87,10 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
                                       %{
                                         occable_item: %{instance_id: id, event_map: em}
                                       } ->
-      td = (Map.get(em, :payload) || Map.get(em, "payload"))
+      td =
+        (Map.get(em, :payload) || Map.get(em, "payload"))
         |> to_td_struct()
+
       case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
         {:ok, transaction_map} -> {:ok, transaction_map}
         {:error, error} -> {:ok, {:error, error}}
@@ -135,6 +137,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
   alias DoubleEntryLedger.InstanceStoreHelper
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.EventWorker.TransactionEventTransformer
+
   @doc """
   Updates an TransactionEventMap during OCC retry cycles.
 

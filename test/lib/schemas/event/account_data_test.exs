@@ -37,7 +37,11 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
                  currency: {"is invalid", _},
                  type: {"is invalid", _}
                ]
-             } = AccountData.changeset(%AccountData{name: "some_name", address: "some:address"}, attrs)
+             } =
+               AccountData.changeset(
+                 %AccountData{name: "some_name", address: "some:address"},
+                 attrs
+               )
     end
 
     test "changeset invalid for normal_balance not equal to type" do

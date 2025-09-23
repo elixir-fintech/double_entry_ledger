@@ -31,7 +31,6 @@ defmodule DoubleEntryLedger.BaseSchema do
       @foreign_key_type :binary_id
 
       @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)
-
     end
   end
 end

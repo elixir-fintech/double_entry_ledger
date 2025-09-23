@@ -3,6 +3,7 @@ defmodule DoubleEntryLedger.MapHelper do
   Provides helper functions for working with maps in the context of the double-entry ledger.
   """
   def deep_atomize_keys!(%{__struct__: _} = struct), do: struct
+
   def deep_atomize_keys!(%{} = map) do
     map
     |> Enum.map(fn {k, v} ->

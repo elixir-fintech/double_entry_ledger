@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.AccountFixtures do
     random_name =
       "account_#{:crypto.strong_rand_bytes(4) |> Base.encode64() |> binary_part(0, 8)}"
 
-    address = "account:main#{:rand.uniform(1000000)}"
+    address = "account:main#{:rand.uniform(1_000_000)}"
 
     attrs =
       attrs

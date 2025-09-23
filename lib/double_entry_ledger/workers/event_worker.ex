@@ -523,7 +523,9 @@ defmodule DoubleEntryLedger.EventWorker do
     case claim_event_for_processing(uuid, processor_id) do
       {:ok, event} ->
         process_event(event)
-      {:error, error} -> {:error, error}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 

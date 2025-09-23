@@ -106,15 +106,15 @@ defmodule DoubleEntryLedger.AccountStore do
   """
   @spec create(map()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t() | String.t()}
   def create(%{instance_address: address} = attrs, source \\ "AccountStore.create/1") do
-    response = EventStore.process_from_event_params_no_save_on_error(
-      %{
+    response =
+      EventStore.process_from_event_params_no_save_on_error(%{
         "instance_address" => address,
         "action" => "create_account",
         "source" => source,
         "source_idempk" => Ecto.UUID.generate(),
         "payload" => Map.delete(attrs, :instance_address)
-      }
-    )
+      })
+
     case response do
       {:ok, account, _event} -> {:ok, account}
       {:error, changeset} -> {:error, changeset}
@@ -145,13 +145,17 @@ defmodule DoubleEntryLedger.AccountStore do
 
   """
   @spec update(Ecto.UUID.t(), map()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
-  def update(address, %{instance_address: instance_address} = attrs, source \\ "AccountStore.update/2") do
+  def update(
+        address,
+        %{instance_address: instance_address} = attrs,
+        source \\ "AccountStore.update/2"
+      ) do
     instance = InstanceStore.get_by_address(instance_address)
     account = get_by_address_and_instance(address, instance.id)
     event = EventStore.get_create_account_event(account.id)
 
-    response = EventStore.process_from_event_params_no_save_on_error(
-      %{
+    response =
+      EventStore.process_from_event_params_no_save_on_error(%{
         "instance_address" => instance_address,
         "action" => "update_account",
         "source" => event.source,
@@ -159,8 +163,8 @@ defmodule DoubleEntryLedger.AccountStore do
         "update_idempk" => Ecto.UUID.generate(),
         "update_source" => source,
         "payload" => Map.delete(attrs, :instance_address)
-      }
-    )
+      })
+
     case response do
       {:ok, account, _event} -> {:ok, account}
       {:error, changeset} -> {:error, changeset}

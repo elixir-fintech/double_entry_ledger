@@ -101,10 +101,14 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
   end
 
   @spec build_update_account(AccountEventMap.t()) :: Ecto.Multi.t()
-  defp build_update_account(%AccountEventMap{payload: payload, instance_address: address} = event_map) do
+  defp build_update_account(
+         %AccountEventMap{payload: payload, instance_address: address} = event_map
+       ) do
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
-    |> Multi.insert(:new_event, fn %{instance: %{id: id}} -> EventStoreHelper.build_create(event_map, id) end)
+    |> Multi.insert(:new_event, fn %{instance: %{id: id}} ->
+      EventStoreHelper.build_create(event_map, id)
+    end)
     |> EventStoreHelper.build_get_create_account_event_account(
       :get_account,
       :new_event

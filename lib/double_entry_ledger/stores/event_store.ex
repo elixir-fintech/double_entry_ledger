@@ -111,11 +111,11 @@ defmodule DoubleEntryLedger.EventStore do
           {:ok, Event.t()} | {:error, Ecto.Changeset.t() | :instance_not_found}
   def create(%{instance_address: address} = attrs) do
     case Multi.new()
-    |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
-    |> Multi.insert(:event, fn %{instance: instance} ->
-      build_create(attrs, instance.id)
-    end)
-    |> Repo.transaction() do
+         |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
+         |> Multi.insert(:event, fn %{instance: instance} ->
+           build_create(attrs, instance.id)
+         end)
+         |> Repo.transaction() do
       {:ok, %{event: event}} -> {:ok, event}
       {:error, :instance, _reason, _changes} -> {:error, :instance_not_found}
       {:error, :event, changeset, _changes} -> {:error, changeset}
@@ -242,7 +242,7 @@ defmodule DoubleEntryLedger.EventStore do
   @spec list_all_for_transaction(Ecto.UUID.t()) :: list(Event.t())
   def list_all_for_transaction(transaction_id) do
     base_transaction_query(transaction_id)
-    |> order_by([desc: :inserted_at])
+    |> order_by(desc: :inserted_at)
     |> Repo.all()
   end
 
@@ -261,8 +261,8 @@ defmodule DoubleEntryLedger.EventStore do
     base_transaction_query(transaction_id)
     |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
     |> where([e], e.action == :create_transaction)
-    |> where([_,_, eqi], eqi.status == :processed)
-    |> order_by([asc: :inserted_at])
+    |> where([_, _, eqi], eqi.status == :processed)
+    |> order_by(asc: :inserted_at)
     |> Repo.one()
   end
 
@@ -280,8 +280,8 @@ defmodule DoubleEntryLedger.EventStore do
     base_account_query(account_id)
     |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
     |> where([e], e.action == :create_account)
-    |> where([_,_, eqi], eqi.status == :processed)
-    |> order_by([asc: :inserted_at])
+    |> where([_, _, eqi], eqi.status == :processed)
+    |> order_by(asc: :inserted_at)
     |> Repo.one()
   end
 
@@ -297,10 +297,9 @@ defmodule DoubleEntryLedger.EventStore do
   @spec list_all_for_account(Ecto.UUID.t()) :: list(Event.t())
   def list_all_for_account(account_id) do
     base_account_query(account_id)
-    |> order_by([desc: :inserted_at])
+    |> order_by(desc: :inserted_at)
     |> Repo.all()
   end
-
 
   @doc """
   Creates a new event record after a processing failure, preserving error information.

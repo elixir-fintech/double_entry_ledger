@@ -147,12 +147,18 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
 
     - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
-  def build_transaction(%{action: :update_transaction, instance_address: address} = event_map, transaction_map, repo) do
+  def build_transaction(
+        %{action: :update_transaction, instance_address: address} = event_map,
+        transaction_map,
+        repo
+      ) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
-    |> Multi.insert(:new_event, fn %{instance: %{id: id}} -> EventStoreHelper.build_create(new_event_map, id) end)
+    |> Multi.insert(:new_event, fn %{instance: %{id: id}} ->
+      EventStoreHelper.build_create(new_event_map, id)
+    end)
     |> EventStoreHelper.build_get_create_transaction_event_transaction(
       :get_create_transaction_event_transaction,
       :new_event

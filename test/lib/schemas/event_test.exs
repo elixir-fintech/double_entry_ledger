@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.EventTest do
                  source: {"can't be blank", [validation: :required]},
                  source_idempk: {"can't be blank", [validation: :required]},
                  instance_id: {"can't be blank", [validation: :required]},
-                 event_map: {"can't be blank", [validation: :required]},
+                 event_map: {"can't be blank", [validation: :required]}
                ]
              } = Event.changeset(%Event{}, %{})
     end
@@ -74,6 +74,7 @@ defmodule DoubleEntryLedger.EventTest do
       }
 
       attrs = Map.put(event_map, :event_map, event_map)
+
       assert %Changeset{
                valid?: true
              } =

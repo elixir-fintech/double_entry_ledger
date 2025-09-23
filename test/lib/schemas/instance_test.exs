@@ -24,13 +24,16 @@ defmodule DoubleEntryLedger.InstanceTest do
 
     test "it enforces unique address" do
       instance_fixture(%{address: "some:address"})
+
       assert {:error, changeset} =
                Repo.insert(Instance.changeset(%Instance{}, %{address: "some:address"}))
 
       assert %Ecto.Changeset{
                valid?: false,
                errors: [
-                 address: {"has already been taken", [constraint: :unique, constraint_name: "unique_address"]}
+                 address:
+                   {"has already been taken",
+                    [constraint: :unique, constraint_name: "unique_address"]}
                ]
              } = changeset
     end

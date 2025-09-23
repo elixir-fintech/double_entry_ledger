@@ -86,7 +86,13 @@ defmodule DoubleEntryLedger.AccountTest do
              } =
                Account.changeset(
                  %Account{},
-                 %{name: "some name", address: "account:main1", type: :asset, instance_id: id, currency: :EUR}
+                 %{
+                   name: "some name",
+                   address: "account:main1",
+                   type: :asset,
+                   instance_id: id,
+                   currency: :EUR
+                 }
                )
 
       assert %Ecto.Changeset{
@@ -168,7 +174,12 @@ defmodule DoubleEntryLedger.AccountTest do
                pending: %Balance{amount: 0, debit: 0, credit: 0},
                available: 0,
                instance_id: ^inst_id
-             } = account_fixture(instance_id: inst.id, name: " some name ", address: "account:main1")
+             } =
+               account_fixture(
+                 instance_id: inst.id,
+                 name: " some name ",
+                 address: "account:main1"
+               )
     end
   end
 

@@ -262,7 +262,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
           fetch_action: 1
         ]
 
-
       @primary_key false
       embedded_schema do
         field(:action, Ecto.Enum,
@@ -316,7 +315,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
           :action,
           :instance_address,
           :source,
-          :source_idempk,
+          :source_idempk
         ])
         |> validate_required([:action, :instance_address, :source, :source_idempk])
         |> validate_inclusion(

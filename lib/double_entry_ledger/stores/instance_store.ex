@@ -205,5 +205,4 @@ defmodule DoubleEntryLedger.InstanceStore do
       isolation: :repeatable_read
     )
   end
-
 end

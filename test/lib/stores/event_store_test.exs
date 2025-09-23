@@ -30,7 +30,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
     setup [:create_instance, :create_accounts]
 
     test "gets an event by source", %{instance: instance} do
-      {:ok, event} = EventStore.create(transaction_event_attrs(instance_address: instance.address))
+      {:ok, event} =
+        EventStore.create(transaction_event_attrs(instance_address: instance.address))
 
       assert %Event{} =
                found_event =

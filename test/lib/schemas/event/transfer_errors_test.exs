@@ -33,9 +33,23 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
 
     test "transfers errors for allowed_negative and normal_balance" do
       account_changeset =
-        Account.changeset(%Account{}, %{name: "A", type: :asset, currency: "USD", allowed_negative: "xx", normal_balance: "yy"})
+        Account.changeset(%Account{}, %{
+          name: "A",
+          type: :asset,
+          currency: "USD",
+          allowed_negative: "xx",
+          normal_balance: "yy"
+        })
 
-      event_map = %AccountEventMap{payload: %AccountData{name: "A", type: :asset, currency: "USD", allowed_negative: "xx", normal_balance: "yy"}}
+      event_map = %AccountEventMap{
+        payload: %AccountData{
+          name: "A",
+          type: :asset,
+          currency: "USD",
+          allowed_negative: "xx",
+          normal_balance: "yy"
+        }
+      }
 
       %{changes: %{payload: %{errors: errors}}} =
         TransferErrors.from_account_to_event_map_payload(event_map, account_changeset)
@@ -45,9 +59,22 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
     end
 
     test "does not transfer errors when account changeset is valid" do
-      account_changeset = Account.changeset(%Account{}, %{name: "Valid Name", type: :asset, currency: "USD", address: "account:main"})
+      account_changeset =
+        Account.changeset(%Account{}, %{
+          name: "Valid Name",
+          type: :asset,
+          currency: "USD",
+          address: "account:main"
+        })
 
-      event_map = %AccountEventMap{payload: %AccountData{name: "Valid Name", type: :asset, currency: "USD", address: "account:main"}}
+      event_map = %AccountEventMap{
+        payload: %AccountData{
+          name: "Valid Name",
+          type: :asset,
+          currency: "USD",
+          address: "account:main"
+        }
+      }
 
       %{changes: %{payload: %{errors: errors}}} =
         TransferErrors.from_account_to_event_map_payload(event_map, account_changeset)

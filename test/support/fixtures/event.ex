@@ -56,7 +56,13 @@ defmodule DoubleEntryLedger.EventFixtures do
     Map.put(ctx, :event, event)
   end
 
-  def new_update_transaction_event(source, source_idempk, instance_address, trx_status, entries \\ []) do
+  def new_update_transaction_event(
+        source,
+        source_idempk,
+        instance_address,
+        trx_status,
+        entries \\ []
+      ) do
     transaction_event_attrs(%{
       action: :update_transaction,
       source: source,

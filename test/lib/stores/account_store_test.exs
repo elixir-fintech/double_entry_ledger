@@ -41,7 +41,10 @@ defmodule DoubleEntryLedger.AccountStoreTest do
     end
 
     test "returns error when account_addresses do not match", %{instance: instance} do
-      account_addresses = ["non:existing:#{:rand.uniform(1000)}", "non:existing:#{:rand.uniform(1000)}"]
+      account_addresses = [
+        "non:existing:#{:rand.uniform(1000)}",
+        "non:existing:#{:rand.uniform(1000)}"
+      ]
 
       assert {:error, :no_accounts_found} ==
                AccountStore.get_accounts_by_instance_id(instance.id, account_addresses)
