@@ -74,7 +74,7 @@ defmodule DoubleEntryLedger.AccountStore do
       "Test Account"
 
   """
-  @spec create(map()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
+  @spec create(map()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t() | String.t()}
   def create(%{instance_address: address} = attrs, source \\ "AccountStore.create/1") do
     response = EventStore.process_from_event_params_no_save_on_error(
       %{
