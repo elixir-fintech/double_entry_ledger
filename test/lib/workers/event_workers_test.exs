@@ -48,8 +48,8 @@ defmodule DoubleEntryLedger.EventWorkerTest do
 
       {:ok, event} =
         new_update_transaction_event(s, s_id, inst.address, :posted, [
-          %{account_id: a1.id, amount: 50, currency: "EUR"},
-          %{account_id: a2.id, amount: 50, currency: "EUR"}
+          %{account_address: a1.address, amount: 50, currency: "EUR"},
+          %{account_address: a2.address, amount: 50, currency: "EUR"}
         ])
 
       {:ok, transaction, %{event_queue_item: evq} = processed_event} =
@@ -105,8 +105,8 @@ defmodule DoubleEntryLedger.EventWorkerTest do
           payload: %{
             status: :pending,
             entries: [
-              %{account_id: a1.id, amount: 100, currency: "EUR"},
-              %{account_id: a2.id, amount: 100, currency: "EUR"}
+              %{account_address: a1.address, amount: 100, currency: "EUR"},
+              %{account_address: a2.address, amount: 100, currency: "EUR"}
             ]
           }
         }

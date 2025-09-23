@@ -277,11 +277,11 @@ defmodule DoubleEntryLedger.AccountStore do
   ## Examples
 
       iex> {:ok, %{address: instance_address, id: instance_id}} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
+      iex> attrs = %{address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
       iex> {:ok, account1} = DoubleEntryLedger.AccountStore.create(attrs)
-      iex> {:ok, account2} = DoubleEntryLedger.AccountStore.create(%{attrs | name: "Account 2", address: "account:main2"})
-      iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main3", name: "Account 3"})
-      iex> {:ok, accounts} = DoubleEntryLedger.AccountStore.get_accounts_by_instance_id(instance_id, [account1.id, account2.id])
+      iex> {:ok, account2} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main2"})
+      iex> {:ok, _} = DoubleEntryLedger.AccountStore.create(%{attrs | address: "account:main3"})
+      iex> {:ok, accounts} = DoubleEntryLedger.AccountStore.get_accounts_by_instance_id(instance_id, [account1.address, account2.address])
       iex> length(accounts)
       2
 
@@ -291,11 +291,11 @@ defmodule DoubleEntryLedger.AccountStore do
           | {:error, :no_accounts_found | :some_accounts_not_found | :no_account_ids_provided}
   def get_accounts_by_instance_id(_instance_id, []), do: {:error, :no_account_ids_provided}
 
-  def get_accounts_by_instance_id(instance_id, account_ids) do
+  def get_accounts_by_instance_id(instance_id, account_addresses) do
     accounts =
       Repo.all(
         from(a in Account,
-          where: a.instance_id == ^instance_id and a.id in ^account_ids
+          where: a.instance_id == ^instance_id and a.address in ^account_addresses
         )
       )
 
@@ -303,7 +303,7 @@ defmodule DoubleEntryLedger.AccountStore do
       accounts == [] ->
         {:error, :no_accounts_found}
 
-      length(accounts) < length(account_ids) ->
+      length(accounts) < length(account_addresses) ->
         {:error, :some_accounts_not_found}
 
       true ->

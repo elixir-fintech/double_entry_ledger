@@ -21,8 +21,8 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       accounts: [a1, a2, _, _]
     } do
       entries = [
-        %EntryData{account_id: a1.id, amount: 100, currency: "EUR"},
-        %EntryData{account_id: a2.id, amount: 100, currency: "EUR"}
+        %EntryData{account_address: a1.address, amount: 100, currency: "EUR"},
+        %EntryData{account_address: a2.address, amount: 100, currency: "EUR"}
       ]
 
       transaction_data = %TransactionData{entries: entries, status: :posted}
@@ -48,8 +48,8 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       accounts: [a1, a2, _, _]
     } do
       entries = [
-        %EntryData{account_id: a1.id, amount: -100, currency: "EUR"},
-        %EntryData{account_id: a2.id, amount: -100, currency: "EUR"}
+        %EntryData{account_address: a1.address, amount: -100, currency: "EUR"},
+        %EntryData{account_address: a2.address, amount: -100, currency: "EUR"}
       ]
 
       transaction_data = %TransactionData{entries: entries, status: :posted}
@@ -80,8 +80,8 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
 
     test "returns error for non-existing accounts", %{instance: instance} do
       entries = [
-        %EntryData{account_id: Ecto.UUID.generate(), amount: 100, currency: "EUR"},
-        %EntryData{account_id: Ecto.UUID.generate(), amount: 100, currency: "EUR"}
+        %EntryData{account_address: "xyz", amount: 100, currency: "EUR"},
+        %EntryData{account_address: "abc", amount: 100, currency: "EUR"}
       ]
 
       transaction_data = %TransactionData{entries: entries, status: :posted}
@@ -98,8 +98,8 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       accounts: [a1, _, _, _]
     } do
       entries = [
-        %EntryData{account_id: a1.id, amount: 100, currency: "EUR"},
-        %EntryData{account_id: Ecto.UUID.generate(), amount: 100, currency: "EUR"}
+        %EntryData{account_address: a1.address, amount: 100, currency: "EUR"},
+        %EntryData{account_address: "xyz", amount: 100, currency: "EUR"}
       ]
 
       transaction_data = %TransactionData{entries: entries, status: :posted}
@@ -116,8 +116,8 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       accounts: [a1, a2, _, _]
     } do
       entries = [
-        %EntryData{account_id: a1.id, currency: "EUR", amount: 100},
-        %EntryData{account_id: a2.id, amount: 100}
+        %EntryData{account_address: a1.address, currency: "EUR", amount: 100},
+        %EntryData{account_address: a2.address, amount: 100}
       ]
 
       transaction_data = %TransactionData{status: :posted, entries: entries}

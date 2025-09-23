@@ -29,8 +29,8 @@ defmodule DoubleEntryLedger.TransactionFixtures do
         "payload" => %{
           "status" => status,
           "entries" => [
-            %{"currency" => "EUR", "amount" => 100, "account_id" => acc1.id},
-            %{"currency" => "EUR", "amount" => 100, "account_id" => acc2.id}
+            %{"currency" => "EUR", "amount" => 100, "account_address" => acc1.address},
+            %{"currency" => "EUR", "amount" => 100, "account_address" => acc2.address}
           ]
         }
       }

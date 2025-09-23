@@ -272,8 +272,8 @@ defmodule DoubleEntryLedger.Account do
       iex> {:ok, _, _} = EventStore.process_from_event_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => "pending", "entries" => [
-      ...>      %{"account_id" => account1.id, "amount" => 100, "currency" => "EUR"},
-      ...>      %{"account_id" => account2.id, "amount" => 100, "currency" => "EUR"},
+      ...>      %{"account_address" => account1.address, "amount" => 100, "currency" => "EUR"},
+      ...>      %{"account_address" => account2.address, "amount" => 100, "currency" => "EUR"},
       ...>  ]}})
       iex> {:error, changeset} = Account.delete_changeset(account1)
       ...> |> Repo.delete()

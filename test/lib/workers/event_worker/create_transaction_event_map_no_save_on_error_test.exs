@@ -98,9 +98,9 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
       updated_event_map =
         update_in(
           event_map,
-          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:account_id)],
+          [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:account_address)],
           fn _ ->
-            Ecto.UUID.generate()
+            "non:existing:#{:rand.uniform(1000)}"
           end
         )
 

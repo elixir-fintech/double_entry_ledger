@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
 
       TransactionData.changeset(%TransactionData{}, attrs)
       |> get_embed(:entries, :changeset)
-      |> Enum.map(&assert {"at least 2 accounts are required", []} = &1.errors[:account_id])
+      |> Enum.map(&assert {"at least 2 accounts are required", []} = &1.errors[:account_address])
       |> then(&assert length(&1) == 1)
     end
 
@@ -80,7 +80,7 @@ defmodule DoubleEntryLedger.Event.TransactionDataTest do
 
       TransactionData.changeset(%TransactionData{}, attr)
       |> get_embed(:entries, :changeset)
-      |> Enum.map(&assert {"account IDs must be distinct", []} = &1.errors[:account_id])
+      |> Enum.map(&assert {"account addresses must be distinct", []} = &1.errors[:account_address])
       |> then(&assert length(&1) == 2)
     end
 

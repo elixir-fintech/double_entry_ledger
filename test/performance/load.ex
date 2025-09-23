@@ -174,8 +174,8 @@ defmodule DoubleEntryLedger.LoadTesting do
         %{
           status: :posted,
           entries: [
-            %{currency: :EUR, amount: -10, account_id: source.id},
-            %{currency: :EUR, amount: 10, account_id: destination.id}
+            %{currency: :EUR, amount: -10, account_address: source.address},
+            %{currency: :EUR, amount: 10, account_address: destination.address}
           ]
         }
       end)

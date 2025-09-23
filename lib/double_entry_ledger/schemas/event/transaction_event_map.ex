@@ -191,8 +191,8 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       ...>   payload: %{
       ...>     status: "pending",
       ...>     entries: [
-      ...>       %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
-      ...>       %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
+      ...>       %{account_address: "asset:account", amount: 100, currency: "USD"},
+      ...>       %{account_address: "cash:account", amount: -100, currency: "USD"}
       ...>     ]
       ...>   }
       ...> }
@@ -261,8 +261,8 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       ...>   payload: %{
       ...>     status: "pending",
       ...>     entries: [
-      ...>       %{account_id: "550e8400-e29b-41d4-a716-446655440001", amount: 100, currency: "USD"},
-      ...>       %{account_id: "550e8400-e29b-41d4-a716-446655440002", amount: -100, currency: "USD"}
+      ...>       %{account_address: "cash:account", amount: 100, currency: "USD"},
+      ...>       %{account_address: "asset:account", amount: -100, currency: "USD"}
       ...>     ]
       ...>   }
       ...> }

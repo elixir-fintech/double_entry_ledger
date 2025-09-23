@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.AccountStoreTest do
       ]
 
       {:ok, returned_accounts} =
-        AccountStore.get_accounts_by_instance_id(instance.id, Enum.map(accounts, & &1.id))
+        AccountStore.get_accounts_by_instance_id(instance.id, Enum.map(accounts, & &1.address))
 
       assert MapSet.new(accounts) == MapSet.new(returned_accounts)
     end
@@ -34,17 +34,17 @@ defmodule DoubleEntryLedger.AccountStoreTest do
         account_fixture(instance_id: instance.id)
       ]
 
-      account_ids = [instance.id | Enum.map(accounts, & &1.id)]
+      account_addresses = [instance.address | Enum.map(accounts, & &1.address)]
 
       assert {:error, :some_accounts_not_found} ==
-               AccountStore.get_accounts_by_instance_id(instance.id, account_ids)
+               AccountStore.get_accounts_by_instance_id(instance.id, account_addresses)
     end
 
-    test "returns error when account_ids do not match", %{instance: instance} do
-      accounts = [Ecto.UUID.generate(), Ecto.UUID.generate()]
+    test "returns error when account_addresses do not match", %{instance: instance} do
+      account_addresses = ["non:existing:#{:rand.uniform(1000)}", "non:existing:#{:rand.uniform(1000)}"]
 
       assert {:error, :no_accounts_found} ==
-               AccountStore.get_accounts_by_instance_id(instance.id, accounts)
+               AccountStore.get_accounts_by_instance_id(instance.id, account_addresses)
     end
 
     test "returns error when no account_ids provided", %{instance: instance} do

@@ -141,9 +141,9 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventTransformer do
              | :account_entries_mismatch
              | :missing_entry_for_account}
   defp get_accounts_with_entries(instance_id, entries) do
-    account_ids = Enum.map(entries, & &1.account_id)
+    account_addresses = Enum.map(entries, & &1.account_address)
 
-    case AccountStore.get_accounts_by_instance_id(instance_id, account_ids) do
+    case AccountStore.get_accounts_by_instance_id(instance_id, account_addresses) do
       {:ok, accounts} -> struct_match_accounts_entries(accounts, entries)
       {:error, error} -> {:error, error}
     end
@@ -165,11 +165,11 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventTransformer do
   end
 
   defp struct_match_accounts_entries(accounts, entries) do
-    entries_map = Map.new(entries, &{&1.account_id, &1})
+    entries_map = Map.new(entries, &{&1.account_address, &1})
 
     pairs =
-      Enum.map(accounts, fn %Account{id: id} = account ->
-        case Map.get(entries_map, id) do
+      Enum.map(accounts, fn %Account{address: address} = account ->
+        case Map.get(entries_map, address) do
           nil -> throw({:error, :missing_entry_for_account})
           entry_data -> {account, entry_data}
         end

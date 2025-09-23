@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
 
   ## Fields
 
-  * `account_id`: UUID of the account involved in the transaction (required)
+  * `account_address`: address of the account involved in the transaction (required)
   * `amount`: Integer amount in the smallest currency unit (e.g., cents) (required)
   * `currency`: The currency of the amount, validated against supported currencies (required)
 
@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
   event processing flow:
 
       entry_data = %EntryData{
-        account_id: "550e8400-e29b-41d4-a716-446655440000",
+        account_address: "cash:user:123",
         amount: 10000,  # $100.00
         currency: :USD
       }
@@ -54,21 +54,21 @@ defmodule DoubleEntryLedger.Event.EntryData do
 
   ## Fields
 
-  * `account_id`: The UUID of the account affected by this entry
+  * `account_address`: The UUID of the account affected by this entry
   * `amount`: Integer amount in the smallest currency unit (e.g., cents)
   * `currency`: Atom representing the currency (e.g., :USD, :EUR)
   """
   @type t :: %EntryData{
-          account_id: Ecto.UUID.t(),
+          account_address: String.t(),
           amount: integer(),
           currency: Currency.currency_atom()
         }
 
-  @derive {Jason.Encoder, only: [:account_id, :amount, :currency]}
+  @derive {Jason.Encoder, only: [:account_address, :amount, :currency]}
 
   @primary_key false
   embedded_schema do
-    field(:account_id, Ecto.UUID)
+    field(:account_address, :string)
     field(:amount, :integer)
     field(:currency, Ecto.Enum, values: @currency_atoms)
   end
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
   Creates a changeset for validating EntryData attributes.
 
   This function creates an Ecto changeset that validates the required fields
-  for an entry in a transaction, ensuring that account_id, amount, and currency
+  for an entry in a transaction, ensuring that account_address, amount, and currency
   are all provided and that the currency is one of the supported types.
 
   ## Parameters
@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
   ## Examples
 
       iex> alias DoubleEntryLedger.Event.EntryData
-      iex> attrs = %{account_id: "550e8400-e29b-41d4-a716-446655440000", amount: 5000, currency: :USD}
+      iex> attrs = %{account_address: "cash:user:123", amount: 5000, currency: :USD}
       iex> changeset = EntryData.changeset(%EntryData{}, attrs)
       iex> changeset.valid?
       true
@@ -104,8 +104,9 @@ defmodule DoubleEntryLedger.Event.EntryData do
   @spec changeset(t() | map(), map()) :: Ecto.Changeset.t()
   def changeset(entry_data, attrs) do
     entry_data
-    |> cast(attrs, [:account_id, :amount, :currency])
-    |> validate_required([:account_id, :amount, :currency])
+    |> cast(attrs, [:account_address, :amount, :currency])
+    |> validate_required([:account_address, :amount, :currency])
+    |> validate_format(:account_address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/, message: "is not a valid account address")
     |> validate_inclusion(:currency, @currency_atoms)
   end
 
@@ -117,13 +118,13 @@ defmodule DoubleEntryLedger.Event.EntryData do
       iex> alias DoubleEntryLedger.Event.EntryData
       iex> entry_data = %EntryData{}
       iex> EntryData.to_map(entry_data)
-      %{account_id: nil, amount: nil, currency: nil}
+      %{account_address: nil, amount: nil, currency: nil}
 
   """
   @spec to_map(t) :: map()
   def to_map(entry_data) do
     %{
-      account_id: Map.get(entry_data, :account_id),
+      account_address: Map.get(entry_data, :account_address),
       amount: Map.get(entry_data, :amount),
       currency: Map.get(entry_data, :currency)
     }

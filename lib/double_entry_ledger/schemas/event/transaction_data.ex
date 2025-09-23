@@ -109,8 +109,8 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
       iex> alias DoubleEntryLedger.Event.TransactionData
       iex> attrs = %{status: :pending, entries: [
-      ...>   %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: :USD},
-      ...>   %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: :USD}
+      ...>   %{account_address: "asset:account", amount: 100, currency: :USD},
+      ...>   %{account_address: "cash:account", amount: -100, currency: :USD}
       ...> ]}
       iex> changeset = TransactionData.changeset(%TransactionData{}, attrs)
       iex> changeset.valid?
@@ -206,7 +206,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
       length(entries) == 1 ->
         add_error(changeset, :entry_count, "must have at least 2 entries")
-        |> add_errors_to_entries(:account_id, "at least 2 accounts are required")
+        |> add_errors_to_entries(:account_address, "at least 2 accounts are required")
 
       true ->
         changeset
@@ -214,15 +214,15 @@ defmodule DoubleEntryLedger.Event.TransactionData do
   end
 
   defp validate_distinct_account_ids(changeset) do
-    duplicate_ids =
+    duplicate_addresses =
       (get_embed(changeset, :entries, :struct) || [])
-      |> Enum.map(& &1.account_id)
+      |> Enum.map(& &1.account_address)
       |> Enum.frequencies()
       |> Enum.filter(fn {_, count} -> count > 1 end)
       |> Enum.map(fn {id, _} -> id end)
 
-    if duplicate_ids != [] do
-      add_errors_to_entries(changeset, :account_id, "account IDs must be distinct", duplicate_ids)
+    if duplicate_addresses != [] do
+      add_errors_to_entries(changeset, :account_address, "account addresses must be distinct", duplicate_addresses)
     else
       changeset
     end

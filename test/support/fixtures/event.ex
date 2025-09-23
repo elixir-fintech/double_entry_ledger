@@ -39,12 +39,12 @@ defmodule DoubleEntryLedger.EventFixtures do
             status: trx_status,
             entries: [
               %{
-                account_id: a1.id,
+                account_address: a1.address,
                 amount: 100,
                 currency: "EUR"
               },
               %{
-                account_id: a2.id,
+                account_address: a2.address,
                 amount: 100,
                 currency: "EUR"
               }
@@ -84,8 +84,8 @@ defmodule DoubleEntryLedger.EventFixtures do
       payload: %TransactionData{
         status: trx_status,
         entries: [
-          %{account_id: a1.id, amount: 100, currency: "EUR"},
-          %{account_id: a2.id, amount: 100, currency: "EUR"}
+          %{account_address: a1.address, amount: 100, currency: "EUR"},
+          %{account_address: a2.address, amount: 100, currency: "EUR"}
         ]
       }
     }
@@ -105,8 +105,8 @@ defmodule DoubleEntryLedger.EventFixtures do
       payload: %TransactionData{
         status: trx_status,
         entries: [
-          %{account_id: a1.id, amount: 50, currency: "EUR"},
-          %{account_id: a2.id, amount: 50, currency: "EUR"}
+          %{account_address: a1.address, amount: 50, currency: "EUR"},
+          %{account_address: a2.address, amount: 50, currency: "EUR"}
         ]
       }
     }

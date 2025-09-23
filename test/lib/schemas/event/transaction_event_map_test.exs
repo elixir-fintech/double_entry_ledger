@@ -97,8 +97,8 @@ defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
     |> Enum.into(%{
       status: "posted",
       entries: [
-        %{account_id: Ecto.UUID.generate(), amount: 100, currency: :EUR},
-        %{account_id: Ecto.UUID.generate(), amount: 100, currency: :EUR}
+        %{account_address: "cash:account", amount: 100, currency: :EUR},
+        %{account_address: "loan:account", amount: 100, currency: :EUR}
       ]
     })
   end

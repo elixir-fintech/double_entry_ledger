@@ -68,8 +68,8 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       {:ok, event} =
         new_update_transaction_event(s, s_id, inst.address, :posted, [
-          %{account_id: a1.id, amount: 50, currency: "EUR"},
-          %{account_id: a2.id, amount: 50, currency: "EUR"}
+          %{account_address: a1.address, amount: 50, currency: "EUR"},
+          %{account_address: a2.address, amount: 50, currency: "EUR"}
         ])
 
       {:ok, transaction, processed_event} = UpdateTransactionEvent.process(event)
@@ -91,8 +91,8 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       {:ok, event} =
         new_update_transaction_event(s, s_id, inst.address, :pending, [
-          %{account_id: a1.id, amount: 50, currency: "EUR"},
-          %{account_id: a2.id, amount: 50, currency: "EUR"}
+          %{account_address: a1.address, amount: 50, currency: "EUR"},
+          %{account_address: a2.address, amount: 50, currency: "EUR"}
         ])
 
       {:ok, transaction, processed_event} = UpdateTransactionEvent.process(event)
@@ -113,8 +113,8 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       {:ok, event} =
         new_update_transaction_event(s, s_id, inst.address, :archived, [
-          %{account_id: a1.id, amount: 50, currency: "EUR"},
-          %{account_id: a2.id, amount: 50, currency: "EUR"}
+          %{account_address: a1.address, amount: 50, currency: "EUR"},
+          %{account_address: a2.address, amount: 50, currency: "EUR"}
         ])
 
       {:ok, transaction, processed_event} = UpdateTransactionEvent.process(event)

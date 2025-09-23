@@ -76,8 +76,8 @@ defmodule DoubleEntryLedger.AccountFixtures do
   end
 
   defp accounts(%{instance: inst, accounts: ctx_accounts}, items) do
-    account_ids = ctx_accounts |> Enum.take(items) |> Enum.map(& &1.id)
-    {:ok, accounts} = AccountStore.get_accounts_by_instance_id(inst.id, account_ids)
+    account_addresses = ctx_accounts |> Enum.take(items) |> Enum.map(& &1.address)
+    {:ok, accounts} = AccountStore.get_accounts_by_instance_id(inst.id, account_addresses)
     accounts
   end
 end

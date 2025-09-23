@@ -252,8 +252,8 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> alias DoubleEntryLedger.{AccountStore, InstanceStore}
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
-      iex> {:ok, revenue_account} = AccountStore.create(%{name: "Revenue", address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address})
-      iex> {:ok, cash_account} = AccountStore.create(%{name: "Cash", address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address})
+      iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address})
+      iex> {:ok, cash_account} = AccountStore.create(%{address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address})
       iex> event_map = %TransactionEventMap{
       ...>   action: :create_transaction,
       ...>   instance_address: instance.address,
@@ -262,8 +262,8 @@ defmodule DoubleEntryLedger.EventWorker do
       ...>   payload: %TransactionData{
       ...>     status: :pending,
       ...>     entries: [
-      ...>       %{account_id: cash_account.id, amount: 100, currency: "USD"},
-      ...>       %{account_id: revenue_account.id, amount: 100, currency: "USD"}
+      ...>       %{account_address: cash_account.address, amount: 100, currency: "USD"},
+      ...>       %{account_address: revenue_account.address, amount: 100, currency: "USD"}
       ...>     ]
       ...>   }
       ...> }
@@ -344,8 +344,8 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> alias DoubleEntryLedger.{AccountStore, InstanceStore}
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:ok, revenue_account} = AccountStore.create(%{name: "Revenue", address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address})
-      iex> {:ok, cash_account} = AccountStore.create(%{name: "Cash", address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address})
+      iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address})
+      iex> {:ok, cash_account} = AccountStore.create(%{address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address})
       iex> valid_event = %TransactionEventMap{action: :create_transaction,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
@@ -353,8 +353,8 @@ defmodule DoubleEntryLedger.EventWorker do
       ...>   payload: %TransactionData{
       ...>      status: :pending,
       ...>      entries: [
-      ...>        %{account_id: revenue_account.id, amount: 100, currency: :USD},
-      ...>        %{account_id: cash_account.id, amount: 100, currency: :USD}
+      ...>        %{account_address: revenue_account.address, amount: 100, currency: :USD},
+      ...>        %{account_address: cash_account.address, amount: 100, currency: :USD}
       ...>      ]
       ...>   }}
       iex> {:ok, _transaction, event} = EventWorker.process_new_event_no_save_on_error(valid_event)

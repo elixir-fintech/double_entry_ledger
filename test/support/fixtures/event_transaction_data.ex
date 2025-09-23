@@ -6,12 +6,12 @@ defmodule DoubleEntryLedger.Event.TransactionDataFixtures do
   def create_2_entries do
     [
       %{
-        account_id: Ecto.UUID.generate(),
+        account_address: "cash:account",
         amount: 100,
         currency: :EUR
       },
       %{
-        account_id: Ecto.UUID.generate(),
+        account_address: "asset:account",
         amount: -100,
         currency: :EUR
       }
@@ -30,12 +30,12 @@ defmodule DoubleEntryLedger.Event.TransactionDataFixtures do
       status: :pending,
       entries: [
         %{
-          account_id: a1.id,
+          account_address: a1.address,
           amount: 100,
           currency: :EUR
         },
         %{
-          account_id: a2.id,
+          account_address: a2.address,
           amount: 100,
           currency: :EUR
         }
