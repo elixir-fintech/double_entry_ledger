@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.AccountStoreTest do
     end
 
     test "returns error when no account_ids provided", %{instance: instance} do
-      assert {:error, :no_account_ids_provided} ==
+      assert {:error, :no_accounts_provided} ==
                AccountStore.get_accounts_by_instance_id(instance.id, [])
     end
   end
@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.AccountStoreTest do
     test "returns error when no accounts are found", %{instance: instance} do
       account_fixture(instance_id: instance.id, type: :liability)
 
-      assert {:error, :no_accounts_found_for_provided_type} ==
+      assert {:error, :no_accounts_found} ==
                AccountStore.get_accounts_by_instance_id_and_type(instance.id, :asset)
     end
   end

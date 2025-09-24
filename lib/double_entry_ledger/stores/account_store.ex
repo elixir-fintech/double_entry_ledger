@@ -253,7 +253,8 @@ defmodule DoubleEntryLedger.AccountStore do
       "Updated Description"
 
   """
-  @spec update(Ecto.UUID.t(), map(), String.t()) :: {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
+  @spec update(Ecto.UUID.t(), map(), String.t()) ::
+          {:ok, Account.t()} | {:error, Ecto.Changeset.t()}
   def update(
         address,
         %{instance_address: instance_address} = attrs,
@@ -340,23 +341,23 @@ defmodule DoubleEntryLedger.AccountStore do
       iex> {:ok, %{address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
       iex> {:ok, account} = AccountStore.create(attrs)
-      iex> {:ok, balance_history} = AccountStore.get_balance_history(account.id)
+      iex> {:ok, balance_history} = AccountStore.get_balance_history_by_id(account.id)
       iex> is_list(balance_history)
       true
 
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
       iex> {:ok, %{id: instance_id}} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:error, _} = AccountStore.get_balance_history(instance_id)
+      iex> {:error, _} = AccountStore.get_balance_history_by_id(instance_id)
 
   """
-  @spec get_balance_history(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          {:ok, list(BalanceHistoryEntry.t())} | {:error, String.t()}
-  def get_balance_history(id, page \\ 1, per_page \\ 40) do
+  @spec get_balance_history_by_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
+          {:ok, list(BalanceHistoryEntry.t())} | {:error, :account_not_found}
+  def get_balance_history_by_id(id, page \\ 1, per_page \\ 40) do
     offset = (page - 1) * per_page
 
     case get_by_id(id) do
       nil ->
-        {:error, "Account not found"}
+        {:error, :account_not_found}
 
       _ ->
         {:ok,
@@ -388,12 +389,61 @@ defmodule DoubleEntryLedger.AccountStore do
   end
 
   @doc """
-  Retrieves accounts by instance ID and a list of account IDs.
+  Retrieves an account's balance history by its address within a specific instance, with pagination support.
+
+  Returns a paginated list of balance history entries showing how the account's
+  balance has changed over time. Each entry includes the associated transaction
+  ID for complete traceability.
+
+  ## Parameters
+
+    - `instance_address` (String.t()): The address of the instance.
+    - `account_address` (String.t()): The address of the account within the instance.
+    - `page` (non_neg_integer(), optional): The page number for pagination (default: 1).
+    - `per_page` (non_neg_integer(), optional): The number of entries per page (default: 40).
+
+  ## Returns
+
+    - `{:ok, list(BalanceHistoryEntry)}`: A list of balance history entries on success.
+    - `{:error, message}`: If the account is not found.
+
+  ## Examples
+
+      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> {:ok, %{address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{name: "Test Account", address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
+      iex> {:ok, account} = AccountStore.create(attrs)
+      iex> {:ok, balance_history} = AccountStore.get_balance_history_by_address(instance_address, account.address)
+      iex> is_list(balance_history)
+      true
+
+      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> {:ok, %{address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> {:error, _} = AccountStore.get_balance_history_by_address(instance_address, "nonexistent_account")
+
+  """
+  @spec get_balance_history_by_address(
+          String.t(),
+          String.t(),
+          non_neg_integer(),
+          non_neg_integer()
+        ) ::
+          {:ok, list(BalanceHistoryEntry.t())} | {:error, :account_not_found}
+  def get_balance_history_by_address(instance_address, account_address, page \\ 1, per_page \\ 40) do
+    get_by_address(instance_address, account_address)
+    |> case do
+      nil -> {:error, :account_not_found}
+      account -> get_balance_history_by_id(account.id, page, per_page)
+    end
+  end
+
+  @doc """
+  Retrieves accounts by instance ID and a list of account addresses.
 
   ## Parameters
 
     - `instance_id` (Ecto.UUID.t()): The ID of the instance.
-    - `account_ids` (list(String.t())): The list of account IDs.
+    - `account_addresses` (list(String.t())): The list of account addresses.
 
   ## Returns
 
@@ -415,27 +465,52 @@ defmodule DoubleEntryLedger.AccountStore do
   """
   @spec get_accounts_by_instance_id(Ecto.UUID.t(), list(String.t())) ::
           {:ok, list(Account.t())}
-          | {:error, :no_accounts_found | :some_accounts_not_found | :no_account_ids_provided}
-  def get_accounts_by_instance_id(_instance_id, []), do: {:error, :no_account_ids_provided}
+          | {:error, :no_accounts_found | :some_accounts_not_found | :no_accounts_provided}
+  def get_accounts_by_instance_id(_instance_id, []), do: {:error, :no_accounts_provided}
 
   def get_accounts_by_instance_id(instance_id, account_addresses) do
-    accounts =
-      Repo.all(
-        from(a in Account,
-          where: a.instance_id == ^instance_id and a.address in ^account_addresses
-        )
-      )
+    from(a in Account,
+      where: a.instance_id == ^instance_id and a.address in ^account_addresses
+    )
+    |> handle_accounts_by_instance_id_queries(length(account_addresses))
+  end
 
-    cond do
-      accounts == [] ->
-        {:error, :no_accounts_found}
+  @doc """
+  Get a list of accounts by instance address and a list of account addresses.
 
-      length(accounts) < length(account_addresses) ->
-        {:error, :some_accounts_not_found}
+  ## Parameters
 
-      true ->
-        {:ok, accounts}
-    end
+    - `instance_address` (String.t()): The address of the instance.
+    - `account_addresses` (list(String.t())): The list of account addresses.
+
+  ## Returns
+
+    - `{:ok, accounts}`: On success.
+    - `{:error, message}`: If some accounts were not found.
+
+  ## Examples
+      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> {:ok, %{address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{address: "account:main1", instance_address: instance_address, currency: :EUR, type: :asset}
+      iex> {:ok, account1} = AccountStore.create(attrs)
+      iex> {:ok, account2} = AccountStore.create(%{attrs | address: "account:main2"})
+      iex> {:ok, _} = AccountStore.create(%{attrs | address: "account:main3"})
+      iex> {:ok, accounts} = AccountStore.get_accounts_by_instance_address(instance_address, [account1.address, account2.address])
+      iex> length(accounts)
+      2
+  """
+  @spec get_accounts_by_instance_address(String.t(), list(String.t())) ::
+          {:ok, list(Account.t())}
+          | {:error, :no_accounts_found | :some_accounts_not_found}
+  def get_accounts_by_instance_address(_instance_address, []),
+    do: {:error, :no_accounts_provided}
+
+  def get_accounts_by_instance_address(instance_address, account_addresses) do
+    from(a in Account,
+      join: i in assoc(a, :instance),
+      where: i.address == ^instance_address and a.address in ^account_addresses
+    )
+    |> handle_accounts_by_instance_id_queries(length(account_addresses))
   end
 
   @doc """
@@ -468,18 +543,10 @@ defmodule DoubleEntryLedger.AccountStore do
           {:ok, list(Account.t())}
           | {:error, :no_accounts_found_for_provided_type}
   def get_accounts_by_instance_id_and_type(instance_id, type) do
-    accounts =
-      Repo.all(
-        from(a in Account,
-          where: a.instance_id == ^instance_id and a.type == ^type
-        )
-      )
-
-    if length(accounts) > 0 do
-      {:ok, accounts}
-    else
-      {:error, :no_accounts_found_for_provided_type}
-    end
+    from(a in Account,
+      where: a.instance_id == ^instance_id and a.type == ^type
+    )
+    |> handle_accounts_by_instance_id_queries(0)
   end
 
   @doc """
@@ -512,12 +579,11 @@ defmodule DoubleEntryLedger.AccountStore do
   @spec get_all_accounts_by_instance_address(String.t()) ::
           {:ok, list(Account.t())} | {:error, :no_accounts_found}
   def get_all_accounts_by_instance_address(instance_address) do
-    instance = InstanceStore.get_by_address(instance_address)
-    if instance do
-      get_all_accounts_by_instance_id(instance.id)
-    else
-      {:error, :no_accounts_found}
-    end
+    from(a in Account,
+      join: i in assoc(a, :instance),
+      where: i.address == ^instance_address
+    )
+    |> handle_accounts_by_instance_id_queries(0)
   end
 
   @doc """
@@ -550,18 +616,40 @@ defmodule DoubleEntryLedger.AccountStore do
   @spec get_all_accounts_by_instance_id(Ecto.UUID.t()) ::
           {:ok, list(Account.t())} | {:error, :no_accounts_found}
   def get_all_accounts_by_instance_id(instance_id) do
-    accounts =
-      Repo.all(
-        from(a in Account,
-          where: a.instance_id == ^instance_id,
-          order_by: [asc: a.name]
-        )
-      )
+    from(a in Account,
+      where: a.instance_id == ^instance_id
+    )
+    |> handle_accounts_by_instance_id_queries(0)
+  end
 
-    if length(accounts) > 0 do
-      {:ok, accounts}
-    else
-      {:error, :no_accounts_found}
+  @spec handle_accounts_by_instance_id_queries(Ecto.Query.t(), non_neg_integer()) ::
+          {:ok, list(Account.t())}
+          | {:error, :no_accounts_found | :some_accounts_not_found}
+  defp handle_accounts_by_instance_id_queries(query, 0) do
+    case get_accounts(query) do
+      [] -> {:error, :no_accounts_found}
+      accounts -> {:ok, accounts}
     end
+  end
+
+  defp handle_accounts_by_instance_id_queries(query, input_length) do
+    accounts = get_accounts(query)
+
+    cond do
+      accounts == [] ->
+        {:error, :no_accounts_found}
+
+      length(accounts) < input_length ->
+        {:error, :some_accounts_not_found}
+
+      true ->
+        {:ok, accounts}
+    end
+  end
+
+  defp get_accounts(query) do
+    query
+    |> Ecto.Query.order_by([a], asc: a.name)
+    |> Repo.all()
   end
 end
