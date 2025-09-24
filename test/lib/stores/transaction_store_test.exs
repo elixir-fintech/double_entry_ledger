@@ -1,14 +1,17 @@
 defmodule DoubleEntryLedger.TransactionStoreTest do
   @moduledoc """
-  This module tests the TransactionStore module.
+  This module tests the TransactionStore and TransactionStoreHelper module.
   """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
   import Mox
 
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
-  alias DoubleEntryLedger.{TransactionStore, Repo}
+  alias DoubleEntryLedger.{TransactionStore, TransactionStoreHelper, Repo}
   alias Ecto.Multi
+
+  doctest TransactionStore
+  doctest TransactionStoreHelper
 
   describe "build_create/4" do
     setup [:create_instance, :create_accounts, :verify_on_exit!]
@@ -34,7 +37,11 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
 
       assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
                Ecto.Multi.new()
-               |> TransactionStore.build_create(:transaction, attr, DoubleEntryLedger.MockRepo)
+               |> TransactionStoreHelper.build_create(
+                 :transaction,
+                 attr,
+                 DoubleEntryLedger.MockRepo
+               )
                |> Repo.transaction()
     end
   end
@@ -53,7 +60,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
 
       assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
                Multi.new()
-               |> TransactionStore.build_update(
+               |> TransactionStoreHelper.build_update(
                  :transaction,
                  trx,
                  %{status: :posted},
@@ -74,7 +81,7 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
       assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
                Multi.new()
                |> Multi.run(:create_event_trx, fn _repo, _changes -> {:ok, trx} end)
-               |> TransactionStore.build_update(
+               |> TransactionStoreHelper.build_update(
                  :transaction,
                  :create_event_trx,
                  %{status: :posted},

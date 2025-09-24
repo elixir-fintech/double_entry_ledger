@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMap do
   alias DoubleEntryLedger.{
     Event,
     EventWorker,
-    TransactionStore,
+    TransactionStoreHelper,
     Repo,
     EventStoreHelper,
     InstanceStoreHelper
@@ -161,7 +161,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMap do
     |> Multi.insert(:new_event, fn %{instance: %{id: id}} ->
       EventStoreHelper.build_create(new_event_map, id)
     end)
-    |> TransactionStore.build_create(:transaction, transaction_map, repo)
+    |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
   end
 
   @impl true

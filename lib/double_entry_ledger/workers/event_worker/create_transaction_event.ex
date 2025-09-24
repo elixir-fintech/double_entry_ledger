@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEvent do
   use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Event, EventWorker, TransactionStore, Repo}
+  alias DoubleEntryLedger.{Event, EventWorker, TransactionStoreHelper, Repo}
 
   import DoubleEntryLedger.EventQueue.Scheduling
 
@@ -125,7 +125,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEvent do
   """
   def build_transaction(_event, transaction_map, repo) do
     Multi.new()
-    |> TransactionStore.build_create(:transaction, transaction_map, repo)
+    |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
   end
 
   @impl true

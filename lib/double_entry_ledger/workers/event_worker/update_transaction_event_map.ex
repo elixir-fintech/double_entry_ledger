@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
   alias DoubleEntryLedger.{
     Event,
     EventWorker,
-    TransactionStore,
+    TransactionStoreHelper,
     Repo,
     EventStoreHelper,
     InstanceStoreHelper
@@ -168,7 +168,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
         Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
 
       %{get_create_transaction_event_transaction: create_transaction} ->
-        TransactionStore.build_update(
+        TransactionStoreHelper.build_update(
           Multi.new(),
           :transaction,
           create_transaction,
