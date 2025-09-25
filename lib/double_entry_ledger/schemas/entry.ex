@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.Entry do
       # Create a posted debit entry
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Test:Instance"})
-      iex> {:ok, account} = AccountStore.create(%{name: "Test Account", address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD})
+      iex> {:ok, account} = AccountStore.create(%{name: "Test Account", address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD}, "unique_id_123")
       iex> attrs = %{
       ...>   type: :debit,
       ...>   value: %{amount: 10000, currency: :USD},
@@ -234,9 +234,9 @@ defmodule DoubleEntryLedger.Entry do
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{
-      ...>    name: "account1", address: "account:main1", instance_address: instance.address, type: :asset, currency: :EUR})
+      ...>    name: "account1", address: "account:main1", instance_address: instance.address, type: :asset, currency: :EUR}, "unique_id_123")
       iex> {:ok, account2} = AccountStore.create(%{
-      ...>    name: "account2", address: "account:main2", instance_address: instance.address, type: :liability, currency: :EUR})
+      ...>    name: "account2", address: "account:main2", instance_address: instance.address, type: :liability, currency: :EUR}, "unique_id_456")
       iex> {:ok, _, _} = EventStore.process_from_event_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => :pending, "entries" => [

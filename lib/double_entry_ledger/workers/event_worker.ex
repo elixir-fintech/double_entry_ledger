@@ -252,8 +252,8 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> alias DoubleEntryLedger.{AccountStore, InstanceStore}
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
-      iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address})
-      iex> {:ok, cash_account} = AccountStore.create(%{address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address})
+      iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address}, "unique_id_123")
+      iex> {:ok, cash_account} = AccountStore.create(%{address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address}, "unique_id_456")
       iex> event_map = %TransactionEventMap{
       ...>   action: :create_transaction,
       ...>   instance_address: instance.address,
@@ -268,10 +268,8 @@ defmodule DoubleEntryLedger.EventWorker do
       ...>   }
       ...> }
       iex> {:ok, transaction, event} = EventWorker.process_new_event(event_map)
-      iex> transaction.status
-      :pending
-      iex> event.event_queue_item.status
-      :processed
+      iex> { transaction.status, event.event_queue_item.status }
+      {:pending, :processed}
 
       # Unsupported action
       iex> invalid_map = %TransactionEventMap{action: :delete_transaction}
@@ -344,8 +342,8 @@ defmodule DoubleEntryLedger.EventWorker do
       iex> alias DoubleEntryLedger.{AccountStore, InstanceStore}
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address})
-      iex> {:ok, cash_account} = AccountStore.create(%{address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address})
+      iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address}, "unique_id_123")
+      iex> {:ok, cash_account} = AccountStore.create(%{address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address}, "unique_id_456")
       iex> valid_event = %TransactionEventMap{action: :create_transaction,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
