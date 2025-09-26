@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.EntryTest do
       assert %Ecto.Changeset{
                valid?: false,
                errors: [
-                 value: {"is invalid", [type: Money.Ecto.Composite.Type, validation: :cast]}
+                 value: {"is invalid", [type: Money.Ecto.Map.Type, validation: :cast]}
                ]
              } = Entry.update_changeset(e0, %{value: %{}}, :pending_to_posted)
     end

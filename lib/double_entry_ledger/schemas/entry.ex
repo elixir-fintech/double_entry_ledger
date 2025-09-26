@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.Entry do
   @optional_attrs ~w(transaction_id)a
 
   schema "entries" do
-    field(:value, Money.Ecto.Composite.Type)
+    field(:value, Money.Ecto.Map.Type)
     field(:type, Ecto.Enum, values: @debit_and_credit)
     belongs_to(:transaction, Transaction)
     belongs_to(:account, Account)
