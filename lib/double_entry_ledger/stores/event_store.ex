@@ -435,7 +435,8 @@ defmodule DoubleEntryLedger.EventStore do
     []
 
   """
-  @spec list_all_for_account_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) :: list(Event.t())
+  @spec list_all_for_account_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
+          list(Event.t())
   def list_all_for_account_id(account_id, page \\ 1, per_page \\ 40) do
     all_processed_events_for_account_id(account_id)
     |> paginate(page, per_page)

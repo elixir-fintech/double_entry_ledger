@@ -79,23 +79,23 @@ defmodule DoubleEntryLedger.AccountStore do
   }
 
   @type create_map() :: %{
-    instance_address: String.t(),
-    address: String.t(),
-    currency: Currency.currency_atom(),
-    type: Types.account_type(),
-    name: String.t() | nil,
-    description: String.t() | nil,
-    context: map() | nil,
-    normal_balance: Types.credit_or_debit() | nil,
-    allow_negative: boolean() | nil
-  }
+          instance_address: String.t(),
+          address: String.t(),
+          currency: Currency.currency_atom(),
+          type: Types.account_type(),
+          name: String.t() | nil,
+          description: String.t() | nil,
+          context: map() | nil,
+          normal_balance: Types.credit_or_debit() | nil,
+          allow_negative: boolean() | nil
+        }
 
   @type update_map() :: %{
-    instance_address: String.t(),
-    name: String.t() | nil,
-    description: String.t() | nil,
-    context: map() | nil
-  }
+          instance_address: String.t(),
+          name: String.t() | nil,
+          description: String.t() | nil,
+          context: map() | nil
+        }
 
   @doc """
   Retrieves an account by its ID.
@@ -443,29 +443,29 @@ defmodule DoubleEntryLedger.AccountStore do
           {:ok, list(BalanceHistoryEntry.t())}
   def get_balance_history_by_account(%Account{id: id}, page \\ 1, per_page \\ 40) do
     {:ok,
-      Repo.all(
-        from(b in BalanceHistoryEntry,
-          where: b.account_id == ^id,
-          left_join: e in Entry,
-          on: b.entry_id == e.id,
-          select:
-            merge(
-              map(b, [
-                :id,
-                :account_id,
-                :entry_id,
-                :available,
-                :posted,
-                :pending,
-                :inserted_at,
-                :updated_at
-              ]),
-              %{transaction_id: e.transaction_id}
-            ),
-          order_by: [desc: b.inserted_at]
-        )
-        |> paginate(page, per_page)
-      )}
+     Repo.all(
+       from(b in BalanceHistoryEntry,
+         where: b.account_id == ^id,
+         left_join: e in Entry,
+         on: b.entry_id == e.id,
+         select:
+           merge(
+             map(b, [
+               :id,
+               :account_id,
+               :entry_id,
+               :available,
+               :posted,
+               :pending,
+               :inserted_at,
+               :updated_at
+             ]),
+             %{transaction_id: e.transaction_id}
+           ),
+         order_by: [desc: b.inserted_at]
+       )
+       |> paginate(page, per_page)
+     )}
   end
 
   @doc """

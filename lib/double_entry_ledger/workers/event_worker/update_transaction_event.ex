@@ -152,7 +152,13 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEvent do
         Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
 
       %{get_create_event_transaction: create_transaction} ->
-        TransactionStoreHelper.build_update(Multi.new(), :transaction, create_transaction, attr, repo)
+        TransactionStoreHelper.build_update(
+          Multi.new(),
+          :transaction,
+          create_transaction,
+          attr,
+          repo
+        )
     end)
   end
 

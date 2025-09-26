@@ -292,8 +292,9 @@ defmodule DoubleEntryLedger.EventStoreHelper do
 
   @spec all_processed_events_for_account_id(Ecto.UUID.t()) :: Ecto.Query.t()
   def all_processed_events_for_account_id(account_id) do
-    union = base_account_query(account_id)
-    |> union(^transaction_events_for_account_query(account_id))
+    union =
+      base_account_query(account_id)
+      |> union(^transaction_events_for_account_query(account_id))
 
     from(u in subquery(union),
       order_by: [desc: u.inserted_at]
@@ -313,8 +314,10 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   def transaction_events_for_account_query(account_id) do
     from(e in Event,
       join: t in assoc(e, :transactions),
-      join: ety in Entry, on: ety.transaction_id == t.id,
-      join: a in Account, on: a.id == ety.account_id,
+      join: ety in Entry,
+      on: ety.transaction_id == t.id,
+      join: a in Account,
+      on: a.id == ety.account_id,
       where: a.id == ^account_id,
       select: e
     )

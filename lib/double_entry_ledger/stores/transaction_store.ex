@@ -39,29 +39,28 @@ defmodule DoubleEntryLedger.TransactionStore do
     Repo,
     Transaction,
     EventStore,
-    BalanceHistoryEntry,
+    BalanceHistoryEntry
   }
 
   alias DoubleEntryLedger.Event.TransactionEventMap
 
   @type entry_map() :: %{
-    account_address: String.t(),
-    amount: integer(),
-    currency: Currency.currency_atom(),
-  }
+          account_address: String.t(),
+          amount: integer(),
+          currency: Currency.currency_atom()
+        }
 
   @type create_map() :: %{
-    instance_address: String.t(),
-    status: Transaction.state(),
-    entries: list(entry_map())
-  }
+          instance_address: String.t(),
+          status: Transaction.state(),
+          entries: list(entry_map())
+        }
 
   @type update_map() :: %{
-    instance_address: String.t(),
-    status: Transaction.state(),
-    entries: list(entry_map()) | nil
-  }
-
+          instance_address: String.t(),
+          status: Transaction.state(),
+          entries: list(entry_map()) | nil
+        }
 
   @doc """
   Creates a new transaction with the given attributes. If the creation fails, the event is saved
@@ -107,8 +106,14 @@ defmodule DoubleEntryLedger.TransactionStore do
       "already exists for this instance"
 
   """
-  @spec create(create_map(), String.t(), String.t()) :: {:ok, Transaction.t()} | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
-  def create(%{instance_address: address} = attrs, idempotent_id, source \\ "TransactionStore.create/3") do
+  @spec create(create_map(), String.t(), String.t()) ::
+          {:ok, Transaction.t()}
+          | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
+  def create(
+        %{instance_address: address} = attrs,
+        idempotent_id,
+        source \\ "TransactionStore.create/3"
+      ) do
     response =
       EventStore.process_from_event_params(%{
         "instance_address" => address,
@@ -172,8 +177,15 @@ defmodule DoubleEntryLedger.TransactionStore do
       "already exists for this source_idempk"
 
   """
-  @spec update(Ecto.UUID.t(), update_map(), String.t(), String.t()) :: {:ok, Transaction.t()} | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
-  def update(id, %{instance_address: address} = attrs, update_idempotent_id, update_source \\ "TransactionStore.update/4") do
+  @spec update(Ecto.UUID.t(), update_map(), String.t(), String.t()) ::
+          {:ok, Transaction.t()}
+          | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
+  def update(
+        id,
+        %{instance_address: address} = attrs,
+        update_idempotent_id,
+        update_source \\ "TransactionStore.update/4"
+      ) do
     event = EventStore.get_create_transaction_event(id)
 
     response =
@@ -314,6 +326,7 @@ defmodule DoubleEntryLedger.TransactionStore do
           list(Transaction.t())
   def list_all_for_instance_address(instance_address, page \\ 1, per_page \\ 40) do
     instance = DoubleEntryLedger.InstanceStore.get_by_address(instance_address)
+
     if instance do
       list_all_for_instance_id(instance.id, page, per_page)
     else
@@ -449,7 +462,12 @@ defmodule DoubleEntryLedger.TransactionStore do
       []
 
   """
-  def list_all_for_instance_address_and_account_address(instance_address, account_address, page \\ 1, per_page \\ 40) do
+  def list_all_for_instance_address_and_account_address(
+        instance_address,
+        account_address,
+        page \\ 1,
+        per_page \\ 40
+      ) do
     instance = DoubleEntryLedger.InstanceStore.get_by_address(instance_address)
     account = DoubleEntryLedger.AccountStore.get_by_address(instance_address, account_address)
 
