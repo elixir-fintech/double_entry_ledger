@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.EventStore do
   import Ecto.Query
   import DoubleEntryLedger.EventStoreHelper
 
-  alias Ecto.{Changeset, Multi}
+  alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Event, InstanceStoreHelper}
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.EventWorker
@@ -124,11 +124,13 @@ defmodule DoubleEntryLedger.EventStore do
 
   @doc """
   Processes an event from provided parameters, handling the entire workflow.
+  This only works for parameters that translate into a `TransactionEventMap`.
 
   This function creates a TransactionEventMap from the parameters, then processes it through
   the EventWorker to create both an event record in the EventStore and creates the necessary projections.
 
-  If the processing fails, it will return an error tuple with details about the failure. The event is saved to the EventStore and then retried later.
+  If the processing fails, it will return an error tuple with details about the failure.
+  The event is saved to the EventQueue and then retried later.
 
   ## Supported Actions
 
@@ -162,9 +164,8 @@ defmodule DoubleEntryLedger.EventStore do
   Same as `process_from_event_params/1`, but does not save the event on error.
 
   This function provides an alternative processing strategy for scenarios where you want
-  to validate and process events but avoid storing error states in the EventQueueItem records.
-  Using this version means that if processing fails, the event will not be saved,
-  allowing for custom error handling or debugging without polluting the event store.
+  to validate and process events but avoid an automated retry. You will need to keep track
+  of failed events for audit purposes.
 
   ## Supported Actions
 
@@ -299,50 +300,5 @@ defmodule DoubleEntryLedger.EventStore do
     base_account_query(account_id)
     |> order_by(desc: :inserted_at)
     |> Repo.all()
-  end
-
-  @doc """
-  Creates a new event record after a processing failure, preserving error information.
-
-  This function is used to persist an event that failed to process, including its error details,
-  retry count, and status. It is typically called when an event could not be saved or processed
-  successfully, allowing for later inspection or retry.
-
-  ## Parameters
-    - `event`: The original `%Event{}` struct that failed
-    - `errors`: A list of error messages or error maps to attach to the event
-    - `retries`: The number of retry attempts that have been made
-    - `status`: The new status for the event (e.g., `:failed`, `:occ_timeout`)
-
-  ## Returns
-    - `{:ok, %Event{}}` if the event was successfully created
-    - `{:error, %Ecto.Changeset{}}` if validation or insertion failed
-  """
-  @spec create_event_after_failure(Event.t(), list(), integer(), atom()) ::
-          {:ok, Event.t()} | {:error, Changeset.t()}
-  def create_event_after_failure(event, errors, retries, status) do
-    event
-    |> Changeset.change(errors: errors, status: status, occ_retry_count: retries)
-    |> Repo.insert()
-  end
-
-  @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
-  defp base_transaction_query(transaction_id) do
-    from(e in Event,
-      join: evt in assoc(e, :event_transaction_links),
-      where: evt.transaction_id == ^transaction_id,
-      select: e
-    )
-    |> preload([:event_queue_item, :account, transactions: :entries])
-  end
-
-  @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
-  defp base_account_query(account_id) do
-    from(e in Event,
-      join: evt in assoc(e, :event_account_link),
-      where: evt.account_id == ^account_id,
-      select: e
-    )
-    |> preload([:event_queue_item, :transactions, :account])
   end
 end

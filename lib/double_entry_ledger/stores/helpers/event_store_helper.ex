@@ -34,6 +34,8 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   This module is primarily used internally by EventStore and EventWorker modules to
   share common functionality and reduce code duplication.
   """
+  import Ecto.Query, only: [from: 2, preload: 2]
+
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias Ecto.Changeset
   alias Ecto.Multi
@@ -276,6 +278,26 @@ defmodule DoubleEntryLedger.EventStoreHelper do
           {:ok, {:error, e}}
       end
     end)
+  end
+
+  @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
+  def base_transaction_query(transaction_id) do
+    from(e in Event,
+      join: evt in assoc(e, :event_transaction_links),
+      where: evt.transaction_id == ^transaction_id,
+      select: e
+    )
+    |> preload([:event_queue_item, :account, transactions: :entries])
+  end
+
+  @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
+  def base_account_query(account_id) do
+    from(e in Event,
+      join: evt in assoc(e, :event_account_link),
+      where: evt.account_id == ^account_id,
+      select: e
+    )
+    |> preload([:event_queue_item, :transactions, :account])
   end
 
   @spec get_event(Event.t() | atom(), map()) :: Event.t()
