@@ -68,9 +68,10 @@ defmodule DoubleEntryLedger.EventStore do
   """
   import Ecto.Query
   import DoubleEntryLedger.EventStoreHelper
+  import DoubleEntryLedger.PaginationHelper
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Event, InstanceStoreHelper}
+  alias DoubleEntryLedger.{Repo, Event, InstanceStoreHelper, AccountStore, Account}
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.EventWorker
 
@@ -214,19 +215,38 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Returns
     - List of Event structs, ordered by insertion time descending
-  """
-  @spec list_all_for_instance(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Event.t())
-  def list_all_for_instance(instance_id, page \\ 1, per_page \\ 40) do
-    offset = (page - 1) * per_page
 
+  ## Examples
+
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+    iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> create_attrs = %{
+    ...>   instance_address: instance.address,
+    ...>   status: :posted,
+    ...>   entries: [
+    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>   ]}
+    iex> TransactionStore.create(create_attrs, "unique_id_123")
+    iex> length(EventStore.list_all_for_instance_id(instance.id))
+    3
+    iex> # test pagination
+    iex> length(EventStore.list_all_for_instance_id(instance.id, 2, 2))
+    1
+
+  """
+  @spec list_all_for_instance_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
+          list(Event.t())
+  def list_all_for_instance_id(instance_id, page \\ 1, per_page \\ 40) do
     from(e in Event,
       where: e.instance_id == ^instance_id,
       order_by: [desc: e.inserted_at],
-      limit: ^per_page,
-      offset: ^offset,
       select: e
     )
+    |> paginate(page, per_page)
     |> preload([:event_queue_item, :transactions, :account])
     |> Repo.all()
   end
@@ -239,9 +259,28 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Returns
     - List of Event structs, ordered by insertion time descending
+
+  ## Examples
+
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+    iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> create_attrs = %{
+    ...>   instance_address: instance.address,
+    ...>   status: :pending,
+    ...>   entries: [
+    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>   ]}
+    iex> {:ok, %{id: id}} = TransactionStore.create(create_attrs, "unique_id_123")
+    iex> TransactionStore.update(id, %{instance_address: instance.address, status: :posted}, "unique_id_123")
+    iex> length(EventStore.list_all_for_transaction_id(id))
+    2
   """
-  @spec list_all_for_transaction(Ecto.UUID.t()) :: list(Event.t())
-  def list_all_for_transaction(transaction_id) do
+  @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Event.t())
+  def list_all_for_transaction_id(transaction_id) do
     base_transaction_query(transaction_id)
     |> order_by(desc: :inserted_at)
     |> Repo.all()
@@ -256,6 +295,27 @@ defmodule DoubleEntryLedger.EventStore do
   ## Returns
 
     - `Event.t() | nil`: The create transaction event if found and processed
+
+  ## Examples
+
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+    iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> create_attrs = %{
+    ...>   instance_address: instance.address,
+    ...>   status: :posted,
+    ...>   entries: [
+    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>   ]}
+    iex> {:ok, %{id: id}} = TransactionStore.create(create_attrs, "unique_id_123")
+    iex> event = EventStore.get_create_transaction_event(id)
+    iex> [%{id: trx_id} | _] = event.transactions
+    iex> trx_id
+    id
+
   """
   @spec get_create_transaction_event(Ecto.UUID.t()) :: Event.t()
   def get_create_transaction_event(transaction_id) do
@@ -275,6 +335,15 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Returns
     - `Event.t() | nil`: The create account event if found and processed
+
+  ### Examples
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+    iex> {:ok, %{id: id}} = AccountStore.create(account_data, "unique_id_123")
+    iex> event = EventStore.get_create_account_event(id)
+    iex> event.account.id
+    id
   """
   @spec get_create_account_event(Ecto.UUID.t()) :: Event.t()
   def get_create_account_event(account_id) do
@@ -283,22 +352,101 @@ defmodule DoubleEntryLedger.EventStore do
     |> where([e], e.action == :create_account)
     |> where([_, _, eqi], eqi.status == :processed)
     |> order_by(asc: :inserted_at)
+    |> preload([:event_queue_item, :transactions, :account])
     |> Repo.one()
   end
 
   @doc """
-  Lists all events associated with a specific account.
+  Lists all events associated with a specific account using the Account id.
 
   ## Parameters
     - `account_id`: ID of the account to list events for
 
   ## Returns
     - List of Event structs, ordered by insertion time descending
+
+  ## Examples
+
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+    iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> create_attrs = %{
+    ...>   instance_address: instance.address,
+    ...>   status: :posted,
+    ...>   entries: [
+    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>   ]}
+    iex> TransactionStore.create(create_attrs, "unique_id_123")
+    iex> [trx_event, acc_event | _] = events = EventStore.list_all_for_account_id(asset_account.id)
+    iex> length(events)
+    2
+    iex> trx_event.action
+    :create_transaction
+    iex> acc_event.action
+    :create_account
+
+    iex> EventStore.list_all_for_account_id(Ecto.UUID.generate())
+    []
+
   """
-  @spec list_all_for_account(Ecto.UUID.t()) :: list(Event.t())
-  def list_all_for_account(account_id) do
-    base_account_query(account_id)
-    |> order_by(desc: :inserted_at)
+  @spec list_all_for_account_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) :: list(Event.t())
+  def list_all_for_account_id(account_id, page \\ 1, per_page \\ 40) do
+    all_processed_events_for_account_id(account_id)
+    |> paginate(page, per_page)
+    |> preload([:event_queue_item, :transactions, :account])
     |> Repo.all()
+  end
+
+  @doc """
+  Lists all events associated with a specific account using the Account address
+
+  ## Parameters
+    - `instance_address`: Address if the instance the account is on
+    - `address`: Address of the account to list events for
+
+  ## Returns
+    - List of Event structs, ordered by insertion time descending
+
+  ## Examples
+
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+    iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> create_attrs = %{
+    ...>   instance_address: instance.address,
+    ...>   status: :posted,
+    ...>   entries: [
+    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>   ]}
+    iex> TransactionStore.create(create_attrs, "unique_id_123")
+    iex> [trx_event, acc_event | _] = events = EventStore.list_all_for_account_address(instance.address, liability_account.address)
+    iex> length(events)
+    2
+    iex> trx_event.action
+    :create_transaction
+    iex> acc_event.action
+    :create_account
+
+    iex> alias DoubleEntryLedger.{InstanceStore, EventStore}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> EventStore.list_all_for_account_address(instance.address, "nonexistent")
+
+    iex> alias DoubleEntryLedger.EventStore
+    iex> EventStore.list_all_for_account_address("nonexistent", "nonexistent")
+    []
+
+  """
+  @spec list_all_for_account_address(String.t(), String.t()) :: list(Event.t())
+  def list_all_for_account_address(instance_address, address) do
+    case AccountStore.get_by_address(instance_address, address) do
+      %Account{id: id} -> list_all_for_account_id(id)
+      _ -> []
+    end
   end
 end
