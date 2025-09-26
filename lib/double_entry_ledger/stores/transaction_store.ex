@@ -64,7 +64,8 @@ defmodule DoubleEntryLedger.TransactionStore do
 
 
   @doc """
-  Creates a new transaction with the given attributes.
+  Creates a new transaction with the given attributes. If the creation fails, the event is saved
+  to the event queue and retried later.
 
   ## Parameters
 
@@ -109,7 +110,7 @@ defmodule DoubleEntryLedger.TransactionStore do
   @spec create(create_map(), String.t(), String.t()) :: {:ok, Transaction.t()} | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
   def create(%{instance_address: address} = attrs, idempotent_id, source \\ "TransactionStore.create/3") do
     response =
-      EventStore.process_from_event_params_no_save_on_error(%{
+      EventStore.process_from_event_params(%{
         "instance_address" => address,
         "action" => "create_transaction",
         "source" => source,
@@ -124,7 +125,8 @@ defmodule DoubleEntryLedger.TransactionStore do
   end
 
   @doc """
-  Updates a transaction with the given attributes.
+  Updates a transaction with the given attributes. If the update fails, the event is saved
+  to the event queue and retried later.
 
   ## Parameters
 
@@ -175,7 +177,7 @@ defmodule DoubleEntryLedger.TransactionStore do
     event = EventStore.get_create_transaction_event(id)
 
     response =
-      EventStore.process_from_event_params_no_save_on_error(%{
+      EventStore.process_from_event_params(%{
         "instance_address" => address,
         "action" => "update_transaction",
         "source" => event.source,
