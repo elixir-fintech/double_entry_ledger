@@ -147,6 +147,30 @@ defmodule DoubleEntryLedger.EventStore do
     - `{:error, event}`: If the event processing failed
     - `{:error, changeset}`: If validation failed
     - `{:error, reason}`: If processing failed for other reasons
+
+  ### Examples
+
+    iex> alias DoubleEntryLedger.{InstanceStore, EventStore, AccountStore, Repo}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+    iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> {:ok, transaction, event} = EventStore.process_from_event_params(%{
+    ...>   "instance_address" => instance.address,
+    ...>   "action" => "create_transaction",
+    ...>   "source" => "frontend",
+    ...>   "source_idempk" => "unique_id_123",
+    ...>   "payload" => %{
+    ...>     status: :posted,
+    ...>     entries: [
+    ...>       %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>       %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>     ]
+    ...>   }
+    ...> })
+    iex> [trx | _] =  (event |> Repo.preload(:transactions)).transactions
+    iex> trx.id == transaction.id
+    true
   """
   @spec process_from_event_params(map()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
@@ -180,6 +204,25 @@ defmodule DoubleEntryLedger.EventStore do
     - `{:ok, account, event}`: If an account event was successfully processed
     - `{:error, changeset}`: If validation failed
     - `{:error, reason}`: If processing failed for other reasons
+
+  ### Examples
+
+    iex> alias DoubleEntryLedger.{InstanceStore, EventStore, Repo}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> {:ok, account, event} = EventStore.process_from_event_params_no_save_on_error(%{
+    ...>   "instance_address" => instance.address,
+    ...>   "action" => "create_account",
+    ...>   "source" => "frontend",
+    ...>   "source_idempk" => "unique_id_123",
+    ...>   "payload" => %{
+    ...>     type: :asset,
+    ...>     address: "asset:owner:1",
+    ...>     currency: :EUR
+    ...>   }
+    ...> })
+    iex> (event |> Repo.preload(:account)).account.id == account.id
+    true
+
   """
   @spec process_from_event_params_no_save_on_error(map()) ::
           EventWorker.success_tuple() | {:error, Ecto.Changeset.t() | String.t()}
