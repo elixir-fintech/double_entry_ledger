@@ -75,9 +75,10 @@ defmodule DoubleEntryLedger.TransactionStore do
         - `:account_address` (String.t()): The address of the account.
         - `:amount` (integer()): The amount for the entry.
         - `:currency` (Currency.currency_atom()): The currency for the entry.
-
     - `idempotent_id` (String.t()): A unique identifier to ensure idempotency of the creation request.
-    - `source` (String.t(), optional): A string indicating the source of the creation request. Defaults to `"TransactionStore.create/2"`.
+    - `opts` (Keyword.t(), optional): A string indicating the source of the creation request.
+      - `:source` Defaults to `"TransactionStore.create/3"
+      - `:retry_on_error` defaults to true. If true, event will be saved in the EventQueue for retry after a processing error. Otherwise Event is not stored at all.
   ## Returns
 
     - `{:ok, transaction}`: On successful creation, returns the created transaction.
@@ -106,22 +107,26 @@ defmodule DoubleEntryLedger.TransactionStore do
       "already exists for this instance"
 
   """
-  @spec create(create_map(), String.t(), String.t()) ::
+  @spec create(create_map(), String.t(), Keyword.t()) ::
           {:ok, Transaction.t()}
           | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
-  def create(
-        %{instance_address: address} = attrs,
-        idempotent_id,
-        source \\ "TransactionStore.create/3"
-      ) do
+  def create(%{instance_address: address} = attrs, idempotent_id, opts \\ []) do
+    source = Keyword.get(opts, :source, "TransactionStore.create/3")
+    retry_on_error = Keyword.get(opts, :retry_on_error, true)
+
+    params = %{
+      "instance_address" => address,
+      "action" => "create_transaction",
+      "source" => source,
+      "source_idempk" => idempotent_id,
+      "payload" => Map.delete(attrs, :instance_address)
+    }
+
     response =
-      EventStore.process_from_event_params(%{
-        "instance_address" => address,
-        "action" => "create_transaction",
-        "source" => source,
-        "source_idempk" => idempotent_id,
-        "payload" => Map.delete(attrs, :instance_address)
-      })
+      case retry_on_error do
+        false -> EventStore.process_from_event_params_no_save_on_error(params)
+        _ -> EventStore.process_from_event_params(params)
+      end
 
     case response do
       {:ok, transaction, _event} -> {:ok, transaction}
@@ -144,7 +149,9 @@ defmodule DoubleEntryLedger.TransactionStore do
         - `:amount` (integer()): The amount for the entry.
         - `:currency` (Currency.currency_atom()): The currency for the entry.
     - `update_idempk` (String.t()): A unique identifier to ensure idempotency of the update request.
-    - `update_source` (String.t(), optional): A string indicating the source of the update request. Defaults to `"TransactionStore.update/4"`.
+    - `opts` (Keyword.t(), optional): A string indicating the source of the creation request.
+      - `:update_source` Defaults to `"TransactionStore.update/4", use if the source of the change is different from the initial source when creating the event
+      - `:retry_on_error` defaults to true. If true, event will be saved in the EventQueue for retry after a processing error. Otherwise Event is not stored at all.
 
   ## Returns
 
@@ -177,27 +184,29 @@ defmodule DoubleEntryLedger.TransactionStore do
       "already exists for this source_idempk"
 
   """
-  @spec update(Ecto.UUID.t(), update_map(), String.t(), String.t()) ::
+  @spec update(Ecto.UUID.t(), update_map(), String.t(), Keyword.t()) ::
           {:ok, Transaction.t()}
           | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
-  def update(
-        id,
-        %{instance_address: address} = attrs,
-        update_idempotent_id,
-        update_source \\ "TransactionStore.update/4"
-      ) do
+  def update(id, %{instance_address: address} = attrs, update_idempotent_id, opts \\ []) do
+    update_source = Keyword.get(opts, :update_source, "TransactionStore.update/4")
+    retry_on_error = Keyword.get(opts, :retry_on_error, true)
     event = EventStore.get_create_transaction_event(id)
 
+    params = %{
+      "instance_address" => address,
+      "action" => "update_transaction",
+      "source" => event.source,
+      "source_idempk" => event.source_idempk,
+      "update_idempk" => update_idempotent_id,
+      "update_source" => update_source,
+      "payload" => Map.delete(attrs, :instance_address)
+    }
+
     response =
-      EventStore.process_from_event_params(%{
-        "instance_address" => address,
-        "action" => "update_transaction",
-        "source" => event.source,
-        "source_idempk" => event.source_idempk,
-        "update_idempk" => update_idempotent_id,
-        "update_source" => update_source,
-        "payload" => Map.delete(attrs, :instance_address)
-      })
+      case retry_on_error do
+        false -> EventStore.process_from_event_params_no_save_on_error(params)
+        _ -> EventStore.process_from_event_params(params)
+      end
 
     case response do
       {:ok, transaction, _event} -> {:ok, transaction}
