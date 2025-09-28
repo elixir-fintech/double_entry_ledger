@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.Account do
     EventAccountLink
   }
 
-  alias DoubleEntryLedger.Helpers.Currency
+  alias DoubleEntryLedger.Utils.Currency
 
   alias __MODULE__, as: Account
 

@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.TransactionStore do
   """
   import Ecto.Query
 
-  import DoubleEntryLedger.PaginationHelper, only: [paginate: 3]
+  import DoubleEntryLedger.Utils.Pagination, only: [paginate: 3]
 
   alias DoubleEntryLedger.{
     Account,

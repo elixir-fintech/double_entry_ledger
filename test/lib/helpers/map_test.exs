@@ -1,7 +1,7 @@
-defmodule DoubleEntryLedger.Helpers.MapHelperTest do
+defmodule DoubleEntryLedger.Utils.MapTest do
   use ExUnit.Case, async: true
 
-  alias DoubleEntryLedger.Helpers.MapHelper
+  alias DoubleEntryLedger.Utils.Map, as: MapHelper
 
   describe "deep_atomize_keys!/1" do
     test "returns atoms for top-level string keys" do

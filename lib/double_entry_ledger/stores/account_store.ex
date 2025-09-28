@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.AccountStore do
 
   import Ecto.Query, only: [from: 2]
 
-  import DoubleEntryLedger.PaginationHelper, only: [paginate: 3]
+  import DoubleEntryLedger.Utils.Pagination, only: [paginate: 3]
 
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.Apis.EventApi

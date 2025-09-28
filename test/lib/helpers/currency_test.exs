@@ -1,9 +1,9 @@
-defmodule DoubleEntryLedger.Helpers.CurrencyTest do
+defmodule DoubleEntryLedger.Utils.CurrencyTest do
   @moduledoc """
   This module tests the Currency module.
   """
   use ExUnit.Case
-  alias DoubleEntryLedger.Helpers.Currency
+  alias DoubleEntryLedger.Utils.Currency
 
   doctest Currency
 end

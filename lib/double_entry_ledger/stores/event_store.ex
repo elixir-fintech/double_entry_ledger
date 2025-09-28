@@ -68,7 +68,7 @@ defmodule DoubleEntryLedger.EventStore do
   """
   import Ecto.Query
   import DoubleEntryLedger.EventStoreHelper
-  import DoubleEntryLedger.PaginationHelper
+  import DoubleEntryLedger.Utils.Pagination
 
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Event, InstanceStoreHelper, AccountStore, Account}

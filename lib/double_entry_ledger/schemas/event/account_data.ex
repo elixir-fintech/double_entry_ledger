@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
 
   alias __MODULE__, as: AccountData
   alias DoubleEntryLedger.Types
-  alias DoubleEntryLedger.Helpers.Currency
+  alias DoubleEntryLedger.Utils.Currency
 
   @typedoc """
   Embedded account data captured with an event.
@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
   ## Examples
 
       iex> alias DoubleEntryLedger.Event.AccountData
-      iex> alias DoubleEntryLedger.Helpers.Currency
+      iex> alias DoubleEntryLedger.Utils.Currency
       iex> alias DoubleEntryLedger.Types
       iex> attrs = %{
       ...>   currency: hd(Currency.currency_atoms()),
@@ -185,7 +185,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
   ## Examples
 
       iex> alias DoubleEntryLedger.Event.AccountData
-      iex> alias DoubleEntryLedger.Helpers.Currency
+      iex> alias DoubleEntryLedger.Utils.Currency
       iex> alias DoubleEntryLedger.Types
       iex> data = %AccountData{
       ...>   currency: hd(Currency.currency_atoms()),

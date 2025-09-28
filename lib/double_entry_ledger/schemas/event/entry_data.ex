@@ -41,7 +41,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias DoubleEntryLedger.Helpers.Currency
+  alias DoubleEntryLedger.Utils.Currency
   alias __MODULE__, as: EntryData
 
   @currency_atoms Currency.currency_atoms()

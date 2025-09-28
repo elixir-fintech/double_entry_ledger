@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Helpers.MapHelper do
+defmodule DoubleEntryLedger.Utils.Map do
   @moduledoc """
   Provides helper functions for working with maps in the context of the double-entry ledger.
   """
