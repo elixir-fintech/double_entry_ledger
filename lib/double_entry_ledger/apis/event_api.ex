@@ -37,7 +37,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
 
   ### Examples
 
-    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, Repo}
+    iex> alias DoubleEntryLedger.{AccountStore, Repo}
+    iex> alias DoubleEntryLedger.Stores.InstanceStore
     iex> alias DoubleEntryLedger.Apis.EventApi
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
@@ -95,7 +96,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
 
   ### Examples
 
-    iex> alias DoubleEntryLedger.{InstanceStore, Repo}
+    iex> alias DoubleEntryLedger.Repo
+    iex> alias DoubleEntryLedger.Stores.InstanceStore
     iex> alias DoubleEntryLedger.Apis.EventApi
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> {:ok, account, event} = EventApi.process_from_event_params_no_save_on_error(%{

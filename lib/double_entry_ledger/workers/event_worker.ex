@@ -249,7 +249,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
   ## Examples
 
       # Create a new transaction
-      iex> alias DoubleEntryLedger.{AccountStore, InstanceStore}
+      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address}, "unique_id_123")
@@ -339,7 +340,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
   ## Examples
 
       iex> # Valid event processes successfully
-      iex> alias DoubleEntryLedger.{AccountStore, InstanceStore}
+      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address}, "unique_id_123")
@@ -361,7 +363,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
 
       # Create a new account
       iex> alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Instance"})
+      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Sample:Instance"})
       iex> event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   instance_address: instance.address,

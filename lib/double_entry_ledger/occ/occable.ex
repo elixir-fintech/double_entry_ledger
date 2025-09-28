@@ -134,7 +134,7 @@ end
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionEventMap do
   alias Ecto.{Multi, Repo, Changeset}
   alias DoubleEntryLedger.Event.{ErrorMap, TransactionEventMap}
-  alias DoubleEntryLedger.InstanceStoreHelper
+  alias DoubleEntryLedger.Stores.InstanceStoreHelper
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer
 

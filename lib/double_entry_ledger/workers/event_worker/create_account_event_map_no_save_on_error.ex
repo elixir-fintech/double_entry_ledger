@@ -49,7 +49,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
   alias Ecto.Multi
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
-  alias DoubleEntryLedger.{InstanceStoreHelper, EventStoreHelper, AccountStoreHelper, Repo}
+  alias DoubleEntryLedger.{EventStoreHelper, AccountStoreHelper, Repo}
+  alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @module_name __MODULE__ |> Module.split() |> List.last()
 
@@ -90,7 +91,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
       # Successful account creation
       iex> alias DoubleEntryLedger.Event.AccountEventMap
       iex> alias DoubleEntryLedger.{Account, Event}
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Main:Instance"})
+      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Main:Instance"})
       iex> event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",
@@ -108,7 +109,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
       true
 
       iex> alias DoubleEntryLedger.Event.AccountEventMap
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Main:Instance"})
+      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Main:Instance"})
       iex> invalid_event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",

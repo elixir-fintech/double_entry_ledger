@@ -30,12 +30,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
     Event,
     Repo,
     EventStoreHelper,
-    InstanceStoreHelper
   }
 
   alias DoubleEntryLedger.Event.TransactionEventMap
   alias DoubleEntryLedger.Workers.EventWorker
-  alias DoubleEntryLedger.Stores.TransactionStoreHelper
+  alias DoubleEntryLedger.Stores.{InstanceStoreHelper, TransactionStoreHelper}
 
   alias DoubleEntryLedger.Workers.EventWorker
 

@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.InstanceStore do
+defmodule DoubleEntryLedger.Stores.InstanceStore do
   @moduledoc """
   Provides functions for managing ledger instances in the double-entry ledger system.
 
@@ -17,22 +17,22 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   Creating a new ledger instance:
 
-      {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{
+      {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{
         address: "Business Ledger",
         metadata: %{owner: "ACME Corp"}
       })
 
   Retrieving and updating an instance:
 
-      instance = DoubleEntryLedger.InstanceStore.get_by_id(instance_id)
-      {:ok, updated_instance} = DoubleEntryLedger.InstanceStore.update(
+      instance = DoubleEntryLedger.Stores.InstanceStore.get_by_id(instance_id)
+      {:ok, updated_instance} = DoubleEntryLedger.Stores.InstanceStore.update(
         instance.id,
         %{address: "Updated:Ledger:address"}
       )
 
   Verifying ledger balance integrity:
 
-      {:ok, currency_balances} = DoubleEntryLedger.InstanceStore.sum_accounts_debits_and_credits_by_currency(instance.id)
+      {:ok, currency_balances} = DoubleEntryLedger.Stores.InstanceStore.sum_accounts_debits_and_credits_by_currency(instance.id)
       # Check that for each currency, debits = credits
 
   ## Implementation Notes
@@ -46,7 +46,8 @@ defmodule DoubleEntryLedger.InstanceStore do
   to ensure consistency when concurrent operations are taking place.
   """
   import Ecto.Query, only: [from: 2]
-  alias DoubleEntryLedger.{Instance, Repo, Account, InstanceStoreHelper}
+  alias DoubleEntryLedger.{Instance, Repo, Account}
+  alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @doc """
   Creates a new ledger instance with the given attributes.
@@ -63,7 +64,7 @@ defmodule DoubleEntryLedger.InstanceStore do
   ## Examples
 
       iex> attrs = %{address: "Test:Ledger"}
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(attrs)
+      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(attrs)
       iex> instance.address
       "Test:Ledger"
 
@@ -92,8 +93,8 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Sample:Ledger"})
-      iex> retrieved = DoubleEntryLedger.InstanceStore.get_by_id(instance.id)
+      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Sample:Ledger"})
+      iex> retrieved = DoubleEntryLedger.Stores.InstanceStore.get_by_id(instance.id)
       iex> retrieved.id == instance.id
       true
 
@@ -123,8 +124,8 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Ledger"})
-      iex> {:ok, updated_instance} = DoubleEntryLedger.InstanceStore.update(instance.id, %{address: "Updated:Ledger"})
+      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Ledger"})
+      iex> {:ok, updated_instance} = DoubleEntryLedger.Stores.InstanceStore.update(instance.id, %{address: "Updated:Ledger"})
       iex> updated_instance.address
       "Updated:Ledger"
 
@@ -152,9 +153,9 @@ defmodule DoubleEntryLedger.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{address: "Temporary:Ledger"})
-      iex> {:ok, _} = DoubleEntryLedger.InstanceStore.delete(instance.id)
-      iex> DoubleEntryLedger.InstanceStore.get_by_id(instance.id) == nil
+      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Temporary:Ledger"})
+      iex> {:ok, _} = DoubleEntryLedger.Stores.InstanceStore.delete(instance.id)
+      iex> DoubleEntryLedger.Stores.InstanceStore.get_by_id(instance.id) == nil
       true
 
   """

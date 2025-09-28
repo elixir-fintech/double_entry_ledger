@@ -32,12 +32,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap do
   alias DoubleEntryLedger.{
     Event,
     Repo,
-    EventStoreHelper,
-    InstanceStoreHelper
+    EventStoreHelper
   }
 
   alias DoubleEntryLedger.Event.TransactionEventMap
-  alias DoubleEntryLedger.Stores.TransactionStoreHelper
+  alias DoubleEntryLedger.Stores.{InstanceStoreHelper, TransactionStoreHelper}
   alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   alias Ecto.Multi

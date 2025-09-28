@@ -69,7 +69,8 @@ defmodule DoubleEntryLedger.AccountStoreHelper do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.{InstanceStore, AccountStoreHelper}
+      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Event.AccountData
       iex> {:ok, %{id: instance_id}} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %AccountData{address: "Cash:Account", type: :asset, currency: :USD}

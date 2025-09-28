@@ -126,7 +126,8 @@ defmodule DoubleEntryLedger.Entry do
   ## Examples
 
       # Create a posted debit entry
-      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> {:ok, instance} = InstanceStore.create(%{address: "Test:Instance"})
       iex> {:ok, account} = AccountStore.create(%{name: "Test Account", address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD}, "unique_id_123")
       iex> attrs = %{
@@ -231,7 +232,8 @@ defmodule DoubleEntryLedger.Entry do
 
       # Update a pending entry to be posted
       # An entry has to be created first using an event
-      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Apis.EventApi
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{

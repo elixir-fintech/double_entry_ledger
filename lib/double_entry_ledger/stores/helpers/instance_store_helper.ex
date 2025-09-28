@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.InstanceStoreHelper do
+defmodule DoubleEntryLedger.Stores.InstanceStoreHelper do
   @moduledoc """
   Helper functions for Instance store queries
   """

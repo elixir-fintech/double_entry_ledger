@@ -256,7 +256,8 @@ defmodule DoubleEntryLedger.Account do
   ## Examples
 
       # Attempt to delete an account with no entries
-      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account} = AccountStore.create(%{
       ...>    name: "account1", address: "cash:main:1", instance_address: instance.address, type: :asset, currency: :EUR}, "unique_id_123")
@@ -266,7 +267,8 @@ defmodule DoubleEntryLedger.Account do
 
       # Attempt to delete an account with entries
       # This is a database constraint error, not a changeset error
-      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
+      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Apis.EventApi
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{
