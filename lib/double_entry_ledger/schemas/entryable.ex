@@ -1,6 +1,5 @@
-alias DoubleEntryLedger.Entry
 
-defprotocol DoubleEntryLedger.EntryHelper do
+defprotocol DoubleEntryLedger.Schemas.Entryable do
   @moduledoc """
   Protocol defining helper functions for working with entry data in the Double Entry Ledger system.
 
@@ -29,18 +28,18 @@ defprotocol DoubleEntryLedger.EntryHelper do
 
   ```elixir
   defmodule DoubleEntryLedger.TransactionValidator do
-    alias DoubleEntryLedger.EntryHelper
+    alias DoubleEntryLedger.Schemas.Entryable
 
     # Works with both Entry structs and changesets
     def balance_entries?(entries) do
-      debit_sum = Enum.reduce(entries, 0, &EntryHelper.debit_sum/2)
-      credit_sum = Enum.reduce(entries, 0, &EntryHelper.credit_sum/2)
+      debit_sum = Enum.reduce(entries, 0, &Entryable.debit_sum/2)
+      credit_sum = Enum.reduce(entries, 0, &Entryable.credit_sum/2)
       debit_sum == credit_sum
     end
 
     # Group entries by currency
     def group_by_currency(entries) do
-      Enum.group_by(entries, &EntryHelper.currency/1)
+      Enum.group_by(entries, &Entryable.currency/1)
     end
   end
   ```
@@ -55,19 +54,21 @@ defprotocol DoubleEntryLedger.EntryHelper do
   ## Examples
 
       # Using with Entry struct
-      iex> alias DoubleEntryLedger.{Entry, EntryHelper}
+      iex> alias DoubleEntryLedger.Entry
+      iex> alias DoubleEntryLedger.Schemas.Entryable
       iex> debit_entry = %Entry{type: :debit, value: %{amount: 500, currency: :USD}}
-      iex> EntryHelper.debit_sum(debit_entry, 100)
+      iex> Entryable.debit_sum(debit_entry, 100)
       600
       iex> credit_entry = %Entry{type: :credit, value: %{amount: 500, currency: :USD}}
-      iex> EntryHelper.debit_sum(credit_entry, 100)
+      iex> Entryable.debit_sum(credit_entry, 100)
       100
 
       # Using with Changeset
       iex> alias DoubleEntryLedger.Entry
+      iex> alias DoubleEntryLedger.Schemas.Entryable
       iex> alias Ecto.Changeset
       iex> changeset = Changeset.change(%Entry{}, %{type: :debit, value: %{amount: 500, currency: :USD}})
-      iex> DoubleEntryLedger.EntryHelper.debit_sum(changeset, 100)
+      iex> Entryable.debit_sum(changeset, 100)
       600
   """
   @spec debit_sum(t(), integer()) :: integer()
@@ -81,19 +82,21 @@ defprotocol DoubleEntryLedger.EntryHelper do
   ## Examples
 
       # Using with Entry struct
-      iex> alias DoubleEntryLedger.{Entry, EntryHelper}
+      iex> alias DoubleEntryLedger.Entry
+      iex> alias DoubleEntryLedger.Schemas.Entryable
       iex> credit_entry = %Entry{type: :credit, value: %{amount: 500, currency: :USD}}
-      iex> EntryHelper.credit_sum(credit_entry, 100)
+      iex> Entryable.credit_sum(credit_entry, 100)
       600
       iex> debit_entry = %Entry{type: :debit, value: %{amount: 500, currency: :USD}}
-      iex> EntryHelper.credit_sum(debit_entry, 100)
+      iex> Entryable.credit_sum(debit_entry, 100)
       100
 
       # Using with Changeset
       iex> alias DoubleEntryLedger.Entry
+      iex> alias DoubleEntryLedger.Schemas.Entryable
       iex> alias Ecto.Changeset
       iex> changeset = Changeset.change(%Entry{}, %{type: :credit, value: %{amount: 500, currency: :USD}})
-      iex> DoubleEntryLedger.EntryHelper.credit_sum(changeset, 100)
+      iex> Entryable.credit_sum(changeset, 100)
       600
   """
   @spec credit_sum(t(), integer()) :: integer()
@@ -105,16 +108,18 @@ defprotocol DoubleEntryLedger.EntryHelper do
   ## Examples
 
       # Using with Entry struct
-      iex> alias DoubleEntryLedger.{Entry, EntryHelper}
+      iex> alias DoubleEntryLedger.Entry
+      iex> alias DoubleEntryLedger.Schemas.Entryable
       iex> entry = %Entry{account_id: "550e8400-e29b-41d4-a716-446655440000"}
-      iex> EntryHelper.uuid(entry)
+      iex> Entryable.uuid(entry)
       "550e8400-e29b-41d4-a716-446655440000"
 
       # Using with Changeset
       iex> alias DoubleEntryLedger.Entry
+      iex> alias DoubleEntryLedger.Schemas.Entryable
       iex> alias Ecto.Changeset
       iex> changeset = Changeset.change(%Entry{}, %{account_id: "550e8400-e29b-41d4-a716-446655440000"})
-      iex> DoubleEntryLedger.EntryHelper.uuid(changeset)
+      iex> Entryable.uuid(changeset)
       "550e8400-e29b-41d4-a716-446655440000"
   """
   @spec uuid(t()) :: String.t()
@@ -126,25 +131,27 @@ defprotocol DoubleEntryLedger.EntryHelper do
   ## Examples
 
       # Using with Entry struct
-      iex> alias DoubleEntryLedger.{Entry, EntryHelper}
+      iex> alias DoubleEntryLedger.Entry
+      iex> alias DoubleEntryLedger.Schemas.Entryable
       iex> entry = %Entry{value: %{amount: 500, currency: :USD}}
-      iex> EntryHelper.currency(entry)
+      iex> Entryable.currency(entry)
       :USD
 
       # Using with Changeset
       iex> alias DoubleEntryLedger.Entry
+      iex> alias DoubleEntryLedger.Schemas.Entryable
       iex> alias Ecto.Changeset
       iex> changeset = Changeset.change(%Entry{}, %{value: %{amount: 500, currency: :USD}})
-      iex> DoubleEntryLedger.EntryHelper.currency(changeset)
+      iex> Entryable.currency(changeset)
       :USD
   """
   @spec currency(t()) :: atom()
   def currency(entry)
 end
 
-defimpl DoubleEntryLedger.EntryHelper, for: Ecto.Changeset do
+defimpl DoubleEntryLedger.Schemas.Entryable, for: Ecto.Changeset do
   @moduledoc """
-  Implementation of `DoubleEntryLedger.EntryHelper` protocol for `Ecto.Changeset`.
+  Implementation of `DoubleEntryLedger.Schemas.Entryable` protocol for `Ecto.Changeset`.
 
   This implementation enables protocol functions to work with entries that are still
   being validated or constructed via Ecto changesets. It extracts relevant data from
@@ -180,13 +187,14 @@ defimpl DoubleEntryLedger.EntryHelper, for: Ecto.Changeset do
   def currency(%{changes: %{value: v}}), do: v.currency
 end
 
-defimpl DoubleEntryLedger.EntryHelper, for: Entry do
+defimpl DoubleEntryLedger.Schemas.Entryable, for: DoubleEntryLedger.Entry do
   @moduledoc """
-  Implementation of `DoubleEntryLedger.EntryHelper` protocol for `Entry` structs.
+  Implementation of `DoubleEntryLedger.Schemas.Entryable` protocol for `Entry` structs.
 
   This implementation works with fully persisted and loaded Entry structs from the database.
   It provides direct access to entry fields like type, account_id and value fields.
   """
+  alias DoubleEntryLedger.Entry
 
   @doc """
   Returns the sum of debit entries for an `Entry`.
