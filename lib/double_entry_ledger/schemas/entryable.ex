@@ -1,4 +1,3 @@
-
 defprotocol DoubleEntryLedger.Schemas.Entryable do
   @moduledoc """
   Protocol defining helper functions for working with entry data in the Double Entry Ledger system.

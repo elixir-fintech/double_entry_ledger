@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
   import Mox
 
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
-  alias DoubleEntryLedger.{TransactionStore, Repo}
+  alias DoubleEntryLedger.Repo
   alias DoubleEntryLedger.Stores.{TransactionStore, TransactionStoreHelper}
   alias Ecto.Multi
 
