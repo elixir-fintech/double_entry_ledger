@@ -42,6 +42,7 @@ defmodule DoubleEntryLedger.TransactionStore do
     BalanceHistoryEntry
   }
 
+  alias DoubleEntryLedger.Apis.EventApi
   alias DoubleEntryLedger.Event.TransactionEventMap
 
   @type entry_map() :: %{
@@ -124,8 +125,8 @@ defmodule DoubleEntryLedger.TransactionStore do
 
     response =
       case retry_on_error do
-        false -> EventStore.process_from_event_params_no_save_on_error(params)
-        _ -> EventStore.process_from_event_params(params)
+        false -> EventApi.process_from_event_params_no_save_on_error(params)
+        _ -> EventApi.process_from_event_params(params)
       end
 
     case response do
@@ -204,8 +205,8 @@ defmodule DoubleEntryLedger.TransactionStore do
 
     response =
       case retry_on_error do
-        false -> EventStore.process_from_event_params_no_save_on_error(params)
-        _ -> EventStore.process_from_event_params(params)
+        false -> EventApi.process_from_event_params_no_save_on_error(params)
+        _ -> EventApi.process_from_event_params(params)
       end
 
     case response do

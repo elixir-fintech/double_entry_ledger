@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.TransactionFixtures do
   transaction entities.
   """
 
-  alias DoubleEntryLedger.EventStore
+  alias DoubleEntryLedger.Apis.EventApi
 
   def transaction_attr(attrs) do
     attrs
@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.TransactionFixtures do
         }
       }
 
-    {:ok, transaction, _event} = EventStore.process_from_event_params(event)
+    {:ok, transaction, _event} = EventApi.process_from_event_params(event)
     Map.put(ctx, :transaction, transaction)
   end
 

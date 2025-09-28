@@ -67,6 +67,7 @@ defmodule DoubleEntryLedger.AccountStore do
   import DoubleEntryLedger.PaginationHelper, only: [paginate: 3]
 
   alias DoubleEntryLedger.Event.AccountEventMap
+  alias DoubleEntryLedger.Apis.EventApi
 
   alias DoubleEntryLedger.{
     Repo,
@@ -228,7 +229,7 @@ defmodule DoubleEntryLedger.AccountStore do
         source \\ "AccountStore.create/2"
       ) do
     response =
-      EventStore.process_from_event_params_no_save_on_error(%{
+      EventApi.process_from_event_params_no_save_on_error(%{
         "instance_address" => address,
         "action" => "create_account",
         "source" => source,
@@ -297,7 +298,7 @@ defmodule DoubleEntryLedger.AccountStore do
     event = EventStore.get_create_account_event(account.id)
 
     response =
-      EventStore.process_from_event_params_no_save_on_error(%{
+      EventApi.process_from_event_params_no_save_on_error(%{
         "instance_address" => instance_address,
         "action" => "update_account",
         "source" => event.source,

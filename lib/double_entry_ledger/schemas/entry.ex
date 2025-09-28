@@ -232,12 +232,13 @@ defmodule DoubleEntryLedger.Entry do
       # Update a pending entry to be posted
       # An entry has to be created first using an event
       iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+      iex> alias DoubleEntryLedger.Apis.EventApi
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{
       ...>    name: "account1", address: "account:main1", instance_address: instance.address, type: :asset, currency: :EUR}, "unique_id_123")
       iex> {:ok, account2} = AccountStore.create(%{
       ...>    name: "account2", address: "account:main2", instance_address: instance.address, type: :liability, currency: :EUR}, "unique_id_456")
-      iex> {:ok, _, _} = EventStore.process_from_event_params(%{"instance_address" => instance.address,
+      iex> {:ok, _, _} = EventApi.process_from_event_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => :pending, "entries" => [
       ...>      %{"account_address" => account1.address, "amount" => 100, "currency" => :EUR},
