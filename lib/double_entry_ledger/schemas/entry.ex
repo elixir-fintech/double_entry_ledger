@@ -231,7 +231,7 @@ defmodule DoubleEntryLedger.Entry do
 
       # Update a pending entry to be posted
       # An entry has to be created first using an event
-      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+      iex> alias DoubleEntryLedger.{InstanceStore, AccountStore}
       iex> alias DoubleEntryLedger.Apis.EventApi
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, account1} = AccountStore.create(%{

@@ -53,13 +53,14 @@ defmodule DoubleEntryLedger.Account do
   alias DoubleEntryLedger.{
     Balance,
     BalanceHistoryEntry,
-    Currency,
     Entry,
     Event,
     Instance,
     Types,
     EventAccountLink
   }
+
+  alias DoubleEntryLedger.Helpers.Currency
 
   alias __MODULE__, as: Account
 

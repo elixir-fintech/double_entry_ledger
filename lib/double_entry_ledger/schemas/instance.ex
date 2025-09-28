@@ -189,7 +189,7 @@ defmodule DoubleEntryLedger.Instance do
 
   ## Example
 
-      iex> alias DoubleEntryLedger.{Account, AccountStore, EventStore, Repo}
+      iex> alias DoubleEntryLedger.{Account, AccountStore, Repo}
       iex> alias DoubleEntryLedger.Apis.EventApi
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
       iex> {:ok, acc1} = AccountStore.create(%{address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}}, "unique_id_123")

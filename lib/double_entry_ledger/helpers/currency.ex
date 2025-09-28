@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Currency do
+defmodule DoubleEntryLedger.Helpers.Currency do
   @moduledoc """
   Provides types and helper functions for currency handling within the ledger system.
 

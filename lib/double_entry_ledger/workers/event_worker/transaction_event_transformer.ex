@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.EventWorker.TransactionEventTransformer do
   alias DoubleEntryLedger.{Account, AccountStore, Types, Transaction}
   alias DoubleEntryLedger.Event.{EntryData, TransactionData}
 
-  import DoubleEntryLedger.Currency
+  import DoubleEntryLedger.Helpers.Currency
 
   @typedoc """
   Represents a single ledger entry with account, monetary value, and entry type.
