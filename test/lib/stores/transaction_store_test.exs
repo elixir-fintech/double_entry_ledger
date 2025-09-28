@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.TransactionStoreTest do
+defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
   @moduledoc """
   This module tests the TransactionStore and TransactionStoreHelper module.
   """
@@ -7,7 +7,8 @@ defmodule DoubleEntryLedger.TransactionStoreTest do
   import Mox
 
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
-  alias DoubleEntryLedger.{TransactionStore, TransactionStoreHelper, Repo}
+  alias DoubleEntryLedger.{TransactionStore, Repo}
+  alias DoubleEntryLedger.Stores.{TransactionStore, TransactionStoreHelper}
   alias Ecto.Multi
 
   doctest TransactionStore

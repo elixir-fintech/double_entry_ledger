@@ -31,15 +31,14 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap do
 
   alias DoubleEntryLedger.{
     Event,
-    EventWorker,
-    TransactionStoreHelper,
     Repo,
     EventStoreHelper,
     InstanceStoreHelper
   }
 
   alias DoubleEntryLedger.Event.TransactionEventMap
-
+  alias DoubleEntryLedger.Stores.TransactionStoreHelper
+  alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   alias Ecto.Multi
 

@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.TransactionStoreHelper do
+defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
   @moduledoc """
   Provides helper functions for building Ecto.Multi operations related to transactions
   in the double-entry ledger system.

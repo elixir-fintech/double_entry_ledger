@@ -24,19 +24,20 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
   This module ensures that events are processed exactly once, even in high-concurrency
   environments, and that all error and retry scenarios are handled transparently.
   """
-
   use DoubleEntryLedger.Occ.Processor
 
   alias DoubleEntryLedger.{
     Event,
-    EventWorker,
-    TransactionStoreHelper,
     Repo,
     EventStoreHelper,
     InstanceStoreHelper
   }
 
   alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Workers.EventWorker
+  alias DoubleEntryLedger.Stores.TransactionStoreHelper
+
+  alias DoubleEntryLedger.Workers.EventWorker
 
   alias Ecto.Multi
 

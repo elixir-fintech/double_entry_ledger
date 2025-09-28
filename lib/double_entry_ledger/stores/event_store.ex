@@ -132,7 +132,8 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+    iex> alias DoubleEntryLedger.Stores.TransactionStore
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -176,7 +177,8 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+    iex> alias DoubleEntryLedger.Stores.TransactionStore
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -212,7 +214,8 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+    iex> alias DoubleEntryLedger.Stores.TransactionStore
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -281,7 +284,8 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+    iex> alias DoubleEntryLedger.Stores.TransactionStore
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -327,7 +331,8 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, TransactionStore, EventStore}
+    iex> alias DoubleEntryLedger.{InstanceStore, AccountStore, EventStore}
+    iex> alias DoubleEntryLedger.Stores.TransactionStore
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")

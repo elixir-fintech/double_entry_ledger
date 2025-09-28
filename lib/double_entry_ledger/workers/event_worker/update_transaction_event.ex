@@ -36,12 +36,13 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEvent do
 
   alias DoubleEntryLedger.{
     Event,
-    EventWorker,
     EventStoreHelper,
-    TransactionStoreHelper,
     Repo
   }
 
+  alias DoubleEntryLedger.Stores.TransactionStoreHelper
+
+  alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   import DoubleEntryLedger.EventQueue.Scheduling
 

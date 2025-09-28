@@ -25,18 +25,15 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
 
   use DoubleEntryLedger.Occ.Processor
   import DoubleEntryLedger.Occ.Helper
-  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler
   import DoubleEntryLedger.EventQueue.Scheduling
 
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
-  alias DoubleEntryLedger.{
-    EventWorker,
-    Repo
-  }
+  alias DoubleEntryLedger.Repo
 
   alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Workers.EventWorker
 
   alias Ecto.{Multi, Changeset}
 

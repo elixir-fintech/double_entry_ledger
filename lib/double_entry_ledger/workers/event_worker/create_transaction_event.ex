@@ -37,8 +37,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
   use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Event, TransactionStoreHelper, Repo}
-
+  alias DoubleEntryLedger.{Event,  Repo}
+  alias DoubleEntryLedger.Stores.TransactionStoreHelper
   alias DoubleEntryLedger.Workers.EventWorker
 
   import DoubleEntryLedger.EventQueue.Scheduling
