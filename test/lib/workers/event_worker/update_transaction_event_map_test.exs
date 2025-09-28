@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
+defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapTest do
   @moduledoc """
   This module tests the TransactionEventMap module.
   """
@@ -13,8 +13,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapTest do
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
-  alias DoubleEntryLedger.EventWorker.UpdateTransactionEventMap
-  alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
+  alias DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap
+  alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventStore
 

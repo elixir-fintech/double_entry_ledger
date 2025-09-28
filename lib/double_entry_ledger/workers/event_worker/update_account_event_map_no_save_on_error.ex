@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnError do
   @moduledoc """
   Processes AccountEventMap structures for atomic update of events and their associated accounts.
 
@@ -47,11 +47,11 @@ defmodule DoubleEntryLedger.EventWorker.UpdateAccountEventMapNoSaveOnError do
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
 
-  import DoubleEntryLedger.EventWorker.AccountEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.EventWorker.{AccountEventResponseHandler, UpdateEventError}
+  alias DoubleEntryLedger.Workers.EventWorker.{AccountEventResponseHandler, UpdateEventError}
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.{Repo, EventStoreHelper, AccountStoreHelper, InstanceStoreHelper}
 

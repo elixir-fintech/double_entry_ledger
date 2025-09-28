@@ -18,7 +18,8 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
   use GenServer
   require Logger
 
-  alias DoubleEntryLedger.{EventWorker, Repo, Event}
+  alias DoubleEntryLedger.{Repo, Event}
+  alias DoubleEntryLedger.Workers.EventWorker
   import Ecto.Query
 
   @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)

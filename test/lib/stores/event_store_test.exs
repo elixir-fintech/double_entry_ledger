@@ -8,8 +8,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   alias DoubleEntryLedger.{EventStore, EventStoreHelper, Event}
-  alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
-  alias DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError
+  alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent
+  alias DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnError
 
   doctest EventStoreHelper
   doctest EventStore

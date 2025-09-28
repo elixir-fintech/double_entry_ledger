@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorkerTest do
+defmodule DoubleEntryLedger.Workers.EventWorkerTest do
   @moduledoc """
   This module tests the EventWorker.
   """
@@ -10,10 +10,9 @@ defmodule DoubleEntryLedger.EventWorkerTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.{
-    EventStore,
-    EventWorker
-  }
+  alias DoubleEntryLedger.EventStore
+
+  alias DoubleEntryLedger.Workers.EventWorker
 
   doctest EventWorker
 

@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   * Jitter to prevent thundering herd problems during retries
   """
 
-  alias DoubleEntryLedger.EventWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
 
   alias DoubleEntryLedger.{

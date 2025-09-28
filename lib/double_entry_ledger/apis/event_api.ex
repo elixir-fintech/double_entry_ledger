@@ -3,7 +3,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
 
   """
 
-  alias DoubleEntryLedger.{EventWorker, Event}
+  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
 
   @account_actions Event.actions(:account) |> Enum.map(&Atom.to_string/1)

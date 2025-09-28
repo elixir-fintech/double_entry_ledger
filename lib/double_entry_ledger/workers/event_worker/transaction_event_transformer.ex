@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.TransactionEventTransformer do
+defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer do
   @moduledoc """
   Transforms accounting events into ledger operations in the double-entry bookkeeping system.
 

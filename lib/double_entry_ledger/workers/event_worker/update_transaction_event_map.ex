@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
+defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap do
   @moduledoc """
   Processes `TransactionEventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system.
 
@@ -23,10 +23,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
 
   use DoubleEntryLedger.Occ.Processor
   import DoubleEntryLedger.Occ.Helper
-  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler
   import DoubleEntryLedger.EventQueue.Scheduling
 
-  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{
@@ -40,14 +40,14 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
 
   alias DoubleEntryLedger.Event.TransactionEventMap
 
-  alias DoubleEntryLedger.EventWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   alias Ecto.Multi
 
   @impl true
   @doc """
   Handles errors that occur when converting event map data to a transaction map.
 
-  Delegates to `DoubleEntryLedger.EventWorker.TransactionEventResponseHandler.handle_transaction_map_error/3`.
+  Delegates to `DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler.handle_transaction_map_error/3`.
 
   ## Parameters
 
@@ -60,14 +60,14 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(event_map, error, repo),
-    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
   @doc """
   Handles the case when OCC retries are exhausted for an event map.
 
-  Delegates to `DoubleEntryLedger.EventWorker.TransactionEventResponseHandler.handle_occ_final_timeout/2`.
+  Delegates to `DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler.handle_occ_final_timeout/2`.
 
   ## Parameters
 
@@ -79,7 +79,7 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMap do
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     as: :handle_occ_final_timeout
 
   @doc """

@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.AccountEventResponseHandler do
+defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler do
   @moduledoc """
   Response handler for account-related event processing operations.
 

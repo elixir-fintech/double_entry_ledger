@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.EventStoreHelper do
   alias Ecto.Changeset
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Event, Transaction, Account, Entry}
-  alias DoubleEntryLedger.EventWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
 
   @doc """
   Builds an Event changeset from a TransactionEventMap or AccountEventMap.

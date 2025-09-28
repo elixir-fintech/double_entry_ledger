@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveOnError do
   @moduledoc """
   Processes `TransactionEventMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system, without saving on error.
 
@@ -25,10 +25,10 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
 
   use DoubleEntryLedger.Occ.Processor
   import DoubleEntryLedger.Occ.Helper
-  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler
   import DoubleEntryLedger.EventQueue.Scheduling
 
-  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{
@@ -44,12 +44,12 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError d
   # but we need to implement it to satisfy the behaviour
   @impl true
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     as: :handle_occ_final_timeout
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
-    to: DoubleEntryLedger.EventWorker.UpdateTransactionEventMap,
+    to: DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap,
     as: :build_transaction
 
   @doc """

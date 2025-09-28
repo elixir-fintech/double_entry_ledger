@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.EventWorker.TransactionEventTransformer
+  alias DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer
   alias DoubleEntryLedger.Event.{EntryData, TransactionData}
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures

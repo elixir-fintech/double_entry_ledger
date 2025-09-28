@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateEventError do
+defmodule DoubleEntryLedger.Workers.EventWorker.UpdateEventError do
   @moduledoc """
   Custom exception for handling errors when update events can't be processed due to issues
   with their corresponding create events.

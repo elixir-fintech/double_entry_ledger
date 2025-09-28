@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionEvent do
+defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
   @moduledoc """
   Handles the processing of creation events in the double-entry ledger system.
 
@@ -41,14 +41,14 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEvent do
 
   import DoubleEntryLedger.EventQueue.Scheduling
 
-  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_event_response_handler: 3]
 
   @impl true
   @doc """
   Handles errors that occur when converting event data to a transaction map.
 
-  Delegates to `DoubleEntryLedger.EventWorker.TransactionEventResponseHandler.handle_transaction_map_error/3`.
+  Delegates to `DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler.handle_transaction_map_error/3`.
 
   ## Parameters
 
@@ -61,14 +61,14 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEvent do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(event_map, error, repo),
-    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
   @doc """
   Handles the case when OCC retries are exhausted.
 
-  Delegates to `DoubleEntryLedger.EventWorker.TransactionEventResponseHandler.handle_occ_final_timeout/2`.
+  Delegates to `DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler.handle_occ_final_timeout/2`.
 
   ## Parameters
 
@@ -80,7 +80,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEvent do
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     as: :handle_occ_final_timeout
 
   @doc """

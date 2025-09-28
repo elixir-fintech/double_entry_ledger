@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTest do
+defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveOnErrorTest do
   @moduledoc """
   This module tests the CreateTransactionEventMapNoSaveOnError module, which processes event maps for transaction creation without saving on error. It ensures that errors return changesets and no partial data is persisted.
   """
@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnErrorTe
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError
+  alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveOnError
 
   doctest CreateTransactionEventMapNoSaveOnError
 

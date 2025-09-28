@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.EventWorker.{UpdateTransactionEvent, CreateTransactionEvent}
+  alias DoubleEntryLedger.Workers.EventWorker.{UpdateTransactionEvent, CreateTransactionEvent}
   alias DoubleEntryLedger.EventQueue.Scheduling
 
   doctest UpdateTransactionEvent

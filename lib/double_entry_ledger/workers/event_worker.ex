@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker do
+defmodule DoubleEntryLedger.Workers.EventWorker do
   @moduledoc """
   Main event processing orchestrator for the Double Entry Ledger system.
 
@@ -72,7 +72,7 @@ defmodule DoubleEntryLedger.EventWorker do
 
   ## Handler Modules
 
-  The EventWorker delegates to specialized handlers in the `DoubleEntryLedger.EventWorker` namespace:
+  The EventWorker delegates to specialized handlers in the `DoubleEntryLedger.Workers.EventWorker` namespace:
 
   - `CreateTransactionEventMap` - New transaction creation from event maps
   - `UpdateTransactionEventMap` - Transaction updates from event maps
@@ -117,7 +117,7 @@ defmodule DoubleEntryLedger.EventWorker do
   - Processing is idempotent based on source identifiers
   - Retry logic and error tracking handled through EventQueueItem state management
   """
-  alias DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError
+  alias DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnError
   alias Ecto.Changeset
 
   alias DoubleEntryLedger.{
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.EventWorker do
 
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
 
-  alias DoubleEntryLedger.EventWorker.{
+  alias DoubleEntryLedger.Workers.EventWorker.{
     CreateTransactionEvent,
     UpdateTransactionEvent,
     CreateTransactionEventMap,

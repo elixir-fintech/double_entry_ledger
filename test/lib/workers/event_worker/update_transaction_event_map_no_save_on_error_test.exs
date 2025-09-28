@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTest do
+defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTest do
   @moduledoc """
   This module tests the UpdateTransactionEventMapNoSaveOnError module.
   """
@@ -13,8 +13,8 @@ defmodule DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnErrorTe
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
-  alias DoubleEntryLedger.EventWorker.UpdateTransactionEventMapNoSaveOnError
-  alias DoubleEntryLedger.EventWorker.CreateTransactionEvent
+  alias DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveOnError
+  alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent
 
   doctest UpdateTransactionEventMapNoSaveOnError
 

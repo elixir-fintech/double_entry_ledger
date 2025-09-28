@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
   use ExUnit.Case, async: true
   import Mox
   alias Ecto.Changeset
-  alias DoubleEntryLedger.EventWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.InstanceFixtures

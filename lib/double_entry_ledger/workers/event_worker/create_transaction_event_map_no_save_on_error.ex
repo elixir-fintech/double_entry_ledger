@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveOnError do
   @moduledoc """
   Processes event maps for creating transactions, returning changesets on error instead of raising or saving invalid data.
 
@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError d
 
   use DoubleEntryLedger.Occ.Processor
 
-  import DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{EventWorker, Repo}
@@ -24,17 +24,17 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapNoSaveOnError d
   # this function will never be called, as we don't save on error
   # but we need to implement it to satisfy the behaviour
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.EventWorker.TransactionEventResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     as: :handle_occ_final_timeout
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
-    to: DoubleEntryLedger.EventWorker.CreateTransactionEventMap,
+    to: DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap,
     as: :build_transaction
 
   @impl true
   defdelegate handle_build_transaction(multi, event_map, repo),
-    to: DoubleEntryLedger.EventWorker.CreateTransactionEventMap,
+    to: DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap,
     as: :handle_build_transaction
 
   @doc """

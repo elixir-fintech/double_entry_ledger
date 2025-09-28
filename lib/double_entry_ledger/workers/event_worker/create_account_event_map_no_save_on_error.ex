@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnError do
   @moduledoc """
   Processes AccountEventMap for creating new accounts in the double-entry ledger system.
 
@@ -43,12 +43,12 @@ defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError do
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
 
-  import DoubleEntryLedger.EventWorker.AccountEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.EventWorker.AccountEventResponseHandler
+  alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
   alias DoubleEntryLedger.{InstanceStoreHelper, EventStoreHelper, AccountStoreHelper, Repo}
 
   @module_name __MODULE__ |> Module.split() |> List.last()

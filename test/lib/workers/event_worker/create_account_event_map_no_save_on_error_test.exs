@@ -1,9 +1,9 @@
-defmodule DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnErrorTest do
+defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErrorTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
-  alias DoubleEntryLedger.EventWorker.CreateAccountEventMapNoSaveOnError
+  alias DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnError
 
   import DoubleEntryLedger.InstanceFixtures
 

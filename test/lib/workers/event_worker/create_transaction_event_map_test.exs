@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
+defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapTest do
   @moduledoc """
   This module tests the CreateTransactionEventMap module, which processes event maps for atomic creation and update of events and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
   """
@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.EventWorker.CreateTransactionEventMapTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.EventWorker.CreateTransactionEventMap
+  alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventStore
 
