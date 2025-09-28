@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.AccountStoreHelper do
+defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
   @moduledoc """
   Helper functions for building Account changesets in the Double Entry Ledger system.
 
@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.AccountStoreHelper do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Event.AccountData
       iex> {:ok, %{id: instance_id}} = InstanceStore.create(%{address: "Sample:Instance"})
@@ -119,7 +119,8 @@ defmodule DoubleEntryLedger.AccountStoreHelper do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.{Account, AccountStoreHelper}
+      iex> alias DoubleEntryLedger.Account
+      iex> alias DoubleEntryLedger.Stores.AccountStoreHelper
       iex> alias DoubleEntryLedger.Event.AccountData
       iex> existing_account = %Account{name: "Old Name", type: :asset, currency: :USD}
       iex> new_data = %AccountData{description: "Updated Description"}

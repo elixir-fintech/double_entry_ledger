@@ -53,8 +53,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Workers.EventWorker.{AccountEventResponseHandler, UpdateEventError}
   alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.{Repo, EventStoreHelper, AccountStoreHelper}
-  alias DoubleEntryLedger.Stores.InstanceStoreHelper
+  alias DoubleEntryLedger.{Repo, EventStoreHelper}
+  alias DoubleEntryLedger.Stores.{AccountStoreHelper, InstanceStoreHelper}
 
   @module_name __MODULE__ |> Module.split() |> List.last()
 

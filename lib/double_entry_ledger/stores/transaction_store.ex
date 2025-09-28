@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
@@ -162,7 +162,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
@@ -255,7 +255,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
@@ -314,7 +314,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
@@ -366,7 +366,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
@@ -453,7 +453,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
@@ -485,7 +485,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
         per_page \\ 40
       ) do
     instance = DoubleEntryLedger.Stores.InstanceStore.get_by_address(instance_address)
-    account = DoubleEntryLedger.AccountStore.get_by_address(instance_address, account_address)
+
+    account =
+      DoubleEntryLedger.Stores.AccountStore.get_by_address(instance_address, account_address)
 
     if instance && account do
       list_all_for_instance_id_and_account_id(instance.id, account.id, page, per_page)

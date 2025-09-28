@@ -157,9 +157,10 @@ defmodule DoubleEntryLedger.Instance do
       iex> changeset = Instance.delete_changeset(instance)
       iex> {:ok, _} = Repo.delete(changeset)
 
-
+      iex> alias DoubleEntryLedger.Repo
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Temporary:Ledger"})
-      iex> DoubleEntryLedger.AccountStore.create(%{name: "Test Account", address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD}, "unique_id_123")
+      iex> AccountStore.create(%{name: "Test Account", address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD}, "unique_id_123")
       iex> changeset = Instance.delete_changeset(instance)
       iex> {:error, _} = Repo.delete(changeset)
   """
@@ -189,7 +190,8 @@ defmodule DoubleEntryLedger.Instance do
 
   ## Example
 
-      iex> alias DoubleEntryLedger.{Account, AccountStore, Repo}
+      iex> alias DoubleEntryLedger.{Account, Repo}
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Apis.EventApi
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
       iex> {:ok, acc1} = AccountStore.create(%{address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}}, "unique_id_123")
@@ -209,7 +211,8 @@ defmodule DoubleEntryLedger.Instance do
         pending_credit: 0
       }}
 
-      iex> alias DoubleEntryLedger.{Account, AccountStore, Repo}
+      iex> alias DoubleEntryLedger.{Account, Repo}
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
       iex> %Account{address: "account:main1", normal_balance: :debit, instance_id: instance.id, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}} |> Repo.insert()
       iex> AccountStore.create(%{name: "Test Account 2", address: "account:main2", instance_address: instance.address, type: :liability, currency: :USD}, "unique_id_456")

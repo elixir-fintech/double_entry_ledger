@@ -249,7 +249,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
   ## Examples
 
       # Create a new transaction
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
@@ -340,7 +340,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
   ## Examples
 
       iex> # Valid event processes successfully
-      iex> alias DoubleEntryLedger.AccountStore
+      iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})

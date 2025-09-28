@@ -15,8 +15,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer do
   and that entries are properly structured and valid before they are recorded in the ledger.
   """
 
-  alias DoubleEntryLedger.{Account, AccountStore, Types, Transaction}
+  alias DoubleEntryLedger.{Account, Types, Transaction}
   alias DoubleEntryLedger.Event.{EntryData, TransactionData}
+  alias DoubleEntryLedger.Stores.AccountStore
 
   import DoubleEntryLedger.Utils.Currency
 

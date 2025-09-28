@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.AccountStoreTest do
+defmodule DoubleEntryLedger.Stores.AccountStoreTest do
   @moduledoc """
   This module tests the AccountStore behaviour.
   """
@@ -7,8 +7,8 @@ defmodule DoubleEntryLedger.AccountStoreTest do
 
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
-  alias DoubleEntryLedger.AccountStore
-  alias DoubleEntryLedger.AccountStoreHelper
+  alias DoubleEntryLedger.Stores.AccountStore
+  alias DoubleEntryLedger.Stores.AccountStoreHelper
 
   doctest AccountStore
   doctest AccountStoreHelper

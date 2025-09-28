@@ -4,7 +4,8 @@ defmodule DoubleEntryLedger.AccountFixtures do
   account entities.
   """
 
-  alias DoubleEntryLedger.{Account, AccountStore, Balance, Repo}
+  alias DoubleEntryLedger.{Account, Balance, Repo}
+  alias DoubleEntryLedger.Stores.AccountStore
 
   @doc """
   Generate a account.
