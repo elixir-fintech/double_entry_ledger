@@ -9,7 +9,8 @@ defmodule DoubleEntryLedger.LoadTesting do
   Both defaults can be overridden by setting the @seconds_to_run and @destination_accounts module attributes.
   """
 
-  alias DoubleEntryLedger.{Account, Balance, Instance, EventWorker, Repo}
+  alias DoubleEntryLedger.{Account, Balance, Instance, Repo}
+  alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Event.TransactionEventMap
   @destination_accounts 10
   @seconds_to_run 10
