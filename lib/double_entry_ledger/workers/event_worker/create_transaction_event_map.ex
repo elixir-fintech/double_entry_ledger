@@ -26,17 +26,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
   """
   use DoubleEntryLedger.Occ.Processor
 
-  alias DoubleEntryLedger.{
-    Event,
-    Repo,
-    EventStoreHelper
-  }
-
+  alias DoubleEntryLedger.{Event, Repo}
   alias DoubleEntryLedger.Event.TransactionEventMap
   alias DoubleEntryLedger.Workers.EventWorker
-  alias DoubleEntryLedger.Stores.{InstanceStoreHelper, TransactionStoreHelper}
-
-  alias DoubleEntryLedger.Workers.EventWorker
+  alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
 
   alias Ecto.Multi
 

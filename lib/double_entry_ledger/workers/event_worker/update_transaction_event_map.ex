@@ -29,14 +29,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap do
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_event_map_response_handler: 3]
 
-  alias DoubleEntryLedger.{
-    Event,
-    Repo,
-    EventStoreHelper
-  }
+  alias DoubleEntryLedger.{Event, Repo}
 
   alias DoubleEntryLedger.Event.TransactionEventMap
-  alias DoubleEntryLedger.Stores.{InstanceStoreHelper, TransactionStoreHelper}
+  alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
   alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   alias Ecto.Multi

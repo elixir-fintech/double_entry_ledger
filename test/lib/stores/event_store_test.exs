@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventStoreTest do
+defmodule DoubleEntryLedger.Stores.EventStoreTest do
   @moduledoc """
   This module tests the EventStore module.
   """
@@ -7,7 +7,8 @@ defmodule DoubleEntryLedger.EventStoreTest do
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
-  alias DoubleEntryLedger.{EventStore, EventStoreHelper, Event}
+  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Stores.{EventStore, EventStoreHelper}
   alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent
   alias DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnError
 

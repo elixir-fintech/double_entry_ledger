@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventStoreHelper do
+defmodule DoubleEntryLedger.Stores.EventStoreHelper do
   @moduledoc """
   Helper functions for event processing in the Double Entry Ledger system.
 

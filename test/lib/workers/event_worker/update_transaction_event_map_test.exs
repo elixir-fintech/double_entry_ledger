@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapTest do
   alias DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap
   alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.EventStore
+  alias DoubleEntryLedger.Stores.EventStore
 
   doctest UpdateTransactionEventMap
 

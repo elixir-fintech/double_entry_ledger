@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventStore do
+defmodule DoubleEntryLedger.Stores.EventStore do
   @moduledoc """
   Provides functions for managing events in the double-entry ledger system.
 
@@ -38,19 +38,19 @@ defmodule DoubleEntryLedger.EventStore do
       {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_event_params(event_params)
 
       # create event for asynchronous processing later
-      {:ok, event} = DoubleEntryLedger.EventStore.create(event_params)
+      {:ok, event} = DoubleEntryLedger.Stores.EventStore.create(event_params)
 
   ### Retrieving events for an instance
 
-      events = DoubleEntryLedger.EventStore.list_all_for_instance(instance.id)
+      events = DoubleEntryLedger.Stores.EventStore.list_all_for_instance(instance.id)
 
   ### Retrieving events for a transaction
 
-      events = DoubleEntryLedger.EventStore.list_all_for_transaction(transaction.id)
+      events = DoubleEntryLedger.Stores.EventStore.list_all_for_transaction(transaction.id)
 
   ### Retrieving events for an account
 
-      events = DoubleEntryLedger.EventStore.list_all_for_account(account.id)
+      events = DoubleEntryLedger.Stores.EventStore.list_all_for_account(account.id)
 
   ### Process event without saving it in the EventStore on error
   If you want more control over error handling, you can process an event without saving it
@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.EventStore do
   - Error handling is explicit, with clear return values for all failure modes.
   """
   import Ecto.Query
-  import DoubleEntryLedger.EventStoreHelper
+  import DoubleEntryLedger.Stores.EventStoreHelper
   import DoubleEntryLedger.Utils.Pagination
 
   alias Ecto.Multi
@@ -133,8 +133,7 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.EventStore
-    iex> alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore, TransactionStore}
+    iex> alias DoubleEntryLedger.Stores.{EventStore, AccountStore, InstanceStore, TransactionStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -178,9 +177,7 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.EventStore
-    iex> alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore, TransactionStore}
-    iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
+    iex> alias DoubleEntryLedger.Stores.{EventStore, AccountStore, InstanceStore, TransactionStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -216,8 +213,7 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.EventStore
-    iex> alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore, TransactionStore}
+    iex> alias DoubleEntryLedger.Stores.{EventStore, AccountStore, InstanceStore, TransactionStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -256,8 +252,7 @@ defmodule DoubleEntryLedger.EventStore do
     - `Event.t() | nil`: The create account event if found and processed
 
   ### Examples
-    iex> alias DoubleEntryLedger.EventStore
-    iex> alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore}
+    iex> alias DoubleEntryLedger.Stores.{EventStore, AccountStore, InstanceStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, %{id: id}} = AccountStore.create(account_data, "unique_id_123")
@@ -287,8 +282,7 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.EventStore
-    iex> alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore, TransactionStore}
+    iex> alias DoubleEntryLedger.Stores.{EventStore, AccountStore, InstanceStore, TransactionStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -334,8 +328,7 @@ defmodule DoubleEntryLedger.EventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.EventStore
-    iex> alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore, TransactionStore}
+    iex> alias DoubleEntryLedger.Stores.{EventStore, AccountStore, InstanceStore, TransactionStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
@@ -356,12 +349,11 @@ defmodule DoubleEntryLedger.EventStore do
     iex> acc_event.action
     :create_account
 
-    iex> alias DoubleEntryLedger.EventStore
-    iex> alias DoubleEntryLedger.Stores.InstanceStore
+    iex> alias DoubleEntryLedger.Stores.{EventStore, InstanceStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> EventStore.list_all_for_account_address(instance.address, "nonexistent")
 
-    iex> alias DoubleEntryLedger.EventStore
+    iex> alias DoubleEntryLedger.Stores.EventStore
     iex> EventStore.list_all_for_account_address("nonexistent", "nonexistent")
     []
 

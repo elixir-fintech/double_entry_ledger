@@ -38,10 +38,10 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
     Entry,
     Repo,
     Transaction,
-    EventStore,
     BalanceHistoryEntry
   }
 
+  alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Apis.EventApi
   alias DoubleEntryLedger.Event.TransactionEventMap
 

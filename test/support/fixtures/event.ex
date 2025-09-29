@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   This module defines test helpers for creating
   event entities.
   """
-  alias DoubleEntryLedger.EventStore
+  alias DoubleEntryLedger.Stores.EventStore
 
   alias DoubleEntryLedger.Event.{
     TransactionEventMap,

@@ -5,13 +5,14 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
   use ExUnit.Case, async: true
   import Mox
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
-  alias DoubleEntryLedger.{EventStore, Event}
+  alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.EventQueue.Scheduling
+  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
 
   describe "claim_event_for_processing/2" do
     setup [:create_instance, :create_accounts]

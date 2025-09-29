@@ -25,10 +25,10 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     EventTransactionLink,
     EventAccountLink,
     Account,
-    Transaction,
-    EventStore
+    Transaction
   }
 
+  alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.EventQueueItem
   alias Ecto.Changeset
 
