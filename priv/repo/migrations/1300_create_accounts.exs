@@ -23,6 +23,12 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateAccounts do
       timestamps(type: :utc_datetime_usec)
     end
 
+    # This regex allows for the address to start with _. This is to allow for system accounts that
+    # are distinct from user generated accounts.
+    create constraint(:accounts, :address_format_chk,
+      prefix: @schema_prefix,
+      check: "address ~ '^_?[A-Za-z0-9]+(:[A-Za-z0-9_]+)*$'"
+    )
     create index(:accounts, [:instance_id], prefix: @schema_prefix)
     create unique_index(:accounts, [:instance_id, :address],
       prefix: @schema_prefix,
