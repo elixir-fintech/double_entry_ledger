@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
 
   @type event_params() :: %{required(String.t()) => term()}
 
-  @doc"""
+  @doc """
   Adds the event to the EventQueue with status `:pending` to be processed asynchronously. Enforce
   idempotency using the
 
@@ -69,7 +69,12 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> {:error, :action_not_supported}
 
   """
-  @spec create_from_params(event_params()) :: {:ok, Event.t()} | {:error, Changeset.t(AccountEventMap.t() | TransactionEventMap.t()) | :instance_not_found | :action_not_supported}
+  @spec create_from_params(event_params()) ::
+          {:ok, Event.t()}
+          | {:error,
+             Changeset.t(AccountEventMap.t() | TransactionEventMap.t())
+             | :instance_not_found
+             | :action_not_supported}
   def create_from_params(%{"action" => action} = event_params) when action in @account_actions do
     case AccountEventMap.create(event_params) do
       {:ok, event_map} -> EventStore.create(event_map)
@@ -77,7 +82,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     end
   end
 
-  def create_from_params(%{"action" => action} = event_params) when action in @transaction_actions do
+  def create_from_params(%{"action" => action} = event_params)
+      when action in @transaction_actions do
     case TransactionEventMap.create(event_params) do
       {:ok, event_map} -> EventStore.create(event_map)
       error -> error
