@@ -157,7 +157,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       iex> changeset.errors[:action]
       {"invalid in this context", [{:value, "invalid_action"}]}
   """
-  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t()}
+  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t(AccountEventMap.t())}
   def create(attrs) do
     %AccountEventMap{}
     |> changeset(attrs)

@@ -208,7 +208,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> changeset.valid?
       false
   """
-  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t()}
+  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t(TransactionEventMap.t())}
   def create(attrs) do
     %TransactionEventMap{}
     |> changeset(attrs)

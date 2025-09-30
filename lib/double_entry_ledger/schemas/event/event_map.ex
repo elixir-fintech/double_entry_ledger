@@ -157,7 +157,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   @type t(payload_type) :: %{
           __struct__: module(),
           action: DoubleEntryLedger.Event.action(),
-          instance_address: Ecto.UUID.t(),
+          instance_address: String.t(),
           source: String.t(),
           source_idempk: String.t(),
           update_idempk: String.t() | nil,

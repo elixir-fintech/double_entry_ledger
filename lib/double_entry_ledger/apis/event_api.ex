@@ -1,14 +1,92 @@
 defmodule DoubleEntryLedger.Apis.EventApi do
   @moduledoc """
 
+  The event_params should be as follows (Elixir does not allow string keys in the typespec
+  so the generic type `%{required(String.t()) => term()}` is used)
+  ```
+  %{
+    "action" => String.t(),
+    "instance_address" => String.t(),
+    "source" => String.t(),
+    "source_idempk" => String.t(),
+    "update_idempk" => String.t() | nil,
+    "update_source" => String.t() | nil,
+    "payload" => map()
+  }
+  ```
   """
 
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.Stores.EventStore
 
   @account_actions Event.actions(:account) |> Enum.map(&Atom.to_string/1)
   @transaction_actions Event.actions(:transaction) |> Enum.map(&Atom.to_string/1)
+
+  @type event_params() :: %{required(String.t()) => term()}
+
+  @doc"""
+  Adds the event to the EventQueue with status `:pending` to be processed asynchronously. Enforce
+  idempotency using the
+
+  ## Parameters
+    - `event_params`: Map containing event parameters including action and payload data
+
+  ## Returns
+    - `{:ok, event}`: If a transaction event was successfully processed
+    - `{:error, changeset}`: If validation failed
+    - `{:error, reason}`: If processing failed for other reasons
+
+  ## Examples
+    iex> alias DoubleEntryLedger.Repo
+    iex> alias DoubleEntryLedger.Stores.InstanceStore
+    iex> alias DoubleEntryLedger.Apis.EventApi
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+    iex> {:ok, event} = EventApi.create_from_params(%{
+    ...>   "instance_address" => instance.address,
+    ...>   "action" => "create_account",
+    ...>   "source" => "frontend",
+    ...>   "source_idempk" => "unique_id_123",
+    ...>   "payload" => account_data
+    ...> })
+    iex> event.event_queue_item.status
+    :pending
+    iex> alias DoubleEntryLedger.Event.AccountEventMap
+    iex> {:error, %Ecto.Changeset{data: %AccountEventMap{}}= changeset} = EventApi.create_from_params(%{
+    ...>   "instance_address" => instance.address,
+    ...>   "action" => "create_account",
+    ...>   "source" => "frontend",
+    ...>   "source_idempk" => "unique_id_124",
+    ...>   "payload" => %{}
+    ...> })
+    iex> changeset.valid?
+    false
+
+    iex> alias DoubleEntryLedger.Apis.EventApi
+    iex> EventApi.create_from_params(%{"action" => "unsupported"})
+    iex> {:error, :action_not_supported}
+
+  """
+  @spec create_from_params(event_params()) :: {:ok, Event.t()} | {:error, Changeset.t(AccountEventMap.t() | TransactionEventMap.t()) | :instance_not_found | :action_not_supported}
+  def create_from_params(%{"action" => action} = event_params) when action in @account_actions do
+    case AccountEventMap.create(event_params) do
+      {:ok, event_map} -> EventStore.create(event_map)
+      error -> error
+    end
+  end
+
+  def create_from_params(%{"action" => action} = event_params) when action in @transaction_actions do
+    case TransactionEventMap.create(event_params) do
+      {:ok, event_map} -> EventStore.create(event_map)
+      error -> error
+    end
+  end
+
+  def create_from_params(_) do
+    {:error, :action_not_supported}
+  end
 
   @doc """
   Processes an event from provided parameters, handling the entire workflow.
@@ -61,7 +139,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> trx.id == transaction.id
     true
   """
-  @spec process_from_event_params(map()) ::
+  @spec process_from_event_params(event_params()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_from_event_params(%{"action" => action} = event_params)
       when action in @transaction_actions do
@@ -72,6 +150,10 @@ defmodule DoubleEntryLedger.Apis.EventApi do
       {:error, event_map_changeset} ->
         {:error, event_map_changeset}
     end
+  end
+
+  def process_from_event_params(_) do
+    {:error, :action_not_supported}
   end
 
   @doc """
@@ -115,7 +197,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     true
 
   """
-  @spec process_from_event_params_no_save_on_error(map()) ::
+  @spec process_from_event_params_no_save_on_error(event_params()) ::
           EventWorker.success_tuple() | {:error, Ecto.Changeset.t() | String.t()}
   def process_from_event_params_no_save_on_error(%{"action" => action} = event_params)
       when action in @account_actions do
@@ -137,5 +219,9 @@ defmodule DoubleEntryLedger.Apis.EventApi do
       {:error, event_map_changeset} ->
         {:error, event_map_changeset}
     end
+  end
+
+  def process_from_event_params_no_save_on_error(_) do
+    {:error, :action_not_supported}
   end
 end
