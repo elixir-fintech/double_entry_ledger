@@ -79,7 +79,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
     - `idempotent_id` (String.t()): A unique identifier to ensure idempotency of the creation request.
     - `opts` (Keyword.t(), optional): A string indicating the source of the creation request.
       - `:source` Defaults to `"TransactionStore.create/3"
-      - `:retry_on_error` defaults to true. If true, event will be saved in the EventQueue for retry after a processing error. Otherwise Event is not stored at all.
+      - `:on_error`
+        - :retry (default) The event will be saved in the EventQueue for retry after a processing error.
+        - :fail if you want to handle errors manually without saving the event to the EventQueue.
   ## Returns
 
     - `{:ok, transaction}`: On successful creation, returns the created transaction.
@@ -109,12 +111,12 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "already exists for this instance"
 
   """
-  @spec create(create_map(), String.t(), Keyword.t()) ::
+  @spec create(create_map(), String.t(), [on_error: EventApi.on_error(), source: String.t()]) ::
           {:ok, Transaction.t()}
           | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
   def create(%{instance_address: address} = attrs, idempotent_id, opts \\ []) do
     source = Keyword.get(opts, :source, "TransactionStore.create/3")
-    retry_on_error = Keyword.get(opts, :retry_on_error, true)
+    on_error = Keyword.get(opts, :on_error, :retry)
 
     params = %{
       "instance_address" => address,
@@ -124,13 +126,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "payload" => Map.delete(attrs, :instance_address)
     }
 
-    response =
-      case retry_on_error do
-        false -> EventApi.process_from_params_no_save_on_error(params)
-        _ -> EventApi.process_from_params(params)
-      end
-
-    case response do
+    EventApi.process_from_params(params, Keyword.new([on_error: on_error]))
+    |> case do
       {:ok, transaction, _event} -> {:ok, transaction}
       {:error, reason} -> {:error, reason}
     end
@@ -187,12 +184,12 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "already exists for this source_idempk"
 
   """
-  @spec update(Ecto.UUID.t(), update_map(), String.t(), Keyword.t()) ::
+  @spec update(Ecto.UUID.t(), update_map(), String.t(), [on_error: EventApi.on_error(), update_source: String.t()]) ::
           {:ok, Transaction.t()}
           | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
   def update(id, %{instance_address: address} = attrs, update_idempotent_id, opts \\ []) do
     update_source = Keyword.get(opts, :update_source, "TransactionStore.update/4")
-    retry_on_error = Keyword.get(opts, :retry_on_error, true)
+    on_error = Keyword.get(opts, :on_error, :retry)
     event = EventStore.get_create_transaction_event(id)
 
     params = %{
@@ -205,13 +202,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "payload" => Map.delete(attrs, :instance_address)
     }
 
-    response =
-      case retry_on_error do
-        false -> EventApi.process_from_params_no_save_on_error(params)
-        _ -> EventApi.process_from_params(params)
-      end
-
-    case response do
+    EventApi.process_from_params(params, Keyword.new([on_error: on_error]))
+    |> case do
       {:ok, transaction, _event} -> {:ok, transaction}
       {:error, reason} -> {:error, reason}
     end

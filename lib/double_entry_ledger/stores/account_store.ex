@@ -232,7 +232,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
         source \\ "AccountStore.create/2"
       ) do
     response =
-      EventApi.process_from_params_no_save_on_error(%{
+      EventApi.process_from_params(%{
         "instance_address" => address,
         "action" => "create_account",
         "source" => source,
@@ -302,7 +302,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
     event = EventStore.get_create_account_event(account.id)
 
     response =
-      EventApi.process_from_params_no_save_on_error(%{
+      EventApi.process_from_params(%{
         "instance_address" => instance_address,
         "action" => "update_account",
         "source" => event.source,

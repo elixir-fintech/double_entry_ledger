@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   in the EventStore on error. This allows you to handle the event processing logic
   without automatically persisting the event, which can be useful for debugging or custom error handling.
 
-      {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_params_no_save_on_error(event_params)
+      {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_params(event_params, [on_error: :fail])
 
   ## Implementation Notes
 
@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     - `{:error, changeset}`: If validation failed
   """
   @spec create(TransactionEventMap.t() | AccountEventMap.t()) ::
-          {:ok, Event.t()} | {:error, Ecto.Changeset.t() | :instance_not_found}
+          {:ok, Event.t()} | {:error, Ecto.Changeset.t(Event.t()) | :instance_not_found}
   def create(%{instance_address: address} = attrs) do
     case Multi.new()
          |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
