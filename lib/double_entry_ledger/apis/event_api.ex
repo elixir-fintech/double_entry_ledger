@@ -122,7 +122,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
     iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> {:ok, transaction, event} = EventApi.process_from_event_params(%{
+    iex> {:ok, transaction, event} = EventApi.process_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_transaction",
     ...>   "source" => "frontend",
@@ -139,9 +139,9 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> trx.id == transaction.id
     true
   """
-  @spec process_from_event_params(event_params()) ::
+  @spec process_from_params(event_params()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process_from_event_params(%{"action" => action} = event_params)
+  def process_from_params(%{"action" => action} = event_params)
       when action in @transaction_actions do
     case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
@@ -152,12 +152,12 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     end
   end
 
-  def process_from_event_params(_) do
+  def process_from_params(_) do
     {:error, :action_not_supported}
   end
 
   @doc """
-  Same as `process_from_event_params/1`, but does not save the event on error.
+  Same as `process_from_params/1`, but does not save the event on error.
 
   This function provides an alternative processing strategy for scenarios where you want
   to validate and process events but avoid an automated retry. You will need to keep track
@@ -165,7 +165,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
 
   ## Supported Actions
 
-  Same as `process_from_event_params/1` - supports both transaction and account actions.
+  Same as `process_from_params/1` - supports both transaction and account actions.
 
   ## Parameters
     - `event_params`: Map containing event parameters including action and payload data
@@ -182,7 +182,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> alias DoubleEntryLedger.Stores.InstanceStore
     iex> alias DoubleEntryLedger.Apis.EventApi
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> {:ok, account, event} = EventApi.process_from_event_params_no_save_on_error(%{
+    iex> {:ok, account, event} = EventApi.process_from_params_no_save_on_error(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_account",
     ...>   "source" => "frontend",
@@ -197,9 +197,9 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     true
 
   """
-  @spec process_from_event_params_no_save_on_error(event_params()) ::
+  @spec process_from_params_no_save_on_error(event_params()) ::
           EventWorker.success_tuple() | {:error, Ecto.Changeset.t() | String.t()}
-  def process_from_event_params_no_save_on_error(%{"action" => action} = event_params)
+  def process_from_params_no_save_on_error(%{"action" => action} = event_params)
       when action in @account_actions do
     case AccountEventMap.create(event_params) do
       {:ok, event_map} ->
@@ -210,7 +210,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     end
   end
 
-  def process_from_event_params_no_save_on_error(%{"action" => action} = event_params)
+  def process_from_params_no_save_on_error(%{"action" => action} = event_params)
       when action in @transaction_actions do
     case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
@@ -221,7 +221,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     end
   end
 
-  def process_from_event_params_no_save_on_error(_) do
+  def process_from_params_no_save_on_error(_) do
     {:error, :action_not_supported}
   end
 end

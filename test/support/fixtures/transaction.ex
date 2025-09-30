@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.TransactionFixtures do
         }
       }
 
-    {:ok, transaction, _event} = EventApi.process_from_event_params(event)
+    {:ok, transaction, _event} = EventApi.process_from_params(event)
     Map.put(ctx, :transaction, transaction)
   end
 

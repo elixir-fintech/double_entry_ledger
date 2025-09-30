@@ -196,7 +196,7 @@ defmodule DoubleEntryLedger.Instance do
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
       iex> {:ok, acc1} = AccountStore.create(%{address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}}, "unique_id_123")
       iex> {:ok, acc2} = AccountStore.create(%{address: "account:main2", instance_address: instance.address, type: :liability, currency: :USD, posted: %{amount: 10, debit: 0, credit: 10}}, "unique_id_456")
-      iex> {:ok, _, _} = EventApi.process_from_event_params(%{"instance_address" => instance.address,
+      iex> {:ok, _, _} = EventApi.process_from_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => :posted, "entries" => [
       ...>      %{"account_address" => acc1.address, "amount" => 10, "currency" => :USD},

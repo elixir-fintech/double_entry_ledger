@@ -126,8 +126,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
     response =
       case retry_on_error do
-        false -> EventApi.process_from_event_params_no_save_on_error(params)
-        _ -> EventApi.process_from_event_params(params)
+        false -> EventApi.process_from_params_no_save_on_error(params)
+        _ -> EventApi.process_from_params(params)
       end
 
     case response do
@@ -207,8 +207,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
     response =
       case retry_on_error do
-        false -> EventApi.process_from_event_params_no_save_on_error(params)
-        _ -> EventApi.process_from_event_params(params)
+        false -> EventApi.process_from_params_no_save_on_error(params)
+        _ -> EventApi.process_from_params(params)
       end
 
     case response do

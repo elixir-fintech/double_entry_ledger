@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
       }
 
       # create and process the event immediately
-      {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_event_params(event_params)
+      {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_params(event_params)
 
       # create event for asynchronous processing later
       {:ok, event} = DoubleEntryLedger.Stores.EventStore.create(event_params)
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   in the EventStore on error. This allows you to handle the event processing logic
   without automatically persisting the event, which can be useful for debugging or custom error handling.
 
-      {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_event_params_no_save_on_error(event_params)
+      {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_params_no_save_on_error(event_params)
 
   ## Implementation Notes
 
