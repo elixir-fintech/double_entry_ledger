@@ -160,7 +160,7 @@ defmodule DoubleEntryLedger.Instance do
       iex> alias DoubleEntryLedger.Repo
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Temporary:Ledger"})
-      iex> AccountStore.create(%{name: "Test Account", address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD}, "unique_id_123")
+      iex> AccountStore.create(instance.address, %{name: "Test Account", address: "account:main1", type: :asset, currency: :USD}, "unique_id_123")
       iex> changeset = Instance.delete_changeset(instance)
       iex> {:error, _} = Repo.delete(changeset)
   """
@@ -194,8 +194,8 @@ defmodule DoubleEntryLedger.Instance do
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Apis.EventApi
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
-      iex> {:ok, acc1} = AccountStore.create(%{address: "account:main1", instance_address: instance.address, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}}, "unique_id_123")
-      iex> {:ok, acc2} = AccountStore.create(%{address: "account:main2", instance_address: instance.address, type: :liability, currency: :USD, posted: %{amount: 10, debit: 0, credit: 10}}, "unique_id_456")
+      iex> {:ok, acc1} = AccountStore.create(instance.address, %{address: "account:main1", type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}}, "unique_id_123")
+      iex> {:ok, acc2} = AccountStore.create(instance.address, %{address: "account:main2", type: :liability, currency: :USD, posted: %{amount: 10, debit: 0, credit: 10}}, "unique_id_456")
       iex> {:ok, _, _} = EventApi.process_from_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => :posted, "entries" => [
@@ -215,7 +215,7 @@ defmodule DoubleEntryLedger.Instance do
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
       iex> %Account{address: "account:main1", normal_balance: :debit, instance_id: instance.id, type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}} |> Repo.insert()
-      iex> AccountStore.create(%{name: "Test Account 2", address: "account:main2", instance_address: instance.address, type: :liability, currency: :USD}, "unique_id_456")
+      iex> AccountStore.create(instance.address, %{name: "Test Account 2", address: "account:main2", type: :liability, currency: :USD}, "unique_id_456")
       iex> instance = Repo.preload(instance, [:accounts])
       iex> Instance.validate_account_balances(instance)
       {:error, %{

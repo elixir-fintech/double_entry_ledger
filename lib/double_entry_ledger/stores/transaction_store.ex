@@ -92,9 +92,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-      iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
       ...>   instance_address: instance.address,
       ...>   status: :posted,
@@ -162,9 +162,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-      iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
       ...>   instance_address: instance.address,
       ...>   status: :pending,
@@ -250,9 +250,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-      iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
       ...>   instance_address: instance.address,
       ...>   status: :posted,
@@ -309,9 +309,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-      iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
       ...>   instance_address: instance.address,
       ...>   status: :posted,
@@ -361,9 +361,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-      iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
       ...>   instance_address: instance.address,
       ...>   status: :posted,
@@ -448,9 +448,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.{InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-      iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
       ...>   instance_address: instance.address,
       ...>   status: :posted,

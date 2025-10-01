@@ -127,9 +127,9 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore}
     iex> alias DoubleEntryLedger.Apis.EventApi
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-    iex> {:ok, asset_account} = AccountStore.create(account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(%{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
     iex> {:ok, transaction, event} = EventApi.process_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_transaction",

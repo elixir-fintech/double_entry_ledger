@@ -253,8 +253,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
       iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
-      iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address}, "unique_id_123")
-      iex> {:ok, cash_account} = AccountStore.create(%{address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address}, "unique_id_456")
+      iex> {:ok, revenue_account} = AccountStore.create(instance.address, %{address: "account:revenue", type: :liability, currency: :USD}, "unique_id_123")
+      iex> {:ok, cash_account} = AccountStore.create(instance.address, %{address: "account:cash", type: :asset, currency: :USD}, "unique_id_456")
       iex> event_map = %TransactionEventMap{
       ...>   action: :create_transaction,
       ...>   instance_address: instance.address,
@@ -344,8 +344,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
       iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:ok, revenue_account} = AccountStore.create(%{address: "account:revenue", type: :liability, currency: :USD, instance_address: instance.address}, "unique_id_123")
-      iex> {:ok, cash_account} = AccountStore.create(%{address: "account:cash", type: :asset, currency: :USD, instance_address: instance.address}, "unique_id_456")
+      iex> {:ok, revenue_account} = AccountStore.create(instance.address, %{address: "account:revenue", type: :liability, currency: :USD}, "unique_id_123")
+      iex> {:ok, cash_account} = AccountStore.create(instance.address, %{address: "account:cash", type: :asset, currency: :USD}, "unique_id_456")
       iex> valid_event = %TransactionEventMap{action: :create_transaction,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
