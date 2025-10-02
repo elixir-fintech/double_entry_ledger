@@ -263,6 +263,17 @@ defmodule DoubleEntryLedger.Entry do
     |> put_balance_history_entry_assoc()
   end
 
+
+  @spec signed_value(Entry.t()) :: integer()
+  def signed_value(entry) do
+    entry = Repo.preload(entry, :account)
+    if entry.account.normal_balance != entry.type do
+      -entry.value.amount
+    else
+      entry.value.amount
+    end
+  end
+
   defp put_account_assoc(changeset, transition) do
     account = get_assoc(changeset, :account, :struct)
 

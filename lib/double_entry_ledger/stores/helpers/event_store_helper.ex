@@ -287,7 +287,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
       where: evt.transaction_id == ^transaction_id,
       select: e
     )
-    |> preload([:event_queue_item, :account, transactions: :entries])
+    |> preload([:event_queue_item, transactions: :entries])
   end
 
   @spec all_processed_events_for_account_id(Ecto.UUID.t()) :: Ecto.Query.t()

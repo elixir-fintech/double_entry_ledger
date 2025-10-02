@@ -139,13 +139,12 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
     iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
     iex> create_attrs = %{
-    ...>   instance_address: instance.address,
     ...>   status: :posted,
     ...>   entries: [
     ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
-    iex> TransactionStore.create(create_attrs, "unique_id_123")
+    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
     iex> length(EventStore.list_all_for_instance_id(instance.id))
     3
     iex> # test pagination
@@ -183,14 +182,13 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
     iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
     iex> create_attrs = %{
-    ...>   instance_address: instance.address,
     ...>   status: :pending,
     ...>   entries: [
     ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
-    iex> {:ok, %{id: id}} = TransactionStore.create(create_attrs, "unique_id_123")
-    iex> TransactionStore.update(id, %{instance_address: instance.address, status: :posted}, "unique_id_123")
+    iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+    iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
     iex> length(EventStore.list_all_for_transaction_id(id))
     2
   """
@@ -219,13 +217,12 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
     iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
     iex> create_attrs = %{
-    ...>   instance_address: instance.address,
     ...>   status: :posted,
     ...>   entries: [
     ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
-    iex> {:ok, %{id: id}} = TransactionStore.create(create_attrs, "unique_id_123")
+    iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
     iex> event = EventStore.get_create_transaction_event(id)
     iex> [%{id: trx_id} | _] = event.transactions
     iex> trx_id
@@ -288,13 +285,12 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
     iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
     iex> create_attrs = %{
-    ...>   instance_address: instance.address,
     ...>   status: :posted,
     ...>   entries: [
     ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
-    iex> TransactionStore.create(create_attrs, "unique_id_123")
+    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
     iex> [trx_event, acc_event | _] = events = EventStore.list_all_for_account_id(asset_account.id)
     iex> length(events)
     2
@@ -334,13 +330,12 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
     iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
     iex> create_attrs = %{
-    ...>   instance_address: instance.address,
     ...>   status: :posted,
     ...>   entries: [
     ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
-    iex> TransactionStore.create(create_attrs, "unique_id_123")
+    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
     iex> [trx_event, acc_event | _] = events = EventStore.list_all_for_account_address(instance.address, liability_account.address)
     iex> length(events)
     2

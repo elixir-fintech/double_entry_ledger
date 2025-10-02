@@ -52,13 +52,11 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
         }
 
   @type create_map() :: %{
-          instance_address: String.t(),
           status: Transaction.state(),
           entries: list(entry_map())
         }
 
   @type update_map() :: %{
-          instance_address: String.t(),
           status: Transaction.state(),
           entries: list(entry_map()) | nil
         }
@@ -96,34 +94,33 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
       iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
-      ...>   instance_address: instance.address,
       ...>   status: :posted,
       ...>   entries: [
       ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
       ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
       ...>   ]}
-      iex> {:ok, transaction} = TransactionStore.create(create_attrs, "unique_id_123")
+      iex> {:ok, transaction} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
       iex> transaction.status
       :posted
-      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}} = changeset} = TransactionStore.create(create_attrs , "unique_id_123")
+      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}} = changeset} = TransactionStore.create(instance.address, create_attrs , "unique_id_123")
       iex> {idempotent_error, _} = Keyword.get(changeset.errors, :source_idempk)
       iex> idempotent_error
       "already exists for this instance"
 
   """
-  @spec create(create_map(), String.t(), [on_error: EventApi.on_error(), source: String.t()]) ::
+  @spec create(String.t(), create_map(), String.t(), [on_error: EventApi.on_error(), source: String.t()]) ::
           {:ok, Transaction.t()}
           | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
-  def create(%{instance_address: address} = attrs, idempotent_id, opts \\ []) do
+  def create(instance_address, attrs, idempotent_id, opts \\ []) do
     source = Keyword.get(opts, :source, "TransactionStore.create/3")
     on_error = Keyword.get(opts, :on_error, :retry)
 
     params = %{
-      "instance_address" => address,
+      "instance_address" => instance_address,
       "action" => "create_transaction",
       "source" => source,
       "source_idempk" => idempotent_id,
-      "payload" => Map.delete(attrs, :instance_address)
+      "payload" => attrs
     }
 
     EventApi.process_from_params(params, Keyword.new([on_error: on_error]))
@@ -166,40 +163,39 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
       iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
-      ...>   instance_address: instance.address,
       ...>   status: :pending,
       ...>   entries: [
       ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
       ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
       ...>   ]}
-      iex> {:ok, pending} = TransactionStore.create(create_attrs, "unique_id_123")
+      iex> {:ok, pending} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
       iex> pending.status
       :pending
-      iex> update_attrs = %{instance_address: instance.address, status: :posted}
-      iex> {:ok, posted} = TransactionStore.update(pending.id, update_attrs, "unique_id_456")
+      iex> update_attrs = %{status: :posted}
+      iex> {:ok, posted} = TransactionStore.update(instance.address, pending.id, update_attrs, "unique_id_456")
       iex> posted.status == :posted && posted.id == pending.id
-      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}} = changeset} = TransactionStore.update(pending.id, update_attrs , "unique_id_456")
+      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}} = changeset} = TransactionStore.update(instance.address, pending.id, update_attrs , "unique_id_456")
       iex> {idempotent_error, _} = Keyword.get(changeset.errors, :update_idempk)
       iex> idempotent_error
       "already exists for this source_idempk"
 
   """
-  @spec update(Ecto.UUID.t(), update_map(), String.t(), [on_error: EventApi.on_error(), update_source: String.t()]) ::
+  @spec update(String.t(), Ecto.UUID.t(), update_map(), String.t(), [on_error: EventApi.on_error(), update_source: String.t()]) ::
           {:ok, Transaction.t()}
           | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
-  def update(id, %{instance_address: address} = attrs, update_idempotent_id, opts \\ []) do
+  def update(instance_address, id, attrs, update_idempotent_id, opts \\ []) do
     update_source = Keyword.get(opts, :update_source, "TransactionStore.update/4")
     on_error = Keyword.get(opts, :on_error, :retry)
     event = EventStore.get_create_transaction_event(id)
 
     params = %{
-      "instance_address" => address,
+      "instance_address" => instance_address,
       "action" => "update_transaction",
       "source" => event.source,
       "source_idempk" => event.source_idempk,
       "update_idempk" => update_idempotent_id,
       "update_source" => update_source,
-      "payload" => Map.delete(attrs, :instance_address)
+      "payload" => attrs
     }
 
     EventApi.process_from_params(params, Keyword.new([on_error: on_error]))
@@ -254,13 +250,12 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
       iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
-      ...>   instance_address: instance.address,
       ...>   status: :posted,
       ...>   entries: [
       ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
       ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
       ...>   ]}
-      iex> {:ok, transaction} = TransactionStore.create(create_attrs, "unique_id_123")
+      iex> {:ok, transaction} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
       iex> [trx|_] = TransactionStore.list_all_for_instance_id(instance.id)
       iex> trx.id == transaction.id && trx.status == :posted
       true
@@ -313,13 +308,12 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
       iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
-      ...>   instance_address: instance.address,
       ...>   status: :posted,
       ...>   entries: [
       ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
       ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
       ...>   ]}
-      iex> {:ok, transaction} = TransactionStore.create(create_attrs, "unique_id_123")
+      iex> {:ok, transaction} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
       iex> [trx|_] = TransactionStore.list_all_for_instance_address(instance.address)
       iex> trx.id == transaction.id && trx.status == :posted
       true
@@ -365,14 +359,13 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
       iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
-      ...>   instance_address: instance.address,
       ...>   status: :posted,
       ...>   entries: [
       ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
       ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
       ...>   ]}
-      iex> {:ok, transaction1} = TransactionStore.create(create_attrs, "unique_id_123")
-      iex> {:ok, transaction2} = TransactionStore.create(create_attrs, "unique_id_456")
+      iex> {:ok, transaction1} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> {:ok, transaction2} = TransactionStore.create(instance.address, create_attrs, "unique_id_456")
       iex> [{trx1, acc1, _ , bh1}, {trx2, acc2, _ , _}| _] = TransactionStore.list_all_for_instance_id_and_account_id(instance.id, asset_account.id)
       iex> trx1.id == transaction2.id && trx1.status == :posted && acc1.id == asset_account.id
       true
@@ -452,14 +445,13 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
       iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
       iex> create_attrs = %{
-      ...>   instance_address: instance.address,
       ...>   status: :posted,
       ...>   entries: [
       ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
       ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
       ...>   ]}
-      iex> {:ok, transaction1} = TransactionStore.create(create_attrs, "unique_id_123")
-      iex> {:ok, transaction2} = TransactionStore.create(create_attrs, "unique_id_456")
+      iex> {:ok, transaction1} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> {:ok, transaction2} = TransactionStore.create(instance.address, create_attrs, "unique_id_456")
       iex> [{trx1, acc1, _ , _}, {trx2, acc2, _ , _}| _] = TransactionStore.list_all_for_instance_address_and_account_address(instance.address, asset_account.address)
       iex> trx1.id == transaction2.id && trx1.status == :posted && acc1.id == asset_account.id
       true
