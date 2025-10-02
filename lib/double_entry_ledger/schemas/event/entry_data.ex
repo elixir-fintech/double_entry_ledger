@@ -59,9 +59,9 @@ defmodule DoubleEntryLedger.Event.EntryData do
   * `currency`: Atom representing the currency (e.g., :USD, :EUR)
   """
   @type t :: %EntryData{
-          account_address: String.t(),
-          amount: integer(),
-          currency: Currency.currency_atom()
+          account_address: String.t() | nil,
+          amount: integer() | nil,
+          currency: Currency.currency_atom() | nil
         }
 
   @derive {Jason.Encoder, only: [:account_address, :amount, :currency]}
