@@ -1,4 +1,7 @@
 defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErrorTest do
+  @moduledoc """
+    Tests for the CreateAccountEventMapNoSaveOnError
+  """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 

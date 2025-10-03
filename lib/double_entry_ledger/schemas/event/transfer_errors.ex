@@ -134,17 +134,21 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
       nil ->
         changeset
 
-      list when is_list(list) ->
-        list
-        |> Enum.uniq_by(fn {msg, opts} -> {msg, Enum.sort(opts)} end)
-        |> Enum.reduce(changeset, fn {msg, opts}, cs ->
-          if has_error?(cs, field, msg, opts) do
-            cs
-          else
-            Changeset.add_error(cs, field, msg, opts)
-          end
-        end)
+      field_errors when is_list(field_errors) ->
+        add_unique_field_errors(changeset, field, field_errors)
     end
+  end
+
+  defp add_unique_field_errors(changeset, field, field_errors) do
+    field_errors
+    |> Enum.uniq_by(fn {msg, opts} -> {msg, Enum.sort(opts)} end)
+    |> Enum.reduce(changeset, fn {msg, opts}, cs ->
+      if has_error?(cs, field, msg, opts) do
+        cs
+      else
+        Changeset.add_error(cs, field, msg, opts)
+      end
+    end)
   end
 
   def has_error?(%Changeset{errors: errors}, field, msg, opts) do
@@ -239,10 +243,24 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   @spec build_entry_data_changeset({EntryData.t(), integer()}, list()) ::
           Changeset.t(EntryData.t())
   defp build_entry_data_changeset({entry_data, index}, entry_errors) do
+    errors = Enum.at(entry_errors, index)
     %EntryData{}
     |> EntryData.changeset(EntryData.to_map(entry_data))
-    |> add_entry_data_errors(Enum.at(entry_errors, index))
+    |> add_entry_data_errors(errors)
+    |> add_sign_error(errors)
     |> Map.put(:action, :insert)
+  end
+
+  @spec add_sign_error(Changeset.t(EntryData.t()), map()) :: Changeset.t(EntryData.t())
+  defp add_sign_error(changeset, errors) do
+    case Map.get(errors, :type) do
+      nil ->
+        changeset
+      [{msg, opts} | _] = list when is_list(list) ->
+        Changeset.add_error(changeset, :amount, msg, opts)
+      {msg, opts} ->
+        Changeset.add_error(changeset, :amount, msg, opts)
+      end
   end
 
   @doc false

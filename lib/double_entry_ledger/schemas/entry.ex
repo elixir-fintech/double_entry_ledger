@@ -259,6 +259,7 @@ defmodule DoubleEntryLedger.Entry do
     |> cast(attrs, [:value])
     |> validate_required([:value])
     |> validate_same_account_currency()
+    |> validate_amount_sign(entry, attrs)
     |> put_account_assoc(transition)
     |> put_balance_history_entry_assoc()
   end
@@ -315,4 +316,18 @@ defmodule DoubleEntryLedger.Entry do
       changeset
     end
   end
+
+  defp validate_amount_sign(changeset, %{type: entry_type}, %{type: change_type}) do
+    if entry_type != change_type do
+      add_error(
+        changeset,
+        :type,
+        "can't change the amount sign"
+      )
+    else
+      changeset
+    end
+  end
+
+  defp validate_amount_sign(changeset, _, _), do: changeset
 end

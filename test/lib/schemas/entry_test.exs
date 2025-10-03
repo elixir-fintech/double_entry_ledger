@@ -72,6 +72,17 @@ defmodule DoubleEntryLedger.EntryTest do
     end
   end
 
+  describe "validate_amount_sign/3" do
+    setup [:create_instance, :create_accounts, :create_transaction]
+
+    test "returns error changeset for different types", %{transaction: %{entries: [e0, _]}} do
+      assert %Ecto.Changeset{
+               valid?: false,
+               errors: [type: {"can't change the amount sign", []}]
+             } = Entry.update_changeset(e0, %{value: Money.new(100, :EUR), type: :xxx}, :pending_to_posted)
+    end
+  end
+
   describe "put_balance_history_entry_assoc/1" do
     setup [:create_instance, :create_accounts, :create_transaction]
 
