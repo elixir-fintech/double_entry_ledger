@@ -23,6 +23,7 @@ defmodule Mix.Tasks.LoadTest do
 
   * `concurrency` - Optional integer specifying the number of concurrent processes to use
   in the load test (default: 1)
+  * `seconds` - optional float specifying the duration of the load test in seconds (default: 10)
 
   ## Examples
 
@@ -31,6 +32,9 @@ defmodule Mix.Tasks.LoadTest do
 
   Run with specified concurrency:
     MIX_ENV=perf mix load_test 10
+
+  Run with specified concurrency:
+    MIX_ENV=perf mix load_test 10 0.5
 
   ## Requirements
 
@@ -57,18 +61,31 @@ defmodule Mix.Tasks.LoadTest do
     Mix.Task.run("ecto.migrate", ["--quiet"])
     Mix.Task.run("app.start", [])
 
-    concurrency = parse_concurrency(args)
+    {concurrency, time} = parse_args(args)
 
     Code.ensure_compiled!(DoubleEntryLedger.LoadTesting)
-    DoubleEntryLedger.LoadTesting.run_load_test(concurrency)
+    DoubleEntryLedger.LoadTesting.run_load_test(concurrency, time)
   end
 
-  defp parse_concurrency([concurrency_str | _]) do
-    case Integer.parse(concurrency_str) do
-      {concurrency, _} -> concurrency
+  defp parse_args([concurrency_str, time_str | _]) do
+    concurrency = case Integer.parse(concurrency_str) do
+      {c, _} -> c
       :error -> 1
+    end
+    time = case Float.parse(time_str) do
+      {t, _} -> t
+      :error -> 10
+    end
+
+    {concurrency, time}
+  end
+
+  defp parse_args([concurrency_str | _]) do
+    case Integer.parse(concurrency_str) do
+      {concurrency, _} -> {concurrency, 10}
+      :error -> {1, 1}
     end
   end
 
-  defp parse_concurrency(_), do: 1
+  defp parse_args(_), do: {1, 10}
 end

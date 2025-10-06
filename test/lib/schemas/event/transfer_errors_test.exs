@@ -1,4 +1,7 @@
 defmodule DoubleEntryLedger.Event.TransferErrorsTest do
+  @moduledoc """
+  Tests for TransferErrors
+  """
   use ExUnit.Case, async: true
 
   alias DoubleEntryLedger.Event.TransferErrors

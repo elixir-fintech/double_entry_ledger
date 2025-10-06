@@ -24,6 +24,8 @@ defmodule DoubleEntryLedger.MixProject do
   def application do
     [
       extra_applications: [:logger],
+      # use below for profiling
+      # extra_applications: [:logger, :tools, :runtime_tools],
       mod: {DoubleEntryLedger.Application, []}
     ]
   end

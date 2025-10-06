@@ -4,17 +4,12 @@ defmodule DoubleEntryLedger.LoadTesting do
 
   This module provides functions to perform load testing on the DoubleEntryLedger system.
   It includes functions to create accounts and events, run transactions, and validate balances.
-
-  The default run time is 1 second, and the default number of destination accounts is 10 per source account.
-  Both defaults can be overridden by setting the @seconds_to_run and @destination_accounts module attributes.
   """
 
   alias DoubleEntryLedger.{Account, Balance, Instance, Repo}
   alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Event.TransactionEventMap
   @destination_accounts 10
-  @seconds_to_run 10
-
   # Function to run a single transaction process
 
   @doc """
@@ -28,8 +23,8 @@ defmodule DoubleEntryLedger.LoadTesting do
 
     - :ok when the load test is completed.
   """
-  def run_load_test(concurrency) do
-    debit_sum = 100_000
+  def run_load_test(concurrency, seconds) do
+    debit_sum = trunc(100_000 * seconds)
     {:ok, instance} = %Instance{address: "instance:#{System.unique_integer()}"} |> Repo.insert()
     sources = create_debit_sources(concurrency, instance, debit_sum)
     destination_arrays = create_debit_destinations(concurrency, instance)
@@ -42,14 +37,25 @@ defmodule DoubleEntryLedger.LoadTesting do
     IO.puts("#{bold("Before:")} #{validate_instance_balance(instance)}")
     start_time = System.monotonic_time(:millisecond)
     # Run time in milliseconds
-    end_time = start_time + 1000 * @seconds_to_run
+    end_time = start_time + 1000 * seconds
+
+    # https://blog.appsignal.com/2022/04/26/using-profiling-in-elixir-to-improve-performance.html
+    #:eprof.start_profiling([self()])
+    #:fprof.start()
+    #:fprof.trace([:start, procs: :all])
 
     # Use a counter to keep track of successful transactions
     successful_transactions =
       run_transactions(concurrency, end_time, 0, instance, 0, transaction_lists)
 
-    IO.puts("Transactions processed in #{@seconds_to_run} second(s): #{successful_transactions}")
-    IO.puts("Transactions per second: #{successful_transactions / @seconds_to_run} tps")
+    #:eprof.stop_profiling()
+    #:eprof.analyze()
+    #:fprof.trace(:stop)
+    #:fprof.profile()
+    #:fprof.analyse(totals: false, dest: 'prof.analysis')
+
+    IO.puts("Transactions processed in #{seconds} second(s): #{successful_transactions}")
+    IO.puts("Transactions per second: #{successful_transactions / seconds} tps")
     validate_instance_balance(instance)
     IO.puts("#{bold("After:")} #{validate_instance_balance(instance)}")
   end
