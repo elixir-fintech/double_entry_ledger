@@ -68,14 +68,17 @@ defmodule Mix.Tasks.LoadTest do
   end
 
   defp parse_args([concurrency_str, time_str | _]) do
-    concurrency = case Integer.parse(concurrency_str) do
-      {c, _} -> c
-      :error -> 1
-    end
-    time = case Float.parse(time_str) do
-      {t, _} -> t
-      :error -> 10
-    end
+    concurrency =
+      case Integer.parse(concurrency_str) do
+        {c, _} -> c
+        :error -> 1
+      end
+
+    time =
+      case Float.parse(time_str) do
+        {t, _} -> t
+        :error -> 10
+      end
 
     {concurrency, time}
   end

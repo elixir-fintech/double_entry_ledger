@@ -40,19 +40,19 @@ defmodule DoubleEntryLedger.LoadTesting do
     end_time = start_time + 1000 * seconds
 
     # https://blog.appsignal.com/2022/04/26/using-profiling-in-elixir-to-improve-performance.html
-    #:eprof.start_profiling([self()])
-    #:fprof.start()
-    #:fprof.trace([:start, procs: :all])
+    # :eprof.start_profiling([self()])
+    # :fprof.start()
+    # :fprof.trace([:start, procs: :all])
 
     # Use a counter to keep track of successful transactions
     successful_transactions =
       run_transactions(concurrency, end_time, 0, instance, 0, transaction_lists)
 
-    #:eprof.stop_profiling()
-    #:eprof.analyze()
-    #:fprof.trace(:stop)
-    #:fprof.profile()
-    #:fprof.analyse(totals: false, dest: 'prof.analysis')
+    # :eprof.stop_profiling()
+    # :eprof.analyze()
+    # :fprof.trace(:stop)
+    # :fprof.profile()
+    # :fprof.analyse(totals: false, dest: 'prof.analysis')
 
     IO.puts("Transactions processed in #{seconds} second(s): #{successful_transactions}")
     IO.puts("Transactions per second: #{successful_transactions / seconds} tps")

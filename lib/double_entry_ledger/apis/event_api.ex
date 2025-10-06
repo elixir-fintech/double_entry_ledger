@@ -169,13 +169,14 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> EventApi.process_from_params(%{"action" => "unsupported"})
     iex> {:error, :action_not_supported}
   """
-  @spec process_from_params(event_params(), [on_error: on_error()]) ::
+  @spec process_from_params(event_params(), on_error: on_error()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process_from_params(event_params, opts \\ [])
 
   def process_from_params(%{"action" => action} = event_params, opts)
       when action in @transaction_actions do
     on_error = Keyword.get(opts, :on_error, :retry)
+
     case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
         case on_error do

@@ -108,7 +108,10 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "already exists for this instance"
 
   """
-  @spec create(String.t(), create_map(), String.t(), [on_error: EventApi.on_error(), source: String.t()]) ::
+  @spec create(String.t(), create_map(), String.t(),
+          on_error: EventApi.on_error(),
+          source: String.t()
+        ) ::
           {:ok, Transaction.t()}
           | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
   def create(instance_address, attrs, idempotent_id, opts \\ []) do
@@ -123,7 +126,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "payload" => attrs
     }
 
-    EventApi.process_from_params(params, Keyword.new([on_error: on_error]))
+    EventApi.process_from_params(params, Keyword.new(on_error: on_error))
     |> case do
       {:ok, transaction, _event} -> {:ok, transaction}
       {:error, reason} -> {:error, reason}
@@ -180,7 +183,10 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "already exists for this source_idempk"
 
   """
-  @spec update(String.t(), Ecto.UUID.t(), update_map(), String.t(), [on_error: EventApi.on_error(), update_source: String.t()]) ::
+  @spec update(String.t(), Ecto.UUID.t(), update_map(), String.t(),
+          on_error: EventApi.on_error(),
+          update_source: String.t()
+        ) ::
           {:ok, Transaction.t()}
           | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
   def update(instance_address, id, attrs, update_idempotent_id, opts \\ []) do
@@ -198,7 +204,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "payload" => attrs
     }
 
-    EventApi.process_from_params(params, Keyword.new([on_error: on_error]))
+    EventApi.process_from_params(params, Keyword.new(on_error: on_error))
     |> case do
       {:ok, transaction, _event} -> {:ok, transaction}
       {:error, reason} -> {:error, reason}

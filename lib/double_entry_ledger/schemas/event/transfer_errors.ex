@@ -244,6 +244,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
           Changeset.t(EntryData.t())
   defp build_entry_data_changeset({entry_data, index}, entry_errors) do
     errors = Enum.at(entry_errors, index)
+
     %EntryData{}
     |> EntryData.changeset(EntryData.to_map(entry_data))
     |> add_entry_data_errors(errors)
@@ -256,11 +257,13 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     case Map.get(errors, :type) do
       nil ->
         changeset
+
       [{msg, opts} | _] = list when is_list(list) ->
         Changeset.add_error(changeset, :amount, msg, opts)
+
       {msg, opts} ->
         Changeset.add_error(changeset, :amount, msg, opts)
-      end
+    end
   end
 
   @doc false

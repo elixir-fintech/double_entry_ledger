@@ -79,7 +79,12 @@ defmodule DoubleEntryLedger.EntryTest do
       assert %Ecto.Changeset{
                valid?: false,
                errors: [type: {"can't change the amount sign", []}]
-             } = Entry.update_changeset(e0, %{value: Money.new(100, :EUR), type: :xxx}, :pending_to_posted)
+             } =
+               Entry.update_changeset(
+                 e0,
+                 %{value: Money.new(100, :EUR), type: :xxx},
+                 :pending_to_posted
+               )
     end
   end
 

@@ -96,7 +96,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler do
       iex> {:error, %Ecto.Changeset{} = changeset} = AccountEventResponseHandler.default_event_map_response_handler(response, event_map, "TestModule")
   """
   @spec default_event_map_response_handler(
-          {:ok, %{account: Account.t(), event_success: Event.t()}} | {:error, :atom, any(), map()},
+          {:ok, %{account: Account.t(), event_success: Event.t()}}
+          | {:error, :atom, any(), map()},
           AccountEventMap.t(),
           String.t()
         ) ::
