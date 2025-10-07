@@ -95,6 +95,17 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     |> Repo.one()
   end
 
+  @spec get_by_instance_address_and_id(String.t(), Ecto.UUID.t()) :: Event.t() | nil
+  def get_by_instance_address_and_id(instance_address, id) do
+    from(e in Event,
+      join: i in assoc(e, :instance),
+      where: i.address == ^instance_address and e.id == ^id,
+      select: e,
+      preload: [:event_queue_item, :transactions, :account, :instance]
+    )
+    |> Repo.one()
+  end
+
   @doc """
   Creates a new event in the database.
 

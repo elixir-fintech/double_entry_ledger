@@ -33,6 +33,8 @@ defmodule DoubleEntryLedger.EventQueueItem do
             Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
           )
 
+  @derive {Jason.Encoder, only: [:status, :processing_completed_at, :retry_count, :next_retry_after, :errors]}
+
   schema "event_queue_items" do
     field(:status, Ecto.Enum, values: @states, default: :pending)
     field(:processor_id, :string)

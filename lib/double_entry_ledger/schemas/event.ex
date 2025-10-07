@@ -106,6 +106,8 @@ defmodule DoubleEntryLedger.Event do
           updated_at: DateTime.t() | nil
         }
 
+  @derive {Jason.Encoder, only: [:id, :event_map, :event_queue_item]}
+
   schema "events" do
     field(:action, Ecto.Enum, values: @actions)
     field(:source, :string)
