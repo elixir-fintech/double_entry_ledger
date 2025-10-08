@@ -87,9 +87,11 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
         # Process event in a separate task to not block the GenServer
         Logger.info("Processing event #{event.id} for instance #{instance_id}")
 
+        parent = self()
+
         Task.start(fn ->
           process_result = EventWorker.process_event_with_id(event.id, processor_name())
-          send(self(), {:processing_complete, event.id, process_result})
+          send(parent, {:processing_complete, event.id, process_result})
         end)
 
         {:noreply, new_state}
