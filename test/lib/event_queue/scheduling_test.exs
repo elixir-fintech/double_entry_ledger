@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       assert eqm.processor_id == "manual"
       assert eqm.processing_started_at != nil
       assert eqm.processing_completed_at == nil
-      assert eqm.retry_count == 1
+      assert eqm.retry_count == 0
       assert eqm.next_retry_after == nil
     end
 
@@ -145,7 +145,6 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
       assert event_queue_item.valid?
       assert event_queue_item.changes.status == reason
       assert event_queue_item.changes.next_retry_after != nil
-      assert event_queue_item.changes.retry_count == 1
       assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
     end
   end

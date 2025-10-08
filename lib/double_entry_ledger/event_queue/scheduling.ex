@@ -37,6 +37,8 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
   @base_delay Keyword.get(@config, :base_retry_delay, 30)
   @max_delay Keyword.get(@config, :max_retry_delay, 3600)
 
+  @processable_states [:pending, :occ_timeout, :failed]
+
   @doc """
   Sets the next retry time for a failed event using exponential backoff.
 
@@ -85,18 +87,17 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
       nil ->
         {:error, :event_not_found}
 
-      %{event_queue_item: %{status: status}} = event ->
-        if status in [:pending, :occ_timeout, :failed] do
-          try do
-            Event.processing_start_changeset(event, processor_id)
-            |> repo.update()
-          rescue
-            Ecto.StaleEntryError ->
-              {:error, :event_already_claimed}
-          end
-        else
-          {:error, :event_not_claimable}
+      %{event_queue_item: %{status: state} = eqi} = event when state in @processable_states ->
+        try do
+          Event.processing_start_changeset(event, processor_id, retry_count_by_status(eqi))
+          |> repo.update()
+        rescue
+          Ecto.StaleEntryError ->
+            {:error, :event_already_claimed}
         end
+
+      _ ->
+        {:error, :event_not_claimable}
     end
   end
 
@@ -282,4 +283,8 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
 
     trunc(delay + jitter)
   end
+
+  @spec retry_count_by_status(EventQueueItem.t()) :: non_neg_integer()
+  defp retry_count_by_status(%{status: :pending, retry_count: retry_count}), do: retry_count
+  defp retry_count_by_status(%{status: _, retry_count: retry_count}), do: retry_count + 1
 end

@@ -34,7 +34,7 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
       event_queue_item = %EventQueueItem{id: Ecto.UUID.generate()}
       processor_id = "processor_1"
 
-      changeset = EventQueueItem.processing_start_changeset(event_queue_item, processor_id)
+      changeset = EventQueueItem.processing_start_changeset(event_queue_item, processor_id, 1)
       assert changeset.valid?
       assert changeset.changes.status == :processing
       assert changeset.changes.processor_id == processor_id

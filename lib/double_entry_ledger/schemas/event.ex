@@ -238,11 +238,11 @@ defmodule DoubleEntryLedger.Event do
   * `processor_version`: Used for optimistic locking
 
   """
-  @spec processing_start_changeset(Event.t(), String.t()) :: Ecto.Changeset.t()
-  def processing_start_changeset(%{event_queue_item: event_queue_item} = event, processor_id) do
+  @spec processing_start_changeset(Event.t(), String.t(), non_neg_integer()) :: Ecto.Changeset.t()
+  def processing_start_changeset(%{event_queue_item: event_queue_item} = event, processor_id, retry_count) do
     event_queue_changeset =
       event_queue_item
-      |> EventQueueItem.processing_start_changeset(processor_id)
+      |> EventQueueItem.processing_start_changeset(processor_id, retry_count)
 
     event
     |> change(%{})
@@ -281,13 +281,13 @@ defmodule DoubleEntryLedger.Event do
   @doc """
   Builds a map of trace metadata for logging from an event and a transaction or and error.
 
-  This function extends `log_trace/1` by also including the transaction ID
-  when a `Transaction` struct is provided.
+  This function extends `log_trace/1` by also including the transaction ID or account ID
+  when a `Transaction` or `Account` struct respectively is provided.
 
   ## Parameters
 
     - `event`: The `Event` struct to extract trace information from.
-    - `transaction` | `error`: The `Transaction` struct to extract the transaction ID from, or the error value to display
+    - `transaction` | `account` | `error`: The `Transaction` struct to extract the transaction ID from, or the error value to display
 
   ## Returns
 

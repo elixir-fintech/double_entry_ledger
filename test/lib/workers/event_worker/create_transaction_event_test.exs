@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       %{transactions: []} = Repo.preload(updated_event, :transactions)
       assert eqm.processing_completed_at != nil
       assert eqm.occ_retry_count == 5
-      assert eqm.retry_count == 1
+      assert eqm.retry_count == 0
       assert eqm.next_retry_after != nil
 
       assert [%{message: "OCC conflict: Max number of 5 retries reached"} | _] =

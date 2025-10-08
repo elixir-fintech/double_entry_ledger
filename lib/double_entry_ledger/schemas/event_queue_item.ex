@@ -70,15 +70,15 @@ defmodule DoubleEntryLedger.EventQueueItem do
     |> validate_inclusion(:status, @states)
   end
 
-  @spec processing_start_changeset(EventQueueItem.t(), String.t()) :: Ecto.Changeset.t()
-  def processing_start_changeset(event_queue_item, processor_id) do
+  @spec processing_start_changeset(EventQueueItem.t(), String.t(), non_neg_integer()) :: Ecto.Changeset.t()
+  def processing_start_changeset(event_queue_item, processor_id, retry_count) do
     event_queue_item
     |> change(%{
       status: :processing,
       processor_id: processor_id,
       processing_started_at: DateTime.utc_now(),
       processing_completed_at: nil,
-      retry_count: event_queue_item.retry_count + 1,
+      retry_count: retry_count,
       next_retry_after: nil
     })
     |> optimistic_lock(:processor_version)
@@ -127,7 +127,6 @@ defmodule DoubleEntryLedger.EventQueueItem do
     |> change(%{
       status: state,
       next_retry_after: DateTime.add(now, delay, :second),
-      retry_count: event_queue_item.retry_count + 1,
       processor_id: nil,
       processing_completed_at: now,
       errors: build_errors(event_queue_item, error)
