@@ -339,9 +339,10 @@ defmodule DoubleEntryLedger.Occ.Processor do
         - The result of the final `repo.transaction/1`
       """
       def retry(module, occable_item, error_map, 0, repo) do
-        Occable.timed_out(occable_item, :occable_item, error_map)
+        name = :_occable_item
+        Occable.timed_out(occable_item, name, error_map)
         |> Multi.merge(fn
-          %{occable_item: occable_item} ->
+          %{^name => occable_item} ->
             module.handle_occ_final_timeout(occable_item, repo)
         end)
         |> repo.transaction()

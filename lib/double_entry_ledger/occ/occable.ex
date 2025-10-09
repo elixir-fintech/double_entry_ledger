@@ -132,9 +132,9 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
 end
 
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionEventMap do
-  alias Ecto.{Multi, Repo, Changeset}
+  alias Ecto.{Multi, Repo}
   alias DoubleEntryLedger.Event.{ErrorMap, TransactionEventMap}
-  alias DoubleEntryLedger.Stores.InstanceStoreHelper
+  alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer
 
@@ -159,11 +159,11 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
   def build_multi(%TransactionEventMap{instance_address: address} = event_map) do
     Multi.new()
     |> Multi.put(:occable_item, event_map)
-    |> Multi.one(:inst_local, InstanceStoreHelper.build_get_by_address(address))
+    |> Multi.one(:_instance, InstanceStoreHelper.build_get_by_address(address))
     |> Multi.run(:transaction_map, fn _,
                                       %{
                                         occable_item: %{payload: td},
-                                        inst_local: %{id: id}
+                                        _instance: %{id: id}
                                       } ->
       case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
         {:ok, transaction_map} -> {:ok, transaction_map}
@@ -188,28 +188,21 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
   """
   @spec timed_out(TransactionEventMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()
-  def timed_out(_event_map, name, %{save_on_error: true} = error_map) do
+  def timed_out(%{instance_address: address} = event_map, name, %{save_on_error: true} = error_map) do
     new_event_step = :new_event
 
     Multi.new()
-    |> Multi.insert(new_event_step, fn _ ->
-      Map.get(error_map.steps_so_far, new_event_step)
-      |> Map.delete(:event_queue_item)
-      |> Changeset.change(%{})
+    |> Multi.one(:_instance, InstanceStoreHelper.build_get_by_address(address))
+    |> Multi.insert(new_event_step, fn %{_instance: %{id: id}} ->
+      EventStoreHelper.build_create(event_map, id)
     end)
-    |> Multi.update(name, fn changes ->
-      Map.get(changes, new_event_step)
-      |> Helper.occ_timeout_changeset(error_map)
+    |> Multi.update(name, fn %{^new_event_step => event} ->
+      Helper.occ_timeout_changeset(event, error_map)
     end)
   end
 
-  def timed_out(event_map, _name, %{save_on_error: false}) do
-    event_map_changeset =
-      event_map
-      |> TransactionEventMap.changeset(%{})
-      |> Changeset.add_error(:occ_timeout, "OCC retries exhausted")
-
+  def timed_out(event_map, name, %{save_on_error: false}) do
     Multi.new()
-    |> Multi.error(:occ_timeout, event_map_changeset)
+    |> Multi.put(name, event_map)
   end
 end

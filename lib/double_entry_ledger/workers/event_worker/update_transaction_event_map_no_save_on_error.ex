@@ -35,11 +35,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
 
   alias Ecto.{Multi, Changeset}
 
-  # this function will never be called, as we don't save on error
-  # but we need to implement it to satisfy the behaviour
   @impl true
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveOnError,
     as: :handle_occ_final_timeout
 
   @impl true
