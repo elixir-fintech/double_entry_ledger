@@ -1,4 +1,7 @@
 defmodule DoubleEntryLedger.Utils.Pagination do
+  @moduledoc """
+  Pagination
+  """
   import Ecto.Query, only: [limit: 2, offset: 2]
 
   @spec paginate(Ecto.Query.t(), non_neg_integer(), non_neg_integer()) :: Ecto.Query.t()

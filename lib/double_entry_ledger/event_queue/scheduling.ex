@@ -63,6 +63,18 @@ defmodule DoubleEntryLedger.EventQueue.Scheduling do
     end
   end
 
+  @spec mark_as_dead_letter(Event.t(), String.t(), Ecto.Repo.t()) ::
+          {:error, Event.t()} | {:error, Changeset.t()}
+  def mark_as_dead_letter(event, error, repo \\ Repo) do
+    case build_mark_as_dead_letter(event, error) |> repo.update() do
+      {:ok, event} ->
+        {:error, event}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
   @doc """
   Claims an event for processing by marking it as being processed by a specific processor.
 

@@ -31,6 +31,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
   """
   require Logger
 
+  import DoubleEntryLedger.Event, only: [log_trace: 1, log_trace: 2]
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [
       build_schedule_retry_with_reason: 3,
@@ -58,24 +59,22 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
           Event.t(),
           String.t()
         ) ::
-          EventWorker.success_tuple() | {:error, Event.t() | String.t()}
+          EventWorker.success_tuple() | {:error, Event.t() | Changeset.t()}
   def default_event_response_handler(response, %Event{} = original_event, module_name) do
     case response do
       {:ok, %{event_success: event, transaction: transaction}} ->
-        Logger.info(
-          "#{module_name}: processed successfully",
-          Event.log_trace(event, transaction)
-        )
+        Logger.info("#{module_name}: processed successfully", log_trace(event, transaction))
 
         {:ok, transaction, event}
 
       {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
-        Logger.warning("#{module_name}: #{last_error.message}", Event.log_trace(event))
+        Logger.warning("#{module_name}: #{last_error.message}", log_trace(event))
+
         {:error, event}
 
       {:error, step, error, _} ->
         message = "#{module_name}: Step :#{step} failed."
-        Logger.error(message, Event.log_trace(original_event, error))
+        Logger.error(message, log_trace(original_event, error))
 
         schedule_retry_with_reason(
           original_event,

@@ -14,6 +14,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Workers.EventWorker.{UpdateTransactionEvent, CreateTransactionEvent}
   alias DoubleEntryLedger.EventQueue.Scheduling
+  alias DoubleEntryLedger.Stores.EventStore
 
   doctest UpdateTransactionEvent
 
@@ -195,6 +196,37 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       assert error.message ==
                "create Event (id: #{pending_event.id}) in dead_letter for Update Event (id: #{event.id})"
+    end
+
+    test "dead_letter when transaction_map_error", %{instance: inst, accounts: [a |_]} = ctx do
+      %{event: %{source: s, source_idempk: s_id} = pending_event} =
+        new_create_transaction_event(ctx, :pending)
+
+      {:ok, event} = new_update_transaction_event(s, s_id, inst.address, :posted)
+
+      {:ok, event} =
+        EventStore.create(
+          transaction_event_attrs(
+            action: :update_transaction,
+            source: s,
+            source_idempk: s_id,
+            update_idempk: "1",
+            instance_address: inst.address,
+            payload: %{
+              status: :posted,
+              entries: [
+                %{account_address: a.address, amount: 100, currency: "EUR"},
+                %{account_address: "nonexisting:account", amount: 100, currency: "EUR"}
+              ]
+            }
+          )
+        )
+      {:error, %{event_queue_item: eqm}} = UpdateTransactionEvent.process(event)
+      assert eqm.status == :dead_letter
+
+      [error | _] = eqm.errors
+
+      assert error.message == ":some_accounts_not_found"
     end
 
     test "update event with last retry that fails", %{instance: inst} = ctx do
