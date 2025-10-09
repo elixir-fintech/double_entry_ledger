@@ -33,7 +33,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
 
   alias Ecto.Multi
 
-  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   import DoubleEntryLedger.EventQueue.Scheduling
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
   """
   defdelegate handle_transaction_map_error(event_map, error, repo),
     as: :handle_transaction_map_error,
-    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler
 
   @impl true
   @doc """

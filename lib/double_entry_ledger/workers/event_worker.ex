@@ -129,6 +129,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
 
   alias DoubleEntryLedger.Workers.EventWorker.{
+    CreateAccountEvent,
     CreateTransactionEvent,
     UpdateTransactionEvent,
     CreateTransactionEventMap,
@@ -541,6 +542,12 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
          %Event{event_queue_item: %{status: :processing}, action: :update_transaction} = event
        ) do
     UpdateTransactionEvent.process(event)
+  end
+
+  defp process_event(
+         %Event{event_queue_item: %{status: :processing}, action: :create_account} = event
+       ) do
+    CreateAccountEvent.process(event)
   end
 
   defp process_event(%Event{event_queue_item: %{status: :processing}, action: _} = _event) do

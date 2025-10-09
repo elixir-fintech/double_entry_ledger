@@ -26,12 +26,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
   use DoubleEntryLedger.Occ.Processor
   import DoubleEntryLedger.Occ.Helper
   import DoubleEntryLedger.EventQueue.Scheduling
-
-  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.Repo
-
   alias DoubleEntryLedger.Event.TransactionEventMap
   alias DoubleEntryLedger.Workers.EventWorker
 
@@ -41,7 +39,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
   # but we need to implement it to satisfy the behaviour
   @impl true
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     as: :handle_occ_final_timeout
 
   @impl true
@@ -82,15 +80,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
        %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
         Logger.error(
           "#{@module_name}: Update event error",
-          TransactionEventMap.log_trace(event_map, changeset.errors)
-        )
-
-        {:error, changeset}
-
-      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset,
-       _steps_so_far} ->
-        Logger.error(
-          "#{@module_name}: Input event map error",
           TransactionEventMap.log_trace(event_map, changeset.errors)
         )
 

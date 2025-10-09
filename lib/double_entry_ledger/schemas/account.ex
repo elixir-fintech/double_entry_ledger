@@ -203,7 +203,7 @@ defmodule DoubleEntryLedger.Account do
     |> cast_embed(:posted, with: &Balance.changeset/2)
     |> cast_embed(:pending, with: &Balance.changeset/2)
     |> trim_name()
-    |> unique_constraint(:address, name: :unique_address, message: "has already been taken")
+    |> unique_constraint(:address, name: :unique_address_per_instance, message: "has already been taken")
   end
 
   @doc """

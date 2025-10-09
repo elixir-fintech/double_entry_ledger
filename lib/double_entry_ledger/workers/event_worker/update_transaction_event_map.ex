@@ -23,10 +23,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap do
 
   use DoubleEntryLedger.Occ.Processor
   import DoubleEntryLedger.Occ.Helper
-  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler
   import DoubleEntryLedger.EventQueue.Scheduling
 
-  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{Event, Repo}

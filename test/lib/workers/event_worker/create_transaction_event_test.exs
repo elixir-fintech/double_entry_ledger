@@ -12,6 +12,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent
 
   doctest CreateTransactionEvent
@@ -32,6 +33,24 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
       assert transaction.status == :posted
+    end
+
+    test "fails for transaction_map_error due to non existent account", %{instance: inst, accounts: [a|_]} do
+      {:ok, event} =
+        EventStore.create(
+          transaction_event_attrs(
+            instance_address: inst.address,
+            payload: %{
+              status: :posted,
+              entries: [
+                %{account_address: a.address, amount: 100, currency: "EUR"},
+                %{account_address: "nonexisting:account", amount: 100, currency: "EUR"}
+              ]
+            }
+          )
+        )
+      assert {:error, %Event{event_queue_item: eqm}} = CreateTransactionEvent.process(event)
+      assert eqm.status == :dead_letter
     end
 
     test "error when saving transaction", ctx do

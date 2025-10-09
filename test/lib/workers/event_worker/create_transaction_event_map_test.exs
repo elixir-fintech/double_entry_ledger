@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapTest do
   import Mox
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
+  alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData, EntryData}
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapTest do
 
       # process same event_map again which should fail
       {:error, changeset} = CreateTransactionEventMap.process(event_map)
-      assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
+      assert %Changeset{data: %TransactionEventMap{}} = changeset
       assert Keyword.has_key?(changeset.errors, :source_idempk)
     end
 
@@ -61,15 +61,31 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapTest do
           end
         )
 
-      # process same update_event again which should fail
       {:error, changeset} =
         CreateTransactionEventMap.process(updated_event_map)
 
-      assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
+      assert %Changeset{data: %TransactionEventMap{}} = changeset
+    end
+
+    test "return TransactionEventMap for transaction_map error", %{instance: inst, accounts: [a|_]} do
+      event_map = transaction_event_attrs(
+        instance_address: inst.address,
+        payload: %TransactionData{
+          status: :posted,
+          entries: [
+            %EntryData{account_address: a.address, amount: 100, currency: "EUR"},
+            %EntryData{account_address: "nonexisting:account", amount: 100, currency: "EUR"}
+          ]
+        }
+      )
+      {:error, changeset} =
+        CreateTransactionEventMap.process(event_map)
+
+      assert %Changeset{data: %TransactionEventMap{}} = changeset
     end
   end
 
-  describe "process_map/2 with OCC timeout" do
+  describe "process/2 with OCC timeout" do
     # , :verify_on_exit!]
     setup [:create_instance, :create_accounts]
 

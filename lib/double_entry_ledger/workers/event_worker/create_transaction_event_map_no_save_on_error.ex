@@ -11,21 +11,24 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveO
 
   use DoubleEntryLedger.Occ.Processor
 
-  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias DoubleEntryLedger.{EventWorker, Repo}
-
   alias DoubleEntryLedger.Event.TransactionEventMap
-
   alias Ecto.Changeset
 
   @impl true
   # this function will never be called, as we don't save on error
   # but we need to implement it to satisfy the behaviour
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     as: :handle_occ_final_timeout
+
+  @impl true
+  defdelegate handle_transaction_map_error(event_map, error, repo),
+    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
+    as: :handle_transaction_map_error
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
@@ -60,28 +63,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveO
 
         {:error, changeset}
 
-      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset,
-       _steps_so_far} ->
-        Logger.error(
-          "#{@module_name}: Input event map error",
-          TransactionEventMap.log_trace(event_map, changeset.errors)
-        )
-
-        {:error, changeset}
-
       response ->
         default_event_map_response_handler(response, event_map, @module_name)
     end
-  end
-
-  @impl true
-  def handle_transaction_map_error(event_map, error, _repo) do
-    event_map_changeset =
-      event_map
-      |> TransactionEventMap.changeset(%{})
-      |> Changeset.add_error(:input_event_map, to_string(error))
-
-    Multi.new()
-    |> Multi.error(:input_event_map_error, event_map_changeset)
   end
 end
