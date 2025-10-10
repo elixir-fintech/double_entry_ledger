@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveO
   use DoubleEntryLedger.Occ.Processor
 
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
-    only: [default_event_map_response_handler: 3]
+    only: [default_response_handler: 3]
 
   alias DoubleEntryLedger.{EventWorker, Repo}
   alias DoubleEntryLedger.Event.TransactionEventMap
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveO
         {:error, changeset}
 
       response ->
-        default_event_map_response_handler(response, event_map, @module_name)
+        default_response_handler(response, event_map, @module_name)
     end
   end
 

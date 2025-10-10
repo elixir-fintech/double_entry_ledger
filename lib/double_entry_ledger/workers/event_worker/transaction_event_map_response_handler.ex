@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
   Examples
 
       # Map event validation errors to an event map changeset
-      iex> default_event_map_response_handler(
+      iex> default_response_handler(
       ...>   {:error, :new_event, event_changeset, %{}},
       ...>   event_map,
       ...>   "MyWorker"
@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
       {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}}}
 
       # Map transaction validation errors to an event map changeset
-      iex> default_event_map_response_handler(
+      iex> default_response_handler(
       ...>   {:error, :transaction, trx_changeset, %{}},
       ...>   event_map,
       ...>   "MyWorker"
@@ -60,14 +60,14 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
     with errors mapped onto an event map changeset
   - `{:error, message}` for other failures
   """
-  @spec default_event_map_response_handler(
+  @spec default_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
           TransactionEventMap.t(),
           String.t()
         ) ::
           EventWorker.success_tuple()
           | {:error, Changeset.t(TransactionEventMap.t()) | String.t()}
-  def default_event_map_response_handler(
+  def default_response_handler(
         response,
         %TransactionEventMap{} = event_map,
         module_name

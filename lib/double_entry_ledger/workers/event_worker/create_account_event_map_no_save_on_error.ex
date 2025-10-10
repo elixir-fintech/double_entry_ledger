@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
     only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
 
   import DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler,
-    only: [default_event_map_response_handler: 3]
+    only: [default_response_handler: 3]
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Event.AccountEventMap
@@ -125,7 +125,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
   def process(%AccountEventMap{action: :create_account} = event_map) do
     build_create_account(event_map)
     |> Repo.transaction()
-    |> default_event_map_response_handler(event_map, @module_name)
+    |> default_response_handler(event_map, @module_name)
   end
 
   @spec build_create_account(AccountEventMap.t()) :: Ecto.Multi.t()

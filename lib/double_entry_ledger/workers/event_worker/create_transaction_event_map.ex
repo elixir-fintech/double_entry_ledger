@@ -34,7 +34,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
   alias Ecto.Multi
 
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
-    only: [default_event_map_response_handler: 3]
+    only: [default_response_handler: 3]
 
   import DoubleEntryLedger.EventQueue.Scheduling
 
@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
         {:error, event}
 
       response ->
-        default_event_map_response_handler(response, event_map, @module_name)
+        default_response_handler(response, event_map, @module_name)
     end
   end
 

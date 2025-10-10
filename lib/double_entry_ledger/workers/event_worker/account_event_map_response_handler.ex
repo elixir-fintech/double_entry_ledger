@@ -87,22 +87,22 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler d
       iex> account = %Account{}
       iex> event = %Event{event_queue_item: %{status: :processed}}
       iex> response = {:ok, %{account: account, event_success: event}}
-      iex> {:ok, ^account, ^event} = AccountEventMapResponseHandler.default_event_map_response_handler(response, %AccountEventMap{}, "TestModule")
+      iex> {:ok, ^account, ^event} = AccountEventMapResponseHandler.default_response_handler(response, %AccountEventMap{}, "TestModule")
 
       iex> alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
       iex> changeset = %Ecto.Changeset{}
       iex> response = {:error, :account, changeset, %{}}
       iex> event_map = %AccountEventMap{payload: %AccountData{}}
-      iex> {:error, %Ecto.Changeset{} = _changeset} = AccountEventMapResponseHandler.default_event_map_response_handler(response, event_map, "TestModule")
+      iex> {:error, %Ecto.Changeset{} = _changeset} = AccountEventMapResponseHandler.default_response_handler(response, event_map, "TestModule")
   """
-  @spec default_event_map_response_handler(
+  @spec default_response_handler(
           {:ok, %{account: Account.t(), event_success: Event.t()}}
           | {:error, :atom, any(), map()},
           AccountEventMap.t(),
           String.t()
         ) ::
           response()
-  def default_event_map_response_handler(response, %AccountEventMap{} = event_map, module_name) do
+  def default_response_handler(response, %AccountEventMap{} = event_map, module_name) do
     case response do
       {:ok, %{account: account, event_success: event}} ->
         Logger.info(

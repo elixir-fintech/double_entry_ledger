@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
     only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
 
   import DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler,
-    only: [default_event_map_response_handler: 3]
+    only: [default_response_handler: 3]
 
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Workers.EventWorker.{AccountEventMapResponseHandler, UpdateEventError}
@@ -98,7 +98,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
     build_update_account(event_map)
     |> handle_build_update_account(event_map)
     |> Repo.transaction()
-    |> default_event_map_response_handler(event_map, @module_name)
+    |> default_response_handler(event_map, @module_name)
   end
 
   @spec build_update_account(AccountEventMap.t()) :: Ecto.Multi.t()
