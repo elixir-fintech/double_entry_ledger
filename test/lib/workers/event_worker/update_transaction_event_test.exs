@@ -199,10 +199,8 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
     end
 
     test "dead_letter when transaction_map_error", %{instance: inst, accounts: [a |_]} = ctx do
-      %{event: %{source: s, source_idempk: s_id} = pending_event} =
+      %{event: %{source: s, source_idempk: s_id}} =
         new_create_transaction_event(ctx, :pending)
-
-      {:ok, event} = new_update_transaction_event(s, s_id, inst.address, :posted)
 
       {:ok, event} =
         EventStore.create(

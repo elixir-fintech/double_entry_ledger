@@ -43,12 +43,12 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
 
-  import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
+  alias DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler
   alias DoubleEntryLedger.Repo
   alias DoubleEntryLedger.Stores.{InstanceStoreHelper, EventStoreHelper, AccountStoreHelper}
 
@@ -121,7 +121,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
       iex> changeset.valid?
       false
   """
-  @spec process(AccountEventMap.t()) :: AccountEventResponseHandler.response()
+  @spec process(AccountEventMap.t()) :: AccountEventMapResponseHandler.response()
   def process(%AccountEventMap{action: :create_account} = event_map) do
     build_create_account(event_map)
     |> Repo.transaction()

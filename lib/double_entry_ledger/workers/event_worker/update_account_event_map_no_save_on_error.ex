@@ -47,11 +47,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
 
-  import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,
+  import DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler,
     only: [default_event_map_response_handler: 3]
 
   alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.Workers.EventWorker.{AccountEventResponseHandler, UpdateEventError}
+  alias DoubleEntryLedger.Workers.EventWorker.{AccountEventMapResponseHandler, UpdateEventError}
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.Repo
   alias DoubleEntryLedger.Stores.{AccountStoreHelper, EventStoreHelper, InstanceStoreHelper}
@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
   - Other failures → String error message with details
 
   """
-  @spec process(AccountEventMap.t()) :: AccountEventResponseHandler.response()
+  @spec process(AccountEventMap.t()) :: AccountEventMapResponseHandler.response()
   def process(%AccountEventMap{action: :update_account} = event_map) do
     build_update_account(event_map)
     |> handle_build_update_account(event_map)
