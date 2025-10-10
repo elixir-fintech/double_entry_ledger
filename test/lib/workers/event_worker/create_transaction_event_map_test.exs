@@ -67,17 +67,22 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapTest do
       assert %Changeset{data: %TransactionEventMap{}} = changeset
     end
 
-    test "return TransactionEventMap for transaction_map error", %{instance: inst, accounts: [a|_]} do
-      event_map = transaction_event_attrs(
-        instance_address: inst.address,
-        payload: %TransactionData{
-          status: :posted,
-          entries: [
-            %EntryData{account_address: a.address, amount: 100, currency: "EUR"},
-            %EntryData{account_address: "nonexisting:account", amount: 100, currency: "EUR"}
-          ]
-        }
-      )
+    test "return TransactionEventMap for transaction_map error", %{
+      instance: inst,
+      accounts: [a | _]
+    } do
+      event_map =
+        transaction_event_attrs(
+          instance_address: inst.address,
+          payload: %TransactionData{
+            status: :posted,
+            entries: [
+              %EntryData{account_address: a.address, amount: 100, currency: "EUR"},
+              %EntryData{account_address: "nonexisting:account", amount: 100, currency: "EUR"}
+            ]
+          }
+        )
+
       {:error, changeset} =
         CreateTransactionEventMap.process(event_map)
 

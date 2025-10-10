@@ -198,7 +198,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
                "create Event (id: #{pending_event.id}) in dead_letter for Update Event (id: #{event.id})"
     end
 
-    test "dead_letter when transaction_map_error", %{instance: inst, accounts: [a |_]} = ctx do
+    test "dead_letter when transaction_map_error", %{instance: inst, accounts: [a | _]} = ctx do
       %{event: %{source: s, source_idempk: s_id}} =
         new_create_transaction_event(ctx, :pending)
 
@@ -219,6 +219,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
             }
           )
         )
+
       {:error, %{event_queue_item: eqm}} = UpdateTransactionEvent.process(event)
       assert eqm.status == :dead_letter
 

@@ -32,6 +32,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
   require Logger
 
   import DoubleEntryLedger.Event, only: [log_trace: 1, log_trace: 2]
+
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [
       build_schedule_retry_with_reason: 3,
@@ -41,6 +42,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Occ.Occable
+
   alias DoubleEntryLedger.{
     Event,
     EventWorker

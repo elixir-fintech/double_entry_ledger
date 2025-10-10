@@ -340,6 +340,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       """
       def retry(module, occable_item, error_map, 0, repo) do
         name = :_occable_item
+
         Occable.timed_out(occable_item, name, error_map)
         |> Multi.merge(fn
           %{^name => occable_item} ->

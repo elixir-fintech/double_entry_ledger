@@ -188,7 +188,11 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
   """
   @spec timed_out(TransactionEventMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()
-  def timed_out(%{instance_address: address} = event_map, name, %{save_on_error: true} = error_map) do
+  def timed_out(
+        %{instance_address: address} = event_map,
+        name,
+        %{save_on_error: true} = error_map
+      ) do
     new_event_step = :new_event
 
     Multi.new()

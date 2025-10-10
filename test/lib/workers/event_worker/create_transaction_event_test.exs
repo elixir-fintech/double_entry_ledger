@@ -35,7 +35,10 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       assert transaction.status == :posted
     end
 
-    test "fails for transaction_map_error due to non existent account", %{instance: inst, accounts: [a|_]} do
+    test "fails for transaction_map_error due to non existent account", %{
+      instance: inst,
+      accounts: [a | _]
+    } do
       {:ok, event} =
         EventStore.create(
           transaction_event_attrs(
@@ -49,6 +52,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
             }
           )
         )
+
       assert {:error, %Event{event_queue_item: eqm}} = CreateTransactionEvent.process(event)
       assert eqm.status == :dead_letter
     end

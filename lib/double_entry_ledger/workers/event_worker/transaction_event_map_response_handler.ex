@@ -33,6 +33,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
 
   import DoubleEntryLedger.EventQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
   import DoubleEntryLedger.Event.TransactionEventMap, only: [log_trace: 2]
+
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
       from_event_to_event_map: 2,
@@ -43,13 +44,12 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Occ.Occable
   alias DoubleEntryLedger.Event.TransactionEventMap
+
   alias DoubleEntryLedger.{
     Event,
     Transaction,
     EventWorker
   }
-
-
 
   @doc """
   Default response handler for functions that operate on a TransactionEventMap.
@@ -83,7 +83,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
 
       {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _} ->
         Logger.error(
-          "#{module_name}: Input event map error", log_trace(event_map, changeset.errors)
+          "#{module_name}: Input event map error",
+          log_trace(event_map, changeset.errors)
         )
 
         {:error, changeset}

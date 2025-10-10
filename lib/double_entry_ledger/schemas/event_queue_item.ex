@@ -33,7 +33,8 @@ defmodule DoubleEntryLedger.EventQueueItem do
             Enum.reduce(@states, fn state, acc -> quote do: unquote(state) | unquote(acc) end)
           )
 
-  @derive {Jason.Encoder, only: [:status, :processing_completed_at, :retry_count, :next_retry_after, :errors]}
+  @derive {Jason.Encoder,
+           only: [:status, :processing_completed_at, :retry_count, :next_retry_after, :errors]}
 
   schema "event_queue_items" do
     field(:status, Ecto.Enum, values: @states, default: :pending)
@@ -70,7 +71,8 @@ defmodule DoubleEntryLedger.EventQueueItem do
     |> validate_inclusion(:status, @states)
   end
 
-  @spec processing_start_changeset(EventQueueItem.t(), String.t(), non_neg_integer()) :: Ecto.Changeset.t()
+  @spec processing_start_changeset(EventQueueItem.t(), String.t(), non_neg_integer()) ::
+          Ecto.Changeset.t()
   def processing_start_changeset(event_queue_item, processor_id, retry_count) do
     event_queue_item
     |> change(%{

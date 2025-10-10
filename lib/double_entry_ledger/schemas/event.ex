@@ -239,7 +239,11 @@ defmodule DoubleEntryLedger.Event do
 
   """
   @spec processing_start_changeset(Event.t(), String.t(), non_neg_integer()) :: Ecto.Changeset.t()
-  def processing_start_changeset(%{event_queue_item: event_queue_item} = event, processor_id, retry_count) do
+  def processing_start_changeset(
+        %{event_queue_item: event_queue_item} = event,
+        processor_id,
+        retry_count
+      ) do
     event_queue_changeset =
       event_queue_item
       |> EventQueueItem.processing_start_changeset(processor_id, retry_count)
