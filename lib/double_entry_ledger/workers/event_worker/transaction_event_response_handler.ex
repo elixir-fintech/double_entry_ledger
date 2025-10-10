@@ -56,13 +56,13 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
   - `{:error, event}` when the event pipeline returns a structured failure
   - schedules a retry and returns `{:error, message}` for other failures
   """
-  @spec default_event_response_handler(
+  @spec default_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
           Event.t(),
           String.t()
         ) ::
           EventWorker.success_tuple() | {:error, Event.t() | Changeset.t()}
-  def default_event_response_handler(response, %Event{} = original_event, module_name) do
+  def default_response_handler(response, %Event{} = original_event, module_name) do
     case response do
       {:ok, %{event_success: event, transaction: transaction}} ->
         Logger.info("#{module_name}: processed successfully", log_trace(event, transaction))
