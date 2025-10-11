@@ -37,11 +37,13 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
     only: [
       build_schedule_retry_with_reason: 3,
       schedule_retry_with_reason: 3,
-      build_mark_as_dead_letter: 2
+      build_mark_as_dead_letter: 2,
+      mark_as_dead_letter: 2
     ]
 
-  alias Ecto.Multi
+  alias Ecto.{Multi, Changeset}
   alias DoubleEntryLedger.Occ.Occable
+  alias DoubleEntryLedger.Event.ErrorMap
 
   alias DoubleEntryLedger.{
     Event,
@@ -73,6 +75,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
         Logger.warning("#{module_name}: #{last_error.message}", log_trace(event))
 
         {:error, event}
+
+      {:error, :transaction, changeset, _} ->
+        message = "#{module_name}: Transaction changeset failed with #{ErrorMap.changeset_errors(changeset)}"
+        Logger.warning(message, Event.log_trace(original_event, changeset.errors))
+        mark_as_dead_letter(original_event, message)
 
       {:error, step, error, _} ->
         message = "#{module_name}: Step :#{step} failed."

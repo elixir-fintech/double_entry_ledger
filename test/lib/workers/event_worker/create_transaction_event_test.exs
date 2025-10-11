@@ -61,9 +61,9 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       %{event: event} = new_create_transaction_event(ctx)
 
       DoubleEntryLedger.MockRepo
-      |> expect(:insert, fn _changeset ->
+      |> expect(:insert, fn changeset ->
         # simulate a conflict when adding the transaction
-        {:error, :conflict}
+        {:error, Ecto.Changeset.add_error(changeset, :entries, ":conflict")}
       end)
       |> expect(:transaction, fn multi ->
         # the transaction has to be handled by the epo
@@ -73,10 +73,10 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       assert {:error, %Event{event_queue_item: eqm}} =
                CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
 
-      assert eqm.status == :failed
+      assert eqm.status == :dead_letter
 
       assert [
-               %{message: "CreateTransactionEvent: Step :transaction failed. Error: :conflict"}
+               %{message: "CreateTransactionEvent: Transaction changeset failed with %{entries: [\":conflict\"]}"}
                | _
              ] =
                eqm.errors

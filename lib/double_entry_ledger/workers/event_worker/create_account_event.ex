@@ -12,28 +12,28 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
       mark_as_dead_letter: 2
     ]
 
-  alias DoubleEntryLedger.Event.AccountEventMap
-  alias Ecto.Multi
-  alias DoubleEntryLedger.{Event, Repo}
+  alias DoubleEntryLedger.Event.{AccountEventMap, ErrorMap}
+  alias Ecto.{Changeset, Multi}
+  alias DoubleEntryLedger.{Account, Event, Repo}
   alias DoubleEntryLedger.Stores.AccountStoreHelper
 
   @module_name __MODULE__ |> Module.split() |> List.last()
 
-  @spec process(Event.t()) :: {:ok, Account.t(), Event.t()} | {:error, Event.t()}
+  @spec process(Event.t()) :: {:ok, Account.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
   def process(%Event{action: :create_account} = event) do
     build_create_account(event)
     |> Repo.transaction()
     |> case do
       {:ok, %{account: account, event_success: event}} ->
         Logger.info(
-          "#{@module_name}: processed successfully",
+          "#{@module_name}: Processed successfully",
           Event.log_trace(event, account)
         )
 
         {:ok, account, event}
 
       {:error, :account, changeset, _changes} ->
-        message = "#{@module_name}: Account changeset failed"
+        message = "#{@module_name}: Account changeset failed with #{ErrorMap.changeset_errors(changeset)}"
         Logger.warning(message, Event.log_trace(event, changeset.errors))
         mark_as_dead_letter(event, message)
 

@@ -307,10 +307,12 @@ defmodule DoubleEntryLedger.Event do
   end
 
   def log_trace(event, %Account{} = account) do
-    Map.put(
+    Map.merge(
       log_trace(event),
-      :account_id,
-      account.id
+      %{
+        account_id: account.id,
+        account_address: account.address
+      }
     )
   end
 

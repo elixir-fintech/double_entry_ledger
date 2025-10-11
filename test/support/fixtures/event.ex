@@ -13,6 +13,8 @@ defmodule DoubleEntryLedger.EventFixtures do
   }
 
   import DoubleEntryLedger.Event.TransactionDataFixtures
+  import DoubleEntryLedger.Event.AccountDataFixtures
+
 
   def transaction_event_attrs(attrs \\ %{}) do
     attrs
@@ -22,9 +24,19 @@ defmodule DoubleEntryLedger.EventFixtures do
       source_idempk: "source_idempk",
       payload: pending_payload()
     })
-    |> then(fn attrs ->
-      struct(TransactionEventMap, attrs)
-    end)
+    |> then(&struct(TransactionEventMap, &1))
+  end
+
+  def account_event_attrs(attrs \\ %{}) do
+    attrs
+    |> Enum.into(%{
+      action: :create_account,
+      source: "source",
+      source_idempk: Ecto.UUID.generate(),
+      instance_address: "123",
+      payload: account_data_attrs()
+    })
+    |> then(&struct(AccountEventMap, &1))
   end
 
   def new_create_transaction_event(

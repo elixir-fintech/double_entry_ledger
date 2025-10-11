@@ -275,9 +275,9 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
         new_update_transaction_event(s, s_id, inst.address, :posted)
 
       DoubleEntryLedger.MockRepo
-      |> expect(:update, fn _changeset ->
+      |> expect(:update, fn changeset ->
         # simulate a conflict when adding the transaction
-        {:error, :conflict}
+        {:error, Ecto.Changeset.add_error(changeset, :entries, ":conflict")}
       end)
       |> expect(:transaction, fn multi ->
         # the transaction has to be handled by the Repo
@@ -290,10 +290,10 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
                  DoubleEntryLedger.MockRepo
                )
 
-      assert eqm.status == :failed
+      assert eqm.status == :dead_letter
 
       assert [
-               %{message: "UpdateTransactionEvent: Step :transaction failed. Error: :conflict"}
+               %{message: "UpdateTransactionEvent: Transaction changeset failed with %{entries: [\":conflict\"]}"}
                | _
              ] =
                eqm.errors

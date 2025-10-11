@@ -39,6 +39,15 @@ defmodule DoubleEntryLedger.AccountFixtures do
     account
   end
 
+  def account_payload_attrs(attrs \\ %{}) do
+    attrs
+    |> Enum.into(%{
+      address: "account:1",
+      type: :asset,
+      currency: "EUR"
+    })
+  end
+
   def create_accounts(%{instance: instance}) do
     %{
       instance: instance,

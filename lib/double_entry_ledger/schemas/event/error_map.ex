@@ -188,4 +188,13 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
       save_on_error: true
     }
   end
+
+
+  @spec changeset_errors(Ecto.Changeset.t()) :: String.t()
+  def changeset_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, _}  ->
+      "#{msg}"
+    end)
+    |> inspect()
+  end
 end
