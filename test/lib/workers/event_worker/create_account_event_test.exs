@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventTest do
       assert {:error, %Event{event_queue_item: %{errors: errors} = eqi}} = CreateAccountEvent.process(preload(event2))
       assert eqi.status == :dead_letter
       assert [
-               %{message: "CreateAccountEvent: Account changeset failed with %{address: [\"has already been taken\"]}"}
+               %{message: "CreateAccountEvent: Account changeset failed: %{address: [\"has already been taken\"]}"}
                | _
              ] =
                errors

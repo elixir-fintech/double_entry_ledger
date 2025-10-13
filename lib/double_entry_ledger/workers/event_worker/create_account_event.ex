@@ -2,7 +2,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
   @moduledoc """
    Processes :create_account actions
   """
-  require Logger
+  use DoubleEntryLedger.Logger
 
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [
@@ -12,12 +12,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
       mark_as_dead_letter: 2
     ]
 
-  alias DoubleEntryLedger.Event.{AccountEventMap, ErrorMap}
+  alias DoubleEntryLedger.Event.AccountEventMap
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.{Account, Event, Repo}
   alias DoubleEntryLedger.Stores.AccountStoreHelper
-
-  @module_name __MODULE__ |> Module.split() |> List.last()
 
   @spec process(Event.t()) :: {:ok, Account.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
   def process(%Event{action: :create_account} = event) do
@@ -25,21 +23,16 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
     |> Repo.transaction()
     |> case do
       {:ok, %{account: account, event_success: event}} ->
-        Logger.info(
-          "#{@module_name}: Processed successfully",
-          Event.log_trace(event, account)
-        )
+        info("Processed successfully", event, account)
 
         {:ok, account, event}
 
       {:error, :account, changeset, _changes} ->
-        message = "#{@module_name}: Account changeset failed with #{ErrorMap.changeset_errors(changeset)}"
-        Logger.warning(message, Event.log_trace(event, changeset.errors))
+        {:ok, message} = error("Account changeset failed:", event, changeset)
         mark_as_dead_letter(event, message)
 
       {:error, step, error, _steps_so_far} ->
-        message = "#{@module_name}: Step :#{step} failed."
-        Logger.error(message, Event.log_trace(event, error))
+        {:ok, message} = error("Step :#{step} failed.", event, error)
         schedule_retry_with_reason(event, message, :failed)
     end
   end
