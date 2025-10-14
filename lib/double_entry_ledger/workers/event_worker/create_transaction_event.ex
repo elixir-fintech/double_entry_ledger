@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
   import DoubleEntryLedger.EventQueue.Scheduling
 
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
-    only: [default_response_handler: 3]
+    only: [default_response_handler: 2]
 
   @impl true
   @doc """
@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
           EventWorker.success_tuple() | EventWorker.error_tuple()
   def process(%Event{action: :create_transaction} = original_event, repo \\ Repo) do
     process_with_retry(original_event, repo)
-    |> default_response_handler(original_event, @module_name)
+    |> default_response_handler(original_event)
   end
 
   @impl true

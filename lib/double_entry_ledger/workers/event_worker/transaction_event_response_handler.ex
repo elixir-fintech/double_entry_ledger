@@ -30,8 +30,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
       {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}}}
   """
   require Logger
-
-  import DoubleEntryLedger.Event, only: [log_trace: 1, log_trace: 2]
+  use DoubleEntryLedger.Logger
 
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [
@@ -43,7 +42,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
 
   alias Ecto.{Multi, Changeset}
   alias DoubleEntryLedger.Occ.Occable
-  alias DoubleEntryLedger.Event.ErrorMap
 
   alias DoubleEntryLedger.{
     Event,
@@ -60,36 +58,29 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
   """
   @spec default_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
-          Event.t(),
-          String.t()
+          Event.t()
         ) ::
           EventWorker.success_tuple() | {:error, Event.t() | Changeset.t()}
-  def default_response_handler(response, %Event{} = original_event, module_name) do
+  def default_response_handler(response, %Event{} = original_event) do
     case response do
       {:ok, %{event_success: event, transaction: transaction}} ->
-        Logger.info("#{module_name}: processed successfully", log_trace(event, transaction))
+        info("Processed successfully", event, transaction)
 
         {:ok, transaction, event}
 
       {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
-        Logger.warning("#{module_name}: #{last_error.message}", log_trace(event))
+        warn("#{last_error.message}", event)
 
         {:error, event}
 
       {:error, :transaction, changeset, _} ->
-        message = "#{module_name}: Transaction changeset failed with #{ErrorMap.changeset_errors(changeset)}"
-        Logger.warning(message, Event.log_trace(original_event, changeset.errors))
+        {:ok, message} = warn("Transaction changeset failed", original_event, changeset)
         mark_as_dead_letter(original_event, message)
 
       {:error, step, error, _} ->
-        message = "#{module_name}: Step :#{step} failed."
-        Logger.error(message, log_trace(original_event, error))
+        {:ok, message} = error("Step :#{step} failed.", original_event, error)
 
-        schedule_retry_with_reason(
-          original_event,
-          "#{message} Error: #{inspect(error)}",
-          :failed
-        )
+        schedule_retry_with_reason(original_event, message, :failed)
     end
   end
 

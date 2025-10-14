@@ -293,7 +293,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       assert eqm.status == :dead_letter
 
       assert [
-               %{message: "UpdateTransactionEvent: Transaction changeset failed with %{entries: [\":conflict\"]}"}
+               %{message: "TransactionEventResponseHandler: Transaction changeset failed %{entries: [\":conflict\"]}"}
                | _
              ] =
                eqm.errors
