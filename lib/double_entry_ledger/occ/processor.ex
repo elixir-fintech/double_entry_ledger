@@ -174,7 +174,6 @@ defmodule DoubleEntryLedger.Occ.Processor do
     quote do
       @behaviour DoubleEntryLedger.Occ.Processor
 
-      require Logger
       alias DoubleEntryLedger.Repo
       alias Ecto.Multi
       import DoubleEntryLedger.Occ.Helper
@@ -182,8 +181,6 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       import DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer,
         only: [transaction_data_to_transaction_map: 2]
-
-      @module_name __MODULE__ |> Module.split() |> List.last()
 
       @max_retries max_retries()
       @retry_interval retry_interval()

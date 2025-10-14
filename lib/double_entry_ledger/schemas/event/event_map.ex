@@ -357,124 +357,13 @@ defmodule DoubleEntryLedger.Event.EventMap do
       end
 
       @doc false
-      def log_trace(event_map),
-        do: DoubleEntryLedger.Event.EventMap.log_trace(event_map)
-
-      @doc false
-      def log_trace(event_map, error),
-        do: DoubleEntryLedger.Event.EventMap.log_trace(event_map, error)
-
-      @doc false
       def to_map(event_map),
         do: DoubleEntryLedger.Event.EventMap.to_map(event_map)
 
-      defoverridable log_trace: 1, log_trace: 2, to_map: 1
+      defoverridable to_map: 1
     end
   end
 
-  @doc """
-  Creates structured metadata for logging from an EventMap.
-
-  This function extracts key identifying information from an EventMap to create
-  a consistent logging context. This is useful for tracing events through the
-  system and debugging issues.
-
-  ## Parameters
-
-  * `event_map` - The EventMap struct to extract trace information from
-
-  ## Returns
-
-  * A map containing trace metadata with consistent key structure
-
-  ## Generated Fields
-
-  * `:is_event_map` - Always `true` to identify log entries from EventMaps
-  * `:event_action` - The action field from the EventMap
-  * `:event_source` - The source field from the EventMap
-  * `:event_trace_id` - Composite identifier joining source, source_idempk, and update_idempk
-
-  ## Examples
-
-      iex> alias DoubleEntryLedger.Event.EventMap
-      iex> defmodule Elixir.TestEventMap5 do
-      ...>   use EventMap, payload: :map
-      ...>   def payload_to_map(payload), do: payload
-      ...> end
-      iex> event_map = struct!(TestEventMap5, %{action: :create_transaction, source: "web_app", source_idempk: "order_123", update_idempk: nil})
-      iex> trace = EventMap.log_trace(event_map)
-      iex> trace.is_event_map
-      true
-      iex> trace.event_trace_id
-      "web_app-order_123"
-
-      iex> alias DoubleEntryLedger.Event.EventMap
-      iex> defmodule TestEventMap6 do
-      ...>   use EventMap, payload: :map
-      ...>   def payload_to_map(payload), do: payload
-      ...> end
-      iex> event_map = struct!(TestEventMap6, %{action: :update_transaction, source: "api", source_idempk: "inv_456", update_idempk: "update_1"})
-      iex> trace = EventMap.log_trace(event_map)
-      iex> trace.event_trace_id
-      "api-inv_456-update_1"
-  """
-  @spec log_trace(struct()) :: map()
-  def log_trace(event_map) do
-    %{
-      is_event_map: true,
-      event_action: Map.get(event_map, :action),
-      event_source: Map.get(event_map, :source),
-      event_trace_id:
-        [
-          Map.get(event_map, :source),
-          Map.get(event_map, :source_idempk),
-          Map.get(event_map, :update_idempk),
-          Map.get(event_map, :update_source)
-        ]
-        |> Enum.reject(&is_nil/1)
-        |> Enum.join("-")
-    }
-  end
-
-  @doc """
-  Creates structured metadata for logging with error information.
-
-  This function extends `log_trace/1` by adding error details to the trace metadata.
-  This is particularly useful for logging failed operations while maintaining
-  the same trace context.
-
-  ## Parameters
-
-  * `event_map` - The EventMap struct to extract trace information from
-  * `error` - The error information to include in the trace
-
-  ## Returns
-
-  * A map containing all trace metadata from `log_trace/1` plus error details
-
-  ## Additional Fields
-
-  * `:error` - Inspected representation of the error with "Error" label
-
-  ## Examples
-
-      iex> alias DoubleEntryLedger.Event.EventMap
-      iex> defmodule TestEventMap7 do
-      ...>   use EventMap, payload: :map
-      ...>   def payload_to_map(payload), do: payload
-      ...> end
-      iex> event_map = struct!(TestEventMap7, %{action: :create_transaction, source: "web_app", source_idempk: "order_123"})
-      iex> error = {:error, "Something went wrong"}
-      iex> trace = EventMap.log_trace(event_map, error)
-      iex> trace.is_event_map
-      true
-      iex> String.contains?(trace.error, "Something went wrong")
-      true
-  """
-  @spec log_trace(struct(), any()) :: map()
-  def log_trace(event_map, error) do
-    Map.put(log_trace(event_map), :error, inspect(error, label: "Error"))
-  end
 
   @doc """
   Converts an EventMap struct to a plain map representation.
