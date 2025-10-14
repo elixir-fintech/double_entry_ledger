@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventTest do
       {:ok, event} = EventStore.create(account_event_attrs(%{instance_address: instance.address}))
 
       assert {:ok, %Account{} = account, %Event{event_queue_item: eqi} = e} =
-        CreateAccountEvent.process(preload(event))
+               CreateAccountEvent.process(preload(event))
 
       assert e.id == event.id
       assert eqi.status == :processed
@@ -31,15 +31,29 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventTest do
 
     test "fails when there is an account issue", %{instance: instance} do
       address = "same:address"
-      {:ok, event1} = EventStore.create(account_event_attrs(%{address: address, instance_address: instance.address}))
-      {:ok, event2} = EventStore.create(account_event_attrs(%{address: address, instance_address: instance.address}))
+
+      {:ok, event1} =
+        EventStore.create(
+          account_event_attrs(%{address: address, instance_address: instance.address})
+        )
+
+      {:ok, event2} =
+        EventStore.create(
+          account_event_attrs(%{address: address, instance_address: instance.address})
+        )
 
       CreateAccountEvent.process(preload(event1))
 
-      assert {:error, %Event{event_queue_item: %{errors: errors} = eqi}} = CreateAccountEvent.process(preload(event2))
+      assert {:error, %Event{event_queue_item: %{errors: errors} = eqi}} =
+               CreateAccountEvent.process(preload(event2))
+
       assert eqi.status == :dead_letter
+
       assert [
-               %{message: "AccountEventResponseHandler: Account changeset failed: %{address: [\"has already been taken\"]}"}
+               %{
+                 message:
+                   "AccountEventResponseHandler: Account changeset failed: %{address: [\"has already been taken\"]}"
+               }
                | _
              ] =
                errors

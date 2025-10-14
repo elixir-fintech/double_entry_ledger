@@ -115,7 +115,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler d
       {:error, :account, changeset, _changes} ->
         warn("Account changeset failed", event_map, changeset)
 
-
         {:error, from_account_to_event_map_payload(event_map, changeset)}
 
       {:error, step, error, _steps_so_far} ->

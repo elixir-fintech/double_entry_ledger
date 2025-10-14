@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
       from_event_to_event_map: 2,
-      from_transaction_to_event_map_payload: 2,
+      from_transaction_to_event_map_payload: 2
     ]
 
   alias Ecto.{Changeset, Multi}

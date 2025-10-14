@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [
       build_mark_as_processed: 1,
-      build_create_account_event_account_link: 2,
+      build_create_account_event_account_link: 2
     ]
 
   import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,

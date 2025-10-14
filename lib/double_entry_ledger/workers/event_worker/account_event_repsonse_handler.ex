@@ -28,10 +28,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler do
 
   use DoubleEntryLedger.Logger
 
-  import DoubleEntryLedger.EventQueue.Scheduling, only: [
-    mark_as_dead_letter: 2,
-    schedule_retry_with_reason: 3
-  ]
+  import DoubleEntryLedger.EventQueue.Scheduling,
+    only: [
+      mark_as_dead_letter: 2,
+      schedule_retry_with_reason: 3
+    ]
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.{Event, Account}

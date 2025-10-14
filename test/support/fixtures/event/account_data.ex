@@ -1,5 +1,5 @@
 defmodule DoubleEntryLedger.Event.AccountDataFixtures do
-  @moduledoc"""
+  @moduledoc """
   AccountData fixtures
   """
   alias DoubleEntryLedger.Event.AccountData

@@ -15,7 +15,6 @@ defmodule DoubleEntryLedger.EventFixtures do
   import DoubleEntryLedger.Event.TransactionDataFixtures
   import DoubleEntryLedger.Event.AccountDataFixtures
 
-
   def transaction_event_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{

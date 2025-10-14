@@ -21,18 +21,30 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
     setup [:create_instance]
 
     test "successfully processes a valid update account event", %{instance: instance} do
-      {:ok, %{source: src, source_idempk: sid} = create_event} = EventStore.create(
-        account_event_attrs(%{instance_address: instance.address,
-        payload: account_data_attrs(%{name: "Old Name"})})
+      {:ok, %{source: src, source_idempk: sid} = create_event} =
+        EventStore.create(
+          account_event_attrs(%{
+            instance_address: instance.address,
+            payload: account_data_attrs(%{name: "Old Name"})
+          })
         )
+
       CreateAccountEvent.process(preload(create_event))
 
-      {:ok, update_event} = EventStore.create(
-        account_event_attrs(%{action: :update_account, instance_address: instance.address, source: src, source_idempk: sid, update_idempk: "1",
-        payload: %AccountData{name: "New Name"}}))
+      {:ok, update_event} =
+        EventStore.create(
+          account_event_attrs(%{
+            action: :update_account,
+            instance_address: instance.address,
+            source: src,
+            source_idempk: sid,
+            update_idempk: "1",
+            payload: %AccountData{name: "New Name"}
+          })
+        )
 
       assert {:ok, %Account{} = account, %Event{event_queue_item: eqi} = e} =
-        UpdateAccountEvent.process(preload(update_event))
+               UpdateAccountEvent.process(preload(update_event))
 
       assert e.id == update_event.id
       assert eqi.status == :processed
@@ -41,47 +53,79 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
     end
 
     test "moves to dead_letter when create account event does not exist", %{instance: instance} do
-      {:ok, update_event} = EventStore.create(
-        account_event_attrs(%{action: :update_account, instance_address: instance.address, source: "src", source_idempk: "sid", update_idempk: "1",
-        payload: %AccountData{name: "New Name"}}))
+      {:ok, update_event} =
+        EventStore.create(
+          account_event_attrs(%{
+            action: :update_account,
+            instance_address: instance.address,
+            source: "src",
+            source_idempk: "sid",
+            update_idempk: "1",
+            payload: %AccountData{name: "New Name"}
+          })
+        )
 
       assert {:error, %Event{event_queue_item: eqi} = e} =
-        UpdateAccountEvent.process(preload(update_event))
+               UpdateAccountEvent.process(preload(update_event))
 
       assert e.id == update_event.id
       assert eqi.status == :dead_letter
     end
 
     test "stays pending when create account event is not yet processed", %{instance: instance} do
-      {:ok, %{source: src, source_idempk: sid}} = EventStore.create(
-        account_event_attrs(%{instance_address: instance.address,
-        payload: account_data_attrs(%{name: "Old Name"})})
+      {:ok, %{source: src, source_idempk: sid}} =
+        EventStore.create(
+          account_event_attrs(%{
+            instance_address: instance.address,
+            payload: account_data_attrs(%{name: "Old Name"})
+          })
         )
 
-      {:ok, update_event} = EventStore.create(
-        account_event_attrs(%{action: :update_account, instance_address: instance.address, source: src, source_idempk: sid, update_idempk: "1",
-        payload: %AccountData{name: "New Name"}}))
+      {:ok, update_event} =
+        EventStore.create(
+          account_event_attrs(%{
+            action: :update_account,
+            instance_address: instance.address,
+            source: src,
+            source_idempk: sid,
+            update_idempk: "1",
+            payload: %AccountData{name: "New Name"}
+          })
+        )
 
       assert {:error, %Event{event_queue_item: eqi} = e} =
-        UpdateAccountEvent.process(preload(update_event))
+               UpdateAccountEvent.process(preload(update_event))
 
       assert e.id == update_event.id
       assert eqi.status == :pending
     end
 
     test "moves to dead letter when create event is in dead letter", %{instance: instance} do
-      {:ok, %{source: src, source_idempk: sid} = create_event} = EventStore.create(
-        account_event_attrs(%{instance_address: instance.address,
-        payload: %AccountData{address: "sss"}})
+      {:ok, %{source: src, source_idempk: sid} = create_event} =
+        EventStore.create(
+          account_event_attrs(%{
+            instance_address: instance.address,
+            payload: %AccountData{address: "sss"}
+          })
         )
-      {:error, %{event_queue_item: %{status: :dead_letter}}} = CreateAccountEvent.process(preload(create_event))
 
-      {:ok, update_event} = EventStore.create(
-        account_event_attrs(%{action: :update_account, instance_address: instance.address, source: src, source_idempk: sid, update_idempk: "1",
-        payload: %AccountData{name: "New Name"}}))
+      {:error, %{event_queue_item: %{status: :dead_letter}}} =
+        CreateAccountEvent.process(preload(create_event))
+
+      {:ok, update_event} =
+        EventStore.create(
+          account_event_attrs(%{
+            action: :update_account,
+            instance_address: instance.address,
+            source: src,
+            source_idempk: sid,
+            update_idempk: "1",
+            payload: %AccountData{name: "New Name"}
+          })
+        )
 
       assert {:error, %Event{event_queue_item: eqi} = e} =
-        UpdateAccountEvent.process(preload(update_event))
+               UpdateAccountEvent.process(preload(update_event))
 
       assert e.id == update_event.id
       assert eqi.status == :dead_letter

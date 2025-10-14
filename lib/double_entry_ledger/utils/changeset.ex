@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.Utils.Changeset do
 
   @spec all_errors(Ecto.Changeset.t()) :: String.t()
   def all_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, _}  ->
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, _} ->
       "#{msg}"
     end)
     |> inspect()

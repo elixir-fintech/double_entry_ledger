@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
       build_create_account_event_account_link: 2,
       build_revert_to_pending: 2,
       build_schedule_update_retry: 2,
-      build_mark_as_dead_letter: 2,
+      build_mark_as_dead_letter: 2
     ]
 
   import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,
@@ -48,7 +48,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
         Multi.put(Multi.new(), :get_create_account_event_error, exception)
 
       %{get_account: account} ->
-        Multi.update(Multi.new(), :account, AccountStoreHelper.build_update(account, account_data))
+        Multi.update(
+          Multi.new(),
+          :account,
+          AccountStoreHelper.build_update(account, account_data)
+        )
     end)
   end
 

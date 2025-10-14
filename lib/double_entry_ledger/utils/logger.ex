@@ -50,5 +50,4 @@ defmodule DoubleEntryLedger.Logger do
       end
     end
   end
-
 end

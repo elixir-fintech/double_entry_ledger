@@ -364,7 +364,6 @@ defmodule DoubleEntryLedger.Event.EventMap do
     end
   end
 
-
   @doc """
   Converts an EventMap struct to a plain map representation.
 

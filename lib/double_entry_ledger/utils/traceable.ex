@@ -1,5 +1,4 @@
 defprotocol DoubleEntryLedger.Utils.Traceable do
-
   @spec metadata(t()) :: map()
   def metadata(schema)
 
