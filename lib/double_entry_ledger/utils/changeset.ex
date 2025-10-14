@@ -21,5 +21,6 @@ defmodule DoubleEntryLedger.Utils.Changeset do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       {msg, opts}
     end)
+    |> inspect()
   end
 end

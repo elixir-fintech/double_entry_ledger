@@ -31,14 +31,14 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
   """
   require Logger
 
+  use DoubleEntryLedger.Logger
+
   import DoubleEntryLedger.EventQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
-  import DoubleEntryLedger.Event.TransactionEventMap, only: [log_trace: 2]
 
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
       from_event_to_event_map: 2,
       from_transaction_to_event_map_payload: 2,
-      get_all_errors_with_opts: 1
     ]
 
   alias Ecto.{Changeset, Multi}
@@ -62,53 +62,37 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
   """
   @spec default_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
-          TransactionEventMap.t(),
-          String.t()
+          TransactionEventMap.t()
         ) ::
           EventWorker.success_tuple()
           | {:error, Changeset.t(TransactionEventMap.t()) | String.t()}
   def default_response_handler(
         response,
-        %TransactionEventMap{} = event_map,
-        module_name
+        %TransactionEventMap{} = event_map
       ) do
     case response do
       {:ok, %{transaction: transaction, event_success: event}} ->
-        Logger.info(
-          "#{module_name}: processed successfully",
-          Event.log_trace(event, transaction)
-        )
+        info("Processed successfully", event, transaction)
 
         {:ok, transaction, event}
 
       {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _} ->
-        Logger.error(
-          "#{module_name}: Input event map error",
-          log_trace(event_map, changeset.errors)
-        )
+        error("Input event map error", event_map, changeset)
 
         {:error, changeset}
 
       {:error, :new_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
-        Logger.warning(
-          "#{module_name}: Event changeset failed",
-          log_trace(event_map, get_all_errors_with_opts(event_changeset))
-        )
+        warn("Event changeset failed", event_map, event_changeset)
 
         {:error, from_event_to_event_map(event_map, event_changeset)}
 
       {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
-        Logger.warning(
-          "#{module_name}: Transaction changeset failed",
-          log_trace(event_map, get_all_errors_with_opts(trx_changeset))
-        )
+        warn("Transaction changeset failed", event_map, trx_changeset)
 
         {:error, from_transaction_to_event_map_payload(event_map, trx_changeset)}
 
       {:error, step, error, _steps_so_far} ->
-        message = "#{module_name}: Step :#{step} failed."
-
-        Logger.error(message, log_trace(event_map, error))
+        {:ok, message} = error("Step :#{step} failed.", event_map, error)
 
         {:error, "#{message} #{inspect(error)}"}
     end

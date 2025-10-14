@@ -22,11 +22,13 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap do
   """
 
   use DoubleEntryLedger.Occ.Processor
+  use DoubleEntryLedger.Logger
+
   import DoubleEntryLedger.Occ.Helper
   import DoubleEntryLedger.EventQueue.Scheduling
 
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
-    only: [default_response_handler: 3]
+    only: [default_response_handler: 2]
 
   alias DoubleEntryLedger.{Event, Repo}
 
@@ -104,11 +106,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap do
   def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
       {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
-        Logger.warning("#{@module_name}: #{last_error.message}", Event.log_trace(event))
+        warn("#{last_error.message}", event)
         {:error, event}
 
       response ->
-        default_response_handler(response, event_map, @module_name)
+        default_response_handler(response, event_map)
     end
   end
 

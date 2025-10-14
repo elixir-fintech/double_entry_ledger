@@ -10,9 +10,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveO
   """
 
   use DoubleEntryLedger.Occ.Processor
+  use DoubleEntryLedger.Logger
 
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
-    only: [default_response_handler: 3]
+    only: [default_response_handler: 2]
 
   alias DoubleEntryLedger.{EventWorker, Repo}
   alias DoubleEntryLedger.Event.TransactionEventMap
@@ -49,15 +50,12 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveO
   def process(%{action: :create_transaction} = event_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(event_map, repo) do
       {:error, :occ_timeout, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
-        Logger.warning(
-          "#{@module_name}: OCC timeout reached",
-          TransactionEventMap.log_trace(event_map, changeset.errors)
-        )
+        warn("OCC timeout reached", event_map, changeset)
 
         {:error, changeset}
 
       response ->
-        default_response_handler(response, event_map, @module_name)
+        default_response_handler(response, event_map)
     end
   end
 
