@@ -29,6 +29,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler d
 
   require Logger
 
+  use DoubleEntryLedger.Logger
+
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
       from_event_to_event_map: 2,
@@ -105,10 +107,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler d
   def default_response_handler(response, %AccountEventMap{} = event_map, module_name) do
     case response do
       {:ok, %{account: account, event_success: event}} ->
-        Logger.info(
-          "#{module_name}: processed successfully",
-          Event.log_trace(event, account)
-        )
+        info("Processed successfully", event, account)
 
         {:ok, account, event}
 

@@ -8,33 +8,22 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
     only: [
       build_mark_as_processed: 1,
       build_create_account_event_account_link: 2,
-      schedule_retry_with_reason: 3,
-      mark_as_dead_letter: 2
     ]
 
-  alias DoubleEntryLedger.Event.AccountEventMap
-  alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.{Account, Event, Repo}
-  alias DoubleEntryLedger.Stores.AccountStoreHelper
+  import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,
+    only: [default_response_handler: 2]
 
-  @spec process(Event.t()) :: {:ok, Account.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
+  alias DoubleEntryLedger.Event.AccountEventMap
+  alias Ecto.Multi
+  alias DoubleEntryLedger.{Event, Repo}
+  alias DoubleEntryLedger.Stores.AccountStoreHelper
+  alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
+
+  @spec process(Event.t()) :: AccountEventResponseHandler.response()
   def process(%Event{action: :create_account} = event) do
     build_create_account(event)
     |> Repo.transaction()
-    |> case do
-      {:ok, %{account: account, event_success: event}} ->
-        info("Processed successfully", event, account)
-
-        {:ok, account, event}
-
-      {:error, :account, changeset, _changes} ->
-        {:ok, message} = error("Account changeset failed:", event, changeset)
-        mark_as_dead_letter(event, message)
-
-      {:error, step, error, _steps_so_far} ->
-        {:ok, message} = error("Step :#{step} failed.", event, error)
-        schedule_retry_with_reason(event, message, :failed)
-    end
+    |> default_response_handler(event)
   end
 
   @spec build_create_account(Event.t()) :: Ecto.Multi.t()

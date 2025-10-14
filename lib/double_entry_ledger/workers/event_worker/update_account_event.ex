@@ -11,40 +11,24 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
       build_revert_to_pending: 2,
       build_schedule_update_retry: 2,
       build_mark_as_dead_letter: 2,
-      mark_as_dead_letter: 2,
-      schedule_retry_with_reason: 3
     ]
 
-  alias Ecto.{Changeset, Multi}
+  import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,
+    only: [default_response_handler: 2]
+
+  alias Ecto.Multi
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.{Event, Repo}
   alias DoubleEntryLedger.Stores.{AccountStoreHelper, EventStoreHelper}
+  alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
 
-  @spec process(Event.t()) :: {:ok, Account.t(), Event.t()} | {:error, Event.t() | Changeset.t()}
+  @spec process(Event.t()) :: AccountEventResponseHandler.response()
   def process(%Event{action: :update_account} = event) do
     build_update_account(event)
     |> handle_build_update_account(event)
     |> Repo.transaction()
-    |> case do
-      {:ok, %{account: account, event_success: event}} ->
-        info("Processed successfully", event, account)
-
-        {:ok, account, event}
-
-      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
-        warn(last_error.message, event)
-
-        {:error, event}
-
-      {:error, :account, changeset, _changes} ->
-        {:ok, message} = error("Account changeset failed:", event, changeset)
-        mark_as_dead_letter(event, message)
-
-      {:error, step, error, _steps_so_far} ->
-        {:ok, message} = error("Step :#{step} failed.", event, error)
-        schedule_retry_with_reason(event, message, :failed)
-    end
+    |> default_response_handler(event)
   end
 
   @spec build_update_account(Event.t()) :: Ecto.Multi.t()
