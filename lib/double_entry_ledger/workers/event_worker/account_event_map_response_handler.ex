@@ -27,15 +27,12 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler d
   - Multi step failures (logged and returned as string errors)
   """
 
-  require Logger
-
   use DoubleEntryLedger.Logger
 
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
       from_event_to_event_map: 2,
-      from_account_to_event_map_payload: 2,
-      get_all_errors_with_opts: 1
+      from_account_to_event_map_payload: 2
     ]
 
   alias Ecto.Changeset
@@ -89,22 +86,21 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler d
       iex> account = %Account{}
       iex> event = %Event{event_queue_item: %{status: :processed}}
       iex> response = {:ok, %{account: account, event_success: event}}
-      iex> {:ok, ^account, ^event} = AccountEventMapResponseHandler.default_response_handler(response, %AccountEventMap{}, "TestModule")
+      iex> {:ok, ^account, ^event} = AccountEventMapResponseHandler.default_response_handler(response, %AccountEventMap{})
 
       iex> alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
       iex> changeset = %Ecto.Changeset{}
       iex> response = {:error, :account, changeset, %{}}
       iex> event_map = %AccountEventMap{payload: %AccountData{}}
-      iex> {:error, %Ecto.Changeset{} = _changeset} = AccountEventMapResponseHandler.default_response_handler(response, event_map, "TestModule")
+      iex> {:error, %Ecto.Changeset{} = _changeset} = AccountEventMapResponseHandler.default_response_handler(response, event_map)
   """
   @spec default_response_handler(
           {:ok, %{account: Account.t(), event_success: Event.t()}}
           | {:error, :atom, any(), map()},
-          AccountEventMap.t(),
-          String.t()
+          AccountEventMap.t()
         ) ::
           response()
-  def default_response_handler(response, %AccountEventMap{} = event_map, module_name) do
+  def default_response_handler(response, %AccountEventMap{} = event_map) do
     case response do
       {:ok, %{account: account, event_success: event}} ->
         info("Processed successfully", event, account)
@@ -112,28 +108,18 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler d
         {:ok, account, event}
 
       {:error, :new_event, changeset, _changes} ->
-        Logger.warning(
-          "#{module_name}: Event changeset failed",
-          AccountEventMap.log_trace(event_map, get_all_errors_with_opts(changeset))
-        )
+        warn("Event changeset failed", event_map, changeset)
 
         {:error, from_event_to_event_map(event_map, changeset)}
 
       {:error, :account, changeset, _changes} ->
-        Logger.warning(
-          "#{module_name}: Account changeset failed",
-          AccountEventMap.log_trace(event_map, get_all_errors_with_opts(changeset))
-        )
+        warn("Event changeset failed", event_map, changeset)
+
 
         {:error, from_account_to_event_map_payload(event_map, changeset)}
 
       {:error, step, error, _steps_so_far} ->
-        message = "#{module_name}: Step :#{step} failed."
-
-        Logger.error(
-          message,
-          AccountEventMap.log_trace(event_map, error)
-        )
+        {:ok, message} = error("Step :#{step} failed.", event_map, error)
 
         {:error, "#{message} #{inspect(error)}"}
     end
