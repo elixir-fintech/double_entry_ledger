@@ -118,7 +118,12 @@ defmodule DoubleEntryLedger.Event.EventMap do
       }) |> Ecto.Changeset.apply_action(:insert)
   """
   require Ecto.Schema
-  import Ecto.Changeset, only: [cast: 3, validate_required: 2, validate_inclusion: 3]
+  import Ecto.Changeset, only: [
+    cast: 3,
+    validate_required: 2,
+    validate_inclusion: 3,
+    validate_format: 3
+  ]
 
   @typedoc """
   Generic EventMap type parameterized by payload type.
@@ -318,6 +323,8 @@ defmodule DoubleEntryLedger.Event.EventMap do
           :source_idempk
         ])
         |> validate_required([:action, :instance_address, :source, :source_idempk])
+        |> validate_format(:source, ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/)
+        |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
         |> validate_inclusion(
           :action,
           case "#{unquote(payload_mod)}" do

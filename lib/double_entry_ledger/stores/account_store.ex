@@ -229,7 +229,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
         instance_address,
         attrs,
         idempotent_id,
-        source \\ "AccountStore.create/2"
+        source \\ "account_store-create"
       ) do
     response =
       EventApi.process_from_params(%{
@@ -298,7 +298,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
         address,
         attrs,
         update_idempotent_id,
-        update_source \\ "AccountStore.update/2"
+        update_source \\ "account_store-update"
       ) do
     account = get_by_address(instance_address, address)
     event = EventStore.get_create_account_event(account.id)
