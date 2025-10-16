@@ -67,15 +67,35 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
 
   This ensures that the payload is always of type `AccountData.t()`.
   """
-  import Ecto.Changeset, only: [cast_embed: 3, apply_action: 2, add_error: 4]
+  use Ecto.Schema
 
-  alias DoubleEntryLedger.Event.{EventMap, AccountData}
+  import Ecto.Changeset,
+    only: [
+      cast: 3,
+      cast_embed: 3,
+      apply_action: 2,
+      add_error: 4,
+      validate_format: 3,
+      validate_required: 2,
+      validate_inclusion: 3
+    ]
+
+  import DoubleEntryLedger.Event.EventMap, only: [fetch_action: 1]
+  alias DoubleEntryLedger.Event.AccountData
   alias Ecto.Changeset
-
-  use EventMap, payload: AccountData
 
   alias __MODULE__, as: AccountEventMap
 
+  @derive {Jason.Encoder,
+           only: [
+             :action,
+             :instance_address,
+             :source,
+             :source_idempk,
+             :update_idempk,
+             :update_source,
+             :payload
+           ]}
   @typedoc """
   Type definition for AccountEventMap struct.
 
@@ -96,7 +116,26 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
         # payload is guaranteed to be AccountData.t()
       end
   """
-  @type t :: EventMap.t(AccountData.t())
+  @type t() :: %AccountEventMap{
+          action: :create_account | :update_account,
+          instance_address: String.t(),
+          source: String.t(),
+          source_idempk: String.t(),
+          update_idempk: String.t() | nil,
+          update_source: String.t() | nil,
+          payload: AccountData.t()
+        }
+  @primary_key false
+  embedded_schema do
+    field(:action, Ecto.Enum, values: DoubleEntryLedger.Event.actions(:account))
+    field(:instance_address, :string)
+    field(:source, :string)
+    field(:source_idempk, :string)
+    field(:update_idempk, :string)
+    field(:update_source, :string)
+
+    embeds_one(:payload, AccountData, on_replace: :delete)
+  end
 
   @doc """
   Creates and validates an AccountEventMap from the given attributes.
@@ -237,37 +276,37 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
     end
   end
 
-  @doc """
-  Converts an AccountData payload to a plain map representation.
+  def base_changeset(struct, attrs) do
+    struct
+    |> cast(attrs, [
+      :action,
+      :instance_address,
+      :source,
+      :source_idempk
+    ])
+    |> validate_required([:action, :instance_address, :source, :source_idempk])
+    |> validate_format(:source, ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/)
+    |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
+    |> validate_inclusion(:action, DoubleEntryLedger.Event.actions(:account))
+  end
 
-  This function implements the EventMap behavior callback for AccountData payloads.
-  It delegates to the `AccountData.to_map/1` function to ensure consistent
-  serialization of account data.
+  def update_changeset(struct, attrs) do
+    struct
+    |> cast(attrs, [:update_idempk, :update_source])
+    |> base_changeset(attrs)
+    |> validate_required([:update_idempk])
+  end
 
-  ## Parameters
-
-  * `payload` - The AccountData struct to convert
-
-  ## Returns
-
-  * A map representation of the account data
-
-  ## Examples
-
-      iex> alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
-      iex> payload = %AccountData{name: "Test Account", type: :asset, currency: "USD"}
-      iex> map = AccountEventMap.payload_to_map(payload)
-      iex> map.name
-      "Test Account"
-      iex> map.type
-      :asset
-
-  ## Implementation Note
-
-  This function is required by the EventMap behavior and is called automatically
-  when using `to_map/1` on the complete EventMap struct.
-  """
-  @impl true
-  @spec payload_to_map(AccountData.t()) :: map()
-  def payload_to_map(payload), do: AccountData.to_map(payload)
+  @spec to_map(struct()) :: map()
+  def to_map(event_map) do
+    %{
+      action: Map.get(event_map, :action),
+      instance_address: Map.get(event_map, :instance_address),
+      source: Map.get(event_map, :source),
+      source_idempk: Map.get(event_map, :source_idempk),
+      update_idempk: Map.get(event_map, :update_idempk),
+      update_source: Map.get(event_map, :update_source),
+      payload: AccountData.to_map(Map.get(event_map, :payload))
+    }
+  end
 end
