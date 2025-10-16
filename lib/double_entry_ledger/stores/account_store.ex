@@ -217,10 +217,6 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
       iex> {:ok, account} = AccountStore.create(address, attrs, "unique_id_123")
       iex> account.address
       "account:main1"
-      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.AccountEventMap{}, errors: errors}} = AccountStore.create(address, attrs, "unique_id_123")
-      iex> {idempotent_error, _} = Keyword.get(errors, :source_idempk)
-      iex> idempotent_error
-      "already exists for this instance"
 
   """
   @spec create(String.t(), create_map(), String.t(), String.t()) ::

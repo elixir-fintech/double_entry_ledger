@@ -27,25 +27,45 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create index(:events, [:update_source], prefix: @schema_prefix)
     create index(:events, [:instance_id], prefix: @schema_prefix)
     create index(:events, [:instance_id, :action], prefix: @schema_prefix)
-    create unique_index(:events, [:instance_id, :source, :source_idempk],
-      prefix: @schema_prefix,
-      name: "unique_for_create_transaction",
-      where: "action = 'create_transaction'"
+    create index(:events, [
+        :instance_id,
+        "(event_map->>'source')",
+        "(event_map->>'source_idempk')"
+      ],
+      where: "event_map->>'action' = 'create_transaction'",
+      name: "idx_events_create_transaction_triple_expr",
+      prefix: @schema_prefix
     )
-    create unique_index(:events, [:instance_id, :source, :source_idempk, :update_idempk],
-      prefix: @schema_prefix,
-      name: "unique_for_update_transaction",
-      where: "action = 'update_transaction'"
+    create index(:events, [
+        :instance_id,
+        "(event_map->>'source')",
+        "(event_map->>'source_idempk')",
+        "(event_map->>'update_idempk')"
+      ],
+      where: "event_map->>'action' = 'update_transaction'",
+      name: "idx_events_update_transaction_triple_expr",
+      prefix: @schema_prefix
     )
-    create unique_index(:events, [:instance_id, :source, :source_idempk],
-      prefix: @schema_prefix,
-      name: "unique_for_create_account",
-      where: "action = 'create_account'"
-    )
-    create unique_index(:events, [:instance_id, :source, :source_idempk, :update_idempk],
-      prefix: @schema_prefix,
-      name: "unique_for_update_account",
-      where: "action = 'update_account'"
-    )
+
+    #create unique_index(:events, [:instance_id, :source, :source_idempk],
+      #prefix: @schema_prefix,
+      #name: "unique_for_create_transaction",
+      #where: "action = 'create_transaction'"
+    #)
+    #create unique_index(:events, [:instance_id, :source, :source_idempk, :update_idempk],
+      #prefix: @schema_prefix,
+      #name: "unique_for_update_transaction",
+      #where: "action = 'update_transaction'"
+    #)
+    #create unique_index(:events, [:instance_id, :source, :source_idempk],
+      #prefix: @schema_prefix,
+      #name: "unique_for_create_account",
+      #where: "action = 'create_account'"
+    #)
+    #create unique_index(:events, [:instance_id, :source, :source_idempk, :update_idempk],
+      #prefix: @schema_prefix,
+      #name: "unique_for_update_account",
+      #where: "action = 'update_account'"
+    #)
   end
 end

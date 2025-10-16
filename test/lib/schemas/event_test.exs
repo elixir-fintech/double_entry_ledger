@@ -42,7 +42,8 @@ defmodule DoubleEntryLedger.EventTest do
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
     end
 
-    test "idempotent: can't save the same event twice" do
+    test "idempotency is not enforced at event creation" do
+
       %{instance: inst} = create_instance()
 
       attrs = %{
@@ -54,10 +55,9 @@ defmodule DoubleEntryLedger.EventTest do
       }
 
       transaction_event_map = struct(TransactionEventMap, attrs)
-      assert {:ok, _event} = EventStore.create(transaction_event_map)
-
-      assert {:error, %{errors: [source_idempk: {_, [{:constraint, :unique}, _]}]}} =
-               EventStore.create(transaction_event_map)
+      assert {:ok, event} = EventStore.create(transaction_event_map)
+      assert {:ok, event2} = EventStore.create(transaction_event_map)
+      assert event.id != event2.id
     end
   end
 
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.EventTest do
                Event.changeset(%Event{}, attrs)
     end
 
-    test "idempotent: can't save the same update event twice" do
+    test "idempotency is not enforced when creating events" do
       %{instance: inst} = create_instance()
 
       attrs = %TransactionEventMap{
@@ -94,20 +94,9 @@ defmodule DoubleEntryLedger.EventTest do
         payload: pending_payload()
       }
 
-      assert {:ok, _event} = EventStore.create(attrs)
-
-      assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
-               EventStore.create(attrs)
-
-      # check it's true for posted and archived status as well
-      posted_payload = put_in(attrs, [Access.key!(:payload), Access.key!(:status)], :posted)
-      archived_payload = put_in(attrs, [Access.key!(:payload), Access.key!(:status)], :archived)
-
-      assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
-               EventStore.create(posted_payload)
-
-      assert {:error, %{errors: [update_idempk: {_, [{:constraint, :unique}, _]}]}} =
-               EventStore.create(archived_payload)
+      assert {:ok, event} = EventStore.create(attrs)
+      assert {:ok, event2} = EventStore.create(attrs)
+      assert event.id != event2.id
     end
   end
 end

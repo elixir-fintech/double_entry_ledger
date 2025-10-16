@@ -268,7 +268,6 @@ defmodule DoubleEntryLedger.Event do
     |> validate_required([:action, :source, :source_idempk, :instance_id, :event_map])
     |> validate_inclusion(:action, @actions)
     |> cast_assoc(:event_queue_item, with: &EventQueueItem.changeset/2, required: true)
-    |> choose_unique_constraint()
   end
 
   @spec update_changeset(Event.t(), map()) :: Ecto.Changeset.t()
@@ -277,38 +276,5 @@ defmodule DoubleEntryLedger.Event do
     |> cast(attrs, [:update_idempk, :update_source])
     |> validate_required([:update_idempk])
     |> base_changeset(attrs)
-  end
-
-  defp choose_unique_constraint(changeset) do
-    action = get_field(changeset, :action)
-
-    case action do
-      :create_transaction ->
-        unique_constraint(changeset, :source_idempk,
-          name: "unique_for_create_transaction",
-          message: "already exists for this instance"
-        )
-
-      :update_transaction ->
-        unique_constraint(changeset, :update_idempk,
-          name: "unique_for_update_transaction",
-          message: "already exists for this source_idempk"
-        )
-
-      :create_account ->
-        unique_constraint(changeset, :source_idempk,
-          name: "unique_for_create_account",
-          message: "already exists for this instance"
-        )
-
-      :update_account ->
-        unique_constraint(changeset, :update_idempk,
-          name: "unique_for_update_account",
-          message: "already exists for this source_idempk"
-        )
-
-      _ ->
-        changeset
-    end
   end
 end
