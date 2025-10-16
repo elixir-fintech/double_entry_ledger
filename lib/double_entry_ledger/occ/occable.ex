@@ -55,7 +55,7 @@ end
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
   alias Ecto.{Multi, Repo, Changeset}
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.Event.{ErrorMap, TransactionData}
+  alias DoubleEntryLedger.Event.{ErrorMap, TransactionData, IdempotencyKey}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer
 
@@ -83,6 +83,9 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
   def build_multi(event) do
     Multi.new()
     |> Multi.put(:occable_item, event)
+    |> Multi.insert(:idempotency, fn %{occable_item: %{instance_id: id, event_map: em}} ->
+      IdempotencyKey.changeset(id, em)
+    end)
     |> Multi.run(:transaction_map, fn _,
                                       %{
                                         occable_item: %{instance_id: id, event_map: em}
@@ -133,7 +136,7 @@ end
 
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionEventMap do
   alias Ecto.{Multi, Repo}
-  alias DoubleEntryLedger.Event.{ErrorMap, TransactionEventMap}
+  alias DoubleEntryLedger.Event.{ErrorMap, TransactionEventMap, IdempotencyKey}
   alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer
@@ -160,6 +163,9 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
     Multi.new()
     |> Multi.put(:occable_item, event_map)
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_by_address(address))
+    |> Multi.insert(:idempotency, fn %{_instance: %{id: id}} ->
+      IdempotencyKey.changeset(id, event_map)
+    end)
     |> Multi.run(:transaction_map, fn _,
                                       %{
                                         occable_item: %{payload: td},

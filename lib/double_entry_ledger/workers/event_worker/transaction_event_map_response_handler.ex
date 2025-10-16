@@ -38,12 +38,13 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
       from_event_to_event_map: 2,
-      from_transaction_to_event_map_payload: 2
+      from_transaction_to_event_map_payload: 2,
+      from_idempotency_key_to_event_map: 2
     ]
 
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Occ.Occable
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Event.{TransactionEventMap, IdempotencyKey}
 
   alias DoubleEntryLedger.{
     Event,
@@ -75,6 +76,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
         info("Processed successfully", event, transaction)
 
         {:ok, transaction, event}
+
+      {:error, :idempotency, %Changeset{data: %IdempotencyKey{}} = changeset, _} ->
+        error("Idempotency violation", event_map, changeset)
+
+        {:error, from_idempotency_key_to_event_map(event_map, changeset) }
 
       {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _} ->
         error("Input event map error", event_map, changeset)

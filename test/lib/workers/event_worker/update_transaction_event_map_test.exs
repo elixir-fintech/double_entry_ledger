@@ -53,7 +53,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapTest do
       # process same update_event again which should fail
       {:error, changeset} = UpdateTransactionEventMap.process(update_event)
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
-      assert Keyword.has_key?(changeset.errors, :update_idempk)
+      assert Keyword.has_key?(changeset.errors, :key_hash)
     end
 
     test "dead letter when create event does not exist", ctx do

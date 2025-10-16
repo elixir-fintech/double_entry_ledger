@@ -103,9 +103,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> transaction.status
       :posted
       iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}} = changeset} = TransactionStore.create(instance.address, create_attrs , "unique_id_123")
-      iex> {idempotent_error, _} = Keyword.get(changeset.errors, :source_idempk)
+      iex> {idempotent_error, _} = Keyword.get(changeset.errors, :key_hash)
       iex> idempotent_error
-      "already exists for this instance"
+      "idempotency violation"
 
   """
   @spec create(String.t(), create_map(), String.t(),
@@ -178,9 +178,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, posted} = TransactionStore.update(instance.address, pending.id, update_attrs, "unique_id_456")
       iex> posted.status == :posted && posted.id == pending.id
       iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}} = changeset} = TransactionStore.update(instance.address, pending.id, update_attrs , "unique_id_456")
-      iex> {idempotent_error, _} = Keyword.get(changeset.errors, :update_idempk)
+      iex> {idempotent_error, _} = Keyword.get(changeset.errors, :key_hash)
       iex> idempotent_error
-      "already exists for this source_idempk"
+      "idempotency violation"
 
   """
   @spec update(String.t(), Ecto.UUID.t(), update_map(), String.t(),

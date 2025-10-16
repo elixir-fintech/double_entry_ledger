@@ -23,15 +23,20 @@ defmodule DoubleEntryLedger.Event.IdempotencyKey do
   end
 
   @spec changeset(Ecto.UUID.t(), map()) :: Ecto.Changeset.t(IdempotencyKey.t())
-  def changeset(instance_id, %{action: a, source: s, source_idempk: sid} = event) do
-    key_hash = case Map.get(event, :update_idempk) do
-      nil -> key_hash("#{a}|#{s}|#{sid}")
-      uid -> key_hash("#{a}|#{s}|#{sid}|#{uid}")
-    end
+  def changeset(instance_id, %{action: a, source: s, source_idempk: sid, update_idempk: uid}) do
+    create_changeset(instance_id, "#{a}|#{s}|#{sid}|#{uid}")
+  end
 
-    %IdempotencyKey{}
-    |> change(%{instance_id: instance_id, key_hash: key_hash})
-    |> unique_constraint([:instance_id, :key_hash], message: "already_exists", error_key: :key_hash)
+  def changeset(instance_id, %{action: a, source: s, source_idempk: sid}) do
+    create_changeset(instance_id, "#{a}|#{s}|#{sid}")
+  end
+
+  def changeset(instance_id, %{"action" => a, "source"=> s, "source_idempk" => sid, "update_idempk" => uid}) do
+    create_changeset(instance_id, "#{a}|#{s}|#{sid}|#{uid}")
+  end
+
+  def changeset(instance_id, %{"action" => a, "source"=> s, "source_idempk" => sid}) do
+    create_changeset(instance_id, "#{a}|#{s}|#{sid}")
   end
 
   @spec key_hash(binary) :: binary
@@ -43,6 +48,12 @@ defmodule DoubleEntryLedger.Event.IdempotencyKey do
   @spec key_hash_hex(binary()) :: binary()
   def key_hash_hex(idempotency_key) do
     key_hash(idempotency_key) |> Base.encode16(case: :lower)
+  end
+
+  defp create_changeset(instance_id, key_string) do
+    %IdempotencyKey{}
+    |> change(%{instance_id: instance_id, key_hash: key_hash(key_string)})
+    |> unique_constraint([:instance_id, :key_hash], message: "idempotency violation", error_key: :key_hash)
   end
 
   @spec secret() :: binary()

@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.Event.IdempotencyKeyTest do
 
       assert {:error, %Ecto.Changeset{errors:
       [key_hash: {
-        "already_exists",
+        "idempotency violation",
         [constraint: :unique, constraint_name: "idempotency_keys_instance_id_key_hash_index"]
       }]}} = Repo.insert(
         IdempotencyKey.changeset(id, %{source: "123", action: "create_transaction", source_idempk: "123456"})

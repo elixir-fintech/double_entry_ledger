@@ -45,7 +45,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveO
       # process same event_map again which should fail
       {:error, changeset} = CreateTransactionEventMapNoSaveOnError.process(event_map)
       assert %Changeset{data: %TransactionEventMapSchema{}} = changeset
-      assert Keyword.has_key?(changeset.errors, :source_idempk)
+      assert Keyword.has_key?(changeset.errors, :key_hash)
     end
 
     test "return TransactionEventMap changeset for other errors", ctx do

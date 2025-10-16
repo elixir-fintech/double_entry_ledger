@@ -21,7 +21,8 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     TransactionEventMap,
     AccountData,
     TransactionData,
-    EntryData
+    EntryData,
+    IdempotencyKey
   }
 
   alias DoubleEntryLedger.{Account, Event, Transaction}
@@ -117,6 +118,16 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     |> Map.put(:action, :insert)
   end
 
+  @spec from_idempotency_key_to_event_map(
+          TransactionEventMap.t(),
+          Ecto.Changeset.t(IdempotencyKey.t())
+        ) ::
+          Ecto.Changeset.t(TransactionEventMap.t())
+  def from_idempotency_key_to_event_map(event_map, ik_changeset) do
+    build_event_map_changeset(event_map)
+    |> transfer_errors_between_changesets(ik_changeset, [:key_hash])
+  end
+
   @doc """
   Returns errors grouped by field as a map of lists of `{message_template, opts}` tuples.
 
@@ -186,6 +197,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   defp build_event_map_changeset(%TransactionEventMap{} = event_map) do
     %TransactionEventMap{}
     |> TransactionEventMap.changeset(TransactionEventMap.to_map(event_map))
+    |> Map.put(:action, "insert")
   end
 
   @doc false
