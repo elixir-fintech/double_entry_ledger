@@ -80,7 +80,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       validate_inclusion: 3
     ]
 
-  import DoubleEntryLedger.Event.EventMap, only: [fetch_action: 1]
+  import DoubleEntryLedger.Event.Helper, only: [fetch_action: 1]
   alias DoubleEntryLedger.Event.AccountData
   alias Ecto.Changeset
 

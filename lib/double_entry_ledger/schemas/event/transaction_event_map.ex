@@ -108,12 +108,27 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         }
       })
   """
-  import Ecto.Changeset, only: [cast_embed: 3, apply_action: 2, add_error: 4]
+  use Ecto.Schema
 
-  alias DoubleEntryLedger.Event.{EventMap, TransactionData}
+  import DoubleEntryLedger.Event.Helper,
+    only: [
+      fetch_action: 1
+    ]
+
+  import Ecto.Changeset,
+    only: [
+      cast_embed: 3,
+      apply_action: 2,
+      add_error: 4,
+      cast: 3,
+      validate_required: 2,
+      validate_inclusion: 3,
+      validate_format: 3
+    ]
+
+  alias DoubleEntryLedger.Event.TransactionData
+  alias DoubleEntryLedger.Event
   alias Ecto.Changeset
-
-  use EventMap, payload: TransactionData
 
   alias __MODULE__, as: TransactionEventMap
 
@@ -153,7 +168,37 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
         # Implementation
       end
   """
-  @type t :: EventMap.t(TransactionData.t())
+  @type t() :: %TransactionEventMap{
+          action: :create_transaction | :update_transaction,
+          instance_address: String.t(),
+          source: String.t(),
+          source_idempk: String.t(),
+          update_idempk: String.t() | nil,
+          update_source: String.t() | nil,
+          payload: TransactionData.t()
+        }
+
+  @derive {Jason.Encoder,
+           only: [
+             :action,
+             :instance_address,
+             :source,
+             :source_idempk,
+             :update_idempk,
+             :update_source,
+             :payload
+           ]}
+
+  @primary_key false
+  embedded_schema do
+    field(:action, Ecto.Enum, values: Event.actions(:transaction))
+    field(:instance_address, :string)
+    field(:source, :string)
+    field(:source_idempk, :string)
+    field(:update_idempk, :string)
+    field(:update_source, :string)
+    embeds_one(:payload, TransactionData, on_replace: :delete)
+  end
 
   @doc """
   Builds a validated TransactionEventMap or returns a changeset with errors.
@@ -307,42 +352,37 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
     end
   end
 
-  @doc """
-  Converts a TransactionData payload to a plain map representation.
+  def base_changeset(struct, attrs) do
+    struct
+    |> cast(attrs, [
+      :action,
+      :instance_address,
+      :source,
+      :source_idempk
+    ])
+    |> validate_required([:action, :instance_address, :source, :source_idempk])
+    |> validate_format(:source, ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/)
+    |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
+    |> validate_inclusion(:action, Event.actions(:transaction))
+  end
 
-  This function implements the EventMap behavior callback for payload serialization.
-  It delegates to the TransactionData module's `to_map/1` function to ensure
-  consistent serialization of transaction payloads across the system.
+  def update_changeset(struct, attrs) do
+    struct
+    |> cast(attrs, [:update_idempk, :update_source])
+    |> base_changeset(attrs)
+    |> validate_required([:update_idempk])
+  end
 
-  ## Parameters
-
-  * `payload` - The TransactionData struct to convert
-
-  ## Returns
-
-  * A map representation of the transaction payload
-
-  ## Implementation Details
-
-  This function serves as the bridge between the generic EventMap `to_map/1` functionality
-  and the specific TransactionData serialization logic. It ensures that when a
-  TransactionEventMap is converted to a map, the payload is properly serialized
-  using TransactionData's own serialization rules.
-
-  ## Examples
-
-      iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
-      iex> payload = %TransactionData{status: :pending}
-      iex> map = TransactionEventMap.payload_to_map(payload)
-      iex> is_map(map)
-      true
-
-      iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
-      iex> payload = %TransactionData{status: :posted, entries: []}
-      iex> map = TransactionEventMap.payload_to_map(payload)
-      iex> map[:status]
-      :posted
-  """
-  @impl true
-  def payload_to_map(payload), do: TransactionData.to_map(payload)
+  @spec to_map(struct()) :: map()
+  def to_map(event_map) do
+    %{
+      action: Map.get(event_map, :action),
+      instance_address: Map.get(event_map, :instance_address),
+      source: Map.get(event_map, :source),
+      source_idempk: Map.get(event_map, :source_idempk),
+      update_idempk: Map.get(event_map, :update_idempk),
+      update_source: Map.get(event_map, :update_source),
+      payload: TransactionData.to_map(Map.get(event_map, :payload))
+    }
+  end
 end

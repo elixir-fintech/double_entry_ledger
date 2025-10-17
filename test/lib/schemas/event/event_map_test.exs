@@ -1,7 +1,7 @@
-defmodule DoubleEntryLedger.Event.EventMapTest do
+defmodule DoubleEntryLedger.Event.HelperTest do
   use ExUnit.Case, async: true
 
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Event.Helper
 
-  doctest EventMap
+  doctest Helper
 end
