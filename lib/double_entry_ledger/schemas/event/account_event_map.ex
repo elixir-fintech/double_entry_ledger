@@ -125,9 +125,13 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
           update_source: String.t() | nil,
           payload: AccountData.t()
         }
+
+  @actions [:create_account, :update_account]
+
+
   @primary_key false
   embedded_schema do
-    field(:action, Ecto.Enum, values: DoubleEntryLedger.Event.actions(:account))
+    field(:action, Ecto.Enum, values: @actions)
     field(:instance_address, :string)
     field(:source, :string)
     field(:source_idempk, :string)
@@ -136,6 +140,8 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
 
     embeds_one(:payload, AccountData, on_replace: :delete)
   end
+
+  def actions(), do: @actions
 
   @doc """
   Creates and validates an AccountEventMap from the given attributes.
@@ -287,7 +293,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
     |> validate_required([:action, :instance_address, :source, :source_idempk])
     |> validate_format(:source, ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/)
     |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
-    |> validate_inclusion(:action, DoubleEntryLedger.Event.actions(:account))
+    |> validate_inclusion(:action, @actions)
   end
 
   def update_changeset(struct, attrs) do
@@ -308,5 +314,6 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       update_source: Map.get(event_map, :update_source),
       payload: AccountData.to_map(Map.get(event_map, :payload))
     }
+    |> Map.reject(fn {_, v} -> is_nil(v) end)
   end
 end

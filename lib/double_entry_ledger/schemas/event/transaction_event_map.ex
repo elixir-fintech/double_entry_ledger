@@ -127,7 +127,6 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
     ]
 
   alias DoubleEntryLedger.Event.TransactionData
-  alias DoubleEntryLedger.Event
   alias Ecto.Changeset
 
   alias __MODULE__, as: TransactionEventMap
@@ -178,6 +177,8 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
           payload: TransactionData.t()
         }
 
+  @actions [:create_transaction, :update_transaction]
+
   @derive {Jason.Encoder,
            only: [
              :action,
@@ -191,7 +192,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   @primary_key false
   embedded_schema do
-    field(:action, Ecto.Enum, values: Event.actions(:transaction))
+    field(:action, Ecto.Enum, values: @actions)
     field(:instance_address, :string)
     field(:source, :string)
     field(:source_idempk, :string)
@@ -199,6 +200,8 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
     field(:update_source, :string)
     embeds_one(:payload, TransactionData, on_replace: :delete)
   end
+
+  def actions(), do: @actions
 
   @doc """
   Builds a validated TransactionEventMap or returns a changeset with errors.
@@ -363,7 +366,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
     |> validate_required([:action, :instance_address, :source, :source_idempk])
     |> validate_format(:source, ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/)
     |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
-    |> validate_inclusion(:action, Event.actions(:transaction))
+    |> validate_inclusion(:action, @actions)
   end
 
   def update_changeset(struct, attrs) do
@@ -384,5 +387,6 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       update_source: Map.get(event_map, :update_source),
       payload: TransactionData.to_map(Map.get(event_map, :payload))
     }
+    |> Map.reject(fn {_, v} -> is_nil(v) end)
   end
 end

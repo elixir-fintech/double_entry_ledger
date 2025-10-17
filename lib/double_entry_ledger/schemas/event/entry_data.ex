@@ -120,8 +120,10 @@ defmodule DoubleEntryLedger.Event.EntryData do
       iex> alias DoubleEntryLedger.Event.EntryData
       iex> entry_data = %EntryData{}
       iex> EntryData.to_map(entry_data)
-      %{account_address: nil, amount: nil, currency: nil}
-
+      %{}
+      iex> entry_data = %EntryData{account_address: "cash:user:123", amount: 10000, currency: :USD}
+      iex> EntryData.to_map(entry_data)
+      %{account_address: "cash:user:123", amount: 10000, currency: :USD}
   """
   @spec to_map(t) :: map()
   def to_map(entry_data) do
@@ -130,5 +132,6 @@ defmodule DoubleEntryLedger.Event.EntryData do
       amount: Map.get(entry_data, :amount),
       currency: Map.get(entry_data, :currency)
     }
+    |> Map.reject(fn {_, v} -> is_nil(v) end)
   end
 end

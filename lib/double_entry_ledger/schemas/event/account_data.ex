@@ -210,8 +210,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       type: Map.get(account_data, :type),
       allowed_negative: Map.get(account_data, :allowed_negative)
     }
-    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-    |> Enum.into(%{})
+    |> Map.reject(fn {_k, v} -> is_nil(v) end)
   end
 
   def to_map(_), do: %{}
