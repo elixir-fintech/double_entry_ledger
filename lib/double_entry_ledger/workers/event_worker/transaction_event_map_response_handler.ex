@@ -80,7 +80,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
       {:error, :idempotency, %Changeset{data: %IdempotencyKey{}} = changeset, _} ->
         error("Idempotency violation", event_map, changeset)
 
-        {:error, from_idempotency_key_to_event_map(event_map, changeset) }
+        {:error, from_idempotency_key_to_event_map(event_map, changeset)}
 
       {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _} ->
         error("Input event map error", event_map, changeset)

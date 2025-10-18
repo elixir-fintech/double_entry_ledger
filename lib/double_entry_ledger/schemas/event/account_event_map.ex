@@ -128,7 +128,6 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
 
   @actions [:create_account, :update_account]
 
-
   @primary_key false
   embedded_schema do
     field(:action, Ecto.Enum, values: @actions)

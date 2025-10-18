@@ -112,7 +112,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
       from(eqi in EventQueueItem, where: eqi.id == ^event_qi.id)
       |> Repo.update_all(set: [status: :dead_letter])
 
-
       {:ok, update_event} =
         EventStore.create(
           account_event_attrs(%{

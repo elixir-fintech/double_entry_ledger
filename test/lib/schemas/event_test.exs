@@ -44,7 +44,6 @@ defmodule DoubleEntryLedger.EventTest do
     end
 
     test "idempotency is not enforced at event creation" do
-
       %{instance: inst} = create_instance()
 
       attrs = %{

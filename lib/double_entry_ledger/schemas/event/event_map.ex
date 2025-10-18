@@ -58,7 +58,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
     end
   end
 
-  def load(nil, _, _ ), do: nil
+  def load(nil, _, _), do: nil
   def load(_, _, _), do: :error
 
   @impl true

@@ -90,7 +90,8 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
                                       %{
                                         occable_item: %{
                                           instance_id: id,
-                                          event_map: %{payload: td}}
+                                          event_map: %{payload: td}
+                                        }
                                       } ->
       case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
         {:ok, transaction_map} -> {:ok, transaction_map}

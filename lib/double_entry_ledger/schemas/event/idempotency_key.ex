@@ -10,10 +10,10 @@ defmodule DoubleEntryLedger.Event.IdempotencyKey do
   alias DoubleEntryLedger.Instance
 
   @type t() :: %IdempotencyKey{
-    instance_id: Ecto.UUID.t(),
-    key_hash: binary(),
-    first_seen_at: DateTime.t()
-  }
+          instance_id: Ecto.UUID.t(),
+          key_hash: binary(),
+          first_seen_at: DateTime.t()
+        }
 
   @primary_key false
   schema "idempotency_keys" do
@@ -31,11 +31,16 @@ defmodule DoubleEntryLedger.Event.IdempotencyKey do
     create_changeset(instance_id, "#{a}|#{s}|#{sid}")
   end
 
-  def changeset(instance_id, %{"action" => a, "source"=> s, "source_idempk" => sid, "update_idempk" => uid}) do
+  def changeset(instance_id, %{
+        "action" => a,
+        "source" => s,
+        "source_idempk" => sid,
+        "update_idempk" => uid
+      }) do
     create_changeset(instance_id, "#{a}|#{s}|#{sid}|#{uid}")
   end
 
-  def changeset(instance_id, %{"action" => a, "source"=> s, "source_idempk" => sid}) do
+  def changeset(instance_id, %{"action" => a, "source" => s, "source_idempk" => sid}) do
     create_changeset(instance_id, "#{a}|#{s}|#{sid}")
   end
 
@@ -53,7 +58,10 @@ defmodule DoubleEntryLedger.Event.IdempotencyKey do
   defp create_changeset(instance_id, key_string) do
     %IdempotencyKey{}
     |> change(%{instance_id: instance_id, key_hash: key_hash(key_string)})
-    |> unique_constraint([:instance_id, :key_hash], message: "idempotency violation", error_key: :key_hash)
+    |> unique_constraint([:instance_id, :key_hash],
+      message: "idempotency violation",
+      error_key: :key_hash
+    )
   end
 
   @spec secret() :: binary()

@@ -116,7 +116,7 @@ defmodule DoubleEntryLedger.Event do
     field(:source_idempk, :string)
     field(:update_idempk, :string)
     field(:update_source, :string)
-    #field(:event_map, :map)
+    # field(:event_map, :map)
     field(:event_map, EventMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)

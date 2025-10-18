@@ -534,37 +534,51 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
   # Private function - processes a claimed event based on its action type
   @spec process_event(Event.t()) :: success_tuple() | error_tuple()
   defp process_event(
-         %Event{event_queue_item: %{status: :processing}, event_map: %{action: :create_transaction}} = event
+         %Event{
+           event_queue_item: %{status: :processing},
+           event_map: %{action: :create_transaction}
+         } = event
        ) do
     CreateTransactionEvent.process(event)
   end
 
   defp process_event(
-         %Event{event_queue_item: %{status: :processing}, event_map: %{"action" => "create_transaction"}} = event
+         %Event{
+           event_queue_item: %{status: :processing},
+           event_map: %{"action" => "create_transaction"}
+         } = event
        ) do
     CreateTransactionEvent.process(event)
   end
 
   defp process_event(
-         %Event{event_queue_item: %{status: :processing}, event_map: %{action: :update_transaction}} = event
+         %Event{
+           event_queue_item: %{status: :processing},
+           event_map: %{action: :update_transaction}
+         } = event
        ) do
     UpdateTransactionEvent.process(event)
   end
 
   defp process_event(
-         %Event{event_queue_item: %{status: :processing}, event_map: %{"action" =>  "update_transaction"}} = event
+         %Event{
+           event_queue_item: %{status: :processing},
+           event_map: %{"action" => "update_transaction"}
+         } = event
        ) do
     UpdateTransactionEvent.process(event)
   end
 
   defp process_event(
-         %Event{event_queue_item: %{status: :processing}, event_map: %{action: :create_account}} = event
+         %Event{event_queue_item: %{status: :processing}, event_map: %{action: :create_account}} =
+           event
        ) do
     CreateAccountEvent.process(event)
   end
 
   defp process_event(
-         %Event{event_queue_item: %{status: :processing}, event_map: %{action: :update_account}} = event
+         %Event{event_queue_item: %{status: :processing}, event_map: %{action: :update_account}} =
+           event
        ) do
     UpdateAccountEvent.process(event)
   end
