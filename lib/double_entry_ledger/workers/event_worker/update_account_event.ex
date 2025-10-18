@@ -32,11 +32,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
   end
 
   @spec build_update_account(Event.t()) :: Ecto.Multi.t()
-  defp build_update_account(%Event{event_map: event_map} = event) do
-    account_data =
-      %AccountEventMap{}
-      |> AccountEventMap.changeset(event_map)
-      |> Ecto.Changeset.get_embed(:payload, :struct)
+  defp build_update_account(%Event{event_map: %{payload: account_data}} = event) do
+    #account_data =
+      #%AccountEventMap{}
+      #|> AccountEventMap.changeset(event_map)
+      #|> Ecto.Changeset.get_embed(:payload, :struct)
 
     Multi.new()
     |> EventStoreHelper.build_get_create_account_event_account(

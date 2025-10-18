@@ -55,7 +55,7 @@ end
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
   alias Ecto.{Multi, Repo, Changeset}
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.Event.{ErrorMap, TransactionData, IdempotencyKey}
+  alias DoubleEntryLedger.Event.{ErrorMap, IdempotencyKey}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer
 
@@ -88,25 +88,15 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
     end)
     |> Multi.run(:transaction_map, fn _,
                                       %{
-                                        occable_item: %{instance_id: id, event_map: em}
+                                        occable_item: %{
+                                          instance_id: id,
+                                          event_map: %{payload: td}}
                                       } ->
-      td =
-        (Map.get(em, :payload) || Map.get(em, "payload"))
-        |> to_td_struct()
-
       case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
         {:ok, transaction_map} -> {:ok, transaction_map}
         {:error, error} -> {:ok, {:error, error}}
       end
     end)
-  end
-
-  # this handles maps with string or atom keys. String keys are expected from jsonb columns
-  # in the database that are setup as map type
-  @spec to_td_struct(map()) :: TransactionData.t()
-  defp to_td_struct(%{} = map) do
-    TransactionData.update_event_changeset(%TransactionData{}, map)
-    |> Ecto.Changeset.apply_changes()
   end
 
   @doc """

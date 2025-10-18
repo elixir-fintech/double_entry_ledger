@@ -33,6 +33,7 @@ defmodule DoubleEntryLedger.EventTest do
         action: :create_transaction,
         source: "source",
         instance_id: Ecto.UUID.generate(),
+        instance_address: "inst1",
         source_idempk: "source_idempk",
         payload: pending_payload()
       }
@@ -67,6 +68,7 @@ defmodule DoubleEntryLedger.EventTest do
         action: :update_transaction,
         source: "source",
         instance_id: Ecto.UUID.generate(),
+        instance_address: "inst1",
         source_idempk: "source_idempk",
         update_idempk: "update_idempk",
         payload: %{

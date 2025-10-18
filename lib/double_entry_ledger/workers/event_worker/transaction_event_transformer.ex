@@ -103,6 +103,13 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer do
   end
 
   def transaction_data_to_transaction_map(
+        %TransactionData{status: :archived},
+        instance_id
+      ) do
+    {:ok, %{instance_id: instance_id, status: :archived}}
+  end
+
+  def transaction_data_to_transaction_map(
         %TransactionData{entries: nil, status: status},
         instance_id
       ) do

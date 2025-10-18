@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Event, Account}
+  alias DoubleEntryLedger.{Event, Account, Repo, EventQueueItem}
   alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Workers.EventWorker.{CreateAccountEvent, UpdateAccountEvent}
   alias DoubleEntryLedger.Event.AccountData
@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
           })
         )
 
-      CreateAccountEvent.process(preload(create_event))
+      CreateAccountEvent.process(create_event)
 
       {:ok, update_event} =
         EventStore.create(
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
         )
 
       assert {:ok, %Account{} = account, %Event{event_queue_item: eqi} = e} =
-               UpdateAccountEvent.process(preload(update_event))
+               UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id
       assert eqi.status == :processed
@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
         )
 
       assert {:error, %Event{event_queue_item: eqi} = e} =
-               UpdateAccountEvent.process(preload(update_event))
+               UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id
       assert eqi.status == :dead_letter
@@ -94,23 +94,24 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
         )
 
       assert {:error, %Event{event_queue_item: eqi} = e} =
-               UpdateAccountEvent.process(preload(update_event))
+               UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id
       assert eqi.status == :pending
     end
 
     test "moves to dead letter when create event is in dead letter", %{instance: instance} do
-      {:ok, %{source: src, source_idempk: sid} = create_event} =
+      {:ok, %{source: src, source_idempk: sid, event_queue_item: event_qi}} =
         EventStore.create(
           account_event_attrs(%{
             instance_address: instance.address,
-            payload: %AccountData{address: "sss"}
+            payload: %AccountData{address: "sss", type: :asset, currency: :EUR}
           })
         )
 
-      {:error, %{event_queue_item: %{status: :dead_letter}}} =
-        CreateAccountEvent.process(preload(create_event))
+      from(eqi in EventQueueItem, where: eqi.id == ^event_qi.id)
+      |> Repo.update_all(set: [status: :dead_letter])
+
 
       {:ok, update_event} =
         EventStore.create(
@@ -125,15 +126,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
         )
 
       assert {:error, %Event{event_queue_item: eqi} = e} =
-               UpdateAccountEvent.process(preload(update_event))
+               UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id
       assert eqi.status == :dead_letter
-    end
-
-    defp preload(event) do
-      Repo.reload(event)
-      |> Repo.preload(:event_queue_item)
     end
   end
 end

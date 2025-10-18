@@ -12,6 +12,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent
 
@@ -43,7 +44,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
         EventStore.create(
           transaction_event_attrs(
             instance_address: inst.address,
-            payload: %{
+            payload: %TransactionData{
               status: :posted,
               entries: [
                 %{account_address: a.address, amount: 100, currency: "EUR"},

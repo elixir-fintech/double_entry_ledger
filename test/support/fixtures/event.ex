@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       action: :create_transaction,
       source: "source",
       source_idempk: "source_idempk",
-      payload: pending_payload()
+      payload: struct(TransactionData, pending_payload())
     })
     |> then(&struct(TransactionEventMap, &1))
   end
@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       EventStore.create(
         transaction_event_attrs(
           instance_address: inst.address,
-          payload: %{
+          payload: %TransactionData{
             status: trx_status,
             entries: [
               %{
@@ -80,7 +80,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       source_idempk: source_idempk,
       instance_address: instance_address,
       update_idempk: Ecto.UUID.generate(),
-      payload: %{
+      payload: %TransactionData{
         status: trx_status,
         entries: entries
       }

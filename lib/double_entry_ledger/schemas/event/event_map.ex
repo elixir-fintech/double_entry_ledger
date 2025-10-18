@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
     This is an Ecto.ParameterizedType
   """
 
-  @behaviour Ecto.ParameterizedType
+  use Ecto.ParameterizedType
 
   import DoubleEntryLedger.Event.Helper, only: [fetch_action: 1]
 
@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
   def type(_), do: :map
 
   @impl true
-  @spec cast(map() | AccountEventMap.t() | TransactionEventMap.t(), map()) ::
+  @spec cast(map() | AccountEventMap.t() | TransactionEventMap.t() | nil, map()) ::
           {:ok, AccountEventMap.t() | TransactionEventMap.t()} | :error
   def cast(%AccountEventMap{} = struct, _params), do: {:ok, struct}
   def cast(%TransactionEventMap{} = struct, _params), do: {:ok, struct}
@@ -39,13 +39,15 @@ defmodule DoubleEntryLedger.Event.EventMap do
     end
   end
 
+  def cast(nil, _), do: {:ok, nil}
   def cast(_, _), do: :error
 
   @impl true
-  @spec dump(AccountEventMap.t() | TransactionEventMap.t() | any(), any(), any()) ::
+  @spec dump(AccountEventMap.t() | TransactionEventMap.t() | nil, any(), any()) ::
           {:ok, map()} | :error
   def dump(%AccountEventMap{} = struct, _, _), do: {:ok, AccountEventMap.to_map(struct)}
   def dump(%TransactionEventMap{} = struct, _, _), do: {:ok, TransactionEventMap.to_map(struct)}
+  def dump(nil, _, _), do: nil
   def dump(_, _, _), do: :error
 
   @impl true
@@ -56,6 +58,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
     end
   end
 
+  def load(nil, _, _ ), do: nil
   def load(_, _, _), do: :error
 
   @impl true

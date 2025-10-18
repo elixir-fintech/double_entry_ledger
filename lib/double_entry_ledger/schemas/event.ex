@@ -46,6 +46,8 @@ defmodule DoubleEntryLedger.Event do
     EventQueueItem
   }
 
+  alias DoubleEntryLedger.Event.EventMap
+
   @transaction_actions [:create_transaction, :update_transaction]
   @account_actions [:create_account, :update_account]
   @actions @transaction_actions ++ @account_actions
@@ -114,7 +116,8 @@ defmodule DoubleEntryLedger.Event do
     field(:source_idempk, :string)
     field(:update_idempk, :string)
     field(:update_source, :string)
-    field(:event_map, :map)
+    #field(:event_map, :map)
+    field(:event_map, EventMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_many(:event_transaction_links, EventTransactionLink)
@@ -181,9 +184,10 @@ defmodule DoubleEntryLedger.Event do
       ...>   source: "api",
       ...>   source_idempk: "order-123",
       ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...>   instance_address: "instance1",
       ...>   payload: %{status: :pending, entries: [
-      ...>     %{account_id: "550e8400-e29b-41d4-a716-446655440000", type: :debit, amount: 100, currency: :USD},
-      ...>     %{account_id: "650e8400-e29b-41d4-a716-446655440000", type: :credit, amount: 100, currency: :USD}
+      ...>     %{account_address: "account1", amount: 100, currency: :USD},
+      ...>     %{account_address: "account2", amount: 100, currency: :USD}
       ...>   ]}
       ...> }
       ...> attrs = Map.put(event_map, :event_map, event_map)

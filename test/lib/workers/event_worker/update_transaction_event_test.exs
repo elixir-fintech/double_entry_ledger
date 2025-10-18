@@ -12,6 +12,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Workers.EventWorker.{UpdateTransactionEvent, CreateTransactionEvent}
   alias DoubleEntryLedger.EventQueue.Scheduling
   alias DoubleEntryLedger.Stores.EventStore
@@ -210,7 +211,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
             source_idempk: s_id,
             update_idempk: "1",
             instance_address: inst.address,
-            payload: %{
+            payload: %TransactionData{
               status: :posted,
               entries: [
                 %{account_address: a.address, amount: 100, currency: "EUR"},
