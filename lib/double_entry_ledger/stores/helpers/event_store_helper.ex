@@ -61,7 +61,10 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
           Changeset.t(Event.t())
   def build_create(%TransactionEventMap{} = event_map, instance_id) do
     %Event{}
-    |> Event.changeset(%{instance_id: instance_id, event_map: TransactionEventMap.to_map(event_map)})
+    |> Event.changeset(%{
+      instance_id: instance_id,
+      event_map: TransactionEventMap.to_map(event_map)
+    })
   end
 
   def build_create(%AccountEventMap{} = event_map, instance_id) do
@@ -103,10 +106,11 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
           Event.t() | nil
   def get_event_by(action, source, source_idempk, instance_id) do
     from(e in Event,
-      where: e.instance_id == ^instance_id and
-           fragment("event_map->>? = ?", "action", ^Atom.to_string(action)) and
-           fragment("event_map->>? = ?", "source", ^source) and
-           fragment("event_map->>? = ?", "source_idempk", ^source_idempk),
+      where:
+        e.instance_id == ^instance_id and
+          fragment("event_map->>? = ?", "action", ^Atom.to_string(action)) and
+          fragment("event_map->>? = ?", "source", ^source) and
+          fragment("event_map->>? = ?", "source_idempk", ^source_idempk),
       limit: 1,
       preload: [:event_queue_item, :account, transactions: [entries: :account]]
     )
@@ -139,7 +143,8 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
           event_map: %{
             source: source,
             source_idempk: source_idempk
-        }} = event
+          }
+        } = event
       ) do
     case get_event_by(:create_transaction, source, source_idempk, id) do
       %{transactions: [transaction | _], event_queue_item: %{status: :processed}} =
@@ -179,7 +184,8 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
           event_map: %{
             source: source,
             source_idempk: source_idempk
-        }} = event
+          }
+        } = event
       ) do
     case get_event_by(:create_account, source, source_idempk, id) do
       %{account: account, event_queue_item: %{status: :processed}} =

@@ -21,7 +21,6 @@ defmodule DoubleEntryLedger.Event.Helper do
             end)
           )
 
-
   @spec actions(:transaction) :: [transaction_action()]
   @spec actions(:account) :: [account_action()]
   def actions(:transaction), do: @transaction_actions
