@@ -145,11 +145,6 @@ defmodule DoubleEntryLedger.Event do
   @spec actions() :: [action()]
   def actions(), do: @actions
 
-  @spec actions(:transaction) :: [transaction_action()]
-  @spec actions(:account) :: [account_action()]
-  def actions(:transaction), do: @transaction_actions
-  def actions(:account), do: @account_actions
-
   @doc """
   Creates a changeset for validating and creating/updating an Event.
 

@@ -15,14 +15,15 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   }
   ```
   """
+  import DoubleEntryLedger.Event.Helper, only: [actions: 1]
 
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.Stores.EventStore
 
-  @account_actions Event.actions(:account) |> Enum.map(&Atom.to_string/1)
-  @transaction_actions Event.actions(:transaction) |> Enum.map(&Atom.to_string/1)
+  @account_actions actions(:account) |> Enum.map(&Atom.to_string/1)
+  @transaction_actions actions(:transaction) |> Enum.map(&Atom.to_string/1)
 
   @type event_params() :: %{required(String.t()) => term()}
 

@@ -7,6 +7,26 @@ defmodule DoubleEntryLedger.Event.Helper do
   @transaction_actions [:create_transaction, :update_transaction]
   @account_actions [:create_account, :update_account]
 
+  @type transaction_action ::
+          unquote(
+            Enum.reduce(@transaction_actions, fn state, acc ->
+              quote do: unquote(state) | unquote(acc)
+            end)
+          )
+
+  @type account_action ::
+          unquote(
+            Enum.reduce(@account_actions, fn state, acc ->
+              quote do: unquote(state) | unquote(acc)
+            end)
+          )
+
+
+  @spec actions(:transaction) :: [transaction_action()]
+  @spec actions(:account) :: [account_action()]
+  def actions(:transaction), do: @transaction_actions
+  def actions(:account), do: @account_actions
+
   def action_to_mod(event_map) do
     case fetch_action(event_map) do
       a when a in @transaction_actions -> {:ok, TransactionEventMap}
