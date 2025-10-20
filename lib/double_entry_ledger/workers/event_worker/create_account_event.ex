@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
   alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
 
   @spec process(Event.t()) :: AccountEventResponseHandler.response()
-  def process(%Event{action: :create_account} = event) do
+  def process(%Event{event_map: %{action: :create_account}} = event) do
     build_create_account(event)
     |> Repo.transaction()
     |> default_response_handler(event)
@@ -30,11 +30,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
   defp build_create_account(
          %Event{event_map: %{payload: account_data}, instance_id: instance_id} = event
        ) do
-    # account_data =
-    # %AccountEventMap{}
-    # |> AccountEventMap.changeset(event_map)
-    # |> Ecto.Changeset.get_embed(:payload, :struct)
-
     Multi.new()
     |> Multi.insert(:account, AccountStoreHelper.build_create(account_data, instance_id))
     |> Multi.update(:event_success, build_mark_as_processed(event))

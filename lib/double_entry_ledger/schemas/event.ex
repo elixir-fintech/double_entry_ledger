@@ -5,39 +5,9 @@ defmodule DoubleEntryLedger.Event do
   This module provides the Event schema, which represents a request to create or update a
   transaction in the ledger. Events serve as an audit trail and queue mechanism for transaction
   processing, allowing for asynchronous handling, retries, and idempotency.
-
-  ## Key Concepts
-
-  * **Event Processing**: Events progress through states (:pending → :processing → :processed/:failed)
-  * **Idempotency**: Idempotency is enforced using a combination of `action`, `source`, `source_idempk` and `update_idempk`. More details
-    are in the `TransactionEventMap` module.
-  * **Transaction Data**: Each event contains embedded payload describing the requested changes
-  * **Queue Management**: Fields track processing attempts, retries, and completion status
-
-  ## Event States
-
-  * `:pending` - Newly created, not yet processed
-  * `:processing` - Currently being processed by a worker
-  * `:processed` - Successfully completed
-  * `:failed` - Processing failed with errors
-  * `:occ_timeout` - Failed due to optimistic concurrency control timeout
-
-  ## Event Actions
-
-  * `:create_transaction` - Request to create a new transaction
-  * `:update_transaction` - Request to update an existing transaction (requires update_idempk)
-
-  ## Processing Flow
-
-  1. Event is created with :pending status
-  2. Worker claims event and updates status to :processing
-  3. Worker processes the event and creates/updates a transaction
-  4. Event is updated to :processed or :failed with results
   """
 
   use DoubleEntryLedger.BaseSchema
-
-  #import DoubleEntryLedger.Event.Helper, only: [action_to_mod: 1]
 
   alias DoubleEntryLedger.{
     Transaction,
@@ -50,15 +20,6 @@ defmodule DoubleEntryLedger.Event do
 
   alias DoubleEntryLedger.Event.EventMap
 
-  @actions [:create_transaction, :update_transaction, :create_account, :update_account]
-
-  @type action ::
-          unquote(
-            Enum.reduce(@actions, fn state, acc ->
-              quote do: unquote(state) | unquote(acc)
-            end)
-          )
-
   alias __MODULE__, as: Event
 
   @typedoc """
@@ -70,10 +31,6 @@ defmodule DoubleEntryLedger.Event do
   ## Fields
 
   * `id`: UUID primary key
-  * `action`: The action type (:create_transaction or :update_transaction)
-  * `source`: Identifier for the system that originated the event
-  * `source_idempk`: Idempotency key from source system
-  * `update_idempk`: Additional idempotency key for update operations
   * `event_map`: map containing the event payload
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
@@ -82,11 +39,6 @@ defmodule DoubleEntryLedger.Event do
   """
   @type t :: %Event{
           id: Ecto.UUID.t() | nil,
-          action: action() | nil,
-          source: String.t() | nil,
-          source_idempk: String.t() | nil,
-          update_idempk: String.t() | nil,
-          update_source: String.t() | nil,
           event_map: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
@@ -102,11 +54,6 @@ defmodule DoubleEntryLedger.Event do
   @derive {Jason.Encoder, only: [:id, :event_map, :event_queue_item]}
 
   schema "events" do
-    field(:action, Ecto.Enum, values: @actions)
-    field(:source, :string)
-    field(:source_idempk, :string)
-    field(:update_idempk, :string)
-    field(:update_source, :string)
     field(:event_map, EventMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
@@ -130,18 +77,6 @@ defmodule DoubleEntryLedger.Event do
   * `event` - The Event struct to create a changeset for
   * `attrs` - Map of attributes to apply to the event
 
-  ## Special Handling
-
-  * For `:update_transaction` actions with `:pending` transaction status: Uses standard TransactionData changeset
-  * For other `:update_transaction` actions: Uses the special update_event_changeset for TransactionData
-  * For `:create_transaction` actions: Uses standard TransactionData changeset
-
-  ## Validations
-
-  * Required fields: `:action`, `:source`, `:source_idempk`, `:instance_id`
-  * For updates: also requires `:update_idempk`
-  * Enforces unique constraints for idempotency
-
   ## Returns
 
   * An Ecto.Changeset with validations applied
@@ -153,29 +88,18 @@ defmodule DoubleEntryLedger.Event do
       ...>   action: :create_transaction,
       ...>   source: "api",
       ...>   source_idempk: "order-123",
-      ...>   instance_id: "550e8400-e29b-41d4-a716-446655440000",
       ...>   instance_address: "instance1",
       ...>   payload: %{status: :pending, entries: [
       ...>     %{account_address: "account1", amount: 100, currency: :USD},
       ...>     %{account_address: "account2", amount: 100, currency: :USD}
       ...>   ]}
       ...> }
-      ...> attrs = Map.put(event_map, :event_map, event_map)
+      ...> attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
       iex> changeset = Event.changeset(%Event{}, attrs)
       iex> changeset.valid?
       true
   """
   @spec changeset(Event.t(), map()) :: Ecto.Changeset.t()
-  def changeset(event, %{event_map: %{action: :update_transaction}} = attrs) do
-    event
-    |> update_changeset(attrs)
-  end
-
-  def changeset(event, %{event_map: %{action: :update_account}} = attrs) do
-    event
-    |> update_changeset(attrs)
-  end
-
   def changeset(event, attrs) do
     event
     |> base_changeset(attrs)
@@ -228,24 +152,12 @@ defmodule DoubleEntryLedger.Event do
 
     event
     |> cast(attrs, [
-      :action,
-      :source,
-      :source_idempk,
       :instance_id,
       :event_map
     ])
-    |> validate_required([:action, :source, :source_idempk, :instance_id, :event_map])
-    |> validate_inclusion(:action, @actions)
+    |> validate_required([:instance_id, :event_map])
     |> cast_assoc(:event_queue_item, with: &EventQueueItem.changeset/2, required: true)
     #|> validate_event_map(attrs)
-  end
-
-  @spec update_changeset(Event.t(), map()) :: Ecto.Changeset.t()
-  defp update_changeset(struct, attrs) do
-    struct
-    |> cast(attrs, [:update_idempk, :update_source])
-    |> validate_required([:update_idempk])
-    |> base_changeset(attrs)
   end
 
   #defp validate_event_map(changeset, attrs) do

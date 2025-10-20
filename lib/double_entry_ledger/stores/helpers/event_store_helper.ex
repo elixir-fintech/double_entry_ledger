@@ -60,25 +60,13 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
   @spec build_create(TransactionEventMap.t() | AccountEventMap.t(), Ecto.UUID.t()) ::
           Changeset.t(Event.t())
   def build_create(%TransactionEventMap{} = event_map, instance_id) do
-    attrs =
-      event_map
-      |> TransactionEventMap.to_map()
-      |> Map.put(:instance_id, instance_id)
-      |> Map.put(:event_map, event_map)
-
     %Event{}
-    |> Event.changeset(attrs)
+    |> Event.changeset(%{instance_id: instance_id, event_map: TransactionEventMap.to_map(event_map)})
   end
 
   def build_create(%AccountEventMap{} = event_map, instance_id) do
-    attrs =
-      event_map
-      |> AccountEventMap.to_map()
-      |> Map.put(:instance_id, instance_id)
-      |> Map.put(:event_map, event_map)
-
     %Event{}
-    |> Event.changeset(attrs)
+    |> Event.changeset(%{instance_id: instance_id, event_map: AccountEventMap.to_map(event_map)})
   end
 
   @doc """

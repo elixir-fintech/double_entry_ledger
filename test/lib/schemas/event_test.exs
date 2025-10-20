@@ -19,9 +19,6 @@ defmodule DoubleEntryLedger.EventTest do
     test "not valid for empty payload" do
       assert %Changeset{
                errors: [
-                 action: {"can't be blank", [validation: :required]},
-                 source: {"can't be blank", [validation: :required]},
-                 source_idempk: {"can't be blank", [validation: :required]},
                  instance_id: {"can't be blank", [validation: :required]},
                  event_map: {"can't be blank", [validation: :required]}
                ]
@@ -32,13 +29,12 @@ defmodule DoubleEntryLedger.EventTest do
       event_map = %{
         action: :create_transaction,
         source: "source",
-        instance_id: Ecto.UUID.generate(),
         instance_address: "inst1",
         source_idempk: "source_idempk",
         payload: pending_payload()
       }
 
-      attrs = Map.put(event_map, :event_map, event_map)
+      attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
 
       assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
     end

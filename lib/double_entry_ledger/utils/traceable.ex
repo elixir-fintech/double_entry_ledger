@@ -13,14 +13,19 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event do
   alias DoubleEntryLedger.{Event, Account, Transaction}
   import DoubleEntryLedger.Utils.Changeset
 
-  def metadata(%{event_queue_item: event_queue_item} = event) do
+  def metadata(%{event_queue_item: event_queue_item, event_map: event_map} = event) do
     %{
       event_id: event.id,
       event_status: event_queue_item.status,
-      event_action: event.action,
-      event_source: event.source,
+      event_action: Map.get(event_map, :action),
+      event_source: Map.get(event_map, :source),
       event_trace_id:
-        [event.source, event.source_idempk, event.update_idempk, event.update_source]
+        [
+          Map.get(event_map, :source),
+          Map.get(event_map, :source_idempk),
+          Map.get(event_map, :update_idempk),
+          Map.get(event_map, :update_source)
+        ]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("-")
     }

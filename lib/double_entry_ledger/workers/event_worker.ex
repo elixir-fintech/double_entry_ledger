@@ -583,7 +583,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
     UpdateAccountEvent.process(event)
   end
 
-  defp process_event(%Event{event_queue_item: %{status: :processing}, action: _}) do
+  defp process_event(%Event{event_queue_item: %{status: :processing}}) do
     {:error, :action_not_supported}
   end
 

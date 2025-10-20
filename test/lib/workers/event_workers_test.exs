@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.Workers.EventWorkerTest do
          %{instance: inst, accounts: [a1, a2 | _]} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, pending_transaction, %{source: s, source_idempk: s_id}} =
+      {:ok, pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
         EventWorker.process_event_with_id(pending_event.id)
 
       assert return_available_balances(ctx) == [0, 0]

@@ -297,14 +297,14 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
         update_source \\ "account_store-update"
       ) do
     account = get_by_address(instance_address, address)
-    event = EventStore.get_create_account_event(account.id)
+    %{event_map: event_map} = EventStore.get_create_account_event(account.id)
 
     response =
       EventApi.process_from_params(%{
         "instance_address" => instance_address,
         "action" => "update_account",
-        "source" => event.source,
-        "source_idempk" => event.source_idempk,
+        "source" => event_map.source,
+        "source_idempk" => event_map.source_idempk,
         "update_idempk" => update_idempotent_id,
         "update_source" => update_source,
         "payload" => Map.delete(attrs, :instance_address)

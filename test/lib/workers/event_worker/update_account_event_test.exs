@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
     setup [:create_instance]
 
     test "successfully processes a valid update account event", %{instance: instance} do
-      {:ok, %{source: src, source_idempk: sid} = create_event} =
+      {:ok, %{event_map: %{source: src, source_idempk: sid}} = create_event} =
         EventStore.create(
           account_event_attrs(%{
             instance_address: instance.address,
@@ -73,7 +73,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
     end
 
     test "stays pending when create account event is not yet processed", %{instance: instance} do
-      {:ok, %{source: src, source_idempk: sid}} =
+      {:ok, %{event_map: %{source: src, source_idempk: sid}}} =
         EventStore.create(
           account_event_attrs(%{
             instance_address: instance.address,
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
     end
 
     test "moves to dead letter when create event is in dead letter", %{instance: instance} do
-      {:ok, %{source: src, source_idempk: sid, event_queue_item: event_qi}} =
+      {:ok, %{event_map: %{source: src, source_idempk: sid}, event_queue_item: event_qi}} =
         EventStore.create(
           account_event_attrs(%{
             instance_address: instance.address,

@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
   """
   @spec process(Event.t(), Ecto.Repo.t()) ::
           EventWorker.success_tuple() | EventWorker.error_tuple()
-  def process(%Event{action: :create_transaction} = original_event, repo \\ Repo) do
+  def process(%Event{event_map: %{action: :create_transaction}} = original_event, repo \\ Repo) do
     process_with_retry(original_event, repo)
     |> default_response_handler(original_event)
   end

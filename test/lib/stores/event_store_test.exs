@@ -38,8 +38,8 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
                found_event =
                EventStoreHelper.get_event_by(
                  :create_transaction,
-                 event.source,
-                 event.source_idempk,
+                 event.event_map.source,
+                 event.event_map.source_idempk,
                  instance.id
                )
 
@@ -47,15 +47,15 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
     end
 
     test "returns processed_transaction", %{instance: instance} = ctx do
-      %{event: event} = new_create_transaction_event(ctx, :pending)
+      %{event: %{event_map: event_map} = event} = new_create_transaction_event(ctx, :pending)
       {:ok, transaction, _} = CreateTransactionEvent.process(event)
 
       assert %Event{} =
                found_event =
                EventStoreHelper.get_event_by(
                  :create_transaction,
-                 event.source,
-                 event.source_idempk,
+                 event_map.source,
+                 event_map.source_idempk,
                  instance.id
                )
 
@@ -72,8 +72,8 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
                found_event =
                EventStoreHelper.get_event_by(
                  :create_account,
-                 event.source,
-                 event.source_idempk,
+                 event.event_map.source,
+                 event.event_map.source_idempk,
                  id
                )
 

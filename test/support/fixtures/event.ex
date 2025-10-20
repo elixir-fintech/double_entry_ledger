@@ -110,14 +110,14 @@ defmodule DoubleEntryLedger.EventFixtures do
 
   def update_transaction_event_map(
         %{instance: %{address: address}, accounts: [a1, a2, _, _]},
-        create_event,
+        %{event_map: event_map},
         trx_status \\ :posted
       ) do
     %TransactionEventMap{
       action: :update_transaction,
       instance_address: address,
-      source: create_event.source,
-      source_idempk: create_event.source_idempk,
+      source: event_map.source,
+      source_idempk: event_map.source_idempk,
       update_idempk: Ecto.UUID.generate(),
       payload: %TransactionData{
         status: trx_status,

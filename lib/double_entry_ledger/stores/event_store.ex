@@ -244,7 +244,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   def get_create_transaction_event(transaction_id) do
     base_transaction_query(transaction_id)
     |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
-    |> where([e], e.action == :create_transaction)
+    |> where([e], fragment("?->> 'action' = 'create_transaction'", e.event_map))
     |> where([_, _, eqi], eqi.status == :processed)
     |> order_by(asc: :inserted_at)
     |> Repo.one()
@@ -272,7 +272,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   def get_create_account_event(account_id) do
     base_account_query(account_id)
     |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
-    |> where([e], e.action == :create_account)
+    |> where([e], fragment("?->> 'action' = 'create_account'", e.event_map))
     |> where([_, _, eqi], eqi.status == :processed)
     |> order_by(asc: :inserted_at)
     |> preload([:event_queue_item, :transactions, :account])
@@ -305,9 +305,9 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> [trx_event, acc_event | _] = events = EventStore.list_all_for_account_id(asset_account.id)
     iex> length(events)
     2
-    iex> trx_event.action
+    iex> trx_event.event_map.action
     :create_transaction
-    iex> acc_event.action
+    iex> acc_event.event_map.action
     :create_account
 
     iex> EventStore.list_all_for_account_id(Ecto.UUID.generate())
@@ -350,9 +350,9 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> [trx_event, acc_event | _] = events = EventStore.list_all_for_account_address(instance.address, liability_account.address)
     iex> length(events)
     2
-    iex> trx_event.action
+    iex> trx_event.event_map.action
     :create_transaction
-    iex> acc_event.action
+    iex> acc_event.event_map.action
     :create_account
 
     iex> alias DoubleEntryLedger.Stores.{EventStore, InstanceStore}

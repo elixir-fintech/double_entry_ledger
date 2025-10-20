@@ -17,8 +17,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
       event_map = %AccountEventMap{
         action: :update_account,
         instance_address: instance.address,
-        source: event.source,
-        source_idempk: event.source_idempk,
+        source: event.event_map.source,
+        source_idempk: event.event_map.source_idempk,
         update_idempk: "update_456",
         payload: %AccountData{
           description: "Updated Description"
@@ -34,8 +34,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
       event_map = %AccountEventMap{
         action: :update_account,
         instance_address: instance.address,
-        source: event.source,
-        source_idempk: event.source_idempk,
+        source: event.event_map.source,
+        source_idempk: event.event_map.source_idempk,
         payload: %AccountData{
           description: "Updated Description"
         }

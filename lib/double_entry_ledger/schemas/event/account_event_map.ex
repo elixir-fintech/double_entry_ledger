@@ -298,8 +298,8 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
   def update_changeset(struct, attrs) do
     struct
     |> cast(attrs, [:update_idempk, :update_source])
-    |> base_changeset(attrs)
     |> validate_required([:update_idempk])
+    |> base_changeset(attrs)
   end
 
   @spec to_map(struct()) :: map()

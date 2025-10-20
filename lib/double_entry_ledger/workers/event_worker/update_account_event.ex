@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
   alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
 
   @spec process(Event.t()) :: AccountEventResponseHandler.response()
-  def process(%Event{action: :update_account} = event) do
+  def process(%Event{event_map: %{action: :update_account}} = event) do
     build_update_account(event)
     |> handle_build_update_account(event)
     |> Repo.transaction()

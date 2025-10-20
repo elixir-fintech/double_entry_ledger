@@ -7,9 +7,9 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
     create table(:events, primary_key: false, prefix: @schema_prefix) do
       add :id, :binary_id, primary_key: true
 
-      add :action, :string, null: false
-      add :source, :string, null: false
-      add :source_idempk, :string, null: false
+      add :action, :string
+      add :source, :string
+      add :source_idempk, :string
       add :update_idempk, :string
       add :update_source, :string
 
@@ -22,11 +22,11 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateEvents do
 
     # Optionally, add indexes for performance optimization
     create index(:events, [:inserted_at], prefix: @schema_prefix)
-    create index(:events, [:source], prefix: @schema_prefix)
-    create index(:events, [:source_idempk], prefix: @schema_prefix)
-    create index(:events, [:update_source], prefix: @schema_prefix)
+#    create index(:events, [:source], prefix: @schema_prefix)
+#    create index(:events, [:source_idempk], prefix: @schema_prefix)
+#    create index(:events, [:update_source], prefix: @schema_prefix)
     create index(:events, [:instance_id], prefix: @schema_prefix)
-    create index(:events, [:instance_id, :action], prefix: @schema_prefix)
+#    create index(:events, [:instance_id, :action], prefix: @schema_prefix)
     create index(:events, [
         :instance_id,
         "(event_map->>'action')",
