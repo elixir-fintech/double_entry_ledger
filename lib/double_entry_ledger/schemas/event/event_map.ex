@@ -5,19 +5,13 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   use Ecto.ParameterizedType
 
-  import DoubleEntryLedger.Event.Helper, only: [fetch_action: 1]
+  import DoubleEntryLedger.Event.Helper, only: [action_to_mod: 1]
 
   alias DoubleEntryLedger.Event.{AccountEventMap, TransactionEventMap}
 
   @impl true
-  @spec init(any()) :: %{action_to_mod: map()}
-  def init(_ops) do
-    %{
-      action_to_mod:
-        Map.new(TransactionEventMap.actions(), &{&1, TransactionEventMap})
-        |> Map.merge(Map.new(AccountEventMap.actions(), &{&1, AccountEventMap}))
-    }
-  end
+  @spec init(any()) :: %{}
+  def init(_ops), do: %{}
 
   @impl true
   @spec type(any()) :: :map
@@ -29,9 +23,8 @@ defmodule DoubleEntryLedger.Event.EventMap do
   def cast(%AccountEventMap{} = struct, _params), do: {:ok, struct}
   def cast(%TransactionEventMap{} = struct, _params), do: {:ok, struct}
 
-  def cast(%{} = map, %{action_to_mod: index}) do
-    with action <- fetch_action(map),
-         {:ok, mod} <- Map.fetch(index, action),
+  def cast(%{} = map, _params) do
+    with {:ok, mod} <- action_to_mod(map),
          {:ok, struct} <- mod.create(map) do
       {:ok, struct}
     else
@@ -52,10 +45,7 @@ defmodule DoubleEntryLedger.Event.EventMap do
 
   @impl true
   def load(%{} = map, _loader, params) do
-    case cast(map, params) do
-      {:ok, struct} -> {:ok, struct}
-      :error -> :error
-    end
+    cast(map, params)
   end
 
   def load(nil, _, _), do: nil

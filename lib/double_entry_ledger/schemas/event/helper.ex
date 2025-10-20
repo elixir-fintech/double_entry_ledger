@@ -2,6 +2,18 @@ defmodule DoubleEntryLedger.Event.Helper do
   @moduledoc """
     Helper functions
   """
+  alias DoubleEntryLedger.Event.{AccountEventMap, TransactionEventMap}
+
+  @transaction_actions [:create_transaction, :update_transaction]
+  @account_actions [:create_account, :update_account]
+
+  def action_to_mod(event_map) do
+    case fetch_action(event_map) do
+      a when a in @transaction_actions -> {:ok, TransactionEventMap}
+      a when a in @account_actions -> {:ok, AccountEventMap}
+      _ -> :error
+    end
+  end
 
   @doc """
   Fetches and normalizes the action value from a map.

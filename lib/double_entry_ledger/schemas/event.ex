@@ -37,6 +37,8 @@ defmodule DoubleEntryLedger.Event do
 
   use DoubleEntryLedger.BaseSchema
 
+  #import DoubleEntryLedger.Event.Helper, only: [action_to_mod: 1]
+
   alias DoubleEntryLedger.{
     Transaction,
     Instance,
@@ -116,7 +118,6 @@ defmodule DoubleEntryLedger.Event do
     field(:source_idempk, :string)
     field(:update_idempk, :string)
     field(:update_source, :string)
-    # field(:event_map, :map)
     field(:event_map, EventMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
@@ -196,22 +197,17 @@ defmodule DoubleEntryLedger.Event do
       true
   """
   @spec changeset(Event.t(), map()) :: Ecto.Changeset.t()
-  def changeset(event, %{action: :update_transaction} = attrs) do
+  def changeset(event, %{event_map: %{action: :update_transaction}} = attrs) do
     event
     |> update_changeset(attrs)
   end
 
-  def changeset(event, %{action: :create_transaction} = attrs) do
-    event
-    |> base_changeset(attrs)
-  end
-
-  def changeset(event, %{action: :update_account} = attrs) do
+  def changeset(event, %{event_map: %{action: :update_account}} = attrs) do
     event
     |> update_changeset(attrs)
   end
 
-  def changeset(event, %{} = attrs) do
+  def changeset(event, attrs) do
     event
     |> base_changeset(attrs)
   end
@@ -272,6 +268,7 @@ defmodule DoubleEntryLedger.Event do
     |> validate_required([:action, :source, :source_idempk, :instance_id, :event_map])
     |> validate_inclusion(:action, @actions)
     |> cast_assoc(:event_queue_item, with: &EventQueueItem.changeset/2, required: true)
+    #|> validate_event_map(attrs)
   end
 
   @spec update_changeset(Event.t(), map()) :: Ecto.Changeset.t()
@@ -281,4 +278,18 @@ defmodule DoubleEntryLedger.Event do
     |> validate_required([:update_idempk])
     |> base_changeset(attrs)
   end
+
+  #defp validate_event_map(changeset, attrs) do
+    #case Map.get(attrs, :event_map) || Map.get(attrs, "event_map") do
+      #%{} = event_map ->
+        #with {:ok, mod} <- action_to_mod(event_map),
+          #inner_cs <- mod.changeset(struct(mod), event_map),
+          #false <- inner_cs.valid? do
+            #Map.put(changeset, :event_map_changeset, inner_cs)
+        #else
+          #_ -> changeset
+        #end
+      #_ -> changeset
+    #end
+  #end
 end
