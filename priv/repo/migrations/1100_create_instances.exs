@@ -15,7 +15,8 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateInstances do
 
     create unique_index(:instances, [:address],
       prefix: @schema_prefix,
-      name: "unique_address"
+      name: "unique_address",
+      include: [:id]
     )
   end
 end
