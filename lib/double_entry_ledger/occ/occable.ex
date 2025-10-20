@@ -153,14 +153,14 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
   def build_multi(%TransactionEventMap{instance_address: address} = event_map) do
     Multi.new()
     |> Multi.put(:occable_item, event_map)
-    |> Multi.one(:_instance, InstanceStoreHelper.build_get_by_address(address))
-    |> Multi.insert(:idempotency, fn %{_instance: %{id: id}} ->
+    |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
+    |> Multi.insert(:idempotency, fn %{_instance: id} ->
       IdempotencyKey.changeset(id, event_map)
     end)
     |> Multi.run(:transaction_map, fn _,
                                       %{
                                         occable_item: %{payload: td},
-                                        _instance: %{id: id}
+                                        _instance: id
                                       } ->
       case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
         {:ok, transaction_map} -> {:ok, transaction_map}
@@ -193,8 +193,8 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
     new_event_step = :new_event
 
     Multi.new()
-    |> Multi.one(:_instance, InstanceStoreHelper.build_get_by_address(address))
-    |> Multi.insert(new_event_step, fn %{_instance: %{id: id}} ->
+    |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
+    |> Multi.insert(new_event_step, fn %{_instance: id} ->
       EventStoreHelper.build_create(event_map, id)
     end)
     |> Multi.update(name, fn %{^new_event_step => event} ->

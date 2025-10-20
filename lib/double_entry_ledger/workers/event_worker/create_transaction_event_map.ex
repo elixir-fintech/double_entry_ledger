@@ -151,8 +151,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
-    |> Multi.insert(:new_event, fn %{instance: %{id: id}} ->
+    |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
+    |> Multi.insert(:new_event, fn %{instance: id} ->
       EventStoreHelper.build_create(new_event_map, id)
     end)
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)

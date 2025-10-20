@@ -104,8 +104,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
          %AccountEventMap{payload: payload, instance_address: address} = event_map
        ) do
     Multi.new()
-    |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
-    |> Multi.insert(:new_event, fn %{instance: %{id: id}} ->
+    |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
+    |> Multi.insert(:new_event, fn %{instance: id} ->
       EventStoreHelper.build_create(event_map, id)
     end)
     |> EventStoreHelper.build_get_create_account_event_account(

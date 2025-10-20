@@ -120,9 +120,9 @@ defmodule DoubleEntryLedger.Stores.EventStore do
           {:ok, Event.t()} | {:error, Ecto.Changeset.t(Event.t()) | :instance_not_found}
   def create(%{instance_address: address} = attrs) do
     case Multi.new()
-         |> Multi.one(:instance, InstanceStoreHelper.build_get_by_address(address))
-         |> Multi.insert(:event, fn %{instance: instance} ->
-           build_create(attrs, instance.id)
+         |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
+         |> Multi.insert(:event, fn %{instance: id} ->
+           build_create(attrs, id)
          end)
          |> Repo.transaction() do
       {:ok, %{event: event}} -> {:ok, event}
