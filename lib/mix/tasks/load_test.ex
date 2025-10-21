@@ -86,7 +86,7 @@ defmodule Mix.Tasks.LoadTest do
   defp parse_args([concurrency_str | _]) do
     case Integer.parse(concurrency_str) do
       {concurrency, _} -> {concurrency, 10}
-      :error -> {1, 1}
+      :error -> {1, 10}
     end
   end
 
