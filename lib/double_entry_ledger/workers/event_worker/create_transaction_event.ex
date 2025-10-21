@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
   use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Event, Repo}
+  alias DoubleEntryLedger.{Event, JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.TransactionStoreHelper
   alias DoubleEntryLedger.Workers.EventWorker
 
@@ -148,6 +148,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
     multi
     |> Multi.update(:event_success, fn _ ->
       build_mark_as_processed(event)
+    end)
+    |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
+      JournalEvent.build_create(%{event_map: em, instance_id: id})
     end)
     |> Multi.insert(:event_transaction_link, fn %{transaction: transaction} ->
       build_create_transaction_event_transaction_link(event, transaction)

@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
   alias Ecto.Multi
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.{Event, Repo}
+  alias DoubleEntryLedger.{Event, JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.{AccountStoreHelper, EventStoreHelper}
   alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
 
@@ -65,6 +65,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
       %{account: account} ->
         Multi.update(Multi.new(), :event_success, fn _ ->
           build_mark_as_processed(event)
+        end)
+        |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
+          JournalEvent.build_create(%{event_map: em, instance_id: id})
         end)
         |> Multi.insert(:create_account_link, fn %{event_success: event} ->
           build_create_account_event_account_link(event, account)

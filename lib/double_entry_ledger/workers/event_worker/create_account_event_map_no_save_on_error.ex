@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
   alias Ecto.Multi
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler
-  alias DoubleEntryLedger.Repo
+  alias DoubleEntryLedger.{JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.{InstanceStoreHelper, EventStoreHelper, AccountStoreHelper}
 
   @doc """
@@ -140,6 +140,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
     end)
     |> Multi.update(:event_success, fn %{new_event: event} ->
       build_mark_as_processed(event)
+    end)
+    |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
+      JournalEvent.build_create(%{event_map: em, instance_id: id})
     end)
     |> Multi.insert(:create_account_link, fn %{event_success: event, account: account} ->
       build_create_account_event_account_link(event, account)
