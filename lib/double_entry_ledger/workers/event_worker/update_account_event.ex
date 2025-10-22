@@ -7,7 +7,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [
       build_mark_as_processed: 1,
-      build_create_account_event_account_link: 2,
       build_revert_to_pending: 2,
       build_schedule_update_retry: 2,
       build_mark_as_dead_letter: 2
@@ -17,6 +16,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
     only: [default_response_handler: 2]
 
   alias Ecto.Multi
+  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.{Event, JournalEvent, Repo}
@@ -60,18 +60,14 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
           Ecto.Multi.t(),
           Event.t()
         ) :: Ecto.Multi.t()
-  defp handle_build_update_account(multi, %Event{} = event) do
+  defp handle_build_update_account(multi, %Event{event_map: event_map, instance_id: id} = event) do
     Multi.merge(multi, fn
       %{account: account} ->
-        Multi.update(Multi.new(), :event_success, fn _ ->
-          build_mark_as_processed(event)
+        Multi.insert(Multi.new(), :journal_event, fn _ ->
+          JournalEvent.build_create(%{event_map: event_map, instance_id: id})
         end)
-        |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
-          JournalEvent.build_create(%{event_map: em, instance_id: id})
-        end)
-        |> Multi.insert(:create_account_link, fn %{event_success: event} ->
-          build_create_account_event_account_link(event, account)
-        end)
+        |> Multi.update(:event_success, build_mark_as_processed(event))
+        |> Oban.insert(:create_account_link, Workers.Oban.CreateAccountLink.new(%{event_id: event.id, account_id: account.id}))
 
       %{
         get_create_account_event_error: %{reason: :create_event_not_processed} = exception

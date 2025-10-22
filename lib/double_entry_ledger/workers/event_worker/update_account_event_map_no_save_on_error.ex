@@ -45,12 +45,13 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
   """
 
   import DoubleEntryLedger.EventQueue.Scheduling,
-    only: [build_mark_as_processed: 1, build_create_account_event_account_link: 2]
+    only: [build_mark_as_processed: 1]
 
   import DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler,
     only: [default_response_handler: 2]
 
   alias Ecto.{Changeset, Multi}
+  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.EventWorker.{AccountEventMapResponseHandler, UpdateEventError}
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.{JournalEvent, Repo}
@@ -127,16 +128,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
         ) :: Ecto.Multi.t()
   defp handle_build_update_account(multi, %AccountEventMap{} = event_map) do
     Multi.merge(multi, fn
-      %{account: account, new_event: event} ->
-        Multi.update(Multi.new(), :event_success, fn _ ->
-          build_mark_as_processed(event)
-        end)
-        |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
-          JournalEvent.build_create(%{event_map: em, instance_id: id})
-        end)
-        |> Multi.insert(:create_account_link, fn _ ->
-          build_create_account_event_account_link(event, account)
-        end)
+      %{account: %{id: aid}, new_event: %{id: eid, instance_id: iid} = event} ->
+        Multi.insert(Multi.new(), :journal_event, JournalEvent.build_create(%{event_map: event_map, instance_id: iid}))
+        |> Multi.update(:event_success, build_mark_as_processed(event))
+        |> Oban.insert(:create_account_link, Workers.Oban.CreateAccountLink.new(%{event_id: eid, account_id: aid}))
 
       %{get_create_account_event_error: %{reason: reason}, new_event: _event} ->
         event_map_changeset =

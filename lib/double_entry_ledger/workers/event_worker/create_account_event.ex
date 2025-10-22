@@ -6,15 +6,15 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
 
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [
-      build_mark_as_processed: 1,
-      build_create_account_event_account_link: 2
+      build_mark_as_processed: 1
     ]
 
   import DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler,
     only: [default_response_handler: 2]
 
-  alias DoubleEntryLedger.Event.AccountEventMap
   alias Ecto.Multi
+  alias DoubleEntryLedger.Workers
+  alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.{Event, JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
@@ -28,16 +28,14 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
 
   @spec build_create_account(Event.t()) :: Ecto.Multi.t()
   defp build_create_account(
-         %Event{event_map: %{payload: account_data}, instance_id: instance_id} = event
+         %Event{event_map: %{payload: account_data} = event_map, instance_id: instance_id} = event
        ) do
     Multi.new()
     |> Multi.insert(:account, AccountStoreHelper.build_create(account_data, instance_id))
+    |> Multi.insert(:journal_event, JournalEvent.build_create(%{event_map: event_map, instance_id: instance_id}))
     |> Multi.update(:event_success, build_mark_as_processed(event))
-    |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
-      JournalEvent.build_create(%{event_map: em, instance_id: id})
-    end)
-    |> Multi.insert(:create_account_link, fn %{event_success: event, account: account} ->
-      build_create_account_event_account_link(event, account)
+    |> Oban.insert(:create_account_link, fn %{event_success: event, account: account} ->
+      Workers.Oban.CreateAccountLink.new(%{event_id: event.id, account_id: account.id})
     end)
   end
 end
