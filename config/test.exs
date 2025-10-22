@@ -13,6 +13,8 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   stacktrace: true
 
+config :double_entry_ledger, Oban, testing: :inline
+
 config :logger,
   backends: [:console],
   level: :info
