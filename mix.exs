@@ -38,6 +38,7 @@ defmodule DoubleEntryLedger.MixProject do
       {:money, "~> 1.12"},
       {:logger_json, "~> 7.0"},
       {:jason, "~> 1.4"},
+      {:oban, "~> 2.19"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:mox, "~> 1.0", only: [:test]},
