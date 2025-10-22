@@ -131,7 +131,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
       %{account: %{id: aid}, new_event: %{id: eid, instance_id: iid} = event} ->
         Multi.insert(Multi.new(), :journal_event, JournalEvent.build_create(%{event_map: event_map, instance_id: iid}))
         |> Multi.update(:event_success, build_mark_as_processed(event))
-        |> Oban.insert(:create_account_link, Workers.Oban.CreateAccountLink.new(%{event_id: eid, account_id: aid}))
+        |> Oban.insert(:create_account_link,  fn %{journal_event: %{id: jid}} ->
+          Workers.Oban.CreateAccountLink.new(%{event_id: eid, account_id: aid, journal_event_id: jid})
+        end)
 
       %{get_create_account_event_error: %{reason: reason}, new_event: _event} ->
         event_map_changeset =

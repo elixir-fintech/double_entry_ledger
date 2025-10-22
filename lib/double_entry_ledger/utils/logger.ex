@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Logger do
       import DoubleEntryLedger.Utils.Traceable
       import DoubleEntryLedger.Utils.Changeset
 
-      @type logable() :: Event.t() | AccountEventMap.t() | TransactionEventMap.t()
+      @type logable() :: Event.t() | AccountEventMap.t() | TransactionEventMap.t() | map()
 
       @module_name __MODULE__ |> Module.split() |> List.last()
 

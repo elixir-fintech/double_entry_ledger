@@ -15,6 +15,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   }
   ```
   """
+  use DoubleEntryLedger.Logger
+
   import DoubleEntryLedger.Event.Helper, only: [actions: 1]
 
   alias DoubleEntryLedger.Event
@@ -186,6 +188,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
         end
 
       {:error, event_map_changeset} ->
+        warn("Invalid transaction event params", event_params, event_map_changeset)
         {:error, event_map_changeset}
     end
   end
@@ -198,6 +201,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
         EventWorker.process_new_event_no_save_on_error(event_map)
 
       {:error, event_map_changeset} ->
+        warn("Invalid account event params", event_params, event_map_changeset)
         {:error, event_map_changeset}
     end
   end

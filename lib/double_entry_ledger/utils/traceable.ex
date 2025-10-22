@@ -16,6 +16,7 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event do
   def metadata(%{event_queue_item: event_queue_item, event_map: event_map} = event) do
     %{
       event_id: event.id,
+      instance_address: Map.get(event_map, :instance_address),
       event_status: event_queue_item.status,
       event_action: Map.get(event_map, :action),
       event_source: Map.get(event_map, :source),
@@ -75,6 +76,7 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event.AccountE
   def metadata(%AccountEventMap{} = event_map) do
     %{
       is_event_map: true,
+      instance_address: Map.get(event_map, :instance_address),
       event_action: Map.get(event_map, :action),
       event_source: Map.get(event_map, :source),
       event_trace_id:
@@ -112,6 +114,7 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event.Transact
   def metadata(%TransactionEventMap{} = event_map) do
     %{
       is_event_map: true,
+      instance_address: Map.get(event_map, :instance_address),
       event_action: Map.get(event_map, :action),
       event_source: Map.get(event_map, :source),
       event_trace_id:
@@ -132,6 +135,43 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event.Transact
   end
 
   @spec changeset_metadata(TransactionEventMap.t(), any()) :: map()
+  def changeset_metadata(event_map, %Ecto.Changeset{} = changeset) do
+    Map.put(
+      metadata(event_map),
+      :changeset_errors,
+      all_errors_with_opts(changeset)
+    )
+  end
+end
+
+defimpl DoubleEntryLedger.Utils.Traceable, for: Map do
+  import DoubleEntryLedger.Utils.Changeset
+
+  @spec metadata(map()) :: map()
+  def metadata(%{} = event_map) do
+    %{
+      is_map: true,
+      instance_address: Map.get(event_map, :instance_address) || Map.get(event_map, "instance_address"),
+      event_action: Map.get(event_map, :action) || Map.get(event_map, "action"),
+      event_source: Map.get(event_map, :source) || Map.get(event_map, "source"),
+      event_trace_id:
+        [
+          Map.get(event_map, :source) || Map.get(event_map, "source"),
+          Map.get(event_map, :source_idempk) || Map.get(event_map, "source_idempk"),
+          Map.get(event_map, :update_idempk) || Map.get(event_map, "update_idempk"),
+          Map.get(event_map, :update_source) || Map.get(event_map, "update_idempk")
+        ]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.join("-")
+    }
+  end
+
+  @spec metadata(map(), any()) :: map()
+  def metadata(event_map, error) do
+    Map.put(metadata(event_map), :error, inspect(error))
+  end
+
+  @spec changeset_metadata(map(), any()) :: map()
   def changeset_metadata(event_map, %Ecto.Changeset{} = changeset) do
     Map.put(
       metadata(event_map),

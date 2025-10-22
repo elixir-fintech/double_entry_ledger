@@ -8,6 +8,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.AddEventTransactionLinksTable do
       add :id, :binary_id, primary_key: true
       add :event_id, references(:events, on_delete: :nothing, type: :binary_id), null: false
       add :transaction_id, references(:transactions, on_delete: :nothing, type: :binary_id), null: false
+  #    add :journal_event_id, references(:journal_events, on_delete: :nothing, type: :binary_id), null: false
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -15,5 +16,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.AddEventTransactionLinksTable do
     # Optionally, add indexes for performance optimization
     create index(:event_transaction_links, [:event_id], prefix: @schema_prefix)
     create index(:event_transaction_links, [:transaction_id], prefix: @schema_prefix)
+  #  create index(:event_transaction_links, [:journal_event_id], prefix: @schema_prefix)
+  #  create unique_index(:event_transaction_links, [:transaction_id, :journal_event_id, :event_id],  prefix: @schema_prefix)
   end
 end
