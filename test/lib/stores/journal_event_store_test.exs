@@ -6,8 +6,11 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreTest do
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.Stores.{
+    AccountStore,
+    InstanceStore,
     JournalEventStore,
-    JournalEventStoreHelper
+    JournalEventStoreHelper,
+    TransactionStore
   }
 
   doctest JournalEventStoreHelper

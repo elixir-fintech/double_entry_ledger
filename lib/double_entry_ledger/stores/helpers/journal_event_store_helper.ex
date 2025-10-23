@@ -143,4 +143,14 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
       select: je
     )
   end
+
+  @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
+  def base_transaction_query(transaction_id) do
+    from(je in JournalEvent,
+      join: evt in assoc(je, :event_transaction_link),
+      where: evt.transaction_id == ^transaction_id,
+      select: je,
+      preload: [transaction: :entries]
+    )
+  end
 end

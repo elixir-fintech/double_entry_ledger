@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
   def get_by_id(id) do
     JournalEvent
     |> where(id: ^id)
-    |> preload([:account])
+    |> preload([:account, :transaction])
     |> Repo.one()
   end
 
@@ -98,7 +98,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     from(e in JournalEvent,
       join: i in assoc(e, :instance), where: i.address == ^instance_address and e.id == ^id,
       select: e,
-      preload: [:account, :instance]
+      preload: [:account, :instance, :transaction]
     )
     |> Repo.one()
   end
@@ -116,7 +116,6 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.Stores.{EventStore, AccountStore, InstanceStore, TransactionStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
@@ -128,10 +127,10 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
     iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> length(EventStore.list_all_for_instance_id(instance.id))
+    iex> length(JournalEventStore.list_all_for_instance_id(instance.id))
     3
     iex> # test pagination
-    iex> length(EventStore.list_all_for_instance_id(instance.id, 2, 2))
+    iex> length(JournalEventStore.list_all_for_instance_id(instance.id, 2, 2))
     1
 
   """
@@ -144,7 +143,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
       select: e
     )
     |> paginate(page, per_page)
-    |> preload([:account])
+    |> preload([:account, :transaction])
     |> Repo.all()
   end
 
@@ -158,7 +157,6 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `Event.t() | nil`: The create account event if found and processed
 
   ### Examples
-    iex> alias DoubleEntryLedger.Stores.{JournalEventStore, AccountStore, InstanceStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
     iex> {:ok, %{id: id}} = AccountStore.create(instance.address, account_data, "unique_id_123")
@@ -266,5 +264,39 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
       %Account{id: id} -> list_all_for_account_id(id)
       _ -> []
     end
+  end
+
+  @doc """
+  Lists all events associated with a specific transaction.
+
+  ## Parameters
+    - `transaction_id`: ID of the transaction to list events for
+
+  ## Returns
+    - List of Event structs, ordered by insertion time descending
+
+  ## Examples
+
+    iex> alias DoubleEntryLedger.Stores.{JournalEventStore, AccountStore, InstanceStore, TransactionStore}
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> create_attrs = %{
+    ...>   status: :pending,
+    ...>   entries: [
+    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>   ]}
+    iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+    iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
+    iex> length(JournalEventStore.list_all_for_transaction_id(id))
+    2
+  """
+  @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Event.t())
+  def list_all_for_transaction_id(transaction_id) do
+    base_transaction_query(transaction_id)
+    |> order_by(desc: :inserted_at)
+    |> Repo.all()
   end
 end
