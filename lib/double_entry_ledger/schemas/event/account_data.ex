@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
   import Ecto.Changeset
 
   alias __MODULE__, as: AccountData
-  alias DoubleEntryLedger.Types
+  alias DoubleEntryLedger.{Account, Types}
   alias DoubleEntryLedger.Utils.Currency
 
   @typedoc """
@@ -108,6 +108,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       :allowed_negative
     ])
     |> validate_required([:currency, :address, :type])
+    |> validate_format(:address, Account.address_regex())
   end
 
   @doc """

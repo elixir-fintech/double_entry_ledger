@@ -57,6 +57,18 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
                AccountData.changeset(%AccountData{}, attrs)
     end
 
+    test "changeset invalid for wrong formatted address" do
+      attrs = %{
+        name: "some_name",
+        address: "some address",
+        type: "asset",
+        currency: "EUR",
+      }
+
+      assert %Changeset{errors: [address: {"has invalid format", [validation: :format]}]} =
+               AccountData.changeset(%AccountData{}, attrs)
+    end
+
     test "changeset valid for valid account data" do
       attrs = %{
         name: "some_name",

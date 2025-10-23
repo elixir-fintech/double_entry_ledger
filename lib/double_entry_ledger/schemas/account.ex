@@ -64,12 +64,19 @@ defmodule DoubleEntryLedger.Account do
 
   alias __MODULE__, as: Account
 
+  @address_regex ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/
+  @currency_atoms Currency.currency_atoms()
+
   @credit_and_debit Types.credit_and_debit()
   @account_types Types.account_types()
 
-  def account_types do
-    @account_types
-  end
+  @spec account_types() :: [Types.account_type()]
+  def account_types, do: @account_types
+
+  @spec address_regex() :: Regex.t()
+  def address_regex, do: @address_regex
+
+
 
   @typedoc """
   Represents a financial account in the double-entry ledger system.
@@ -115,7 +122,6 @@ defmodule DoubleEntryLedger.Account do
           updated_at: DateTime.t() | nil
         }
 
-  @currency_atoms Currency.currency_atoms()
 
   schema "accounts" do
     field(:currency, Ecto.Enum, values: @currency_atoms)
@@ -193,7 +199,7 @@ defmodule DoubleEntryLedger.Account do
       :instance_id
     ])
     |> validate_required([:address, :currency, :instance_id, :type])
-    |> validate_format(:address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/,
+    |> validate_format(:address, @address_regex,
       message: "is not a valid address"
     )
     |> validate_inclusion(:type, @account_types)

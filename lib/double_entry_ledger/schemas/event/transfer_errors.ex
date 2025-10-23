@@ -65,12 +65,13 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   @spec from_account_to_event_map_payload(AccountEventMap.t(), Ecto.Changeset.t(Account.t())) ::
           Ecto.Changeset.t(AccountEventMap.t())
   def from_account_to_event_map_payload(event_map, account_changeset) do
-    build_event_map_changeset(event_map)
+    cs = build_event_map_changeset(event_map)
     |> Changeset.put_embed(
       :payload,
       build_payload_changeset(event_map, account_changeset)
     )
     |> Map.put(:action, :insert)
+    cs
   end
 
   @doc """
@@ -209,6 +210,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     %AccountData{}
     |> AccountData.changeset(AccountData.to_map(payload))
     |> transfer_errors_between_changesets(account_changeset, [
+      :address,
       :name,
       :type,
       :currency,

@@ -41,6 +41,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias DoubleEntryLedger.Account
   alias DoubleEntryLedger.Utils.Currency
   alias __MODULE__, as: EntryData
 
@@ -106,7 +107,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
     entry_data
     |> cast(attrs, [:account_address, :amount, :currency])
     |> validate_required([:account_address, :amount, :currency])
-    |> validate_format(:account_address, ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/,
+    |> validate_format(:account_address, Account.address_regex(),
       message: "is not a valid account address"
     )
     |> validate_inclusion(:currency, @currency_atoms)
