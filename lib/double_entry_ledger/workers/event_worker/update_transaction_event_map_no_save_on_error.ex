@@ -34,18 +34,19 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
 
   alias DoubleEntryLedger.{JournalEvent, Repo}
   alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.EventWorker
 
   alias Ecto.{Multi, Changeset}
 
   @impl true
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveOnError,
+    to: Workers.EventWorker.CreateTransactionEventMapNoSaveOnError,
     as: :handle_occ_final_timeout
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, repo),
-    to: DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMap,
+    to: Workers.EventWorker.UpdateTransactionEventMap,
     as: :build_transaction
 
   @doc """
@@ -112,15 +113,15 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
   def handle_build_transaction(multi, event_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: transaction, new_event: event} ->
-        Multi.update(Multi.new(), :event_success, fn _ ->
+      %{transaction: %{id: tid}, new_event: %{id: eid, event_map: em, instance_id: iid} = event} ->
+        Multi.insert(Multi.new(), :journal_event, fn _ ->
+          JournalEvent.build_create(%{event_map: em, instance_id: iid})
+        end)
+        |> Multi.update(:event_success, fn _ ->
           build_mark_as_processed(event)
         end)
-        |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
-          JournalEvent.build_create(%{event_map: em, instance_id: id})
-        end)
-        |> Multi.insert(:event_transaction_link, fn _ ->
-          build_create_transaction_event_transaction_link(event, transaction)
+        |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
+          Workers.Oban.CreateTransactionLink.new(%{event_id: eid, transaction_id: tid, journal_event_id: jid})
         end)
 
       %{get_create_transaction_event_error: %{reason: reason}, new_event: _event} ->

@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.EventTransactionLink do
   while preserving the full business and audit history.
   """
   use DoubleEntryLedger.BaseSchema
-  alias DoubleEntryLedger.{Event, Transaction}
+  alias DoubleEntryLedger.{Event, Transaction, JournalEvent}
   alias __MODULE__, as: EventTransactionLink
 
   @type t :: %EventTransactionLink{
@@ -29,6 +29,8 @@ defmodule DoubleEntryLedger.EventTransactionLink do
           event_id: Ecto.UUID.t() | nil,
           transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
           transaction_id: Ecto.UUID.t() | nil,
+          journal_event: Event.t() | Ecto.Association.NotLoaded.t(),
+          journal_event_id: Ecto.UUID.t() | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -36,6 +38,7 @@ defmodule DoubleEntryLedger.EventTransactionLink do
   schema "event_transaction_links" do
     belongs_to(:event, Event)
     belongs_to(:transaction, Transaction)
+    belongs_to(:journal_event, JournalEvent)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -43,7 +46,7 @@ defmodule DoubleEntryLedger.EventTransactionLink do
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(event_transaction_link, attrs) do
     event_transaction_link
-    |> cast(attrs, [:event_id, :transaction_id])
-    |> validate_required([:event_id, :transaction_id])
+    |> cast(attrs, [:event_id, :transaction_id, :journal_event_id])
+    |> validate_required([:event_id, :transaction_id, :journal_event_id])
   end
 end

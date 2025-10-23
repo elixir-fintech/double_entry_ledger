@@ -40,10 +40,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
   alias DoubleEntryLedger.{Event, JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.TransactionStoreHelper
   alias DoubleEntryLedger.Workers.EventWorker
+  alias DoubleEntryLedger.Workers
 
   import DoubleEntryLedger.EventQueue.Scheduling
 
-  import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+  import Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_response_handler: 2]
 
   @impl true
@@ -63,7 +64,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(event_map, error, repo),
-    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+    to: Workers.EventWorker.TransactionEventResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
@@ -82,7 +83,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
+    to: Workers.EventWorker.TransactionEventResponseHandler,
     as: :handle_occ_final_timeout
 
   @doc """
@@ -144,7 +145,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
 
     - The updated `Ecto.Multi` with an `:event_success` update step.
   """
-  def handle_build_transaction(multi, event, _repo) do
+  def handle_build_transaction(multi, %{id: eid} = event, _repo) do
     multi
     |> Multi.update(:event_success, fn _ ->
       build_mark_as_processed(event)
@@ -152,8 +153,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
     |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
       JournalEvent.build_create(%{event_map: em, instance_id: id})
     end)
-    |> Multi.insert(:event_transaction_link, fn %{transaction: transaction} ->
-      build_create_transaction_event_transaction_link(event, transaction)
+    |> Oban.insert(:create_transaction_link, fn %{transaction: %{id: tid}, journal_event: %{id: jid}} ->
+      Workers.Oban.CreateTransactionLink.new(%{event_id: eid, transaction_id: tid, journal_event_id: jid})
     end)
   end
 end

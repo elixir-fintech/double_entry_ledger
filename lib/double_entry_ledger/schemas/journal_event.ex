@@ -8,7 +8,12 @@ defmodule DoubleEntryLedger.JournalEvent do
 
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Instance, Account, EventAccountLink}
+  alias DoubleEntryLedger.{
+    Instance,
+    Account,
+    EventAccountLink,
+    EventTransactionLink
+  }
 
   alias DoubleEntryLedger.Event.EventMap
 
@@ -22,6 +27,8 @@ defmodule DoubleEntryLedger.JournalEvent do
           inserted_at: DateTime.t() | nil,
           event_account_link: EventAccountLink.t() | Ecto.Association.NotLoaded.t() | nil,
           account: Account.t() | Ecto.Association.NotLoaded.t() | nil,
+          event_transaction_link: EventTransactionLink.t() | Ecto.Association.NotLoaded.t() | nil,
+          account: Transaction.t() | Ecto.Association.NotLoaded.t() | nil,
           updated_at: DateTime.t() | nil
         }
 
@@ -33,6 +40,8 @@ defmodule DoubleEntryLedger.JournalEvent do
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_one(:event_account_link, EventAccountLink)
     has_one(:account, through: [:event_account_link, :account])
+    has_one(:event_transaction_link, EventTransactionLink)
+    has_one(:transaction, through: [:event_transaction_link, :transaction])
 
     timestamps(type: :utc_datetime_usec)
   end

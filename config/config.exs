@@ -26,7 +26,7 @@ config :double_entry_ledger, :event_queue,
 
 config :double_entry_ledger, Oban,
   engine: Oban.Engines.Basic,
-  queues: [double_entry_ledger: 10],
+  queues: [double_entry_ledger: 1],
   repo: DoubleEntryLedger.Repo,
   prefix: "double_entry_ledger"
 

@@ -11,3 +11,5 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   pool_size: 10
 
 config :logger, level: :warning
+
+config :double_entry_ledger, Oban, testing: :manual

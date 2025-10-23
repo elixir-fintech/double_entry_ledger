@@ -27,8 +27,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
   use DoubleEntryLedger.Occ.Processor
   use DoubleEntryLedger.Logger
 
-  alias DoubleEntryLedger.{Event, Repo}
+  alias DoubleEntryLedger.{Event, Repo, JournalEvent}
   alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
 
@@ -155,6 +156,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
     |> Multi.insert(:new_event, fn %{instance: id} ->
       EventStoreHelper.build_create(new_event_map, id)
     end)
+    |> Multi.insert(:journal_event, fn %{new_event: %{event_map: em, instance_id: id} } ->
+      JournalEvent.build_create(%{event_map: em, instance_id: id})
+    end)
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
   end
 
@@ -183,12 +187,12 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
   def handle_build_transaction(multi, _event_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: transaction, new_event: event} ->
+      %{transaction: %{id: tid}, new_event: %{id: eid} = event, journal_event: %{id: jid}} ->
         Multi.update(Multi.new(), :event_success, fn _ ->
           build_mark_as_processed(event)
         end)
-        |> Multi.insert(:event_transaction_link, fn _ ->
-          build_create_transaction_event_transaction_link(event, transaction)
+        |> Oban.insert(:create_transaction_link, fn _ ->
+          Workers.Oban.CreateTransactionLink.new(%{event_id: eid, transaction_id: tid, journal_event_id: jid})
         end)
     end)
   end
