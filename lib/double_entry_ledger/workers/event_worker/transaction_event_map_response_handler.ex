@@ -46,11 +46,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
   alias DoubleEntryLedger.Occ.Occable
   alias DoubleEntryLedger.Event.{TransactionEventMap, IdempotencyKey}
 
-  alias DoubleEntryLedger.{
-    Event,
-    Transaction,
-    EventWorker
-  }
+  alias DoubleEntryLedger.{Event, Transaction}
+  alias DoubleEntryLedger.Workers.EventWorker
 
   @doc """
   Default response handler for functions that operate on a TransactionEventMap.

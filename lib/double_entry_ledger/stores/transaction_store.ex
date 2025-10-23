@@ -32,9 +32,10 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   import DoubleEntryLedger.Utils.Pagination, only: [paginate: 3]
 
+  alias DoubleEntryLedger.Utils.Currency
+
   alias DoubleEntryLedger.{
     Account,
-    Currency,
     Entry,
     Repo,
     Transaction,

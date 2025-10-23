@@ -69,10 +69,10 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.Apis.EventApi
   alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Utils.Currency
 
   alias DoubleEntryLedger.{
     Repo,
-    Currency,
     Account,
     Types,
     BalanceHistoryEntry,

@@ -43,10 +43,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
   alias Ecto.{Multi, Changeset}
   alias DoubleEntryLedger.Occ.Occable
 
-  alias DoubleEntryLedger.{
-    Event,
-    EventWorker
-  }
+  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Workers.EventWorker
 
   @doc """
   Default response handler when starting from a stored Event.

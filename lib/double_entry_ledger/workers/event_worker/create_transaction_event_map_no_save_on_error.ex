@@ -15,9 +15,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMapNoSaveO
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     only: [default_response_handler: 2]
 
-  alias DoubleEntryLedger.{EventWorker, Repo}
-  alias DoubleEntryLedger.Event.TransactionEventMap
   alias Ecto.Changeset
+  alias DoubleEntryLedger.Repo
+  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Workers.EventWorker
 
   @impl true
   defdelegate handle_transaction_map_error(event_map, error, repo),
