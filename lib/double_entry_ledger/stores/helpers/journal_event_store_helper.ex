@@ -34,9 +34,9 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   This module is primarily used internally by EventStore and EventWorker modules to
   share common functionality and reduce code duplication.
   """
-  import Ecto.Query, only: [from: 2, subquery: 1]
+  import Ecto.Query, only: [from: 2, subquery: 1, union: 2]
 
-  alias DoubleEntryLedger.{Repo, Event, JournalEvent, Account}
+  alias DoubleEntryLedger.{Repo, Event, JournalEvent, Account, Entry}
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
 
   @doc """
@@ -128,8 +128,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   def all_processed_events_for_account_id(account_id) do
     union =
       base_account_query(account_id)
-
-    # |> union(^transaction_events_for_account_query(account_id))
+      |> union(^transaction_events_for_account_query(account_id))
 
     from(u in subquery(union),
       order_by: [desc: u.inserted_at]
@@ -141,6 +140,19 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
     from(je in JournalEvent,
       join: evt in assoc(je, :event_account_link),
       where: evt.account_id == ^account_id,
+      select: je
+    )
+  end
+
+  @spec transaction_events_for_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
+  def transaction_events_for_account_query(account_id) do
+    from(je in JournalEvent,
+      join: t in assoc(je, :transaction),
+      join: ety in Entry,
+      on: ety.transaction_id == t.id,
+      join: a in Account,
+      on: a.id == ety.account_id,
+      where: a.id == ^account_id,
       select: je
     )
   end

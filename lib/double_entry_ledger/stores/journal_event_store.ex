@@ -185,7 +185,6 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.Stores.{JournalEventStore, AccountStore, InstanceStore, TransactionStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
@@ -197,13 +196,13 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
     iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> [acc_event | _] = events = JournalEventStore.list_all_for_account_id(asset_account.id)
-    iex> #[trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_id(asset_account.id)
+    iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_id(asset_account.id)
     iex> length(events)
-    1
+    2
     iex> acc_event.event_map.action
     :create_account
-    iex> #trx_event.event_map.action
+    iex> trx_event.event_map.action
+    :create_transaction
 
     iex> JournalEventStore.list_all_for_account_id(Ecto.UUID.generate())
     []
@@ -230,7 +229,6 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.Stores.{JournalEventStore, AccountStore, InstanceStore, TransactionStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
@@ -242,19 +240,17 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
     iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> #[trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_address(instance.address, liability_account.address)
-    iex> [acc_event| _] = events = JournalEventStore.list_all_for_account_address(instance.address, liability_account.address)
+    iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_address(instance.address, liability_account.address)
     iex> length(events)
-    1
+    2
     iex> acc_event.event_map.action
     :create_account
-    iex> #trx_event.event_map.action
+    iex> trx_event.event_map.action
+    :create_transaction
 
-    iex> alias DoubleEntryLedger.Stores.{JournalEventStore, InstanceStore}
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> JournalEventStore.list_all_for_account_address(instance.address, "nonexistent")
 
-    iex> alias DoubleEntryLedger.Stores.JournalEventStore
     iex> JournalEventStore.list_all_for_account_address("nonexistent", "nonexistent")
     []
 
