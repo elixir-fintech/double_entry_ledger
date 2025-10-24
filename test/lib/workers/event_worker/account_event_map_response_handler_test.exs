@@ -6,6 +6,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandlerTe
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler
+  alias DoubleEntryLedger.{Account, Event}
+  alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
 
   doctest AccountEventMapResponseHandler
 end

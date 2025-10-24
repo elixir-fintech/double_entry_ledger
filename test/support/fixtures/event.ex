@@ -31,7 +31,6 @@ defmodule DoubleEntryLedger.EventFixtures do
     |> Enum.into(%{
       action: :create_account,
       source: "source",
-      source_idempk: Ecto.UUID.generate(),
       instance_address: "123",
       payload: account_data_attrs()
     })
@@ -134,8 +133,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       action: :create_account,
       instance_address: address,
       source: "source",
-      source_idempk: "source_idempk",
-      update_idempk: nil,
+      account_address: nil,
       payload: %AccountData{
         name: "Test Account",
         description: "Test Description",

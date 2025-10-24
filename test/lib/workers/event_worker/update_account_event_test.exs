@@ -21,27 +21,22 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
     setup [:create_instance]
 
     test "successfully processes a valid update account event", %{instance: instance} do
-      {:ok, %{event_map: %{source: src, source_idempk: sid}} = create_event} =
-        EventStore.create(
-          account_event_attrs(%{
-            instance_address: instance.address,
-            payload: account_data_attrs(%{name: "Old Name"})
-          })
-        )
+      attrs = account_event_attrs(%{
+        instance_address: instance.address,
+        payload: account_data_attrs(%{name: "Old Name"})
+      })
+      {:ok, %{event_map: %{payload: payload}} = create_event} = EventStore.create(attrs)
 
       CreateAccountEvent.process(create_event)
 
-      {:ok, update_event} =
-        EventStore.create(
-          account_event_attrs(%{
-            action: :update_account,
-            instance_address: instance.address,
-            source: src,
-            source_idempk: sid,
-            update_idempk: "1",
-            payload: %AccountData{name: "New Name"}
-          })
-        )
+      update_attrs =  account_event_attrs(%{
+        action: :update_account,
+        instance_address: instance.address,
+        account_address: payload.address,
+        source: "some-source",
+        payload: %AccountData{name: "New Name"}
+      })
+      {:ok, update_event} = EventStore.create(update_attrs)
 
       assert {:ok, %Account{} = account, %Event{event_queue_item: eqi} = e} =
                UpdateAccountEvent.process(update_event)
@@ -58,9 +53,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
           account_event_attrs(%{
             action: :update_account,
             instance_address: instance.address,
+            account_address: "non:existent",
             source: "src",
-            source_idempk: "sid",
-            update_idempk: "1",
             payload: %AccountData{name: "New Name"}
           })
         )
@@ -72,8 +66,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
       assert eqi.status == :dead_letter
     end
 
-    test "stays pending when create account event is not yet processed", %{instance: instance} do
-      {:ok, %{event_map: %{source: src, source_idempk: sid}}} =
+    test "goes to dead letter when create account event is not yet processed", %{instance: instance} do
+      {:ok, %{event_map: %{payload: payload}}} =
         EventStore.create(
           account_event_attrs(%{
             instance_address: instance.address,
@@ -86,9 +80,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
           account_event_attrs(%{
             action: :update_account,
             instance_address: instance.address,
-            source: src,
-            source_idempk: sid,
-            update_idempk: "1",
+            account_address: payload.address,
+            source: "source",
             payload: %AccountData{name: "New Name"}
           })
         )
@@ -97,11 +90,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
                UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id
-      assert eqi.status == :pending
+      assert eqi.status == :dead_letter
     end
 
     test "moves to dead letter when create event is in dead letter", %{instance: instance} do
-      {:ok, %{event_map: %{source: src, source_idempk: sid}, event_queue_item: event_qi}} =
+      {:ok, %{event_map: %{payload: create_payload}, event_queue_item: event_qi}} =
         EventStore.create(
           account_event_attrs(%{
             instance_address: instance.address,
@@ -117,9 +110,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
           account_event_attrs(%{
             action: :update_account,
             instance_address: instance.address,
-            source: src,
-            source_idempk: sid,
-            update_idempk: "1",
+            account_address: create_payload.address,
+            source: "src",
             payload: %AccountData{name: "New Name"}
           })
         )

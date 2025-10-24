@@ -88,13 +88,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
   ## Examples
 
       # Successful account creation
-      iex> alias DoubleEntryLedger.Event.AccountEventMap
-      iex> alias DoubleEntryLedger.{Account, Event}
-      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Main:Instance"})
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Main:Instance"})
       iex> event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",
-      ...>   source_idempk: "unique_id_123",
       ...>   instance_address: instance.address,
       ...>   payload: %AccountData{
       ...>     name: "Cash Account",
@@ -107,12 +104,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
       iex> is_struct(account, Account) and account.name == "Cash Account" and is_struct(event, Event) and event.event_queue_item.status == :processed
       true
 
-      iex> alias DoubleEntryLedger.Event.AccountEventMap
-      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Main:Instance"})
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Main:Instance"})
       iex> invalid_event_map = %AccountEventMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",
-      ...>   source_idempk: "unique_id_124",
       ...>   instance_address: instance.address,
       ...>   payload: %AccountData{name: "", type: nil}  # missing required fields
       ...> }

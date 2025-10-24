@@ -81,14 +81,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler d
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.{Account, Event}
-      iex> alias DoubleEntryLedger.Event.AccountEventMap
       iex> account = %Account{}
       iex> event = %Event{event_queue_item: %{status: :processed}, event_map: %{}}
       iex> response = {:ok, %{account: account, event_success: event}}
       iex> {:ok, ^account, ^event} = AccountEventMapResponseHandler.default_response_handler(response, %AccountEventMap{})
 
-      iex> alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
       iex> changeset = %Ecto.Changeset{}
       iex> response = {:error, :account, changeset, %{}}
       iex> event_map = %AccountEventMap{payload: %AccountData{}}

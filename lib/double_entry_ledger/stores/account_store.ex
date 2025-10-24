@@ -68,8 +68,8 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.Apis.EventApi
-  alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Utils.Currency
+  alias DoubleEntryLedger.Stores.AccountStoreHelper
 
   alias DoubleEntryLedger.{
     Repo,
@@ -165,11 +165,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   """
   @spec get_by_address(String.t(), String.t()) :: Account.t() | nil
   def get_by_address(instance_address, account_address) do
-    from(a in Account,
-      join: i in assoc(a, :instance),
-      where: a.address == ^account_address and i.address == ^instance_address,
-      preload: [:events]
-    )
+    AccountStoreHelper.get_by_address_query(instance_address, account_address)
     |> Repo.one()
   end
 
@@ -210,21 +206,18 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Stores.AccountStore
-      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> {:ok, %{address: address}} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> attrs = %{address: "account:main1", currency: :EUR, type: :asset}
-      iex> {:ok, account} = AccountStore.create(address, attrs, "unique_id_123")
+      iex> {:ok, account} = AccountStore.create(address, attrs)
       iex> account.address
       "account:main1"
 
   """
-  @spec create(String.t(), create_map(), String.t(), String.t()) ::
+  @spec create(String.t(), create_map(), String.t()) ::
           {:ok, Account.t()} | {:error, Ecto.Changeset.t(AccountEventMap.t()) | String.t()}
   def create(
         instance_address,
         attrs,
-        idempotent_id,
         source \\ "account_store-create"
       ) do
     response =
@@ -232,7 +225,6 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
         "instance_address" => instance_address,
         "action" => "create_account",
         "source" => source,
-        "source_idempk" => idempotent_id,
         "payload" => attrs
       })
 
@@ -277,36 +269,30 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Stores.AccountStore
-      iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> {:ok, %{address: address}} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> attrs = %{name: "Test Account", address: "account:main1", description: "Test Description", currency: :EUR, type: :asset}
-      iex> {:ok, account} = AccountStore.create(address, attrs, "unique_id_123")
-      iex> {:ok, updated_account} = AccountStore.update(address, account.address, %{instance_address: address, description: "Updated Description"}, "unique_update_id_456")
+      iex> {:ok, account} = AccountStore.create(address, attrs)
+      iex> {:ok, updated_account} = AccountStore.update(address, account.address, %{instance_address: address, description: "Updated Description"})
       iex> updated_account.description
       "Updated Description"
 
   """
-  @spec update(String.t(), String.t(), update_map(), String.t(), String.t()) ::
+  @spec update(String.t(), String.t(), update_map(), String.t()) ::
           {:ok, Account.t()} | {:error, Ecto.Changeset.t(AccountEventMap.t()) | String.t()}
   def update(
         instance_address,
-        address,
+        account_address,
         attrs,
-        update_idempotent_id,
-        update_source \\ "account_store-update"
+        source \\ "account_store-update"
       ) do
-    account = get_by_address(instance_address, address)
-    %{event_map: event_map} = EventStore.get_create_account_event(account.id)
+    account = get_by_address(instance_address, account_address)
 
     response =
       EventApi.process_from_params(%{
         "instance_address" => instance_address,
+        "account_address" => account.address,
         "action" => "update_account",
-        "source" => event_map.source,
-        "source_idempk" => event_map.source_idempk,
-        "update_idempk" => update_idempotent_id,
-        "update_source" => update_source,
+        "source" => source,
         "payload" => Map.delete(attrs, :instance_address)
       })
 

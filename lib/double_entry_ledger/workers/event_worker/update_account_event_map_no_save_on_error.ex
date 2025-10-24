@@ -52,7 +52,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
 
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Workers
-  alias DoubleEntryLedger.Workers.EventWorker.{AccountEventMapResponseHandler, UpdateEventError}
+  alias DoubleEntryLedger.Workers.EventWorker.{AccountEventMapResponseHandler}
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.{JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.{AccountStoreHelper, EventStoreHelper, InstanceStoreHelper}
@@ -102,23 +102,18 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
 
   @spec build_update_account(AccountEventMap.t()) :: Ecto.Multi.t()
   defp build_update_account(
-         %AccountEventMap{payload: payload, instance_address: address} = event_map
-       ) do
+         %AccountEventMap{payload: payload, instance_address: iaddr, account_address: aaddr} = event_map
+       ) when not is_nil(iaddr) and not is_nil(aaddr) do
     Multi.new()
-    |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
-    |> Multi.insert(:new_event, fn %{instance: id} ->
-      EventStoreHelper.build_create(event_map, id)
-    end)
-    |> EventStoreHelper.build_get_create_account_event_account(
-      :get_account,
-      :new_event
-    )
+    |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(iaddr))
+    |> Multi.insert(:new_event, fn %{instance: id} -> EventStoreHelper.build_create(event_map, id) end)
+    |> Multi.one(:get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))
     |> Multi.merge(fn
-      %{get_account: {:error, %UpdateEventError{} = exception}} ->
-        Multi.put(Multi.new(), :get_create_account_event_error, exception)
-
-      %{get_account: account} ->
+      %{get_account: account} when not is_nil(account) ->
         Multi.update(Multi.new(), :account, AccountStoreHelper.build_update(account, payload))
+
+      _ ->
+        Multi.put(Multi.new(), :account, nil)
     end)
   end
 
@@ -135,11 +130,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
           Workers.Oban.CreateAccountLink.new(%{event_id: eid, account_id: aid, journal_event_id: jid})
         end)
 
-      %{get_create_account_event_error: %{reason: reason}, new_event: _event} ->
+      _ ->
         event_map_changeset =
           event_map
           |> AccountEventMap.changeset(%{})
-          |> Changeset.add_error(:create_account_event_error, to_string(reason))
+          |> Changeset.add_error(:create_account_event_error, to_string("Account does not exist"))
 
         Multi.error(Multi.new(), :create_account_event_error, event_map_changeset)
     end)

@@ -93,7 +93,6 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
         action: {"can't be blank", [validation: :required]},
         instance_address: {"can't be blank", [validation: :required]},
         source: {"can't be blank", [validation: :required]},
-        source_idempk: {"can't be blank", [validation: :required]}
       ]
 
       event_changeset = Event.changeset(%Event{}, %{})
@@ -106,7 +105,7 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
       %{data: %TransactionEventMap{}, errors: errors} =
         TransferErrors.from_event_to_event_map(%TransactionEventMap{}, event_changeset)
 
-      assert Keyword.equal?(errors, expected_errors)
+      assert Keyword.equal?(errors, Keyword.put(expected_errors, :source_idempk, {"can't be blank", [validation: :required]}))
     end
 
     # Add tests for this function
@@ -138,7 +137,6 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
                %{
                  instance_address: [{"can't be blank", [validation: :required]}],
                  source: [{"can't be blank", [validation: :required]}],
-                 source_idempk: [{"can't be blank", [validation: :required]}],
                  payload: %{
                    currency: [{"can't be blank", [validation: :required]}],
                    type: [{"can't be blank", [validation: :required]}],

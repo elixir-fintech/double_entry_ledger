@@ -222,54 +222,11 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
   def build_get_create_transaction_event_transaction(multi, step, event_or_step) do
     multi
     |> Multi.run(step, fn _, changes ->
-      event =
-        cond do
-          is_struct(event_or_step, Event) -> event_or_step
-          is_atom(event_or_step) -> Map.fetch!(changes, event_or_step)
-        end
+      event = get_event(event_or_step, changes)
 
       try do
         {:ok, {transaction, _}} = get_create_transaction_event_transaction(event)
         {:ok, transaction}
-      rescue
-        e in UpdateEventError ->
-          {:ok, {:error, e}}
-      end
-    end)
-  end
-
-  @doc """
-  Builds an Ecto.Multi step to get a create account event's account.
-
-  This function adds a step to an Ecto.Multi that retrieves the account associated with
-  the create event corresponding to an update event. Handles error cases by wrapping
-  exceptions in the result tuple.
-
-  ## Parameters
-
-  * `multi` - The Ecto.Multi instance to add the step to
-  * `step` - The atom representing the step name in the Multi
-  * `event_or_step` - Either an Event struct or the name of a previous step in the Multi
-
-  ## Returns
-
-  * `Ecto.Multi.t()` - The updated Multi instance with the new step added
-
-  """
-  @spec build_get_create_account_event_account(Ecto.Multi.t(), atom(), Event.t() | atom()) ::
-          Ecto.Multi.t()
-  def build_get_create_account_event_account(
-        multi,
-        step,
-        event_or_step
-      ) do
-    multi
-    |> Multi.run(step, fn _, changes ->
-      event = get_event(event_or_step, changes)
-
-      try do
-        {:ok, {account, _}} = get_create_account_event_account(event)
-        {:ok, account}
       rescue
         e in UpdateEventError ->
           {:ok, {:error, e}}

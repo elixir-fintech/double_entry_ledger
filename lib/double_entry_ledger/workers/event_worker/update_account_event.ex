@@ -7,8 +7,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
   import DoubleEntryLedger.EventQueue.Scheduling,
     only: [
       build_mark_as_processed: 1,
-      build_revert_to_pending: 2,
-      build_schedule_update_retry: 2,
       build_mark_as_dead_letter: 2
     ]
 
@@ -17,10 +15,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Workers
-  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
   alias DoubleEntryLedger.Event.AccountEventMap
   alias DoubleEntryLedger.{Event, JournalEvent, Repo}
-  alias DoubleEntryLedger.Stores.{AccountStoreHelper, EventStoreHelper}
+  alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.EventWorker.AccountEventResponseHandler
 
   @spec process(Event.t()) :: AccountEventResponseHandler.response()
@@ -32,28 +29,16 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
   end
 
   @spec build_update_account(Event.t()) :: Ecto.Multi.t()
-  defp build_update_account(%Event{event_map: %{payload: account_data}} = event) do
-    # account_data =
-    # %AccountEventMap{}
-    # |> AccountEventMap.changeset(event_map)
-    # |> Ecto.Changeset.get_embed(:payload, :struct)
-
+  defp build_update_account(%Event{event_map: %{payload: account_data, instance_address: iaddr, account_address: aaddr}}) do
     Multi.new()
-    |> EventStoreHelper.build_get_create_account_event_account(
-      :get_account,
-      event
-    )
+    |> Multi.one(:_get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))
     |> Multi.merge(fn
-      %{get_account: {:error, %UpdateEventError{} = exception}} ->
-        Multi.put(Multi.new(), :get_create_account_event_error, exception)
+      %{_get_account: account} when not is_nil(account) ->
+        Multi.update(Multi.new(), :account, AccountStoreHelper.build_update(account, account_data))
 
-      %{get_account: account} ->
-        Multi.update(
-          Multi.new(),
-          :account,
-          AccountStoreHelper.build_update(account, account_data)
-        )
-    end)
+      _ ->
+        Multi.put(Multi.new(), :account, nil)
+      end)
   end
 
   @spec handle_build_update_account(
@@ -62,33 +47,17 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
         ) :: Ecto.Multi.t()
   defp handle_build_update_account(multi, %Event{event_map: event_map, instance_id: id} = event) do
     Multi.merge(multi, fn
-      %{account: account} ->
+      %{account: %{id: aid}} ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{event_map: event_map, instance_id: id})
         end)
         |> Multi.update(:event_success, build_mark_as_processed(event))
         |> Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->
-          Workers.Oban.CreateAccountLink.new(%{event_id: event.id, account_id: account.id, journal_event_id: jid})
+          Workers.Oban.CreateAccountLink.new(%{event_id: event.id, account_id: aid, journal_event_id: jid})
         end)
 
-      %{
-        get_create_account_event_error: %{reason: :create_event_not_processed} = exception
-      } ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
-          build_revert_to_pending(event, exception.message)
-        end)
-
-      %{
-        get_create_account_event_error: %{reason: :create_event_failed} = exception
-      } ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
-          build_schedule_update_retry(event, exception)
-        end)
-
-      %{get_create_account_event_error: exception} ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
-          build_mark_as_dead_letter(event, exception.message)
-        end)
+      _ ->
+        Multi.update(Multi.new(), :event_failure, build_mark_as_dead_letter(event, "Account does not exist"))
     end)
   end
 end

@@ -5,6 +5,8 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
+  alias DoubleEntryLedger.{Account, Event}
+  alias DoubleEntryLedger.Stores.InstanceStore
   alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
   alias DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnError
 
@@ -20,7 +22,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
         action: :create_account,
         instance_address: instance.address,
         source: "manual",
-        source_idempk: "acc_123",
         payload: %AccountData{
           currency: "USD",
           address: "account:main1",
@@ -41,7 +42,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
         action: :create_account,
         instance_address: instance.address,
         source: "manual",
-        source_idempk: "acc_123",
         payload: %AccountData{
           currency: "USD",
           address: nil,

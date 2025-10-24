@@ -2,10 +2,12 @@ defmodule DoubleEntryLedger.Event.Helper do
   @moduledoc """
     Helper functions
   """
+  alias DoubleEntryLedger.Account
   alias DoubleEntryLedger.Event.{AccountEventMap, TransactionEventMap}
 
   @transaction_actions [:create_transaction, :update_transaction]
   @account_actions [:create_account, :update_account]
+  @source_regex ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/
 
   @type transaction_action ::
           unquote(
@@ -25,6 +27,11 @@ defmodule DoubleEntryLedger.Event.Helper do
   @spec actions(:account) :: [account_action()]
   def actions(:transaction), do: @transaction_actions
   def actions(:account), do: @account_actions
+
+  @spec source_regex() :: Regex.t()
+  def source_regex(), do: @source_regex
+
+  defdelegate address_regex(), to: Account
 
   def action_to_mod(event_map) do
     case fetch_action(event_map) do

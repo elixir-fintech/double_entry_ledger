@@ -39,6 +39,8 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
       # Building an update changeset
       changeset = AccountStoreHelper.build_update(existing_account, updated_data)
   """
+  import Ecto.Query, only: [from: 2]
+
   alias DoubleEntryLedger.Account
   alias DoubleEntryLedger.Event.AccountData
 
@@ -132,5 +134,15 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
   def build_update(%Account{} = account, account_data) do
     account
     |> Account.update_changeset(AccountData.to_map(account_data))
+  end
+
+
+  @spec get_by_address_query(String.t(), String.t()) :: Ecto.Query.t()
+  def get_by_address_query(instance_address, account_address) do
+    from(a in Account,
+      join: i in assoc(a, :instance),
+      where: a.address == ^account_address and i.address == ^instance_address,
+      preload: [:events]
+    )
   end
 end

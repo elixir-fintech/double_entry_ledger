@@ -1,4 +1,6 @@
 defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErrorTest do
+  @moduledoc false
+
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
@@ -13,13 +15,12 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
   describe "process/1" do
     setup [:create_instance, :create_account]
 
-    test "successfully processes a valid account event map", %{instance: instance, event: event} do
+    test "successfully processes a valid account event map", %{instance: instance, account: account} do
       event_map = %AccountEventMap{
         action: :update_account,
         instance_address: instance.address,
-        source: event.event_map.source,
-        source_idempk: event.event_map.source_idempk,
-        update_idempk: "update_456",
+        account_address: account.address,
+        source: "some-source",
         payload: %AccountData{
           description: "Updated Description"
         }
@@ -30,22 +31,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
       assert event.event_queue_item.status == :processed
     end
 
-    test "returns an error for an invalid account event map", %{instance: instance, event: event} do
-      event_map = %AccountEventMap{
-        action: :update_account,
-        instance_address: instance.address,
-        source: event.event_map.source,
-        source_idempk: event.event_map.source_idempk,
-        payload: %AccountData{
-          description: "Updated Description"
-        }
-      }
-
-      assert {:error, changeset} = UpdateAccountEventMapNoSaveOnError.process(event_map)
-      assert %Ecto.Changeset{} = changeset
-      assert changeset.valid? == false
-      assert Keyword.has_key?(changeset.errors, :update_idempk)
-    end
   end
 
   defp create_account(%{instance: instance} = ctx) do
@@ -53,7 +38,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
       action: :create_account,
       instance_address: instance.address,
       source: "manual",
-      source_idempk: "acc_123",
       payload: %AccountData{
         currency: "USD",
         name: "Test Account",

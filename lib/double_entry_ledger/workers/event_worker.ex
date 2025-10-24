@@ -370,7 +370,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
       ...>   action: :create_account,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
-      ...>   source_idempk: "acc_create_456",
       ...>   payload: %AccountData{
       ...>     name: "Petty Cash",
       ...>     address: "account:petty_cash",

@@ -80,7 +80,13 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       validate_inclusion: 3
     ]
 
-  import DoubleEntryLedger.Event.Helper, only: [fetch_action: 1]
+  import DoubleEntryLedger.Event.Helper,
+    only: [
+      fetch_action: 1,
+      source_regex: 0,
+      address_regex: 0
+    ]
+
   alias DoubleEntryLedger.Event.AccountData
   alias Ecto.Changeset
 
@@ -90,10 +96,8 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
            only: [
              :action,
              :instance_address,
+             :account_address,
              :source,
-             :source_idempk,
-             :update_idempk,
-             :update_source,
              :payload
            ]}
   @typedoc """
@@ -119,10 +123,8 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
   @type t() :: %AccountEventMap{
           action: :create_account | :update_account,
           instance_address: String.t(),
+          account_address: String.t() | nil,
           source: String.t(),
-          source_idempk: String.t(),
-          update_idempk: String.t() | nil,
-          update_source: String.t() | nil,
           payload: AccountData.t()
         }
 
@@ -132,10 +134,8 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
   embedded_schema do
     field(:action, Ecto.Enum, values: @actions)
     field(:instance_address, :string)
+    field(:account_address, :string)
     field(:source, :string)
-    field(:source_idempk, :string)
-    field(:update_idempk, :string)
-    field(:update_source, :string)
 
     embeds_one(:payload, AccountData, on_replace: :delete)
   end
@@ -177,7 +177,6 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>   action: :create_account,
       ...>   instance_address: "Test:Ledger",
       ...>   source: "web_app",
-      ...>   source_idempk: "acc_123",
       ...>   payload: %{
       ...>     name: "Test Account",
       ...>     address: "account:main",
@@ -238,7 +237,6 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>   action: :create_account,
       ...>   instance_address: "Test:Ledger",
       ...>   source: "test",
-      ...>   source_idempk: "123",
       ...>   payload: %{name: "Test", address: "account:main", type: :asset, currency: "USD"}
       ...> }
       iex> changeset = DoubleEntryLedger.Event.AccountEventMap.changeset(%DoubleEntryLedger.Event.AccountEventMap{}, attrs)
@@ -249,8 +247,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>   action: :update_account,
       ...>   instance_address: "Test:Ledger",
       ...>   source: "test",
-      ...>   source_idempk: "123",
-      ...>   update_idempk: "upd_456",
+      ...>   account_address: "account:test",
       ...>   payload: %{description: "Updated Test Account"}
       ...> }
       iex> changeset = DoubleEntryLedger.Event.AccountEventMap.changeset(%DoubleEntryLedger.Event.AccountEventMap{}, update_attrs)
@@ -287,18 +284,17 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       :action,
       :instance_address,
       :source,
-      :source_idempk
     ])
-    |> validate_required([:action, :instance_address, :source, :source_idempk])
-    |> validate_format(:source, ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/)
-    |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
+    |> validate_required([:action, :instance_address, :source])
+    |> validate_format(:source, source_regex())
     |> validate_inclusion(:action, @actions)
   end
 
   def update_changeset(struct, attrs) do
     struct
-    |> cast(attrs, [:update_idempk, :update_source])
-    |> validate_required([:update_idempk])
+    |> cast(attrs, [:account_address])
+    |> validate_required([:account_address])
+    |> validate_format(:account_address, address_regex())
     |> base_changeset(attrs)
   end
 
@@ -307,10 +303,8 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
     %{
       action: Map.get(event_map, :action),
       instance_address: Map.get(event_map, :instance_address),
+      account_address: Map.get(event_map, :account_address),
       source: Map.get(event_map, :source),
-      source_idempk: Map.get(event_map, :source_idempk),
-      update_idempk: Map.get(event_map, :update_idempk),
-      update_source: Map.get(event_map, :update_source),
       payload: AccountData.to_map(Map.get(event_map, :payload))
     }
     |> Map.reject(fn {_, v} -> is_nil(v) end)
