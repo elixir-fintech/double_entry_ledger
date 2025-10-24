@@ -8,7 +8,12 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
 
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
   alias DoubleEntryLedger.Repo
-  alias DoubleEntryLedger.Stores.{TransactionStore, TransactionStoreHelper}
+  alias DoubleEntryLedger.Stores.{
+    TransactionStore,
+    TransactionStoreHelper,
+    InstanceStore,
+    AccountStore
+  }
   alias Ecto.Multi
 
   doctest TransactionStore

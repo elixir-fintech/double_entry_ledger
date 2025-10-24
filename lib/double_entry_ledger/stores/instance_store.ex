@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
 
   Verifying ledger balance integrity:
 
-      {:ok, currency_balances} = DoubleEntryLedger.Stores.InstanceStore.sum_accounts_debits_and_credits_by_currency(instance.id)
+      {:ok, currency_balances} = InstanceStore.sum_accounts_debits_and_credits_by_currency(instance.id)
       # Check that for each currency, debits = credits
 
   ## Implementation Notes
@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
   ## Examples
 
       iex> attrs = %{address: "Test:Ledger"}
-      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(attrs)
+      iex> {:ok, instance} = InstanceStore.create(attrs)
       iex> instance.address
       "Test:Ledger"
 
@@ -93,8 +93,8 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Sample:Ledger"})
-      iex> retrieved = DoubleEntryLedger.Stores.InstanceStore.get_by_id(instance.id)
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Ledger"})
+      iex> retrieved = InstanceStore.get_by_id(instance.id)
       iex> retrieved.id == instance.id
       true
 
@@ -124,8 +124,8 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Ledger"})
-      iex> {:ok, updated_instance} = DoubleEntryLedger.Stores.InstanceStore.update(instance.id, %{address: "Updated:Ledger"})
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Ledger"})
+      iex> {:ok, updated_instance} = InstanceStore.update(instance.id, %{address: "Updated:Ledger"})
       iex> updated_instance.address
       "Updated:Ledger"
 
@@ -153,9 +153,9 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
 
   ## Examples
 
-      iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Temporary:Ledger"})
-      iex> {:ok, _} = DoubleEntryLedger.Stores.InstanceStore.delete(instance.id)
-      iex> DoubleEntryLedger.Stores.InstanceStore.get_by_id(instance.id) == nil
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Temporary:Ledger"})
+      iex> {:ok, _} = InstanceStore.delete(instance.id)
+      iex> InstanceStore.get_by_id(instance.id) == nil
       true
 
   """

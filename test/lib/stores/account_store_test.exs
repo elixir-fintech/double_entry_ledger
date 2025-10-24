@@ -7,8 +7,15 @@ defmodule DoubleEntryLedger.Stores.AccountStoreTest do
 
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
-  alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore}
-  alias DoubleEntryLedger.Stores.AccountStoreHelper
+
+  alias DoubleEntryLedger.Stores.{
+    AccountStore,
+    InstanceStore,
+    AccountStoreHelper
+  }
+
+  alias DoubleEntryLedger.Account
+  alias DoubleEntryLedger.Event.AccountData
 
   doctest AccountStore
   doctest AccountStoreHelper

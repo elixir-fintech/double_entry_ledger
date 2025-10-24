@@ -121,9 +121,6 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Account
-      iex> alias DoubleEntryLedger.Stores.AccountStoreHelper
-      iex> alias DoubleEntryLedger.Event.AccountData
       iex> existing_account = %Account{name: "Old Name", type: :asset, currency: :USD}
       iex> new_data = %AccountData{description: "Updated Description"}
       iex> changeset = AccountStoreHelper.build_update(existing_account, new_data)
