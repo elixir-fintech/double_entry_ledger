@@ -76,8 +76,6 @@ defmodule DoubleEntryLedger.Account do
   @spec address_regex() :: Regex.t()
   def address_regex, do: @address_regex
 
-
-
   @typedoc """
   Represents a financial account in the double-entry ledger system.
 
@@ -121,7 +119,6 @@ defmodule DoubleEntryLedger.Account do
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
-
 
   schema "accounts" do
     field(:currency, Ecto.Enum, values: @currency_atoms)
@@ -199,9 +196,7 @@ defmodule DoubleEntryLedger.Account do
       :instance_id
     ])
     |> validate_required([:address, :currency, :instance_id, :type])
-    |> validate_format(:address, @address_regex,
-      message: "is not a valid address"
-    )
+    |> validate_format(:address, @address_regex, message: "is not a valid address")
     |> validate_inclusion(:type, @account_types)
     |> set_normal_balance_based_on_type()
     |> validate_inclusion(:normal_balance, @credit_and_debit)

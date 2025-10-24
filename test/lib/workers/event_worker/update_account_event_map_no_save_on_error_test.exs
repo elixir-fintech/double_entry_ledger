@@ -15,7 +15,10 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
   describe "process/1" do
     setup [:create_instance, :create_account]
 
-    test "successfully processes a valid account event map", %{instance: instance, account: account} do
+    test "successfully processes a valid account event map", %{
+      instance: instance,
+      account: account
+    } do
       event_map = %AccountEventMap{
         action: :update_account,
         instance_address: instance.address,
@@ -30,7 +33,6 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
       assert account.description == "Updated Description"
       assert event.event_queue_item.status == :processed
     end
-
   end
 
   defp create_account(%{instance: instance} = ctx) do

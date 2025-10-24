@@ -283,7 +283,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
     |> cast(attrs, [
       :action,
       :instance_address,
-      :source,
+      :source
     ])
     |> validate_required([:action, :instance_address, :source])
     |> validate_format(:source, source_regex())

@@ -136,7 +136,6 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
     |> Account.update_changeset(AccountData.to_map(account_data))
   end
 
-
   @spec get_by_address_query(String.t(), String.t()) :: Ecto.Query.t()
   def get_by_address_query(instance_address, account_address) do
     from(a in Account,

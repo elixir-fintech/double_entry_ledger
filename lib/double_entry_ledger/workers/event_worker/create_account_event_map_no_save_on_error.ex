@@ -132,7 +132,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
       EventStoreHelper.build_create(event_map, id)
     end)
     |> Multi.insert(:journal_event, fn %{instance: id} ->
-      JournalEvent.build_create(%{event_map: event_map , instance_id: id})
+      JournalEvent.build_create(%{event_map: event_map, instance_id: id})
     end)
     |> Multi.insert(:account, fn %{instance: id} ->
       AccountStoreHelper.build_create(payload, id)
@@ -140,9 +140,16 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
     |> Multi.update(:event_success, fn %{new_event: event} ->
       build_mark_as_processed(event)
     end)
-    |> Oban.insert(:create_account_link, fn %{event_success: event, account: account, journal_event: journal_event} ->
+    |> Oban.insert(:create_account_link, fn %{
+                                              event_success: event,
+                                              account: account,
+                                              journal_event: journal_event
+                                            } ->
       Workers.Oban.CreateAccountLink.new(%{
-        event_id: event.id, account_id: account.id, journal_event_id: journal_event.id})
+        event_id: event.id,
+        account_id: account.id,
+        journal_event_id: journal_event.id
+      })
     end)
   end
 end

@@ -121,7 +121,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
           build_mark_as_processed(event)
         end)
         |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
-          Workers.Oban.CreateTransactionLink.new(%{event_id: eid, transaction_id: tid, journal_event_id: jid})
+          Workers.Oban.CreateTransactionLink.new(%{
+            event_id: eid,
+            transaction_id: tid,
+            journal_event_id: jid
+          })
         end)
 
       %{get_create_transaction_event_error: %{reason: reason}, new_event: _event} ->

@@ -128,7 +128,8 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   def all_processed_events_for_account_id(account_id) do
     union =
       base_account_query(account_id)
-      #|> union(^transaction_events_for_account_query(account_id))
+
+    # |> union(^transaction_events_for_account_query(account_id))
 
     from(u in subquery(union),
       order_by: [desc: u.inserted_at]

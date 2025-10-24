@@ -182,13 +182,15 @@ defmodule DoubleEntryLedger.Event do
     case Map.get(attrs, :event_map) || Map.get(attrs, "event_map") do
       %{} = event_map ->
         with {:ok, mod} <- action_to_mod(event_map),
-          inner_cs <- mod.changeset(struct(mod), event_map),
-          false <- inner_cs.valid? do
+             inner_cs <- mod.changeset(struct(mod), event_map),
+             false <- inner_cs.valid? do
           Map.put(changeset, :event_map_changeset, inner_cs)
         else
-        _ -> changeset
+          _ -> changeset
         end
-      _ -> changeset
+
+      _ ->
+        changeset
     end
   end
 end

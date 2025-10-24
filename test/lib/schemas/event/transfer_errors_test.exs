@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
         action: {"invalid in this context", [value: ""]},
         action: {"can't be blank", [validation: :required]},
         instance_address: {"can't be blank", [validation: :required]},
-        source: {"can't be blank", [validation: :required]},
+        source: {"can't be blank", [validation: :required]}
       ]
 
       event_changeset = Event.changeset(%Event{}, %{})
@@ -105,7 +105,14 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
       %{data: %TransactionEventMap{}, errors: errors} =
         TransferErrors.from_event_to_event_map(%TransactionEventMap{}, event_changeset)
 
-      assert Keyword.equal?(errors, Keyword.put(expected_errors, :source_idempk, {"can't be blank", [validation: :required]}))
+      assert Keyword.equal?(
+               errors,
+               Keyword.put(
+                 expected_errors,
+                 :source_idempk,
+                 {"can't be blank", [validation: :required]}
+               )
+             )
     end
 
     # Add tests for this function

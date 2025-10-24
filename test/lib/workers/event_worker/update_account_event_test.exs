@@ -21,21 +21,25 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
     setup [:create_instance]
 
     test "successfully processes a valid update account event", %{instance: instance} do
-      attrs = account_event_attrs(%{
-        instance_address: instance.address,
-        payload: account_data_attrs(%{name: "Old Name"})
-      })
+      attrs =
+        account_event_attrs(%{
+          instance_address: instance.address,
+          payload: account_data_attrs(%{name: "Old Name"})
+        })
+
       {:ok, %{event_map: %{payload: payload}} = create_event} = EventStore.create(attrs)
 
       CreateAccountEvent.process(create_event)
 
-      update_attrs =  account_event_attrs(%{
-        action: :update_account,
-        instance_address: instance.address,
-        account_address: payload.address,
-        source: "some-source",
-        payload: %AccountData{name: "New Name"}
-      })
+      update_attrs =
+        account_event_attrs(%{
+          action: :update_account,
+          instance_address: instance.address,
+          account_address: payload.address,
+          source: "some-source",
+          payload: %AccountData{name: "New Name"}
+        })
+
       {:ok, update_event} = EventStore.create(update_attrs)
 
       assert {:ok, %Account{} = account, %Event{event_queue_item: eqi} = e} =
@@ -66,7 +70,9 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventTest do
       assert eqi.status == :dead_letter
     end
 
-    test "goes to dead letter when create account event is not yet processed", %{instance: instance} do
+    test "goes to dead letter when create account event is not yet processed", %{
+      instance: instance
+    } do
       {:ok, %{event_map: %{payload: payload}}} =
         EventStore.create(
           account_event_attrs(%{

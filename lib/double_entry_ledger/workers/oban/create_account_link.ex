@@ -7,7 +7,9 @@ defmodule DoubleEntryLedger.Workers.Oban.CreateAccountLink do
   alias DoubleEntryLedger.{EventAccountLink, Repo}
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"event_id" => eid, "account_id" => aid, "journal_event_id" => jid}}) do
+  def perform(%Oban.Job{
+        args: %{"event_id" => eid, "account_id" => aid, "journal_event_id" => jid}
+      }) do
     Repo.insert(changeset(eid, aid, jid))
   end
 

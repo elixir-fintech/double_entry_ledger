@@ -102,11 +102,15 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
 
   @spec build_update_account(AccountEventMap.t()) :: Ecto.Multi.t()
   defp build_update_account(
-         %AccountEventMap{payload: payload, instance_address: iaddr, account_address: aaddr} = event_map
-       ) when not is_nil(iaddr) and not is_nil(aaddr) do
+         %AccountEventMap{payload: payload, instance_address: iaddr, account_address: aaddr} =
+           event_map
+       )
+       when not is_nil(iaddr) and not is_nil(aaddr) do
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(iaddr))
-    |> Multi.insert(:new_event, fn %{instance: id} -> EventStoreHelper.build_create(event_map, id) end)
+    |> Multi.insert(:new_event, fn %{instance: id} ->
+      EventStoreHelper.build_create(event_map, id)
+    end)
     |> Multi.one(:get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))
     |> Multi.merge(fn
       %{get_account: account} when not is_nil(account) ->
@@ -124,10 +128,18 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEventMapNoSaveOnErr
   defp handle_build_update_account(multi, %AccountEventMap{} = event_map) do
     Multi.merge(multi, fn
       %{account: %{id: aid}, new_event: %{id: eid, instance_id: iid} = event} ->
-        Multi.insert(Multi.new(), :journal_event, JournalEvent.build_create(%{event_map: event_map, instance_id: iid}))
+        Multi.insert(
+          Multi.new(),
+          :journal_event,
+          JournalEvent.build_create(%{event_map: event_map, instance_id: iid})
+        )
         |> Multi.update(:event_success, build_mark_as_processed(event))
-        |> Oban.insert(:create_account_link,  fn %{journal_event: %{id: jid}} ->
-          Workers.Oban.CreateAccountLink.new(%{event_id: eid, account_id: aid, journal_event_id: jid})
+        |> Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->
+          Workers.Oban.CreateAccountLink.new(%{
+            event_id: eid,
+            account_id: aid,
+            journal_event_id: jid
+          })
         end)
 
       _ ->

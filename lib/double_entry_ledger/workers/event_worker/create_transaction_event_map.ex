@@ -156,7 +156,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
     |> Multi.insert(:new_event, fn %{instance: id} ->
       EventStoreHelper.build_create(new_event_map, id)
     end)
-    |> Multi.insert(:journal_event, fn %{new_event: %{event_map: em, instance_id: id} } ->
+    |> Multi.insert(:journal_event, fn %{new_event: %{event_map: em, instance_id: id}} ->
       JournalEvent.build_create(%{event_map: em, instance_id: id})
     end)
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
@@ -192,7 +192,11 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
           build_mark_as_processed(event)
         end)
         |> Oban.insert(:create_transaction_link, fn _ ->
-          Workers.Oban.CreateTransactionLink.new(%{event_id: eid, transaction_id: tid, journal_event_id: jid})
+          Workers.Oban.CreateTransactionLink.new(%{
+            event_id: eid,
+            transaction_id: tid,
+            journal_event_id: jid
+          })
         end)
     end)
   end

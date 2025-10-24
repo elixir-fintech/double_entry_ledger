@@ -151,7 +151,8 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: Map do
   def metadata(%{} = event_map) do
     %{
       is_map: true,
-      instance_address: Map.get(event_map, :instance_address) || Map.get(event_map, "instance_address"),
+      instance_address:
+        Map.get(event_map, :instance_address) || Map.get(event_map, "instance_address"),
       event_action: Map.get(event_map, :action) || Map.get(event_map, "action"),
       event_source: Map.get(event_map, :source) || Map.get(event_map, "source"),
       event_trace_id:

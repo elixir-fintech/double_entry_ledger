@@ -96,7 +96,8 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
   @spec get_by_instance_address_and_id(String.t(), Ecto.UUID.t()) :: JournalEvent.t() | nil
   def get_by_instance_address_and_id(instance_address, id) do
     from(e in JournalEvent,
-      join: i in assoc(e, :instance), where: i.address == ^instance_address and e.id == ^id,
+      join: i in assoc(e, :instance),
+      where: i.address == ^instance_address and e.id == ^id,
       select: e,
       preload: [:account, :instance, :transaction]
     )

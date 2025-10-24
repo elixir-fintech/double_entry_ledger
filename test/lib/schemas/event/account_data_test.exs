@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
         name: "some_name",
         address: "some address",
         type: "asset",
-        currency: "EUR",
+        currency: "EUR"
       }
 
       assert %Changeset{errors: [address: {"has invalid format", [validation: :format]}]} =

@@ -29,16 +29,22 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
   end
 
   @spec build_update_account(Event.t()) :: Ecto.Multi.t()
-  defp build_update_account(%Event{event_map: %{payload: account_data, instance_address: iaddr, account_address: aaddr}}) do
+  defp build_update_account(%Event{
+         event_map: %{payload: account_data, instance_address: iaddr, account_address: aaddr}
+       }) do
     Multi.new()
     |> Multi.one(:_get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))
     |> Multi.merge(fn
       %{_get_account: account} when not is_nil(account) ->
-        Multi.update(Multi.new(), :account, AccountStoreHelper.build_update(account, account_data))
+        Multi.update(
+          Multi.new(),
+          :account,
+          AccountStoreHelper.build_update(account, account_data)
+        )
 
       _ ->
         Multi.put(Multi.new(), :account, nil)
-      end)
+    end)
   end
 
   @spec handle_build_update_account(
@@ -53,11 +59,19 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateAccountEvent do
         end)
         |> Multi.update(:event_success, build_mark_as_processed(event))
         |> Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->
-          Workers.Oban.CreateAccountLink.new(%{event_id: event.id, account_id: aid, journal_event_id: jid})
+          Workers.Oban.CreateAccountLink.new(%{
+            event_id: event.id,
+            account_id: aid,
+            journal_event_id: jid
+          })
         end)
 
       _ ->
-        Multi.update(Multi.new(), :event_failure, build_mark_as_dead_letter(event, "Account does not exist"))
+        Multi.update(
+          Multi.new(),
+          :event_failure,
+          build_mark_as_dead_letter(event, "Account does not exist")
+        )
     end)
   end
 end

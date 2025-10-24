@@ -150,11 +150,18 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
     |> Multi.update(:event_success, fn _ ->
       build_mark_as_processed(event)
     end)
-    |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id} } ->
+    |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id}} ->
       JournalEvent.build_create(%{event_map: em, instance_id: id})
     end)
-    |> Oban.insert(:create_transaction_link, fn %{transaction: %{id: tid}, journal_event: %{id: jid}} ->
-      Workers.Oban.CreateTransactionLink.new(%{event_id: eid, transaction_id: tid, journal_event_id: jid})
+    |> Oban.insert(:create_transaction_link, fn %{
+                                                  transaction: %{id: tid},
+                                                  journal_event: %{id: jid}
+                                                } ->
+      Workers.Oban.CreateTransactionLink.new(%{
+        event_id: eid,
+        transaction_id: tid,
+        journal_event_id: jid
+      })
     end)
   end
 end
