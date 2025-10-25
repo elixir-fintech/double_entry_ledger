@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler 
   require Logger
   use DoubleEntryLedger.Logger
 
-  import DoubleEntryLedger.EventQueue.Scheduling,
+  import DoubleEntryLedger.CommandQueue.Scheduling,
     only: [
       build_schedule_retry_with_reason: 3,
       schedule_retry_with_reason: 3,

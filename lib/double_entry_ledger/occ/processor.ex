@@ -177,7 +177,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       alias DoubleEntryLedger.Repo
       alias Ecto.Multi
       import DoubleEntryLedger.Occ.Helper
-      import DoubleEntryLedger.EventQueue.Scheduling
+      import DoubleEntryLedger.CommandQueue.Scheduling
 
       import DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer,
         only: [transaction_data_to_transaction_map: 2]

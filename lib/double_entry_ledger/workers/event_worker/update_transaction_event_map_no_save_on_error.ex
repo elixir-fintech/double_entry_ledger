@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEventMapNoSaveO
   use DoubleEntryLedger.Logger
 
   import DoubleEntryLedger.Occ.Helper
-  import DoubleEntryLedger.EventQueue.Scheduling
+  import DoubleEntryLedger.CommandQueue.Scheduling
 
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     only: [default_response_handler: 2]

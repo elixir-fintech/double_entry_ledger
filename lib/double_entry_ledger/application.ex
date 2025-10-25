@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.Application do
     children =
       [
         DoubleEntryLedger.Repo,
-        if(Mix.env() != :test, do: {DoubleEntryLedger.EventQueue.Supervisor, []}),
+        if(Mix.env() != :test, do: {DoubleEntryLedger.CommandQueue.Supervisor, []}),
         {Oban, Application.fetch_env!(:double_entry_ledger, Oban)}
       ]
       |> Enum.reject(&is_nil/1)

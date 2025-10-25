@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Event.TransactionData
   alias DoubleEntryLedger.Workers.EventWorker.{UpdateTransactionEvent, CreateTransactionEvent}
-  alias DoubleEntryLedger.EventQueue.Scheduling
+  alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.EventStore
 
   doctest UpdateTransactionEvent
@@ -159,7 +159,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
         new_create_transaction_event(ctx, :pending)
 
       {:error, failed_create_event} =
-        DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(
+        DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
           pending_event,
           "some reason",
           :failed
@@ -182,7 +182,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       %{event: %{event_map: %{source: s, source_idempk: s_id}} = pending_event} =
         new_create_transaction_event(ctx, :pending)
 
-      DoubleEntryLedger.EventQueue.Scheduling.build_mark_as_dead_letter(
+      DoubleEntryLedger.CommandQueue.Scheduling.build_mark_as_dead_letter(
         pending_event,
         "some reason"
       )

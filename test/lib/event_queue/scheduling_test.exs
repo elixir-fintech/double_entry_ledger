@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
+defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   @moduledoc """
   Tests for the scheduling of events in the event queue.
   """
@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.EventQueue.Scheduling
+  alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
 
@@ -157,7 +157,7 @@ defmodule DoubleEntryLedger.EventQueue.SchedulingTest do
         new_create_transaction_event(ctx, :pending)
 
       {:error, failed_create_event} =
-        DoubleEntryLedger.EventQueue.Scheduling.schedule_retry_with_reason(
+        DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
           pending_event,
           "some reason",
           :failed

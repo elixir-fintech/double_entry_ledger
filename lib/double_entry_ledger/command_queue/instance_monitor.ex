@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
+defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   @moduledoc """
   Monitors event queue instances for pending events and ensures processors are started as needed.
 
@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
 
   alias DoubleEntryLedger.{Repo, Event, EventQueueItem}
 
-  alias DoubleEntryLedger.EventQueue.InstanceProcessor
+  alias DoubleEntryLedger.CommandQueue.InstanceProcessor
 
   import Ecto.Query
 
@@ -98,13 +98,13 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitor do
 
   defp ensure_processor(instance_id) do
     # Check if processor already exists
-    case Registry.lookup(DoubleEntryLedger.EventQueue.Registry, instance_id) do
+    case Registry.lookup(DoubleEntryLedger.CommandQueue.Registry, instance_id) do
       [] ->
         # No processor running, start one
         Logger.info("Starting new processor for instance #{instance_id}")
 
         DynamicSupervisor.start_child(
-          DoubleEntryLedger.EventQueue.InstanceSupervisor,
+          DoubleEntryLedger.CommandQueue.InstanceSupervisor,
           {InstanceProcessor, [instance_id: instance_id]}
         )
 

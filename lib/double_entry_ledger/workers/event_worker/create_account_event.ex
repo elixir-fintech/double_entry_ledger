@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEvent do
   """
   use DoubleEntryLedger.Logger
 
-  import DoubleEntryLedger.EventQueue.Scheduling,
+  import DoubleEntryLedger.CommandQueue.Scheduling,
     only: [
       build_mark_as_processed: 1
     ]

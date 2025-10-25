@@ -80,7 +80,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       - `:source` Defaults to `"TransactionStore.create/3"
       - `:on_error`
         - :retry (default) The event will be saved in the EventQueue for retry after a processing error.
-        - :fail if you want to handle errors manually without saving the event to the EventQueue.
+        - :fail if you want to handle errors manually without saving the event to the CommandQueue.
   ## Returns
 
     - `{:ok, transaction}`: On successful creation, returns the created transaction.

@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventQueue.Scheduling do
+defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   @moduledoc """
   This module is responsible for scheduling events in the event queue.
 

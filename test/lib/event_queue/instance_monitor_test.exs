@@ -1,17 +1,17 @@
-defmodule DoubleEntryLedger.EventQueue.InstanceMonitorTest do
+defmodule DoubleEntryLedger.CommandQueue.InstanceMonitorTest do
   @moduledoc """
-  Tests for the DoubleEntryLedger.EventQueue.InstanceMonitor module.
+  Tests for the DoubleEntryLedger.CommandQueue.InstanceMonitor module.
 
   These tests verify that the InstanceMonitor GenServer starts correctly and
   respects the poll interval configuration.
   """
   use ExUnit.Case, async: false
 
-  alias DoubleEntryLedger.EventQueue.InstanceMonitor
+  alias DoubleEntryLedger.CommandQueue.InstanceMonitor
 
   setup do
     # Ensure the monitor is not already running
-    pid = Process.whereis(DoubleEntryLedger.EventQueue.InstanceMonitor)
+    pid = Process.whereis(DoubleEntryLedger.CommandQueue.InstanceMonitor)
     if pid, do: Process.exit(pid, :kill)
     :ok
   end
@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceMonitorTest do
   test "starts the InstanceMonitor GenServer" do
     assert {:ok, pid} = start_supervised(InstanceMonitor)
     assert Process.alive?(pid)
-    assert pid == Process.whereis(DoubleEntryLedger.EventQueue.InstanceMonitor)
+    assert pid == Process.whereis(DoubleEntryLedger.CommandQueue.InstanceMonitor)
   end
 
   test "poll interval is set from config or defaults" do

@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateAccountEventMapNoSaveOnErr
   - `:create_account` - Creates a new account from AccountEventMap payload
   """
 
-  import DoubleEntryLedger.EventQueue.Scheduling,
+  import DoubleEntryLedger.CommandQueue.Scheduling,
     only: [build_mark_as_processed: 1]
 
   import DoubleEntryLedger.Workers.EventWorker.AccountEventMapResponseHandler,

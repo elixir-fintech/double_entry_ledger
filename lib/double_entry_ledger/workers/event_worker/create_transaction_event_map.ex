@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEventMap do
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandler,
     only: [default_response_handler: 2]
 
-  import DoubleEntryLedger.EventQueue.Scheduling
+  import DoubleEntryLedger.CommandQueue.Scheduling
 
   @impl true
   @doc """

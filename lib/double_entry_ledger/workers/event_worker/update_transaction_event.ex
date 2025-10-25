@@ -41,7 +41,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.UpdateTransactionEvent do
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
-  import DoubleEntryLedger.EventQueue.Scheduling
+  import DoubleEntryLedger.CommandQueue.Scheduling
 
   import DoubleEntryLedger.Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_response_handler: 2]

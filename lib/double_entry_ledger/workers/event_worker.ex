@@ -141,7 +141,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker do
     UpdateTransactionEventMapNoSaveOnError
   }
 
-  import DoubleEntryLedger.EventQueue.Scheduling, only: [claim_event_for_processing: 2]
+  import DoubleEntryLedger.CommandQueue.Scheduling, only: [claim_event_for_processing: 2]
 
   @typedoc """
   Success result from event processing operations.

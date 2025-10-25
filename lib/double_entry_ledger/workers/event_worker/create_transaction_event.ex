@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent do
   alias DoubleEntryLedger.Workers.EventWorker
   alias DoubleEntryLedger.Workers
 
-  import DoubleEntryLedger.EventQueue.Scheduling
+  import DoubleEntryLedger.CommandQueue.Scheduling
 
   import Workers.EventWorker.TransactionEventResponseHandler,
     only: [default_response_handler: 2]

@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
+defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   @moduledoc """
   Handles processing of events for a specific event queue instance.
 
@@ -53,7 +53,7 @@ defmodule DoubleEntryLedger.EventQueue.InstanceProcessor do
     - A tuple in the format expected by Registry for process lookup
   """
   def via_tuple(instance_id) do
-    {:via, Registry, {DoubleEntryLedger.EventQueue.Registry, instance_id}}
+    {:via, Registry, {DoubleEntryLedger.CommandQueue.Registry, instance_id}}
   end
 
   # Server Callbacks

@@ -33,7 +33,7 @@ defmodule DoubleEntryLedger.Workers.EventWorker.TransactionEventMapResponseHandl
 
   use DoubleEntryLedger.Logger
 
-  import DoubleEntryLedger.EventQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
+  import DoubleEntryLedger.CommandQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
 
   import DoubleEntryLedger.Event.TransferErrors,
     only: [
