@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
     TransactionStore
   }
 
-  alias DoubleEntryLedger.Workers.EventWorker.CreateTransactionEvent
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
 
   doctest EventStoreHelper
   doctest EventStore

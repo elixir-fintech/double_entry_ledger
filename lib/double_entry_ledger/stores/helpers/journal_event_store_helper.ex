@@ -31,13 +31,13 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   ## Implementation Notes
 
-  This module is primarily used internally by EventStore and EventWorker modules to
+  This module is primarily used internally by EventStore and CommandWorker modules to
   share common functionality and reduce code duplication.
   """
   import Ecto.Query, only: [from: 2, subquery: 1, union: 2]
 
   alias DoubleEntryLedger.{Repo, Event, JournalEvent, Account, Entry}
-  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
 
   @doc """
   Retrieves an event by its action and source identifiers with preloaded associations.

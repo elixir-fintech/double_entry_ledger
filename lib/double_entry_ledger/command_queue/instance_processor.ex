@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   require Logger
 
   alias DoubleEntryLedger.{Repo, Event}
-  alias DoubleEntryLedger.Workers.EventWorker
+  alias DoubleEntryLedger.Workers.CommandWorker
   import Ecto.Query
 
   @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)
@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         parent = self()
 
         Task.start(fn ->
-          process_result = EventWorker.process_event_with_id(event.id, processor_name())
+          process_result = CommandWorker.process_event_with_id(event.id, processor_name())
           send(parent, {:processing_complete, event.id, process_result})
         end)
 
@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
       {:error, reason} ->
         Logger.warning("Failed to process event #{event_id}: #{inspect(reason)}")
-        # Note: the error is already recorded in the event by EventWorker.process_event_with_id
+        # Note: the error is already recorded in the event by CommandWorker.process_event_with_id
     end
 
     # Event processing completed, check for more events

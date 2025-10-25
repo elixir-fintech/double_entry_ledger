@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
 
   use DoubleEntryLedger.BaseSchema
   import Ecto.Changeset
-  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
   alias DoubleEntryLedger.Event.ErrorMap
   alias DoubleEntryLedger.Event
   import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]

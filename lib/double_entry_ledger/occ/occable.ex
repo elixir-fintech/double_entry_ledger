@@ -57,7 +57,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
   alias DoubleEntryLedger.Event
   alias DoubleEntryLedger.Event.{ErrorMap, IdempotencyKey}
   alias DoubleEntryLedger.Occ.Helper
-  alias DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
 
   @doc """
   Updates an Event with retry information during OCC retry cycles.
@@ -130,7 +130,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
   alias DoubleEntryLedger.Event.{ErrorMap, TransactionEventMap, IdempotencyKey}
   alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper}
   alias DoubleEntryLedger.Occ.Helper
-  alias DoubleEntryLedger.Workers.EventWorker.TransactionEventTransformer
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
 
   @doc """
   Updates an TransactionEventMap during OCC retry cycles.

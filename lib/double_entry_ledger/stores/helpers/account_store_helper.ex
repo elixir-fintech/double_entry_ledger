@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
 
   ## Integration
 
-  This module is primarily used by EventWorker modules when processing account-related
+  This module is primarily used by CommandWorker modules when processing account-related
   events, providing a consistent interface for account changeset operations. It integrates
   directly with the Account schema's validation rules and the event sourcing system.
 

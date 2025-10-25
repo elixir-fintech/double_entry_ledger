@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   """
 
   alias DoubleEntryLedger.{Account, Balance, Instance, Repo}
-  alias DoubleEntryLedger.Workers.EventWorker
+  alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Event.TransactionEventMap
   @destination_accounts 10
   # Function to run a single transaction process
@@ -114,7 +114,7 @@ defmodule DoubleEntryLedger.LoadTesting do
         instance_address: instance.address
       })
 
-    EventWorker.process_new_event(event_map)
+    CommandWorker.process_new_event(event_map)
   end
 
   # create as many source debit accounts as concurrent transactions to minimize contention

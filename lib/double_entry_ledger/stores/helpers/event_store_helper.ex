@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   ## Implementation Notes
 
-  This module is primarily used internally by EventStore and EventWorker modules to
+  This module is primarily used internally by EventStore and CommandWorker modules to
   share common functionality and reduce code duplication.
   """
   import Ecto.Query, only: [from: 2, preload: 2, union: 2, subquery: 1]
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
   alias Ecto.Changeset
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Event, Transaction, Account, Entry}
-  alias DoubleEntryLedger.Workers.EventWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
 
   @doc """
   Builds an Event changeset from a TransactionEventMap or AccountEventMap.

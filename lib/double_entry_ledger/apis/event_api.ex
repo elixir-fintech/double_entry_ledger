@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   import DoubleEntryLedger.Event.Helper, only: [actions: 1]
 
   alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.Workers.EventWorker
+  alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.Stores.EventStore
 
@@ -104,7 +104,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   This only works for parameters that translate into a `TransactionEventMap`.
 
   This function creates a TransactionEventMap from the parameters, then processes it through
-  the EventWorker to create both an event record in the EventStore and creates the necessary projections.
+  the CommandWorker to create both an event record in the EventStore and creates the necessary projections.
 
   If the processing fails, it will return an error tuple with details about the failure.
   The event is saved to the EventQueue and then retried later.
@@ -173,7 +173,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> {:error, :action_not_supported}
   """
   @spec process_from_params(event_params(), on_error: on_error()) ::
-          EventWorker.success_tuple() | EventWorker.error_tuple()
+          CommandWorker.success_tuple() | CommandWorker.error_tuple()
   def process_from_params(event_params, opts \\ [])
 
   def process_from_params(%{"action" => action} = event_params, opts)
@@ -183,8 +183,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     case TransactionEventMap.create(event_params) do
       {:ok, event_map} ->
         case on_error do
-          :fail -> EventWorker.process_new_event_no_save_on_error(event_map)
-          _ -> EventWorker.process_new_event(event_map)
+          :fail -> CommandWorker.process_new_event_no_save_on_error(event_map)
+          _ -> CommandWorker.process_new_event(event_map)
         end
 
       {:error, event_map_changeset} ->
@@ -198,7 +198,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
       when action in @account_actions do
     case AccountEventMap.create(event_params) do
       {:ok, event_map} ->
-        EventWorker.process_new_event_no_save_on_error(event_map)
+        CommandWorker.process_new_event_no_save_on_error(event_map)
 
       {:error, event_map_changeset} ->
         warn("Invalid account event params", event_params, event_map_changeset)

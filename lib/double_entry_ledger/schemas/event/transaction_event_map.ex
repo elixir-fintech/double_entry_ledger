@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   ## Workflow Integration
 
   TransactionEventMaps are typically created from external input data, validated, and then processed
-  by the EventWorker system to create or update transactions in the ledger.
+  by the CommandWorker system to create or update transactions in the ledger.
 
   ## Examples
 
