@@ -71,9 +71,9 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   import DoubleEntryLedger.Utils.Pagination
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Command, Account}
+  alias DoubleEntryLedger.{Repo, Command}
   alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
-  alias DoubleEntryLedger.Stores.{AccountStore, InstanceStoreHelper}
+  alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @doc """
   Retrieves an event by its unique ID.
@@ -245,94 +245,5 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     |> where([_, _, eqi], eqi.status == :processed)
     |> order_by(asc: :inserted_at)
     |> Repo.one()
-  end
-
-  @doc """
-  Lists all events associated with a specific account using the Account id.
-
-  ## Parameters
-    - `account_id`: ID of the account to list events for
-
-  ## Returns
-    - List of Command structs, ordered by insertion time descending
-
-  ## Examples
-
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :posted,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> [trx_event, acc_event | _] = events = EventStore.list_all_for_account_id(asset_account.id)
-    iex> length(events)
-    2
-    iex> trx_event.event_map.action
-    :create_transaction
-    iex> acc_event.event_map.action
-    :create_account
-
-    iex> EventStore.list_all_for_account_id(Ecto.UUID.generate())
-    []
-
-  """
-  @spec list_all_for_account_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Command.t())
-  def list_all_for_account_id(account_id, page \\ 1, per_page \\ 40) do
-    all_processed_events_for_account_id(account_id)
-    |> paginate(page, per_page)
-    |> preload([:command_queue_item, :transactions, :account])
-    |> Repo.all()
-  end
-
-  @doc """
-  Lists all events associated with a specific account using the Account address
-
-  ## Parameters
-    - `instance_address`: Address if the instance the account is on
-    - `address`: Address of the account to list events for
-
-  ## Returns
-    - List of Command structs, ordered by insertion time descending
-
-  ## Examples
-
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :posted,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> [trx_event, acc_event | _] = events = EventStore.list_all_for_account_address(instance.address, liability_account.address)
-    iex> length(events)
-    2
-    iex> trx_event.event_map.action
-    :create_transaction
-    iex> acc_event.event_map.action
-    :create_account
-
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> EventStore.list_all_for_account_address(instance.address, "nonexistent")
-
-    iex> EventStore.list_all_for_account_address("nonexistent", "nonexistent")
-    []
-
-  """
-  @spec list_all_for_account_address(String.t(), String.t()) :: list(Command.t())
-  def list_all_for_account_address(instance_address, address) do
-    case AccountStore.get_by_address(instance_address, address) do
-      %Account{id: id} -> list_all_for_account_id(id)
-      _ -> []
-    end
   end
 end
