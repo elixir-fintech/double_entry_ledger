@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     Repo,
     Command,
     EventTransactionLink,
-    EventAccountLink,
+    JournalEventAccountLink,
     Account,
     Transaction
   }
@@ -156,8 +156,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   @spec build_create_account_event_account_link(Command.t(), Account.t()) :: Changeset.t()
   def build_create_account_event_account_link(%Command{id: event_id}, %Account{id: account_id}) do
-    %EventAccountLink{}
-    |> EventAccountLink.changeset(%{
+    %JournalEventAccountLink{}
+    |> JournalEventAccountLink.changeset(%{
       event_id: event_id,
       account_id: account_id
     })

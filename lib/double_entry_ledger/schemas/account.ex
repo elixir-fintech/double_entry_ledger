@@ -54,10 +54,10 @@ defmodule DoubleEntryLedger.Account do
     Balance,
     BalanceHistoryEntry,
     Entry,
-    Command,
     Instance,
     Types,
-    EventAccountLink
+    JournalEvent,
+    JournalEventAccountLink
   }
 
   alias DoubleEntryLedger.Utils.Currency
@@ -136,14 +136,11 @@ defmodule DoubleEntryLedger.Account do
 
     belongs_to(:instance, Instance)
 
-    has_many(:entries, Entry, foreign_key: :account_id)
-    has_many(:balance_history_entries, BalanceHistoryEntry, foreign_key: :account_id)
-    has_many(:event_account_links, EventAccountLink, foreign_key: :account_id)
+    has_many(:entries, Entry)
+    has_many(:balance_history_entries, BalanceHistoryEntry)
+    has_many(:journal_event_account_links, JournalEventAccountLink)
 
-    many_to_many(:events, Command,
-      join_through: EventAccountLink,
-      join_keys: [account_id: :id, event_id: :id]
-    )
+    many_to_many(:journal_events, JournalEvent, join_through: JournalEventAccountLink)
 
     field(:lock_version, :integer, default: 1)
     timestamps(type: :utc_datetime_usec)

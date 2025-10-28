@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.Workers.Oban.CreateAccountLink do
   """
   use Oban.Worker, queue: :double_entry_ledger
 
-  alias DoubleEntryLedger.{EventAccountLink, Repo}
+  alias DoubleEntryLedger.{JournalEventAccountLink, Repo}
 
   @impl Oban.Worker
   def perform(%Oban.Job{
@@ -14,8 +14,8 @@ defmodule DoubleEntryLedger.Workers.Oban.CreateAccountLink do
   end
 
   defp changeset(event_id, account_id, journal_event_id) do
-    %EventAccountLink{}
-    |> EventAccountLink.changeset(%{
+    %JournalEventAccountLink{}
+    |> JournalEventAccountLink.changeset(%{
       event_id: event_id,
       account_id: account_id,
       journal_event_id: journal_event_id

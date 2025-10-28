@@ -138,7 +138,7 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
     from(a in Account,
       join: i in assoc(a, :instance),
       where: a.address == ^account_address and i.address == ^instance_address,
-      preload: [:events]
+      preload: [:journal_events]
     )
   end
 end

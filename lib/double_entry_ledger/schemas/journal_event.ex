@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.JournalEvent do
   alias DoubleEntryLedger.{
     Instance,
     Account,
-    EventAccountLink,
+    JournalEventAccountLink,
     EventTransactionLink
   }
 
@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.JournalEvent do
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           inserted_at: DateTime.t() | nil,
-          event_account_link: EventAccountLink.t() | Ecto.Association.NotLoaded.t() | nil,
+          event_account_link: JournalEventAccountLink.t() | Ecto.Association.NotLoaded.t() | nil,
           account: Account.t() | Ecto.Association.NotLoaded.t() | nil,
           event_transaction_link: EventTransactionLink.t() | Ecto.Association.NotLoaded.t() | nil,
           account: Transaction.t() | Ecto.Association.NotLoaded.t() | nil,
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.JournalEvent do
     field(:event_map, EventMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    has_one(:event_account_link, EventAccountLink)
+    has_one(:event_account_link, JournalEventAccountLink)
     has_one(:account, through: [:event_account_link, :account])
     has_one(:event_transaction_link, EventTransactionLink)
     has_one(:transaction, through: [:event_transaction_link, :transaction])
