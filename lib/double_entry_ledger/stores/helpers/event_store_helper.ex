@@ -159,47 +159,6 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
   end
 
   @doc """
-  Gets the account associated with a create account event.
-
-  This function finds the original create account event corresponding to an update event
-  and returns its associated account. Used primarily when processing account update events
-  to locate the original account to modify.
-
-  ## Parameters
-
-  * `event` - An Command struct containing source, source_idempk, and instance_id
-
-  ## Returns
-
-  * `{:ok, {Account.t(), Command.t()}}` - The account and create event if found and processed
-  * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
-
-  """
-  @spec get_create_account_event_account(Command.t()) ::
-          {:ok, {Account.t(), Command.t()}}
-          | {:error | :pending_error, String.t(), Command.t() | nil}
-  def get_create_account_event_account(
-        %{
-          instance_id: id,
-          event_map: %{
-            source: source,
-            source_idempk: source_idempk
-          }
-        } = event
-      ) do
-    case get_event_by(:create_account, source, source_idempk, id) do
-      %{account: account, command_queue_item: %{status: :processed}} =
-          create_account_event ->
-        {:ok, {account, create_account_event}}
-
-      create_account_event ->
-        raise UpdateEventError,
-          create_event: create_account_event,
-          update_event: event
-    end
-  end
-
-  @doc """
   Builds an Ecto.Multi step to get a create transaction event's transaction.
 
   This function adds a step to an Ecto.Multi that retrieves the transaction associated with

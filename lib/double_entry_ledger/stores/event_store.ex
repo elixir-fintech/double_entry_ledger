@@ -248,34 +248,6 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   end
 
   @doc """
-  Gets the create account event associated with a specific account.
-
-  ## Parameters
-    - `account_id`: ID of the account to get the create event for
-
-  ## Returns
-    - `Command.t() | nil`: The create account event if found and processed
-
-  ### Examples
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, %{id: id}} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> event = EventStore.get_create_account_event(id)
-    iex> event.account.id
-    id
-  """
-  @spec get_create_account_event(Ecto.UUID.t()) :: Command.t()
-  def get_create_account_event(account_id) do
-    base_account_query(account_id)
-    |> join(:inner, [e], eqi in assoc(e, :command_queue_item))
-    |> where([e], fragment("?->> 'action' = 'create_account'", e.event_map))
-    |> where([_, _, eqi], eqi.status == :processed)
-    |> order_by(asc: :inserted_at)
-    |> preload([:command_queue_item, :transactions, :account])
-    |> Repo.one()
-  end
-
-  @doc """
   Lists all events associated with a specific account using the Account id.
 
   ## Parameters
