@@ -139,7 +139,11 @@ defmodule DoubleEntryLedger.Account do
     has_many(:entries, Entry, foreign_key: :account_id)
     has_many(:balance_history_entries, BalanceHistoryEntry, foreign_key: :account_id)
     has_many(:event_account_links, EventAccountLink, foreign_key: :account_id)
-    many_to_many(:events, Command, join_through: EventAccountLink, join_keys: [account_id: :id, event_id: :id])
+
+    many_to_many(:events, Command,
+      join_through: EventAccountLink,
+      join_keys: [account_id: :id, event_id: :id]
+    )
 
     field(:lock_version, :integer, default: 1)
     timestamps(type: :utc_datetime_usec)

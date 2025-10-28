@@ -569,14 +569,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   defp process_event(
-         %Command{command_queue_item: %{status: :processing}, event_map: %{action: :create_account}} =
+         %Command{
+           command_queue_item: %{status: :processing},
+           event_map: %{action: :create_account}
+         } =
            event
        ) do
     CreateAccountEvent.process(event)
   end
 
   defp process_event(
-         %Command{command_queue_item: %{status: :processing}, event_map: %{action: :update_account}} =
+         %Command{
+           command_queue_item: %{status: :processing},
+           event_map: %{action: :update_account}
+         } =
            event
        ) do
     UpdateAccountEvent.process(event)

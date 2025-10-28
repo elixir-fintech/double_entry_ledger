@@ -51,7 +51,12 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry_with_reason(Command.t(), String.t(), CommandQueueItem.state(), Ecto.Repo.t()) ::
+  @spec schedule_retry_with_reason(
+          Command.t(),
+          String.t(),
+          CommandQueueItem.state(),
+          Ecto.Repo.t()
+        ) ::
           {:error, Command.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(event, reason, status, repo \\ Repo) do
     case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do

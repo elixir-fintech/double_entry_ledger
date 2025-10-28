@@ -27,7 +27,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEvent do
 
   @spec build_create_account(Command.t()) :: Ecto.Multi.t()
   defp build_create_account(
-         %Command{event_map: %{payload: account_data} = event_map, instance_id: instance_id} = event
+         %Command{event_map: %{payload: account_data} = event_map, instance_id: instance_id} =
+           event
        ) do
     Multi.new()
     |> Multi.insert(:account, AccountStoreHelper.build_create(account_data, instance_id))

@@ -176,7 +176,11 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
   * `Ecto.Multi.t()` - The updated Multi instance with the new step added
 
   """
-  @spec build_get_create_transaction_event_transaction(Ecto.Multi.t(), atom(), Command.t() | atom()) ::
+  @spec build_get_create_transaction_event_transaction(
+          Ecto.Multi.t(),
+          atom(),
+          Command.t() | atom()
+        ) ::
           Ecto.Multi.t()
   def build_get_create_transaction_event_transaction(multi, step, event_or_step) do
     multi
@@ -202,7 +206,6 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
     )
     |> preload([:command_queue_item, transactions: :entries])
   end
-
 
   @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_account_query(account_id) do

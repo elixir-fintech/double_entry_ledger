@@ -8,12 +8,14 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
 
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, TransactionFixtures}
   alias DoubleEntryLedger.Repo
+
   alias DoubleEntryLedger.Stores.{
     TransactionStore,
     TransactionStoreHelper,
     InstanceStore,
     AccountStore
   }
+
   alias Ecto.Multi
 
   doctest TransactionStore
@@ -26,12 +28,12 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
       instance: inst,
       accounts: [a1, a2, _, _]
     } do
-      attrs =  %{
+      attrs = %{
         status: :pending,
-          entries: [
-            %{currency: "EUR", amount: 100, account_address: a1.address},
-            %{currency: "EUR", amount: 100, account_address: a2.address}
-          ]
+        entries: [
+          %{currency: "EUR", amount: 100, account_address: a1.address},
+          %{currency: "EUR", amount: 100, account_address: a2.address}
+        ]
       }
 
       assert {:ok, _trx} = TransactionStore.create(inst.address, attrs, "idempotent")

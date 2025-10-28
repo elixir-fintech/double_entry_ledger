@@ -89,7 +89,11 @@ defmodule DoubleEntryLedger.Transaction do
     belongs_to(:instance, Instance)
     has_many(:entries, Entry)
     has_many(:event_transaction_links, EventTransactionLink)
-    many_to_many(:events, Command, join_through: EventTransactionLink, join_keys: [transaction_id: :id, event_id: :id])
+
+    many_to_many(:events, Command,
+      join_through: EventTransactionLink,
+      join_keys: [transaction_id: :id, event_id: :id]
+    )
 
     timestamps(type: :utc_datetime_usec)
   end

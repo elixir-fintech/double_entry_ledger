@@ -55,7 +55,12 @@ defmodule DoubleEntryLedger.Command do
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_many(:event_transaction_links, EventTransactionLink, foreign_key: :event_id)
-    many_to_many(:transactions, Transaction, join_through: EventTransactionLink, join_keys: [event_id: :id, transaction_id: :id])
+
+    many_to_many(:transactions, Transaction,
+      join_through: EventTransactionLink,
+      join_keys: [event_id: :id, transaction_id: :id]
+    )
+
     has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)
 
     timestamps(type: :utc_datetime_usec)
@@ -143,7 +148,8 @@ defmodule DoubleEntryLedger.Command do
   * `processor_version`: Used for optimistic locking
 
   """
-  @spec processing_start_changeset(Command.t(), String.t(), non_neg_integer()) :: Ecto.Changeset.t()
+  @spec processing_start_changeset(Command.t(), String.t(), non_neg_integer()) ::
+          Ecto.Changeset.t()
   def processing_start_changeset(
         %{command_queue_item: command_queue_item} = event,
         processor_id,
