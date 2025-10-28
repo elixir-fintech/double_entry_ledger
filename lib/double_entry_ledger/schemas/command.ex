@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.Command do
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_many(:event_transaction_links, EventTransactionLink, foreign_key: :event_id)
     many_to_many(:transactions, Transaction, join_through: EventTransactionLink, join_keys: [event_id: :id, transaction_id: :id])
-    has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem, foreign_key: :event_id)
+    has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)
     has_one(:event_account_link, DoubleEntryLedger.EventAccountLink, foreign_key: :event_id)
     has_one(:account, through: [:event_account_link, :account])
 

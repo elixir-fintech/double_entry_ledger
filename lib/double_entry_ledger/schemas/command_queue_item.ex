@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
           next_retry_after: DateTime.t() | nil,
           occ_retry_count: integer() | nil,
           errors: list(map()) | nil,
-          event_id: Ecto.UUID.t() | nil
+          command_id: Ecto.UUID.t() | nil
         }
 
   @states [:pending, :processed, :failed, :occ_timeout, :processing, :dead_letter]
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
   @derive {Jason.Encoder,
            only: [:status, :processing_completed_at, :retry_count, :next_retry_after, :errors]}
 
-  schema "event_queue_items" do
+  schema "command_queue_items" do
     field(:status, Ecto.Enum, values: @states, default: :pending)
     field(:processor_id, :string)
     field(:processor_version, :integer, default: 1)
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
 
     timestamps(type: :utc_datetime_usec)
 
-    belongs_to(:event, Command, type: Ecto.UUID)
+    belongs_to(:command, Command, type: Ecto.UUID)
   end
 
   @doc false
@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       :next_retry_after,
       :occ_retry_count,
       :errors,
-      :event_id
+      :command_id
     ])
     |> validate_required([:status])
     |> validate_inclusion(:status, @states)

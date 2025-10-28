@@ -47,7 +47,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
                Scheduling.claim_event_for_processing(event.id, "manual")
 
       assert eqm.status == :processing
-      assert eqm.event_id == claimed_event.id
+      assert eqm.command_id == claimed_event.id
       assert eqm.processor_id == "manual"
       assert eqm.processing_started_at != nil
       assert eqm.processing_completed_at == nil
