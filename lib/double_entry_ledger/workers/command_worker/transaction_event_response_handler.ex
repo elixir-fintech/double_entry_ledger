@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
 
         {:ok, transaction, event}
 
-      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
+      {:ok, %{event_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
         warn("#{last_error.message}", event)
 
         {:error, event}
@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
   @doc """
   Handles errors that occur during transaction map conversion.
 
-  Marks the event_queue_item as dead_letter
+  Marks the command_queue_item as dead_letter
 
   ## Parameters
 

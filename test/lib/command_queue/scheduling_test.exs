@@ -29,8 +29,8 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       event =
         event
         |> Ecto.Changeset.change()
-        |> Ecto.Changeset.put_assoc(:event_queue_item, %{
-          id: event.event_queue_item.id,
+        |> Ecto.Changeset.put_assoc(:command_queue_item, %{
+          id: event.command_queue_item.id,
           status: :processed
         })
         |> Repo.update!()
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, event} =
         EventStore.create(transaction_event_attrs(instance_address: instance.address))
 
-      assert {:ok, %Command{event_queue_item: eqm} = claimed_event} =
+      assert {:ok, %Command{command_queue_item: eqm} = claimed_event} =
                Scheduling.claim_event_for_processing(event.id, "manual")
 
       assert eqm.status == :processing
@@ -80,13 +80,13 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, event} =
         EventStore.create(transaction_event_attrs(instance_address: instance.address))
 
-      %{changes: %{event_queue_item: event_queue_item}} =
+      %{changes: %{command_queue_item: command_queue_item}} =
         Scheduling.build_mark_as_processed(event)
 
-      assert event_queue_item.valid?
-      assert event_queue_item.changes.status == :processed
-      assert event_queue_item.changes.processing_completed_at != nil
-      assert Ecto.Changeset.get_field(event_queue_item, :next_retry_after) == nil
+      assert command_queue_item.valid?
+      assert command_queue_item.changes.status == :processed
+      assert command_queue_item.changes.processing_completed_at != nil
+      assert Ecto.Changeset.get_field(command_queue_item, :next_retry_after) == nil
     end
   end
 
@@ -99,14 +99,14 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       error = "Test error"
 
-      %{changes: %{event_queue_item: event_queue_item}} =
+      %{changes: %{command_queue_item: command_queue_item}} =
         Scheduling.build_mark_as_dead_letter(event, error)
 
-      assert event_queue_item.valid?
-      assert event_queue_item.changes.status == :dead_letter
-      assert event_queue_item.changes.processing_completed_at != nil
-      assert Ecto.Changeset.get_field(event_queue_item, :next_retry_after) == nil
-      assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
+      assert command_queue_item.valid?
+      assert command_queue_item.changes.status == :dead_letter
+      assert command_queue_item.changes.processing_completed_at != nil
+      assert Ecto.Changeset.get_field(command_queue_item, :next_retry_after) == nil
+      assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
     end
   end
 
@@ -120,12 +120,12 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, event} = Scheduling.claim_event_for_processing(pending_event.id, "manual")
       error = "Test error"
 
-      %{changes: %{event_queue_item: event_queue_item}} =
+      %{changes: %{command_queue_item: command_queue_item}} =
         Scheduling.build_revert_to_pending(event, error)
 
-      assert event_queue_item.valid?
-      assert event_queue_item.changes.status == :pending
-      assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
+      assert command_queue_item.valid?
+      assert command_queue_item.changes.status == :pending
+      assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
     end
   end
 
@@ -139,13 +139,13 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       error = "Test error"
       reason = :failed
 
-      %{changes: %{event_queue_item: event_queue_item}} =
+      %{changes: %{command_queue_item: command_queue_item}} =
         Scheduling.build_schedule_retry_with_reason(event, error, reason)
 
-      assert event_queue_item.valid?
-      assert event_queue_item.changes.status == reason
-      assert event_queue_item.changes.next_retry_after != nil
-      assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == error end)
+      assert command_queue_item.valid?
+      assert command_queue_item.changes.status == reason
+      assert command_queue_item.changes.next_retry_after != nil
+      assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
     end
   end
 
@@ -173,14 +173,14 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         reason: :create_event_not_processed
       }
 
-      %{changes: %{event_queue_item: event_queue_item}} =
+      %{changes: %{command_queue_item: command_queue_item}} =
         Scheduling.build_schedule_update_retry(event, error)
 
-      assert event_queue_item.valid?
-      assert event_queue_item.changes.status == :failed
-      assert event_queue_item.changes.next_retry_after != nil
-      assert Changeset.get_field(event_queue_item, :retry_count) == 0
-      assert Enum.any?(event_queue_item.changes.errors, fn e -> e.message == test_message end)
+      assert command_queue_item.valid?
+      assert command_queue_item.changes.status == :failed
+      assert command_queue_item.changes.next_retry_after != nil
+      assert Changeset.get_field(command_queue_item, :retry_count) == 0
+      assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == test_message end)
     end
   end
 end

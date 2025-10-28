@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventQueueItem do
+defmodule DoubleEntryLedger.CommandQueueItem do
   @moduledoc """
   Schema for the event queue table, used for worker-based queue management.
   This schema is used to track events that need to be processed by workers.
@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
   alias DoubleEntryLedger.Command
   import DoubleEntryLedger.Command.ErrorMap, only: [build_error: 1]
 
-  alias __MODULE__, as: EventQueueItem
+  alias __MODULE__, as: CommandQueueItem
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t() | nil,
@@ -53,8 +53,8 @@ defmodule DoubleEntryLedger.EventQueueItem do
   end
 
   @doc false
-  def changeset(event_queue_item, attrs) do
-    event_queue_item
+  def changeset(command_queue_item, attrs) do
+    command_queue_item
     |> cast(attrs, [
       :status,
       :processor_id,
@@ -71,10 +71,10 @@ defmodule DoubleEntryLedger.EventQueueItem do
     |> validate_inclusion(:status, @states)
   end
 
-  @spec processing_start_changeset(EventQueueItem.t(), String.t(), non_neg_integer()) ::
+  @spec processing_start_changeset(CommandQueueItem.t(), String.t(), non_neg_integer()) ::
           Ecto.Changeset.t()
-  def processing_start_changeset(event_queue_item, processor_id, retry_count) do
-    event_queue_item
+  def processing_start_changeset(command_queue_item, processor_id, retry_count) do
+    command_queue_item
     |> change(%{
       status: :processing,
       processor_id: processor_id,
@@ -86,9 +86,9 @@ defmodule DoubleEntryLedger.EventQueueItem do
     |> optimistic_lock(:processor_version)
   end
 
-  @spec processing_complete_changeset(EventQueueItem.t()) :: Ecto.Changeset.t()
-  def processing_complete_changeset(event_queue_item) do
-    event_queue_item
+  @spec processing_complete_changeset(CommandQueueItem.t()) :: Ecto.Changeset.t()
+  def processing_complete_changeset(command_queue_item) do
+    command_queue_item
     |> change(%{
       status: :processed,
       processing_completed_at: DateTime.utc_now(),
@@ -96,52 +96,52 @@ defmodule DoubleEntryLedger.EventQueueItem do
     })
   end
 
-  @spec revert_to_pending_changeset(EventQueueItem.t(), any()) :: Ecto.Changeset.t()
-  def revert_to_pending_changeset(event_queue_item, error \\ nil) do
-    event_queue_item
+  @spec revert_to_pending_changeset(CommandQueueItem.t(), any()) :: Ecto.Changeset.t()
+  def revert_to_pending_changeset(command_queue_item, error \\ nil) do
+    command_queue_item
     |> change(%{
       status: :pending,
-      errors: build_errors(event_queue_item, error)
+      errors: build_errors(command_queue_item, error)
     })
   end
 
-  @spec dead_letter_changeset(EventQueueItem.t(), any()) :: Ecto.Changeset.t()
-  def dead_letter_changeset(event_queue_item, error) do
-    event_queue_item
+  @spec dead_letter_changeset(CommandQueueItem.t(), any()) :: Ecto.Changeset.t()
+  def dead_letter_changeset(command_queue_item, error) do
+    command_queue_item
     |> change(%{
       status: :dead_letter,
       processing_completed_at: DateTime.utc_now(),
-      errors: build_errors(event_queue_item, error),
+      errors: build_errors(command_queue_item, error),
       next_retry_after: nil
     })
   end
 
   @spec schedule_retry_changeset(
-          EventQueueItem.t(),
+          CommandQueueItem.t(),
           any(),
           state(),
           non_neg_integer()
         ) :: Ecto.Changeset.t()
-  def schedule_retry_changeset(event_queue_item, error, state, delay) do
+  def schedule_retry_changeset(command_queue_item, error, state, delay) do
     now = DateTime.utc_now()
 
-    event_queue_item
+    command_queue_item
     |> change(%{
       status: state,
       next_retry_after: DateTime.add(now, delay, :second),
       processor_id: nil,
       processing_completed_at: now,
-      errors: build_errors(event_queue_item, error)
+      errors: build_errors(command_queue_item, error)
     })
   end
 
   @spec schedule_update_retry_changeset(
-          EventQueueItem.t(),
+          CommandQueueItem.t(),
           UpdateEventError.t(),
           non_neg_integer()
         ) :: Ecto.Changeset.t()
   def schedule_update_retry_changeset(
-        event_queue_item,
+        command_queue_item,
         %UpdateEventError{
           create_event: create_event,
           message: message
@@ -150,27 +150,27 @@ defmodule DoubleEntryLedger.EventQueueItem do
       ) do
     now = DateTime.utc_now()
 
-    %{event_queue_item: %{next_retry_after: ce_next_retry_after}} = create_event
+    %{command_queue_item: %{next_retry_after: ce_next_retry_after}} = create_event
 
     next_retry_after =
       DateTime.add(ce_next_retry_after || now, retry_delay, :second)
 
-    event_queue_item
+    command_queue_item
     |> change(
       status: :failed,
       processor_id: nil,
       processing_completed_at: now,
       next_retry_after: next_retry_after,
-      errors: build_errors(event_queue_item, message)
+      errors: build_errors(command_queue_item, message)
     )
   end
 
-  @spec build_errors(EventQueueItem.t(), any()) :: list(ErrorMap.error())
-  defp build_errors(event_queue_item, error) do
+  @spec build_errors(CommandQueueItem.t(), any()) :: list(ErrorMap.error())
+  defp build_errors(command_queue_item, error) do
     if is_nil(error) do
-      event_queue_item.errors
+      command_queue_item.errors
     else
-      [build_error(error) | event_queue_item.errors]
+      [build_error(error) | command_queue_item.errors]
     end
   end
 end

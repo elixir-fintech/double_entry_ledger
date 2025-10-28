@@ -163,7 +163,7 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
 
       iex> alias DoubleEntryLedger.Command.ErrorMap
       iex> alias DoubleEntryLedger.Command
-      iex> event = %Command{event_queue_item: %{errors: [%{message: "Previous error", inserted_at: ~U[2023-01-01 00:00:00Z]}]}}
+      iex> event = %Command{command_queue_item: %{errors: [%{message: "Previous error", inserted_at: ~U[2023-01-01 00:00:00Z]}]}}
       iex> error_map = ErrorMap.create_error_map(event)
       iex> error_map.retries
       0
@@ -171,9 +171,9 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
       1
   """
   @spec create_error_map(Command.t() | TransactionEventMap.t()) :: t()
-  def create_error_map(%Command{event_queue_item: event_queue_item}) do
+  def create_error_map(%Command{command_queue_item: command_queue_item}) do
     %ErrorMap{
-      errors: Map.get(event_queue_item, :errors, []),
+      errors: Map.get(command_queue_item, :errors, []),
       steps_so_far: %{},
       retries: 0,
       save_on_error: true

@@ -68,7 +68,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler do
 
         {:ok, account, event}
 
-      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
+      {:ok, %{event_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
         warn(last_error.message, event)
 
         {:error, event}

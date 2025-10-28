@@ -120,7 +120,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
     # Find an event for this instance that's ready to be processed
     from(e in Command,
-      join: eqi in assoc(e, :event_queue_item),
+      join: eqi in assoc(e, :command_queue_item),
       prefix: ^@schema_prefix,
       where:
         eqi.status in [:pending, :occ_timeout, :failed] and

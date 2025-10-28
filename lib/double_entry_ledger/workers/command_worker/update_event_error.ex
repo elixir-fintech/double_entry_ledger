@@ -61,19 +61,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
     create_event = Keyword.get(opts, :create_event)
 
     case create_event do
-      %{event_queue_item: %{status: :pending}} ->
+      %{command_queue_item: %{status: :pending}} ->
         pending_error(create_event, update_event)
 
-      %{event_queue_item: %{status: :processing}} ->
+      %{command_queue_item: %{status: :processing}} ->
         pending_error(create_event, update_event)
 
-      %{event_queue_item: %{status: :occ_timeout}} ->
+      %{command_queue_item: %{status: :occ_timeout}} ->
         pending_error(create_event, update_event)
 
-      %{event_queue_item: %{status: :failed}} ->
+      %{command_queue_item: %{status: :failed}} ->
         pending_error(create_event, update_event)
 
-      %{event_queue_item: %{status: :dead_letter}} ->
+      %{command_queue_item: %{status: :dead_letter}} ->
         %UpdateEventError{
           message:
             "create Command (id: #{create_event.id}) in dead_letter for Update Command (id: #{update_event.id})",
@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
   end
 
   defp pending_error(
-         %{event_queue_item: %{status: status}} = create_event,
+         %{command_queue_item: %{status: status}} = create_event,
          update_event
        ) do
     %UpdateEventError{

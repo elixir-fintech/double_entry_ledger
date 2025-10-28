@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
     test "create event for event_map, which must also create the event", ctx do
       event_map = create_transaction_event_map(ctx)
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
         CreateTransactionEventMap.process(event_map)
 
       assert evq.status == :processed
@@ -105,14 +105,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Command{id: id, event_queue_item: %{status: :occ_timeout}}} =
+      assert {:error, %Command{id: id, command_queue_item: %{status: :occ_timeout}}} =
                CreateTransactionEventMap.process(
                  create_transaction_event_map(ctx),
                  DoubleEntryLedger.MockRepo
                )
 
       assert %Command{
-               event_queue_item: %{status: :occ_timeout, occ_retry_count: 5, errors: errors},
+               command_queue_item: %{status: :occ_timeout, occ_retry_count: 5, errors: errors},
                transactions: []
              } =
                EventStore.get_by_id(id) |> Repo.preload(:transactions)

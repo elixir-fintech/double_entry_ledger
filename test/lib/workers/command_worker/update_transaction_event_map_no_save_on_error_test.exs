@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSav
 
       update_event = update_transaction_event_map(ctx, pending_event, :posted)
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
         UpdateTransactionEventMapNoSaveOnError.process(update_event)
 
       assert evq.status == :processed
@@ -175,13 +175,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSav
     end
 
     test "update event is pending for event_map, when create event failed", ctx do
-      %{event: %{event_queue_item: eqm1} = pending_event} =
+      %{event: %{command_queue_item: eqm1} = pending_event} =
         new_create_transaction_event(ctx, :pending)
 
       failed_event =
         pending_event
         |> Ecto.Changeset.change(%{})
-        |> Ecto.Changeset.put_assoc(:event_queue_item, %{id: eqm1.id, status: :failed})
+        |> Ecto.Changeset.put_assoc(:command_queue_item, %{id: eqm1.id, status: :failed})
         |> Repo.update!()
 
       update_event = update_transaction_event_map(ctx, failed_event, :posted)
@@ -200,11 +200,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSav
     test "update event is dead_letter for event_map, when create event failed", ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      pending_event.event_queue_item
+      pending_event.command_queue_item
       |> Ecto.Changeset.change(%{status: :dead_letter})
       |> Repo.update!()
 
-      failed_event = Repo.preload(pending_event, :event_queue_item)
+      failed_event = Repo.preload(pending_event, :command_queue_item)
 
       update_event = update_transaction_event_map(ctx, failed_event, :posted)
 

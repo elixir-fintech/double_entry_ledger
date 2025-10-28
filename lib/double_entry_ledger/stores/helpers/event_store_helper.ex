@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
       |> Map.put(:instance_id, instance_id)
       |> Mts action, source system identifier,
   source-specific identifier, and instance ID. The returned event includes preloaded
-  associations for event_queue_item, account, and transactions with their entries.
+  associations for command_queue_item, account, and transactions with their entries.
 
   ## Parameters
 
@@ -97,7 +97,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
   ## Preloaded Associations
 
   The returned event includes:
-  - `:event_queue_item` - Processing status and retry information
+  - `:command_queue_item` - Processing status and retry information
   - `:account` - Associated account (for account-related events)
   - `transactions: [entries: :account]` - Transactions with their entries and accounts
 
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
           fragment("event_map->>? = ?", "source", ^source) and
           fragment("event_map->>? = ?", "source_idempk", ^source_idempk),
       limit: 1,
-      preload: [:event_queue_item, :account, transactions: [entries: :account]]
+      preload: [:command_queue_item, :account, transactions: [entries: :account]]
     )
     |> Repo.one()
   end
@@ -147,7 +147,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
         } = event
       ) do
     case get_event_by(:create_transaction, source, source_idempk, id) do
-      %{transactions: [transaction | _], event_queue_item: %{status: :processed}} =
+      %{transactions: [transaction | _], command_queue_item: %{status: :processed}} =
           create_transaction_event ->
         {:ok, {transaction, create_transaction_event}}
 
@@ -188,7 +188,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
         } = event
       ) do
     case get_event_by(:create_account, source, source_idempk, id) do
-      %{account: account, event_queue_item: %{status: :processed}} =
+      %{account: account, command_queue_item: %{status: :processed}} =
           create_account_event ->
         {:ok, {account, create_account_event}}
 
@@ -241,7 +241,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
       where: evt.transaction_id == ^transaction_id,
       select: e
     )
-    |> preload([:event_queue_item, transactions: :entries])
+    |> preload([:command_queue_item, transactions: :entries])
   end
 
   @spec all_processed_events_for_account_id(Ecto.UUID.t()) :: Ecto.Query.t()

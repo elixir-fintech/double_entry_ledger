@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
   def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
     case process_with_retry(event_map, repo) do
-      {:ok, %{event_failure: %{event_queue_item: %{errors: [last_error | _]}} = event}} ->
+      {:ok, %{event_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
         warn("#{last_error.message}", event)
         {:error, event}
 

@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
     test "create event for event_map, which must also create the event", ctx do
       event_map = create_transaction_event_map(ctx)
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
         CreateTransactionEventMapNoSaveOnError.process(event_map)
 
       assert evq.status == :processed

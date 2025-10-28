@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
     test "successful", ctx do
       %{event: event} = new_create_transaction_event(ctx)
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
         CreateTransactionEvent.process(event)
 
       assert evq.status == :processed
@@ -54,7 +54,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
           )
         )
 
-      assert {:error, %Command{event_queue_item: eqm}} = CreateTransactionEvent.process(event)
+      assert {:error, %Command{command_queue_item: eqm}} = CreateTransactionEvent.process(event)
       assert eqm.status == :dead_letter
     end
 
@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Command{event_queue_item: eqm}} =
+      assert {:error, %Command{command_queue_item: eqm}} =
                CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
 
       assert eqm.status == :dead_letter
@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
         # the transaction has to be handled by the Repo
       end)
 
-      {:error, %{event_queue_item: eqm} = updated_event} =
+      {:error, %{command_queue_item: eqm} = updated_event} =
         CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
 
       %{transactions: []} = Repo.preload(updated_event, :transactions)

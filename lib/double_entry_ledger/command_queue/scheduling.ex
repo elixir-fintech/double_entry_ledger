@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   }
 
   alias DoubleEntryLedger.Stores.EventStore
-  alias DoubleEntryLedger.EventQueueItem
+  alias DoubleEntryLedger.CommandQueueItem
   alias Ecto.Changeset
 
   @config Application.compile_env(:double_entry_ledger, :event_queue, [])
@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry_with_reason(Command.t(), String.t(), EventQueueItem.state(), Ecto.Repo.t()) ::
+  @spec schedule_retry_with_reason(Command.t(), String.t(), CommandQueueItem.state(), Ecto.Repo.t()) ::
           {:error, Command.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(event, reason, status, repo \\ Repo) do
     case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       nil ->
         {:error, :event_not_found}
 
-      %{event_queue_item: %{status: state} = eqi} = event when state in @processable_states ->
+      %{command_queue_item: %{status: state} = eqi} = event when state in @processable_states ->
         try do
           Command.processing_start_changeset(event, processor_id, retry_count_by_status(eqi))
           |> repo.update()
@@ -127,14 +127,14 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `Ecto.Changeset.t()` - The changeset for marking the event as processed
   """
   @spec build_mark_as_processed(Command.t()) :: Changeset.t(Command.t())
-  def build_mark_as_processed(%{event_queue_item: event_queue_item} = event) do
+  def build_mark_as_processed(%{command_queue_item: command_queue_item} = event) do
     event_queue_changeset =
-      event_queue_item
-      |> EventQueueItem.processing_complete_changeset()
+      command_queue_item
+      |> CommandQueueItem.processing_complete_changeset()
 
     event
     |> change(%{})
-    |> put_assoc(:event_queue_item, event_queue_changeset)
+    |> put_assoc(:command_queue_item, event_queue_changeset)
   end
 
   @spec build_create_transaction_event_transaction_link(Command.t(), Transaction.t()) ::
@@ -172,14 +172,14 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
   @spec build_revert_to_pending(Command.t(), any()) :: Changeset.t()
-  def build_revert_to_pending(%{event_queue_item: event_queue_item} = event, error) do
+  def build_revert_to_pending(%{command_queue_item: command_queue_item} = event, error) do
     event_queue_changeset =
-      event_queue_item
-      |> EventQueueItem.revert_to_pending_changeset(error)
+      command_queue_item
+      |> CommandQueueItem.revert_to_pending_changeset(error)
 
     event
     |> change(%{})
-    |> put_assoc(:event_queue_item, event_queue_changeset)
+    |> put_assoc(:command_queue_item, event_queue_changeset)
   end
 
   @doc """
@@ -198,14 +198,14 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
-  @spec build_schedule_retry_with_reason(Command.t(), String.t() | nil, EventQueueItem.state()) ::
+  @spec build_schedule_retry_with_reason(Command.t(), String.t() | nil, CommandQueueItem.state()) ::
           Changeset.t()
   def build_schedule_retry_with_reason(
-        %{event_queue_item: event_queue_item} = event,
+        %{command_queue_item: command_queue_item} = event,
         error,
         status
       ) do
-    retry_count = event_queue_item.retry_count || 0
+    retry_count = command_queue_item.retry_count || 0
 
     if retry_count >= @max_retries do
       # Max retries exceeded, mark as dead letter
@@ -218,8 +218,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       retry_delay = calculate_retry_delay(retry_count)
 
       event_queue_item_changeset =
-        event_queue_item
-        |> EventQueueItem.schedule_retry_changeset(
+        command_queue_item
+        |> CommandQueueItem.schedule_retry_changeset(
           error,
           status,
           retry_delay
@@ -227,7 +227,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
       event
       |> change(%{})
-      |> put_assoc(:event_queue_item, event_queue_item_changeset)
+      |> put_assoc(:command_queue_item, event_queue_item_changeset)
     end
   end
 
@@ -246,17 +246,17 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
   @spec build_schedule_update_retry(Command.t(), UpdateEventError.t()) :: Changeset.t()
-  def build_schedule_update_retry(%{event_queue_item: event_queue_item} = event, error) do
+  def build_schedule_update_retry(%{command_queue_item: command_queue_item} = event, error) do
     event_queue_item_changeset =
-      event_queue_item
-      |> EventQueueItem.schedule_update_retry_changeset(
+      command_queue_item
+      |> CommandQueueItem.schedule_update_retry_changeset(
         error,
-        calculate_retry_delay(event_queue_item.retry_count)
+        calculate_retry_delay(command_queue_item.retry_count)
       )
 
     event
     |> change(%{})
-    |> put_assoc(:event_queue_item, event_queue_item_changeset)
+    |> put_assoc(:command_queue_item, event_queue_item_changeset)
   end
 
   @doc """
@@ -274,14 +274,14 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
   @spec build_mark_as_dead_letter(Command.t(), String.t()) :: Changeset.t()
-  def build_mark_as_dead_letter(%{event_queue_item: event_queue_item} = event, error) do
+  def build_mark_as_dead_letter(%{command_queue_item: command_queue_item} = event, error) do
     event_queue_changeset =
-      event_queue_item
-      |> EventQueueItem.dead_letter_changeset(error)
+      command_queue_item
+      |> CommandQueueItem.dead_letter_changeset(error)
 
     event
     |> change(%{})
-    |> put_assoc(:event_queue_item, event_queue_changeset)
+    |> put_assoc(:command_queue_item, event_queue_changeset)
   end
 
   # Private function to calculate retry delay
@@ -296,7 +296,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     trunc(delay + jitter)
   end
 
-  @spec retry_count_by_status(EventQueueItem.t()) :: non_neg_integer()
+  @spec retry_count_by_status(CommandQueueItem.t()) :: non_neg_integer()
   defp retry_count_by_status(%{status: :pending, retry_count: retry_count}), do: retry_count
   defp retry_count_by_status(%{status: _, retry_count: retry_count}), do: retry_count + 1
 end

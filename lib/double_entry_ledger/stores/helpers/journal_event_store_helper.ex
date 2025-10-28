@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
       |> Map.put(:instance_id, instance_id)
       |> Mts action, source system identifier,
   source-specific identifier, and instance ID. The returned event includes preloaded
-  associations for event_queue_item, account, and transactions with their entries.
+  associations for command_queue_item, account, and transactions with their entries.
 
   ## Parameters
 
@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   ## Preloaded Associations
 
   The returned event includes:
-  - `:event_queue_item` - Processing status and retry information
+  - `:command_queue_item` - Processing status and retry information
   - `:account` - Associated account (for account-related events)
   - `transactions: [entries: :account]` - Transactions with their entries and accounts
 

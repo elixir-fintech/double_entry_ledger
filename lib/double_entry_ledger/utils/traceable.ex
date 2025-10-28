@@ -13,11 +13,11 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command do
   alias DoubleEntryLedger.{Command, Account, Transaction}
   import DoubleEntryLedger.Utils.Changeset
 
-  def metadata(%{event_queue_item: event_queue_item, event_map: event_map} = event) do
+  def metadata(%{command_queue_item: command_queue_item, event_map: event_map} = event) do
     %{
       event_id: event.id,
       instance_address: Map.get(event_map, :instance_address),
-      event_status: event_queue_item.status,
+      event_status: command_queue_item.status,
       event_action: Map.get(event_map, :action),
       event_source: Map.get(event_map, :source),
       event_trace_id:

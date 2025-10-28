@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ```
   External System → EventMap → CommandWorker → Specialized Handler → Transaction/Account
                                     ↓
-                                  Command → EventQueueItem → Final State
+                                  Command → CommandQueueItem → Final State
                                                 ↓
                                             Retryable State
   ```
@@ -40,14 +40,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ```
   EventQueue → Command → CommandWorker → Specialized Handler → Transaction/Account
                           ↓
-                      EventQueueItem → Final State
+                      CommandQueueItem → Final State
                           ↓
                        Retryable State
   ```
 
-  ## EventQueueItem State Management
+  ## CommandQueueItem State Management
 
-  Events are tracked through `EventQueueItem` records that maintain processing state:
+  Events are tracked through `CommandQueueItem` records that maintain processing state:
 
   ### Status Lifecycle
   - **`:pending`** → **`:processing`** → **`:processed`** (success path)
@@ -65,10 +65,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Error Handling Strategies
 
-  - **Standard Processing**: Errors update EventQueueItem status and error details for retry logic
-  - **No-Save-On-Error**: Validation errors return changesets without Command and EventQueueItem persistence
-  - **Command Claiming**: Uses optimistic locking on EventQueueItem to prevent concurrent processing
-  - **Retry Logic**: Failed events can be automatically retried based on EventQueueItem configuration
+  - **Standard Processing**: Errors update CommandQueueItem status and error details for retry logic
+  - **No-Save-On-Error**: Validation errors return changesets without Command and CommandQueueItem persistence
+  - **Command Claiming**: Uses optimistic locking on CommandQueueItem to prevent concurrent processing
+  - **Retry Logic**: Failed events can be automatically retried based on CommandQueueItem configuration
 
   ## Handler Modules
 
@@ -101,21 +101,21 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       }
 
       {:ok, transaction, event} = CommandWorker.process_new_event(event_map)
-      # event.event_queue_item.status == :processed
+      # event.command_queue_item.status == :processed
 
       # Process an existing event by ID
       {:ok, transaction, event} = CommandWorker.process_event_with_id(event_uuid)
 
-      # Process without saving errors to EventQueueItem
+      # Process without saving errors to CommandQueueItem
       {:ok, transaction, event} = CommandWorker.process_new_event_no_save_on_error(event_map)
 
   ## Architecture Notes
 
   - All processing maintains ACID properties through database transactions
-  - Events are claimed atomically via EventQueueItem to prevent duplicate processing
+  - Events are claimed atomically via CommandQueueItem to prevent duplicate processing
   - Double-entry rules are enforced: debits must equal credits
   - Processing is idempotent based on source identifiers
-  - Retry logic and error tracking handled through EventQueueItem state management
+  - Retry logic and error tracking handled through CommandQueueItem state management
   """
   alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnError
   alias Ecto.Changeset
@@ -147,17 +147,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   Success result from event processing operations.
 
   Contains the created or updated domain entity (Transaction or Account) along with
-  the final Command record that tracks the processing state. The associated EventQueueItem
+  the final Command record that tracks the processing state. The associated CommandQueueItem
   will have status `:processed` upon successful completion.
 
   ## Fields
 
   - First element: The created/updated domain entity (`Transaction.t()` or `Account.t()`)
-  - Second element: The `Command.t()` record with processing metadata and associated EventQueueItem
+  - Second element: The `Command.t()` record with processing metadata and associated CommandQueueItem
 
-  ## EventQueueItem State on Success
+  ## CommandQueueItem State on Success
 
-  Upon success, the Command's EventQueueItem will have:
+  Upon success, the Command's CommandQueueItem will have:
   - `status: :processed` - Indicates successful completion
   - `processing_completed_at: DateTime` - Timestamp of completion
   - `processor_id: String` - Identifier of the processing system
@@ -166,10 +166,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ## Examples
 
       {:ok, %Transaction{id: "123", status: :pending},
-           %Command{event_queue_item: %{status: :processed, processing_completed_at: ~U[...]}}}
+           %Command{command_queue_item: %{status: :processed, processing_completed_at: ~U[...]}}}
 
       {:ok, %Account{name: "Cash"},
-           %Command{event_queue_item: %{status: :processed, processor_id: "api_worker"}}}
+           %Command{command_queue_item: %{status: :processed, processor_id: "api_worker"}}}
   """
   @type success_tuple :: {:ok, Transaction.t() | Account.t(), Command.t()}
 
@@ -183,15 +183,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ## Error Types
 
   - `Command.t()` - Processing failed after the event was created/updated. The Command's
-    EventQueueItem will have status `:failed`, `:occ_timeout`, or `:dead_letter` based
+    CommandQueueItem will have status `:failed`, `:occ_timeout`, or `:dead_letter` based
     on the error type and retry configuration
   - `Changeset.t()` - Validation failed with detailed field-level error information
   - `String.t()` - General error with a descriptive message
   - `atom()` - Specific error codes like `:event_not_found` or `:action_not_supported`
 
-  ## EventQueueItem Error States
+  ## CommandQueueItem Error States
 
-  When processing fails with an Command error, the EventQueueItem may have:
+  When processing fails with an Command error, the CommandQueueItem may have:
   - `status: :failed` - Temporary failure, will be retried
   - `status: :occ_timeout` - Optimistic concurrency timeout, will be retried
   - `status: :dead_letter` - Permanent failure after exhausting retries
@@ -200,7 +200,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Examples
 
-      {:error, %Command{event_queue_item: %{status: :failed, errors: [%{message: "Insufficient balance"}]}}}
+      {:error, %Command{command_queue_item: %{status: :failed, errors: [%{message: "Insufficient balance"}]}}}
       {:error, %Changeset{errors: [amount: {"must be positive", []}]}}
       {:error, "Database connection failed"}
       {:error, :action_not_supported}
@@ -217,12 +217,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Command Processing Flow
 
-  1. **Command Creation** - Creates Command record and associated EventQueueItem with status `:pending`
-  2. **Status Update** - Updates EventQueueItem to `:processing` during processing
+  1. **Command Creation** - Creates Command record and associated CommandQueueItem with status `:pending`
+  2. **Status Update** - Updates CommandQueueItem to `:processing` during processing
   3. **Validation** - Ensures event map structure and data integrity
   4. **Transformation** - Converts event data into domain entities
-  5. **Persistence** - Saves entities and updates EventQueueItem to `:processed`
-  6. **Error Handling** - Updates EventQueueItem to appropriate error status (`:failed`, `:occ_timeout`, `:dead_letter`)
+  5. **Persistence** - Saves entities and updates CommandQueueItem to `:processed`
+  6. **Error Handling** - Updates CommandQueueItem to appropriate error status (`:failed`, `:occ_timeout`, `:dead_letter`)
 
   ## Parameters
 
@@ -235,8 +235,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Returns
 
-  - `success_tuple()` - Processing succeeded, returns the created entity and event with EventQueueItem status `:processed`
-  - `error_tuple()` - Processing failed, returns error details and EventQueueItem in appropriate error state
+  - `success_tuple()` - Processing succeeded, returns the created entity and event with CommandQueueItem status `:processed`
+  - `error_tuple()` - Processing failed, returns error details and CommandQueueItem in appropriate error state
 
   ## Supported Actions
 
@@ -271,7 +271,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>   }
       ...> }
       iex> {:ok, transaction, event} = CommandWorker.process_new_event(event_map)
-      iex> { transaction.status, event.event_queue_item.status }
+      iex> { transaction.status, event.command_queue_item.status }
       {:pending, :processed}
 
       # Unsupported action
@@ -284,11 +284,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       # Validation failure (returns changeset)
       {:error, %Changeset{errors: [amount: {"must be positive", []}]}}
 
-      # Business rule violation (returns event with error in EventQueueItem)
-      {:error, %Command{event_queue_item: %{status: :failed, errors: [%{message: "Debit and credit amounts must balance"}]}}}
+      # Business rule violation (returns event with error in CommandQueueItem)
+      {:error, %Command{command_queue_item: %{status: :failed, errors: [%{message: "Debit and credit amounts must balance"}]}}}
 
       # Optimistic concurrency timeout
-      {:error, %Command{event_queue_item: %{status: :occ_timeout, next_retry_after: ~U[...]}}}
+      {:error, %Command{command_queue_item: %{status: :occ_timeout, next_retry_after: ~U[...]}}}
 
       # System error
       {:error, "Database connection timeout"}
@@ -306,29 +306,29 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   def process_new_event(_event_map), do: {:error, :action_not_supported}
 
   @doc """
-  Processes an event map without persisting processing errors to the EventQueueItem.
+  Processes an event map without persisting processing errors to the CommandQueueItem.
 
   This function provides an alternative processing strategy for scenarios where you want
-  to validate and process events but avoid storing error states in the EventQueueItem records.
+  to validate and process events but avoid storing error states in the CommandQueueItem records.
   This is useful for:
 
   - **Validation Testing** - Check if an event would process successfully without side effects
   - **Batch Processing** - Process multiple events and handle errors in memory
   - **Preview Mode** - Show users what would happen without committing changes
-  - **Error Recovery** - Retry processing without accumulating error history in EventQueueItem
+  - **Error Recovery** - Retry processing without accumulating error history in CommandQueueItem
 
   ## Key Differences from Standard Processing
 
-  - **Error Persistence**: Validation errors return changesets instead of creating EventQueueItem error records
+  - **Error Persistence**: Validation errors return changesets instead of creating CommandQueueItem error records
   - **Rollback Behavior**: Failed processing leaves no database traces
   - **Performance**: Slightly faster due to reduced database writes on errors
-  - **State Management**: No EventQueueItem status transitions for validation failures
+  - **State Management**: No CommandQueueItem status transitions for validation failures
 
-  ## EventQueueItem Behavior
+  ## CommandQueueItem Behavior
 
-  - **Success**: EventQueueItem created with status `:processed` (same as standard processing)
-  - **Validation Errors**: No EventQueueItem created, changeset returned directly
-  - **System Errors**: No EventQueueItem error state persisted
+  - **Success**: CommandQueueItem created with status `:processed` (same as standard processing)
+  - **Validation Errors**: No CommandQueueItem created, changeset returned directly
+  - **System Errors**: No CommandQueueItem error state persisted
 
   ## Parameters
 
@@ -336,8 +336,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Returns
 
-  - `success_tuple()` - Processing succeeded, entity and event are created normally with EventQueueItem status `:processed`
-  - `error_tuple()` - Processing failed, returns validation changeset or error atom without EventQueueItem persistence
+  - `success_tuple()` - Processing succeeded, entity and event are created normally with CommandQueueItem status `:processed`
+  - `error_tuple()` - Processing failed, returns validation changeset or error atom without CommandQueueItem persistence
 
   ## Examples
 
@@ -360,7 +360,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>      ]
       ...>   }}
       iex> {:ok, _transaction, event} = CommandWorker.process_new_event_no_save_on_error(valid_event)
-      iex> event.event_queue_item.status
+      iex> event.command_queue_item.status
       :processed
 
       # Create a new account
@@ -380,7 +380,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       iex> {:ok, account, event} = CommandWorker.process_new_event_no_save_on_error(event_map)
       iex> account.name
       "Petty Cash"
-      iex> event.event_queue_item.status
+      iex> event.command_queue_item.status
       :processed
 
       iex> # Unsupported action
@@ -396,7 +396,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
           # Safe to process normally
           CommandWorker.process_new_event(event_map)
         {:error, changeset} ->
-          # Handle validation errors without EventQueueItem pollution
+          # Handle validation errors without CommandQueueItem pollution
           {:error, format_validation_errors(changeset)}
       end
   """
@@ -426,24 +426,24 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   def process_new_event_no_save_on_error(_event_map), do: {:error, :action_not_supported}
 
   @doc """
-  Retrieves and processes an existing event by its UUID using atomic EventQueueItem claiming.
+  Retrieves and processes an existing event by its UUID using atomic CommandQueueItem claiming.
 
   This function enables processing of events that were previously stored in the database
   but not yet processed. It implements an atomic claim-and-process pattern through the
-  EventQueueItem to ensure that only one processor can work on an event at a time,
+  CommandQueueItem to ensure that only one processor can work on an event at a time,
   preventing race conditions and duplicate processing in concurrent environments.
 
-  ## EventQueueItem Claiming Process
+  ## CommandQueueItem Claiming Process
 
-  1. **Atomic Claim** - Updates EventQueueItem status from `:pending` or claimable error states to `:processing`
-  2. **Processor Assignment** - Records processor_id and processing_started_at timestamp in EventQueueItem
+  1. **Atomic Claim** - Updates CommandQueueItem status from `:pending` or claimable error states to `:processing`
+  2. **Processor Assignment** - Records processor_id and processing_started_at timestamp in CommandQueueItem
   3. **Optimistic Locking** - Uses processor_version for concurrent update protection
   4. **Processing** - Delegates to appropriate handler based on action
-  5. **Completion** - Updates EventQueueItem status to `:processed` or appropriate error state
+  5. **Completion** - Updates CommandQueueItem status to `:processed` or appropriate error state
 
   ## Use Cases
 
-  - **Retry Processing** - Reprocess events that failed previously (EventQueueItem status `:failed` or `:occ_timeout`)
+  - **Retry Processing** - Reprocess events that failed previously (CommandQueueItem status `:failed` or `:occ_timeout`)
   - **Manual Processing** - Admin tools for processing specific events
   - **Batch Processing** - Process queued events in background jobs
   - **Command Replay** - Reprocess events for audit or recovery scenarios
@@ -452,19 +452,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   - `uuid` - String UUID of the event to process
   - `processor_id` - Optional identifier for the processor (defaults to "manual")
-    Recorded in EventQueueItem for tracking which system/user initiated the processing
+    Recorded in CommandQueueItem for tracking which system/user initiated the processing
 
   ## Returns
 
-  - `success_tuple()` - Command was claimed and processed successfully, EventQueueItem status `:processed`
+  - `success_tuple()` - Command was claimed and processed successfully, CommandQueueItem status `:processed`
   - `{:error, :event_not_found}` - No event exists with the provided UUID
-  - `{:error, :event_already_claimed}` - Another processor is already working on this event (EventQueueItem status `:processing`)
+  - `{:error, :event_already_claimed}` - Another processor is already working on this event (CommandQueueItem status `:processing`)
   - `{:error, :event_not_claimable}` - Command is in a non-processable state (e.g., already `:processed`)
-  - `error_tuple()` - Processing failed after successful claim, EventQueueItem updated to appropriate error state
+  - `error_tuple()` - Processing failed after successful claim, CommandQueueItem updated to appropriate error state
 
-  ## EventQueueItem States and Claimability
+  ## CommandQueueItem States and Claimability
 
-  | EventQueueItem Status | Claimable? | Description |
+  | CommandQueueItem Status | Claimable? | Description |
   |-------------|------------|-------------|
   | `:pending` | ✓ | Ready for initial processing |
   | `:failed` | ✓ | Failed previously, can be retried (if retry window passed) |
@@ -477,9 +477,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
       # Process a pending event
       {:ok, transaction, event} = CommandWorker.process_event_with_id("550e8400-e29b-41d4-a716-446655440000")
-      event.event_queue_item.status
+      event.command_queue_item.status
       :processed
-      event.event_queue_item.processor_id
+      event.command_queue_item.processor_id
       "manual"
 
       # Attempt to process non-existent event
@@ -488,7 +488,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
       # Process with custom processor ID
       {:ok, _, event} = CommandWorker.process_event_with_id(event_uuid, "background_job_1")
-      event.event_queue_item.processor_id
+      event.command_queue_item.processor_id
       "background_job_1"
 
       # Command already being processed
@@ -498,24 +498,24 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
       # Retry a failed event
       {:ok, _, event} = CommandWorker.process_event_with_id(failed_event_uuid)
-      event.event_queue_item.status
+      event.command_queue_item.status
       :processed
-      event.event_queue_item.retry_count
+      event.command_queue_item.retry_count
       2
 
   ## Concurrency Safety
 
-  The claiming mechanism uses database-level optimistic locking on EventQueueItem to ensure atomicity:
+  The claiming mechanism uses database-level optimistic locking on CommandQueueItem to ensure atomicity:
   This prevents race conditions even with multiple concurrent processors.
 
   ## Monitoring and Debugging
 
-  The processor_id and timing fields in EventQueueItem help with operational monitoring:
+  The processor_id and timing fields in CommandQueueItem help with operational monitoring:
 
   - Track which systems are processing events (`processor_id`)
-  - Debug stuck or slow processing jobs through EventQueueItem queries
+  - Debug stuck or slow processing jobs through CommandQueueItem queries
   - Implement processor-specific retry logic (`retry_count`, `occ_retry_count`)
-  - Generate processing performance metrics from EventQueueItem timestamps
+  - Generate processing performance metrics from CommandQueueItem timestamps
   - Monitor error patterns through the `errors` array
   """
   @spec process_event_with_id(Ecto.UUID.t(), String.t()) ::
@@ -534,7 +534,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   @spec process_event(Command.t()) :: success_tuple() | error_tuple()
   defp process_event(
          %Command{
-           event_queue_item: %{status: :processing},
+           command_queue_item: %{status: :processing},
            event_map: %{action: :create_transaction}
          } = event
        ) do
@@ -543,7 +543,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   defp process_event(
          %Command{
-           event_queue_item: %{status: :processing},
+           command_queue_item: %{status: :processing},
            event_map: %{"action" => "create_transaction"}
          } = event
        ) do
@@ -552,7 +552,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   defp process_event(
          %Command{
-           event_queue_item: %{status: :processing},
+           command_queue_item: %{status: :processing},
            event_map: %{action: :update_transaction}
          } = event
        ) do
@@ -561,7 +561,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   defp process_event(
          %Command{
-           event_queue_item: %{status: :processing},
+           command_queue_item: %{status: :processing},
            event_map: %{"action" => "update_transaction"}
          } = event
        ) do
@@ -569,20 +569,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   defp process_event(
-         %Command{event_queue_item: %{status: :processing}, event_map: %{action: :create_account}} =
+         %Command{command_queue_item: %{status: :processing}, event_map: %{action: :create_account}} =
            event
        ) do
     CreateAccountEvent.process(event)
   end
 
   defp process_event(
-         %Command{event_queue_item: %{status: :processing}, event_map: %{action: :update_account}} =
+         %Command{command_queue_item: %{status: :processing}, event_map: %{action: :update_account}} =
            event
        ) do
     UpdateAccountEvent.process(event)
   end
 
-  defp process_event(%Command{event_queue_item: %{status: :processing}}) do
+  defp process_event(%Command{command_queue_item: %{status: :processing}}) do
     {:error, :action_not_supported}
   end
 

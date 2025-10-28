@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
     test "dead letter when create event does not exist", %{instance: inst} do
       {:ok, event} = new_update_transaction_event("source", "1", inst.address, :posted)
 
-      {:error, %{event_queue_item: evq}} = UpdateTransactionEvent.process(event)
+      {:error, %{command_queue_item: evq}} = UpdateTransactionEvent.process(event)
       assert evq.status == :dead_letter
 
       [error | _] = evq.errors
@@ -145,7 +145,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       {:ok, processing_event} = Scheduling.claim_event_for_processing(event.id, "manual")
 
-      {:error, %{event_queue_item: eqm}} = UpdateTransactionEvent.process(processing_event)
+      {:error, %{command_queue_item: eqm}} = UpdateTransactionEvent.process(processing_event)
       assert eqm.status == :pending
 
       [error | _] = eqm.errors
@@ -167,12 +167,12 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       {:ok, event} = new_update_transaction_event(s, s_id, inst.address, :posted)
 
-      {:error, %{event_queue_item: eqm}} = UpdateTransactionEvent.process(event)
+      {:error, %{command_queue_item: eqm}} = UpdateTransactionEvent.process(event)
       assert eqm.status == :pending
 
       [error | _] = eqm.errors
 
-      assert failed_create_event.event_queue_item.status == :failed
+      assert failed_create_event.command_queue_item.status == :failed
 
       assert error.message ==
                "create Command (id: #{pending_event.id}, status: failed) not yet processed for Update Command (id: #{event.id})"
@@ -190,7 +190,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       {:ok, event} = new_update_transaction_event(s, s_id, inst.address, :posted)
 
-      {:error, %{event_queue_item: eqm}} = UpdateTransactionEvent.process(event)
+      {:error, %{command_queue_item: eqm}} = UpdateTransactionEvent.process(event)
       assert eqm.status == :dead_letter
 
       [error | _] = eqm.errors
@@ -221,7 +221,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
           )
         )
 
-      {:error, %{event_queue_item: eqm}} = UpdateTransactionEvent.process(event)
+      {:error, %{command_queue_item: eqm}} = UpdateTransactionEvent.process(event)
       assert eqm.status == :dead_letter
 
       [error | _] = eqm.errors
@@ -251,7 +251,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
         Repo.transaction(multi)
       end)
 
-      {:error, %{event_queue_item: eqm} = updated_event} =
+      {:error, %{command_queue_item: eqm} = updated_event} =
         UpdateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
 
       assert eqm.status == :occ_timeout
@@ -285,7 +285,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Command{event_queue_item: eqm}} =
+      assert {:error, %Command{command_queue_item: eqm}} =
                UpdateTransactionEvent.process(
                  event,
                  DoubleEntryLedger.MockRepo
@@ -305,13 +305,13 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
   end
 
   defp shared_event_asserts(transaction, processed_event, pending_transaction) do
-    assert processed_event.event_queue_item.status == :processed
+    assert processed_event.command_queue_item.status == :processed
 
     %{transactions: [processed_transaction | []]} =
       processed_event = Repo.preload(processed_event, :transactions)
 
     assert processed_transaction.id == pending_transaction.id
     assert transaction.id == pending_transaction.id
-    assert processed_event.event_queue_item.processing_completed_at != nil
+    assert processed_event.command_queue_item.processing_completed_at != nil
   end
 end

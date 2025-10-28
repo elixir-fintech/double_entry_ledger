@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     ...>   "source_idempk" => "unique_id_123",
     ...>   "payload" => account_data
     ...> })
-    iex> event.event_queue_item.status
+    iex> event.command_queue_item.status
     :pending
     iex> alias DoubleEntryLedger.Command.AccountEventMap
     iex> {:error, %Ecto.Changeset{data: %AccountEventMap{}}= changeset} = EventApi.create_from_params(%{

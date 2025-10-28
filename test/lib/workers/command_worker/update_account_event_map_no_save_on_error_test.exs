@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
 
       {:ok, account, event} = UpdateAccountEventMapNoSaveOnError.process(event_map)
       assert account.description == "Updated Description"
-      assert event.event_queue_item.status == :processed
+      assert event.command_queue_item.status == :processed
     end
   end
 

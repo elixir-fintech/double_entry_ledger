@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Command do
     Account,
     EventTransactionLink,
     EventAccountLink,
-    EventQueueItem
+    CommandQueueItem
   }
 
   alias DoubleEntryLedger.Command.EventMap
@@ -47,12 +47,12 @@ defmodule DoubleEntryLedger.Command do
           transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
           event_account_link: EventAccountLink.t() | Ecto.Association.NotLoaded.t(),
           account: Account.t() | Ecto.Association.NotLoaded.t(),
-          event_queue_item: EventQueueItem.t() | Ecto.Association.NotLoaded.t(),
+          command_queue_item: CommandQueueItem.t() | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
 
-  @derive {Jason.Encoder, only: [:id, :event_map, :event_queue_item]}
+  @derive {Jason.Encoder, only: [:id, :event_map, :command_queue_item]}
 
   schema "events" do
     field(:event_map, EventMap, skip_default_validation: true)
@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.Command do
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_many(:event_transaction_links, EventTransactionLink, foreign_key: :event_id)
     many_to_many(:transactions, Transaction, join_through: EventTransactionLink, join_keys: [event_id: :id, transaction_id: :id])
-    has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem, foreign_key: :event_id)
+    has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem, foreign_key: :event_id)
     has_one(:event_account_link, DoubleEntryLedger.EventAccountLink, foreign_key: :event_id)
     has_one(:account, through: [:event_account_link, :account])
 
@@ -151,22 +151,22 @@ defmodule DoubleEntryLedger.Command do
   """
   @spec processing_start_changeset(Command.t(), String.t(), non_neg_integer()) :: Ecto.Changeset.t()
   def processing_start_changeset(
-        %{event_queue_item: event_queue_item} = event,
+        %{command_queue_item: command_queue_item} = event,
         processor_id,
         retry_count
       ) do
     event_queue_changeset =
-      event_queue_item
-      |> EventQueueItem.processing_start_changeset(processor_id, retry_count)
+      command_queue_item
+      |> CommandQueueItem.processing_start_changeset(processor_id, retry_count)
 
     event
     |> change(%{})
-    |> put_assoc(:event_queue_item, event_queue_changeset)
+    |> put_assoc(:command_queue_item, event_queue_changeset)
   end
 
   @spec base_changeset(Command.t() | Ecto.Changeset.t(Command.t()), map()) :: Ecto.Changeset.t()
   defp base_changeset(event, attrs) do
-    attrs = Map.put_new(attrs, :event_queue_item, %{})
+    attrs = Map.put_new(attrs, :command_queue_item, %{})
 
     event
     |> cast(attrs, [
@@ -174,7 +174,7 @@ defmodule DoubleEntryLedger.Command do
       :event_map
     ])
     |> validate_required([:instance_id, :event_map])
-    |> cast_assoc(:event_queue_item, with: &EventQueueItem.changeset/2, required: true)
+    |> cast_assoc(:command_queue_item, with: &CommandQueueItem.changeset/2, required: true)
     |> validate_event_map(attrs)
   end
 

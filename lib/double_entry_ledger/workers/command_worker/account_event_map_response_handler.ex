@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
   ## Examples
 
       iex> account = %Account{}
-      iex> event = %Command{event_queue_item: %{status: :processed}, event_map: %{}}
+      iex> event = %Command{command_queue_item: %{status: :processed}, event_map: %{}}
       iex> response = {:ok, %{account: account, event_success: event}}
       iex> {:ok, ^account, ^event} = AccountEventMapResponseHandler.default_response_handler(response, %AccountEventMap{})
 

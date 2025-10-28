@@ -34,7 +34,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
       assert account.currency == :USD
       assert account.name == "Test Account"
       assert account.type == :asset
-      assert event.event_queue_item.status == :processed
+      assert event.command_queue_item.status == :processed
     end
 
     test "returns an error for an invalid account event map", %{instance: instance} do

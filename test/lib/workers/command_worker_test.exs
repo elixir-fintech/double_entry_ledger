@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
     test "process create event successfully", ctx do
       %{event: event} = new_create_transaction_event(ctx)
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
         CommandWorker.process_event_with_id(event.id)
 
       assert evq.status == :processed
@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
           %{account_address: a2.address, amount: 50, currency: "EUR"}
         ])
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
         CommandWorker.process_event_with_id(event.id)
 
       assert evq.status == :processed
@@ -76,8 +76,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
       event
       |> Ecto.Changeset.change()
       |> Ecto.Changeset.put_assoc(
-        :event_queue_item,
-        %{id: event.event_queue_item.id, status: :dead_letter}
+        :command_queue_item,
+        %{id: event.command_queue_item.id, status: :dead_letter}
       )
       |> Repo.update!()
 
@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
         }
         |> TransactionEventMap.create()
 
-      {:ok, transaction, %{event_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
         CommandWorker.process_new_event(event_map)
 
       assert evq.status == :processed

@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   def get_by_id(id) do
     Command
     |> where(id: ^id)
-    |> preload([:event_queue_item, :transactions, :account])
+    |> preload([:command_queue_item, :transactions, :account])
     |> Repo.one()
   end
 
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
       join: i in assoc(e, :instance),
       where: i.address == ^instance_address and e.id == ^id,
       select: e,
-      preload: [:event_queue_item, :transactions, :account, :instance]
+      preload: [:command_queue_item, :transactions, :account, :instance]
     )
     |> Repo.one()
   end
@@ -171,7 +171,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
       select: e
     )
     |> paginate(page, per_page)
-    |> preload([:event_queue_item, :transactions, :account])
+    |> preload([:command_queue_item, :transactions, :account])
     |> Repo.all()
   end
 
@@ -240,7 +240,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   @spec get_create_transaction_event(Ecto.UUID.t()) :: Command.t()
   def get_create_transaction_event(transaction_id) do
     base_transaction_query(transaction_id)
-    |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
+    |> join(:inner, [e], eqi in assoc(e, :command_queue_item))
     |> where([e], fragment("?->> 'action' = 'create_transaction'", e.event_map))
     |> where([_, _, eqi], eqi.status == :processed)
     |> order_by(asc: :inserted_at)
@@ -267,11 +267,11 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   @spec get_create_account_event(Ecto.UUID.t()) :: Command.t()
   def get_create_account_event(account_id) do
     base_account_query(account_id)
-    |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
+    |> join(:inner, [e], eqi in assoc(e, :command_queue_item))
     |> where([e], fragment("?->> 'action' = 'create_account'", e.event_map))
     |> where([_, _, eqi], eqi.status == :processed)
     |> order_by(asc: :inserted_at)
-    |> preload([:event_queue_item, :transactions, :account])
+    |> preload([:command_queue_item, :transactions, :account])
     |> Repo.one()
   end
 
@@ -314,7 +314,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   def list_all_for_account_id(account_id, page \\ 1, per_page \\ 40) do
     all_processed_events_for_account_id(account_id)
     |> paginate(page, per_page)
-    |> preload([:event_queue_item, :transactions, :account])
+    |> preload([:command_queue_item, :transactions, :account])
     |> Repo.all()
   end
 

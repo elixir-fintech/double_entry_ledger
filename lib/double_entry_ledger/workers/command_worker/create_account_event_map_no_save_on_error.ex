@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
       ...>   }
       ...> }
       iex> {:ok, account, event} = CreateAccountEventMapNoSaveOnError.process(event_map)
-      iex> is_struct(account, Account) and account.name == "Cash Account" and is_struct(event, Command) and event.event_queue_item.status == :processed
+      iex> is_struct(account, Account) and account.name == "Cash Account" and is_struct(event, Command) and event.command_queue_item.status == :processed
       true
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Main:Instance"})
