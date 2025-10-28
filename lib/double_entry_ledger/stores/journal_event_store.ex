@@ -8,9 +8,9 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Key Functionality
 
-    * **Event Management**: Create, retrieve, and track events.
-    * **Event Processing**: Claim events for processing, mark events as processed or failed.
-    * **Event Queries**: Find events by instance, transaction ID, account ID, or other criteria.
+    * **Command Management**: Create, retrieve, and track events.
+    * **Command Processing**: Claim events for processing, mark events as processed or failed.
+    * **Command Queries**: Find events by instance, transaction ID, account ID, or other criteria.
     * **Error Handling**: Track and manage errors that occur during event processing.
 
   ## Usage Examples
@@ -70,7 +70,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
   import DoubleEntryLedger.Stores.JournalEventStoreHelper
   import DoubleEntryLedger.Utils.Pagination
 
-  alias DoubleEntryLedger.{Repo, Event, JournalEvent, Account}
+  alias DoubleEntryLedger.{Repo, Command, JournalEvent, Account}
   alias DoubleEntryLedger.Stores.AccountStore
 
   @doc """
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `id`: The UUID of the event to retrieve
 
   ## Returns
-    - `Event.t()`: The found event
+    - `Command.t()`: The found event
     - `nil`: If no event with the given ID exists
   """
   @spec get_by_id(Ecto.UUID.t()) :: JournalEvent.t() | nil
@@ -113,7 +113,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `per_page`: Number of events per page (defaults to 40)
 
   ## Returns
-    - List of Event structs, ordered by insertion time descending
+    - List of Command structs, ordered by insertion time descending
 
   ## Examples
 
@@ -155,7 +155,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `account_id`: ID of the account to get the create event for
 
   ## Returns
-    - `Event.t() | nil`: The create account event if found and processed
+    - `Command.t() | nil`: The create account event if found and processed
 
   ### Examples
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
@@ -165,7 +165,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     iex> event.account.id
     id
   """
-  @spec get_create_account_event(Ecto.UUID.t()) :: Event.t()
+  @spec get_create_account_event(Ecto.UUID.t()) :: Command.t()
   def get_create_account_event(account_id) do
     base_account_query(account_id)
     |> where([e], fragment("?->> 'action' = 'create_account'", e.event_map))
@@ -181,7 +181,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `account_id`: ID of the account to list events for
 
   ## Returns
-    - List of Event structs, ordered by insertion time descending
+    - List of Command structs, ordered by insertion time descending
 
   ## Examples
 
@@ -209,7 +209,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   """
   @spec list_all_for_account_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Event.t())
+          list(Command.t())
   def list_all_for_account_id(account_id, page \\ 1, per_page \\ 40) do
     all_processed_events_for_account_id(account_id)
     |> paginate(page, per_page)
@@ -225,7 +225,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `address`: Address of the account to list events for
 
   ## Returns
-    - List of Event structs, ordered by insertion time descending
+    - List of Command structs, ordered by insertion time descending
 
   ## Examples
 
@@ -255,7 +255,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     []
 
   """
-  @spec list_all_for_account_address(String.t(), String.t()) :: list(Event.t())
+  @spec list_all_for_account_address(String.t(), String.t()) :: list(Command.t())
   def list_all_for_account_address(instance_address, address) do
     case AccountStore.get_by_address(instance_address, address) do
       %Account{id: id} -> list_all_for_account_id(id)
@@ -270,7 +270,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `transaction_id`: ID of the transaction to list events for
 
   ## Returns
-    - List of Event structs, ordered by insertion time descending
+    - List of Command structs, ordered by insertion time descending
 
   ## Examples
 
@@ -290,7 +290,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     iex> length(JournalEventStore.list_all_for_transaction_id(id))
     2
   """
-  @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Event.t())
+  @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Command.t())
   def list_all_for_transaction_id(transaction_id) do
     base_transaction_query(transaction_id)
     |> order_by(desc: :inserted_at)

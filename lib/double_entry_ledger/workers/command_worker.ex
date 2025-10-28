@@ -11,11 +11,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   The CommandWorker supports multiple processing approaches:
 
-  1. **New Event Maps** (`process_new_event/1`) - Direct processing of event maps from external systems. Event is saved for retry later if it fails.
-  2. **No-Save-On-Error** (`process_new_event_no_save_on_error/1`) - Processing as above without saving the Event.
+  1. **New Command Maps** (`process_new_event/1`) - Direct processing of event maps from external systems. Command is saved for retry later if it fails.
+  2. **No-Save-On-Error** (`process_new_event_no_save_on_error/1`) - Processing as above without saving the Command.
   3. **Stored Events** (`process_event_with_id/2`) - Processing events already in the database using atomic claiming
 
-  ## Supported Event Types and Actions
+  ## Supported Command Types and Actions
 
   ### TransactionEventMap
   - `:create_transaction` - Creates new double-entry transactions with balanced entries
@@ -25,20 +25,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - `:create_account` - Creates new ledger accounts with specified types and currencies
   - `:update_account` - Updates existing account properties
 
-  ## Event Processing Flow
+  ## Command Processing Flow
 
   ### Direct processing of event maps
   ```
   External System → EventMap → CommandWorker → Specialized Handler → Transaction/Account
                                     ↓
-                                  Event → EventQueueItem → Final State
+                                  Command → EventQueueItem → Final State
                                                 ↓
                                             Retryable State
   ```
 
   ### Stored event
   ```
-  EventQueue → Event → CommandWorker → Specialized Handler → Transaction/Account
+  EventQueue → Command → CommandWorker → Specialized Handler → Transaction/Account
                           ↓
                       EventQueueItem → Final State
                           ↓
@@ -66,8 +66,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ## Error Handling Strategies
 
   - **Standard Processing**: Errors update EventQueueItem status and error details for retry logic
-  - **No-Save-On-Error**: Validation errors return changesets without Event and EventQueueItem persistence
-  - **Event Claiming**: Uses optimistic locking on EventQueueItem to prevent concurrent processing
+  - **No-Save-On-Error**: Validation errors return changesets without Command and EventQueueItem persistence
+  - **Command Claiming**: Uses optimistic locking on EventQueueItem to prevent concurrent processing
   - **Retry Logic**: Failed events can be automatically retried based on EventQueueItem configuration
 
   ## Handler Modules
@@ -121,12 +121,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   alias Ecto.Changeset
 
   alias DoubleEntryLedger.{
-    Event,
+    Command,
     Transaction,
     Account
   }
 
-  alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
     CreateAccountEvent,
@@ -147,17 +147,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   Success result from event processing operations.
 
   Contains the created or updated domain entity (Transaction or Account) along with
-  the final Event record that tracks the processing state. The associated EventQueueItem
+  the final Command record that tracks the processing state. The associated EventQueueItem
   will have status `:processed` upon successful completion.
 
   ## Fields
 
   - First element: The created/updated domain entity (`Transaction.t()` or `Account.t()`)
-  - Second element: The `Event.t()` record with processing metadata and associated EventQueueItem
+  - Second element: The `Command.t()` record with processing metadata and associated EventQueueItem
 
   ## EventQueueItem State on Success
 
-  Upon success, the Event's EventQueueItem will have:
+  Upon success, the Command's EventQueueItem will have:
   - `status: :processed` - Indicates successful completion
   - `processing_completed_at: DateTime` - Timestamp of completion
   - `processor_id: String` - Identifier of the processing system
@@ -166,12 +166,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ## Examples
 
       {:ok, %Transaction{id: "123", status: :pending},
-           %Event{event_queue_item: %{status: :processed, processing_completed_at: ~U[...]}}}
+           %Command{event_queue_item: %{status: :processed, processing_completed_at: ~U[...]}}}
 
       {:ok, %Account{name: "Cash"},
-           %Event{event_queue_item: %{status: :processed, processor_id: "api_worker"}}}
+           %Command{event_queue_item: %{status: :processed, processor_id: "api_worker"}}}
   """
-  @type success_tuple :: {:ok, Transaction.t() | Account.t(), Event.t()}
+  @type success_tuple :: {:ok, Transaction.t() | Account.t(), Command.t()}
 
   @typedoc """
   Error result from event processing operations.
@@ -182,7 +182,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Error Types
 
-  - `Event.t()` - Processing failed after the event was created/updated. The Event's
+  - `Command.t()` - Processing failed after the event was created/updated. The Command's
     EventQueueItem will have status `:failed`, `:occ_timeout`, or `:dead_letter` based
     on the error type and retry configuration
   - `Changeset.t()` - Validation failed with detailed field-level error information
@@ -191,7 +191,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## EventQueueItem Error States
 
-  When processing fails with an Event error, the EventQueueItem may have:
+  When processing fails with an Command error, the EventQueueItem may have:
   - `status: :failed` - Temporary failure, will be retried
   - `status: :occ_timeout` - Optimistic concurrency timeout, will be retried
   - `status: :dead_letter` - Permanent failure after exhausting retries
@@ -200,12 +200,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Examples
 
-      {:error, %Event{event_queue_item: %{status: :failed, errors: [%{message: "Insufficient balance"}]}}}
+      {:error, %Command{event_queue_item: %{status: :failed, errors: [%{message: "Insufficient balance"}]}}}
       {:error, %Changeset{errors: [amount: {"must be positive", []}]}}
       {:error, "Database connection failed"}
       {:error, :action_not_supported}
   """
-  @type error_tuple :: {:error, Event.t() | Changeset.t() | String.t() | atom()}
+  @type error_tuple :: {:error, Command.t() | Changeset.t() | String.t() | atom()}
 
   @doc """
   Processes a new event map by dispatching to the appropriate specialized handler.
@@ -215,9 +215,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   processing module. Each handler is responsible for validation, transformation, and
   persistence of the event and its resulting domain entities.
 
-  ## Event Processing Flow
+  ## Command Processing Flow
 
-  1. **Event Creation** - Creates Event record and associated EventQueueItem with status `:pending`
+  1. **Command Creation** - Creates Command record and associated EventQueueItem with status `:pending`
   2. **Status Update** - Updates EventQueueItem to `:processing` during processing
   3. **Validation** - Ensures event map structure and data integrity
   4. **Transformation** - Converts event data into domain entities
@@ -231,7 +231,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     - `:instance_id` - UUID of the ledger instance
     - `:source` - External system identifier
     - `:source_idempk` - Idempotency key from source system
-    - `:payload` - Event-specific data for processing
+    - `:payload` - Command-specific data for processing
 
   ## Returns
 
@@ -253,7 +253,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       # Create a new transaction
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
-      iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
+      iex> alias DoubleEntryLedger.Command.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, revenue_account} = AccountStore.create(instance.address, %{address: "account:revenue", type: :liability, currency: :USD}, "unique_id_123")
       iex> {:ok, cash_account} = AccountStore.create(instance.address, %{address: "account:cash", type: :asset, currency: :USD}, "unique_id_456")
@@ -285,10 +285,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       {:error, %Changeset{errors: [amount: {"must be positive", []}]}}
 
       # Business rule violation (returns event with error in EventQueueItem)
-      {:error, %Event{event_queue_item: %{status: :failed, errors: [%{message: "Debit and credit amounts must balance"}]}}}
+      {:error, %Command{event_queue_item: %{status: :failed, errors: [%{message: "Debit and credit amounts must balance"}]}}}
 
       # Optimistic concurrency timeout
-      {:error, %Event{event_queue_item: %{status: :occ_timeout, next_retry_after: ~U[...]}}}
+      {:error, %Command{event_queue_item: %{status: :occ_timeout, next_retry_after: ~U[...]}}}
 
       # System error
       {:error, "Database connection timeout"}
@@ -344,7 +344,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       iex> # Valid event processes successfully
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
-      iex> alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData}
+      iex> alias DoubleEntryLedger.Command.{TransactionEventMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> {:ok, revenue_account} = AccountStore.create(instance.address, %{address: "account:revenue", type: :liability, currency: :USD}, "unique_id_123")
       iex> {:ok, cash_account} = AccountStore.create(instance.address, %{address: "account:cash", type: :asset, currency: :USD}, "unique_id_456")
@@ -364,7 +364,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       :processed
 
       # Create a new account
-      iex> alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
+      iex> alias DoubleEntryLedger.Command.{AccountEventMap, AccountData}
       iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Sample:Instance"})
       iex> event_map = %AccountEventMap{
       ...>   action: :create_account,
@@ -446,7 +446,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - **Retry Processing** - Reprocess events that failed previously (EventQueueItem status `:failed` or `:occ_timeout`)
   - **Manual Processing** - Admin tools for processing specific events
   - **Batch Processing** - Process queued events in background jobs
-  - **Event Replay** - Reprocess events for audit or recovery scenarios
+  - **Command Replay** - Reprocess events for audit or recovery scenarios
 
   ## Parameters
 
@@ -456,10 +456,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Returns
 
-  - `success_tuple()` - Event was claimed and processed successfully, EventQueueItem status `:processed`
+  - `success_tuple()` - Command was claimed and processed successfully, EventQueueItem status `:processed`
   - `{:error, :event_not_found}` - No event exists with the provided UUID
   - `{:error, :event_already_claimed}` - Another processor is already working on this event (EventQueueItem status `:processing`)
-  - `{:error, :event_not_claimable}` - Event is in a non-processable state (e.g., already `:processed`)
+  - `{:error, :event_not_claimable}` - Command is in a non-processable state (e.g., already `:processed`)
   - `error_tuple()` - Processing failed after successful claim, EventQueueItem updated to appropriate error state
 
   ## EventQueueItem States and Claimability
@@ -491,7 +491,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       event.event_queue_item.processor_id
       "background_job_1"
 
-      # Event already being processed
+      # Command already being processed
       Task.async(fn -> CommandWorker.process_event_with_id(uuid, "proc_1") end)
       CommandWorker.process_event_with_id(uuid, "proc_2")
       {:error, :event_already_claimed}
@@ -531,9 +531,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   # Private function - processes a claimed event based on its action type
-  @spec process_event(Event.t()) :: success_tuple() | error_tuple()
+  @spec process_event(Command.t()) :: success_tuple() | error_tuple()
   defp process_event(
-         %Event{
+         %Command{
            event_queue_item: %{status: :processing},
            event_map: %{action: :create_transaction}
          } = event
@@ -542,7 +542,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   defp process_event(
-         %Event{
+         %Command{
            event_queue_item: %{status: :processing},
            event_map: %{"action" => "create_transaction"}
          } = event
@@ -551,7 +551,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   defp process_event(
-         %Event{
+         %Command{
            event_queue_item: %{status: :processing},
            event_map: %{action: :update_transaction}
          } = event
@@ -560,7 +560,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   defp process_event(
-         %Event{
+         %Command{
            event_queue_item: %{status: :processing},
            event_map: %{"action" => "update_transaction"}
          } = event
@@ -569,22 +569,22 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   defp process_event(
-         %Event{event_queue_item: %{status: :processing}, event_map: %{action: :create_account}} =
+         %Command{event_queue_item: %{status: :processing}, event_map: %{action: :create_account}} =
            event
        ) do
     CreateAccountEvent.process(event)
   end
 
   defp process_event(
-         %Event{event_queue_item: %{status: :processing}, event_map: %{action: :update_account}} =
+         %Command{event_queue_item: %{status: :processing}, event_map: %{action: :update_account}} =
            event
        ) do
     UpdateAccountEvent.process(event)
   end
 
-  defp process_event(%Event{event_queue_item: %{status: :processing}}) do
+  defp process_event(%Command{event_queue_item: %{status: :processing}}) do
     {:error, :action_not_supported}
   end
 
-  defp process_event(%Event{} = _event), do: {:error, :event_not_in_processing_state}
+  defp process_event(%Command{} = _event), do: {:error, :event_not_in_processing_state}
 end

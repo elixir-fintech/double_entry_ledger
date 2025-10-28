@@ -26,7 +26,7 @@ defprotocol DoubleEntryLedger.Occ.Occable do
   ## Returns
     - The updated struct with retry information
   """
-  @spec update!(t(), DoubleEntryLedger.Event.ErrorMap.t(), Ecto.Repo.t()) :: t()
+  @spec update!(t(), DoubleEntryLedger.Command.ErrorMap.t(), Ecto.Repo.t()) :: t()
   def update!(impl_struct, error_map, repo)
 
   @spec build_multi(t()) :: Ecto.Multi.t()
@@ -47,39 +47,39 @@ defprotocol DoubleEntryLedger.Occ.Occable do
   ## Returns
     - A tuple containing error details and the final state of the entity
   """
-  @spec timed_out(t(), atom(), DoubleEntryLedger.Event.ErrorMap.t()) ::
+  @spec timed_out(t(), atom(), DoubleEntryLedger.Command.ErrorMap.t()) ::
           Ecto.Multi.t()
   def timed_out(impl_struct, name, error_map)
 end
 
-defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
+defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
   alias Ecto.{Multi, Repo, Changeset}
-  alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.Event.{ErrorMap, IdempotencyKey}
+  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.Command.{ErrorMap, IdempotencyKey}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
 
   @doc """
-  Updates an Event with retry information during OCC retry cycles.
+  Updates an Command with retry information during OCC retry cycles.
 
-  Records the retry count and error information in the Event record.
+  Records the retry count and error information in the Command record.
 
   ## Parameters
-    - `event` - The Event struct to update
+    - `event` - The Command struct to update
     - `error_map` - Contains retry count and error details
     - `repo` - Ecto.Repo to use for the update
 
   ## Returns
-    - The updated Event struct
+    - The updated Command struct
   """
-  @spec update!(Event.t(), ErrorMap.t(), Repo.t()) :: Event.t()
+  @spec update!(Command.t(), ErrorMap.t(), Repo.t()) :: Command.t()
   def update!(event, error_map, repo) do
     event
     |> Changeset.change(occ_retry_count: error_map.retries, errors: error_map.errors)
     |> repo.update!()
   end
 
-  @spec build_multi(Event.t()) :: Multi.t()
+  @spec build_multi(Command.t()) :: Multi.t()
   def build_multi(event) do
     Multi.new()
     |> Multi.put(:occable_item, event)
@@ -101,20 +101,20 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
   end
 
   @doc """
-  Handles OCC timeout for an Event when maximum retries are reached.
+  Handles OCC timeout for an Command when maximum retries are reached.
 
-  Updates the Event to reflect the OCC timeout status and returns
+  Updates the Command to reflect the OCC timeout status and returns
   an error tuple with the appropriate error code.
 
   ## Parameters
-    - `event` - The Event that has reached maximum retries
+    - `event` - The Command that has reached maximum retries
     - `error_map` - Contains retry count and accumulated errors
     - `repo` - Ecto.Repo to use for the update
 
   ## Returns
-    - Error tuple containing the updated Event and timeout indication
+    - Error tuple containing the updated Command and timeout indication
   """
-  @spec timed_out(Event.t(), atom(), ErrorMap.t()) ::
+  @spec timed_out(Command.t(), atom(), ErrorMap.t()) ::
           Multi.t()
   def timed_out(event, name, error_map) do
     Multi.new()
@@ -125,9 +125,9 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event do
   end
 end
 
-defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionEventMap do
+defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.TransactionEventMap do
   alias Ecto.{Multi, Repo}
-  alias DoubleEntryLedger.Event.{ErrorMap, TransactionEventMap, IdempotencyKey}
+  alias DoubleEntryLedger.Command.{ErrorMap, TransactionEventMap, IdempotencyKey}
   alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
@@ -172,16 +172,16 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Event.TransactionE
   @doc """
   Handles OCC timeout for an TransactionEventMap when maximum retries are reached.
 
-  Creates and stores a permanent Event record from the TransactionEventMap data
+  Creates and stores a permanent Command record from the TransactionEventMap data
   with timeout status, then returns an error tuple.
 
   ## Parameters
     - `_event_map` - The TransactionEventMap that has reached maximum retries
-    - `error_map` - Contains retry count, errors, and created Event
-    - `repo` - Ecto.Repo to use for storing the Event
+    - `error_map` - Contains retry count, errors, and created Command
+    - `repo` - Ecto.Repo to use for storing the Command
 
   ## Returns
-    - Error tuple containing the created Event and timeout indication
+    - Error tuple containing the created Command and timeout indication
   """
   @spec timed_out(TransactionEventMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()

@@ -1,13 +1,13 @@
-defmodule DoubleEntryLedger.Event.TransactionDataTest do
+defmodule DoubleEntryLedger.Command.TransactionDataTest do
   @moduledoc """
   Tests for the event payload
   """
   use ExUnit.Case
-  import DoubleEntryLedger.Event.TransactionDataFixtures
+  import DoubleEntryLedger.Command.TransactionDataFixtures
 
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Event.TransactionData
+  alias DoubleEntryLedger.Command.TransactionData
 
   doctest TransactionData
 

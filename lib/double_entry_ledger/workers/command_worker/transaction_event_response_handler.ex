@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
-      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}}}
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}}}
 
       # Map transaction validation errors to an event map changeset
       iex> default_response_handler(
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
-      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}}}
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}}}
   """
   require Logger
   use DoubleEntryLedger.Logger
@@ -43,11 +43,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
   alias Ecto.{Multi, Changeset}
   alias DoubleEntryLedger.Occ.Occable
 
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @doc """
-  Default response handler when starting from a stored Event.
+  Default response handler when starting from a stored Command.
 
   Returns:
   - `{:ok, transaction, event}` on success
@@ -56,10 +56,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
   """
   @spec default_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
-          Event.t()
+          Command.t()
         ) ::
-          CommandWorker.success_tuple() | {:error, Event.t() | Changeset.t()}
-  def default_response_handler(response, %Event{} = original_event) do
+          CommandWorker.success_tuple() | {:error, Command.t() | Changeset.t()}
+  def default_response_handler(response, %Command{} = original_event) do
     case response do
       {:ok, %{event_success: event, transaction: transaction}} ->
         info("Processed successfully", event, transaction)
@@ -97,7 +97,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
 
     - An `Ecto.Multi` that updates the event with error information.
   """
-  @spec handle_transaction_map_error(Event.t(), any(), Ecto.Repo.t()) :: Multi.t()
+  @spec handle_transaction_map_error(Command.t(), any(), Ecto.Repo.t()) :: Multi.t()
   def handle_transaction_map_error(event, error, _repo) do
     Multi.update(Multi.new(), :event_failure, fn _ ->
       build_mark_as_dead_letter(event, error)

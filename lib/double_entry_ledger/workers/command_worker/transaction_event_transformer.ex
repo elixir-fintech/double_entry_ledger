@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer do
   """
 
   alias DoubleEntryLedger.{Account, Types, Transaction}
-  alias DoubleEntryLedger.Event.{EntryData, TransactionData}
+  alias DoubleEntryLedger.Command.{EntryData, TransactionData}
   alias DoubleEntryLedger.Stores.AccountStore
 
   import DoubleEntryLedger.Utils.Currency

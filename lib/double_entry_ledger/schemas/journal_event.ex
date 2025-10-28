@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.JournalEvent do
     EventTransactionLink
   }
 
-  alias DoubleEntryLedger.Event.EventMap
+  alias DoubleEntryLedger.Command.EventMap
 
   alias __MODULE__, as: JournalEvent
 
@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.JournalEvent do
 
   ## Parameters
 
-  * `event` - The Event struct to create a changeset for
+  * `event` - The Command struct to create a changeset for
   * `attrs` - Map of attributes to apply to the event
 
   ## Returns
@@ -72,7 +72,7 @@ defmodule DoubleEntryLedger.JournalEvent do
       ...>   ]}
       ...> }
       ...> attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
-      iex> changeset = JournalEvent.changeset(%Event{}, attrs)
+      iex> changeset = JournalEvent.changeset(%Command{}, attrs)
       iex> changeset.valid?
       true
   """

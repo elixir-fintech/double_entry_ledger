@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.AccountDataTest do
+defmodule DoubleEntryLedger.Command.AccountDataTest do
   @moduledoc """
   Tests for AccountData payload
   """
@@ -7,11 +7,11 @@ defmodule DoubleEntryLedger.Event.AccountDataTest do
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Event.AccountData
+  alias DoubleEntryLedger.Command.AccountData
 
   doctest AccountData
 
-  describe "Event.AccountData" do
+  describe "Command.AccountData" do
     test "changeset not valid for empty account data" do
       assert %Changeset{valid?: false} = AccountData.changeset(%AccountData{}, %{})
     end

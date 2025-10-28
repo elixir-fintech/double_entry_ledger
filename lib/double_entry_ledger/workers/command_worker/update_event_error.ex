@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
       iex> raise UpdateEventError,
       ...>   update_event: update_event,
       ...>   create_event: create_event
-      ** (UpdateEventError) Create event (id: ...) not yet processed for Update Event (id: ...)
+      ** (UpdateEventError) Create event (id: ...) not yet processed for Update Command (id: ...)
 
   ## Reasons
 
@@ -45,13 +45,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
 
   defexception [:message, :create_event, :update_event, :reason]
 
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Command
   alias __MODULE__, as: UpdateEventError
 
   @type t :: %__MODULE__{
           message: String.t(),
-          create_event: Event.t() | nil,
-          update_event: Event.t(),
+          create_event: Command.t() | nil,
+          update_event: Command.t(),
           reason: atom()
         }
 
@@ -76,7 +76,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
       %{event_queue_item: %{status: :dead_letter}} ->
         %UpdateEventError{
           message:
-            "create Event (id: #{create_event.id}) in dead_letter for Update Event (id: #{update_event.id})",
+            "create Command (id: #{create_event.id}) in dead_letter for Update Command (id: #{update_event.id})",
           create_event: create_event,
           update_event: update_event,
           reason: :create_event_in_dead_letter
@@ -84,7 +84,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
 
       nil ->
         %UpdateEventError{
-          message: "create Event not found for Update Event (id: #{update_event.id})",
+          message: "create Command not found for Update Command (id: #{update_event.id})",
           create_event: nil,
           update_event: update_event,
           reason: :create_event_not_found
@@ -98,7 +98,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
        ) do
     %UpdateEventError{
       message:
-        "create Event (id: #{create_event.id}, status: #{status}) not yet processed for Update Event (id: #{update_event.id})",
+        "create Command (id: #{create_event.id}, status: #{status}) not yet processed for Update Command (id: #{update_event.id})",
       create_event: create_event,
       update_event: update_event,
       reason: :create_event_not_processed

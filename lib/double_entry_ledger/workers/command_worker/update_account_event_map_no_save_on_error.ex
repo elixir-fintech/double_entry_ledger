@@ -17,16 +17,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
 
   ## Processing Flow
 
-  1. **Event Creation**: Creates an Event record from the AccountEventMap for audit purposes
+  1. **Command Creation**: Creates an Command record from the AccountEventMap for audit purposes
   2. **Dependency Resolution**: Locates the original create account event and its account
   3. **Account Update**: Updates the account using the payload data
-  4. **Event Completion**: Marks the event as processed upon successful account update
+  4. **Command Completion**: Marks the event as processed upon successful account update
   5. **Linking**: Creates a link between the event and the updated account for traceability
 
   ## Error Handling
 
   The module provides comprehensive error handling:
-  - Event validation errors are mapped back to AccountEventMap changesets
+  - Command validation errors are mapped back to AccountEventMap changesets
   - Account validation errors are propagated to the event map payload
   - Dependency errors (missing create events) are handled gracefully
   - All errors are returned as changesets without database persistence
@@ -53,14 +53,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker.{AccountEventMapResponseHandler}
-  alias DoubleEntryLedger.Event.AccountEventMap
+  alias DoubleEntryLedger.Command.AccountEventMap
   alias DoubleEntryLedger.{JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.{AccountStoreHelper, EventStoreHelper, InstanceStoreHelper}
 
   @doc """
   Processes an AccountEventMap to update an existing account in the ledger system.
 
-  This function orchestrates the update of both an Event record (for audit trail)
+  This function orchestrates the update of both an Command record (for audit trail)
   and an Account record within a single database transaction. It first locates the
   original create account event and its associated account, then applies the updates
   from the event map's payload.
@@ -72,21 +72,21 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
 
   ## Returns
 
-  * `{:ok, Account.t(), Event.t()}` - Success tuple containing the updated Account and Event
+  * `{:ok, Account.t(), Command.t()}` - Success tuple containing the updated Account and Command
   * `{:error, Changeset.t(AccountEventMap.t())}` - AccountEventMap changeset with validation errors
   * `{:error, String.t()}` - String error message for unexpected failures
 
   ## Transaction Steps
 
-  1. Creates Event record from AccountEventMap
+  1. Creates Command record from AccountEventMap
   2. Locates original create account event and its account
   3. Updates Account record with payload data
-  4. Marks Event as processed
-  5. Creates Event-Account link for traceability
+  4. Marks Command as processed
+  5. Creates Command-Account link for traceability
 
   ## Error Scenarios
 
-  - Event validation errors → AccountEventMap changeset with event-level errors
+  - Command validation errors → AccountEventMap changeset with event-level errors
   - Missing create account event → AccountEventMap changeset with dependency error
   - Account validation errors → AccountEventMap changeset with payload-level errors
   - Other failures → String error message with details

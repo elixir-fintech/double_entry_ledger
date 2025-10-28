@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.EntryDataTest do
+defmodule DoubleEntryLedger.Command.EntryDataTest do
   @moduledoc """
   Tests for the Entry Data payload
   """
@@ -7,11 +7,11 @@ defmodule DoubleEntryLedger.Event.EntryDataTest do
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Event.EntryData
+  alias DoubleEntryLedger.Command.EntryData
 
   doctest EntryData
 
-  describe "Event.EntryData" do
+  describe "Command.EntryData" do
     test "changeset not valid for empty entry data" do
       assert %Changeset{valid?: false} = EntryData.changeset(%EntryData{}, %{})
     end

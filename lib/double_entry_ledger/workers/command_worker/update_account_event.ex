@@ -15,21 +15,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEvent do
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Workers
-  alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.{Event, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler
 
-  @spec process(Event.t()) :: AccountEventResponseHandler.response()
-  def process(%Event{event_map: %{action: :update_account}} = event) do
+  @spec process(Command.t()) :: AccountEventResponseHandler.response()
+  def process(%Command{event_map: %{action: :update_account}} = event) do
     build_update_account(event)
     |> handle_build_update_account(event)
     |> Repo.transaction()
     |> default_response_handler(event)
   end
 
-  @spec build_update_account(Event.t()) :: Ecto.Multi.t()
-  defp build_update_account(%Event{
+  @spec build_update_account(Command.t()) :: Ecto.Multi.t()
+  defp build_update_account(%Command{
          event_map: %{payload: account_data, instance_address: iaddr, account_address: aaddr}
        }) do
     Multi.new()
@@ -49,9 +48,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEvent do
 
   @spec handle_build_update_account(
           Ecto.Multi.t(),
-          Event.t()
+          Command.t()
         ) :: Ecto.Multi.t()
-  defp handle_build_update_account(multi, %Event{event_map: event_map, instance_id: id} = event) do
+  defp handle_build_update_account(multi, %Command{event_map: event_map, instance_id: id} = event) do
     Multi.merge(multi, fn
       %{account: %{id: aid}} ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->

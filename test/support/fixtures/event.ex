@@ -5,15 +5,15 @@ defmodule DoubleEntryLedger.EventFixtures do
   """
   alias DoubleEntryLedger.Stores.EventStore
 
-  alias DoubleEntryLedger.Event.{
+  alias DoubleEntryLedger.Command.{
     TransactionEventMap,
     TransactionData,
     AccountEventMap,
     AccountData
   }
 
-  import DoubleEntryLedger.Event.TransactionDataFixtures
-  import DoubleEntryLedger.Event.AccountDataFixtures
+  import DoubleEntryLedger.Command.TransactionDataFixtures
+  import DoubleEntryLedger.Command.AccountDataFixtures
 
   def transaction_event_attrs(attrs \\ %{}) do
     attrs

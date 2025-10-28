@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, event} =
         EventStore.create(transaction_event_attrs(instance_address: instance.address))
 
-      assert {:ok, %Event{event_queue_item: eqm} = claimed_event} =
+      assert {:ok, %Command{event_queue_item: eqm} = claimed_event} =
                Scheduling.claim_event_for_processing(event.id, "manual")
 
       assert eqm.status == :processing

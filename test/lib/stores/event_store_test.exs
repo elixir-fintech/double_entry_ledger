@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Command
 
   alias DoubleEntryLedger.Stores.{
     EventStore,
@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
     setup [:create_instance]
 
     test "inserts a new event and adds an event_queue_item", %{instance: instance} do
-      assert {:ok, %Event{id: id} = event} =
+      assert {:ok, %Command{id: id} = event} =
                EventStore.create(transaction_event_attrs(instance_address: instance.address))
 
       assert %{id: evq_id, event_id: ^id, status: :pending} = event.event_queue_item
@@ -41,7 +41,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
       {:ok, event} =
         EventStore.create(transaction_event_attrs(instance_address: instance.address))
 
-      assert %Event{} =
+      assert %Command{} =
                found_event =
                EventStoreHelper.get_event_by(
                  :create_transaction,
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
       %{event: %{event_map: event_map} = event} = new_create_transaction_event(ctx, :pending)
       {:ok, transaction, _} = CreateTransactionEvent.process(event)
 
-      assert %Event{} =
+      assert %Command{} =
                found_event =
                EventStoreHelper.get_event_by(
                  :create_transaction,

@@ -3,23 +3,23 @@ defmodule DoubleEntryLedger.EventAccountLink do
   Schema for linking events and accounts.
   """
   use DoubleEntryLedger.BaseSchema
-  alias DoubleEntryLedger.{Event, Account, JournalEvent}
+  alias DoubleEntryLedger.{Command, Account, JournalEvent}
   alias __MODULE__, as: EventAccountLink
 
   @type t() :: %EventAccountLink{
           id: Ecto.UUID.t() | nil,
           event_id: Ecto.UUID.t() | nil,
-          event: Event.t() | Ecto.Association.NotLoaded.t(),
+          event: Command.t() | Ecto.Association.NotLoaded.t(),
           account_id: Ecto.UUID.t() | nil,
           account: Account.t() | Ecto.Association.NotLoaded.t(),
           journal_event_id: Ecto.UUID.t() | nil,
-          journal_event: Event.t() | Ecto.Association.NotLoaded.t(),
+          journal_event: Command.t() | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
 
   schema "event_account_links" do
-    belongs_to(:event, Event)
+    belongs_to(:event, Command)
     belongs_to(:account, Account)
     belongs_to(:journal_event, JournalEvent)
 

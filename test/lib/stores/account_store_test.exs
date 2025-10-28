@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Stores.AccountStoreTest do
   }
 
   alias DoubleEntryLedger.Account
-  alias DoubleEntryLedger.Event.AccountData
+  alias DoubleEntryLedger.Command.AccountData
 
   doctest AccountStore
   doctest AccountStoreHelper

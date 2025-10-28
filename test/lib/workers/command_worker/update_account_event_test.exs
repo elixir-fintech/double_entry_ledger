@@ -6,14 +6,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Event, Account, Repo, EventQueueItem}
+  alias DoubleEntryLedger.{Command, Account, Repo, EventQueueItem}
   alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Workers.CommandWorker.{CreateAccountEvent, UpdateAccountEvent}
-  alias DoubleEntryLedger.Event.AccountData
+  alias DoubleEntryLedger.Command.AccountData
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.EventFixtures
-  import DoubleEntryLedger.Event.AccountDataFixtures
+  import DoubleEntryLedger.Command.AccountDataFixtures
 
   doctest UpdateAccountEvent
 
@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
 
       {:ok, update_event} = EventStore.create(update_attrs)
 
-      assert {:ok, %Account{} = account, %Event{event_queue_item: eqi} = e} =
+      assert {:ok, %Account{} = account, %Command{event_queue_item: eqi} = e} =
                UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id
@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
           })
         )
 
-      assert {:error, %Event{event_queue_item: eqi} = e} =
+      assert {:error, %Command{event_queue_item: eqi} = e} =
                UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id
@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
           })
         )
 
-      assert {:error, %Event{event_queue_item: eqi} = e} =
+      assert {:error, %Command{event_queue_item: eqi} = e} =
                UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id
@@ -122,7 +122,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
           })
         )
 
-      assert {:error, %Event{event_queue_item: eqi} = e} =
+      assert {:error, %Command{event_queue_item: eqi} = e} =
                UpdateAccountEvent.process(update_event)
 
       assert e.id == update_event.id

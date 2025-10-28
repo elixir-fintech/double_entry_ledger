@@ -22,27 +22,27 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
   ## Error Handling
 
   The module handles several types of errors:
-  - Event validation errors (mapped to event-level changeset errors)
+  - Command validation errors (mapped to event-level changeset errors)
   - Account validation errors (mapped to payload-level changeset errors)
   - Multi step failures (logged and returned as string errors)
   """
 
   use DoubleEntryLedger.Logger
 
-  import DoubleEntryLedger.Event.TransferErrors,
+  import DoubleEntryLedger.Command.TransferErrors,
     only: [
       from_event_to_event_map: 2,
       from_account_to_event_map_payload: 2
     ]
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.AccountEventMap
-  alias DoubleEntryLedger.{Event, Account}
+  alias DoubleEntryLedger.Command.AccountEventMap
+  alias DoubleEntryLedger.{Command, Account}
 
   @typedoc """
   Success response tuple containing the processed account and associated event.
   """
-  @type success_tuple :: {:ok, Account.t(), Event.t()}
+  @type success_tuple :: {:ok, Account.t(), Command.t()}
 
   @typedoc """
   Error response containing either a changeset with validation errors or a string error message.
@@ -69,20 +69,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
 
   ## Returns
 
-  * `{:ok, Account.t(), Event.t()}` - Success with the created/updated account and event
+  * `{:ok, Account.t(), Command.t()}` - Success with the created/updated account and event
   * `{:error, Changeset.t(AccountEventMap.t())}` - Validation error with changeset
   * `{:error, String.t()}` - System error with descriptive message
 
   ## Error Handling
 
-  - `:new_event` errors: Event validation failures mapped to event-level changeset errors
+  - `:new_event` errors: Command validation failures mapped to event-level changeset errors
   - `:account` errors: Account validation failures mapped to payload-level changeset errors
   - Other step failures: Logged and returned as descriptive string errors
 
   ## Examples
 
       iex> account = %Account{}
-      iex> event = %Event{event_queue_item: %{status: :processed}, event_map: %{}}
+      iex> event = %Command{event_queue_item: %{status: :processed}, event_map: %{}}
       iex> response = {:ok, %{account: account, event_success: event}}
       iex> {:ok, ^account, ^event} = AccountEventMapResponseHandler.default_response_handler(response, %AccountEventMap{})
 
@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
       iex> {:error, %Ecto.Changeset{} = _changeset} = AccountEventMapResponseHandler.default_response_handler(response, event_map)
   """
   @spec default_response_handler(
-          {:ok, %{account: Account.t(), event_success: Event.t()}}
+          {:ok, %{account: Account.t(), event_success: Command.t()}}
           | {:error, :atom, any(), map()},
           AccountEventMap.t()
         ) ::
@@ -105,7 +105,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
         {:ok, account, event}
 
       {:error, :new_event, changeset, _changes} ->
-        warn("Event changeset failed", event_map, changeset)
+        warn("Command changeset failed", event_map, changeset)
 
         {:error, from_event_to_event_map(event_map, changeset)}
 

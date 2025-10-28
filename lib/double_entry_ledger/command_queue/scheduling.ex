@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   alias DoubleEntryLedger.{
     Repo,
-    Event,
+    Command,
     EventTransactionLink,
     EventAccountLink,
     Account,
@@ -51,8 +51,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `{:error, updated_event}` - The event with updated retry information
     - `{:error, changeset}` - Error updating the event
   """
-  @spec schedule_retry_with_reason(Event.t(), String.t(), EventQueueItem.state(), Ecto.Repo.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
+  @spec schedule_retry_with_reason(Command.t(), String.t(), EventQueueItem.state(), Ecto.Repo.t()) ::
+          {:error, Command.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(event, reason, status, repo \\ Repo) do
     case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
       {:ok, event} ->
@@ -63,8 +63,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     end
   end
 
-  @spec mark_as_dead_letter(Event.t(), String.t(), Ecto.Repo.t()) ::
-          {:error, Event.t()} | {:error, Changeset.t()}
+  @spec mark_as_dead_letter(Command.t(), String.t(), Ecto.Repo.t()) ::
+          {:error, Command.t()} | {:error, Changeset.t()}
   def mark_as_dead_letter(event, error, repo \\ Repo) do
     case build_mark_as_dead_letter(event, error) |> repo.update() do
       {:ok, event} ->
@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `{:error, :event_not_claimable}`: If the event is not in a claimable state (not pending or occ_timeout)
   """
   @spec claim_event_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
-          {:ok, Event.t()} | {:error, atom()}
+          {:ok, Command.t()} | {:error, atom()}
   def claim_event_for_processing(id, processor_id, repo \\ Repo) do
     case EventStore.get_by_id(id) do
       nil ->
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
       %{event_queue_item: %{status: state} = eqi} = event when state in @processable_states ->
         try do
-          Event.processing_start_changeset(event, processor_id, retry_count_by_status(eqi))
+          Command.processing_start_changeset(event, processor_id, retry_count_by_status(eqi))
           |> repo.update()
         rescue
           Ecto.StaleEntryError ->
@@ -120,13 +120,13 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   transaction ID and timestamps.
 
   ## Parameters
-    - `event` - The Event struct to update
+    - `event` - The Command struct to update
     - `transaction_id` - The UUID of the associated transaction
 
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for marking the event as processed
   """
-  @spec build_mark_as_processed(Event.t()) :: Changeset.t(Event.t())
+  @spec build_mark_as_processed(Command.t()) :: Changeset.t(Command.t())
   def build_mark_as_processed(%{event_queue_item: event_queue_item} = event) do
     event_queue_changeset =
       event_queue_item
@@ -137,9 +137,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
-  @spec build_create_transaction_event_transaction_link(Event.t(), Transaction.t()) ::
+  @spec build_create_transaction_event_transaction_link(Command.t(), Transaction.t()) ::
           Changeset.t()
-  def build_create_transaction_event_transaction_link(%Event{id: event_id}, %Transaction{
+  def build_create_transaction_event_transaction_link(%Command{id: event_id}, %Transaction{
         id: transaction_id
       }) do
     %EventTransactionLink{}
@@ -149,8 +149,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     })
   end
 
-  @spec build_create_account_event_account_link(Event.t(), Account.t()) :: Changeset.t()
-  def build_create_account_event_account_link(%Event{id: event_id}, %Account{id: account_id}) do
+  @spec build_create_account_event_account_link(Command.t(), Account.t()) :: Changeset.t()
+  def build_create_account_event_account_link(%Command{id: event_id}, %Account{id: account_id}) do
     %EventAccountLink{}
     |> EventAccountLink.changeset(%{
       event_id: event_id,
@@ -171,7 +171,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
-  @spec build_revert_to_pending(Event.t(), any()) :: Changeset.t()
+  @spec build_revert_to_pending(Command.t(), any()) :: Changeset.t()
   def build_revert_to_pending(%{event_queue_item: event_queue_item} = event, error) do
     event_queue_changeset =
       event_queue_item
@@ -198,7 +198,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
-  @spec build_schedule_retry_with_reason(Event.t(), String.t() | nil, EventQueueItem.state()) ::
+  @spec build_schedule_retry_with_reason(Command.t(), String.t() | nil, EventQueueItem.state()) ::
           Changeset.t()
   def build_schedule_retry_with_reason(
         %{event_queue_item: event_queue_item} = event,
@@ -245,7 +245,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
-  @spec build_schedule_update_retry(Event.t(), UpdateEventError.t()) :: Changeset.t()
+  @spec build_schedule_update_retry(Command.t(), UpdateEventError.t()) :: Changeset.t()
   def build_schedule_update_retry(%{event_queue_item: event_queue_item} = event, error) do
     event_queue_item_changeset =
       event_queue_item
@@ -273,7 +273,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the event
   """
-  @spec build_mark_as_dead_letter(Event.t(), String.t()) :: Changeset.t()
+  @spec build_mark_as_dead_letter(Command.t(), String.t()) :: Changeset.t()
   def build_mark_as_dead_letter(%{event_queue_item: event_queue_item} = event, error) do
     event_queue_changeset =
       event_queue_item

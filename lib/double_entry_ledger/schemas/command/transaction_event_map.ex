@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.TransactionEventMap do
+defmodule DoubleEntryLedger.Command.TransactionEventMap do
   @moduledoc """
   Defines the TransactionEventMap schema for representing transaction event data in the Double Entry Ledger system.
 
@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   ## Architecture
 
-  This module extends the base `DoubleEntryLedger.Event.EventMap` behavior by:
+  This module extends the base `DoubleEntryLedger.Command.EventMap` behavior by:
 
   * Using the EventMap macro to inject common fields and functionality
   * Implementing the `payload_to_map/1` callback for TransactionData serialization
@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
   """
   use Ecto.Schema
 
-  import DoubleEntryLedger.Event.Helper,
+  import DoubleEntryLedger.Command.Helper,
     only: [
       fetch_action: 1
     ]
@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       validate_format: 3
     ]
 
-  alias DoubleEntryLedger.Event.TransactionData
+  alias DoubleEntryLedger.Command.TransactionData
   alias Ecto.Changeset
 
   alias __MODULE__, as: TransactionEventMap
@@ -139,7 +139,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   ## Type Specification
 
-  This is equivalent to `DoubleEntryLedger.Event.EventMap.t(TransactionData.t())` and includes:
+  This is equivalent to `DoubleEntryLedger.Command.EventMap.t(TransactionData.t())` and includes:
 
   ## Inherited Fields (from EventMap)
 
@@ -230,7 +230,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionEventMap
       iex> attrs = %{
       ...>   action: "create_transaction",
       ...>   instance_address: "some:address",
@@ -250,7 +250,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> event_map.source
       "accounting_system"
 
-      iex> alias DoubleEntryLedger.Event.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionEventMap
       iex> invalid_attrs = %{action: "create_transaction", source: "test"}
       iex> {:error, changeset} = TransactionEventMap.create(invalid_attrs)
       iex> changeset.valid?
@@ -300,7 +300,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionEventMap
       iex> attrs = %{
       ...>   action: "create_transaction",
       ...>   instance_address: "some:address",
@@ -318,7 +318,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> changeset.valid?
       true
 
-      iex> alias DoubleEntryLedger.Event.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionEventMap
       iex> update_attrs = %{
       ...>   action: "update_transaction",
       ...>   instance_address: "some:address",
@@ -331,7 +331,7 @@ defmodule DoubleEntryLedger.Event.TransactionEventMap do
       iex> changeset.valid?
       true
 
-      iex> alias DoubleEntryLedger.Event.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionEventMap
       iex> invalid_attrs = %{action: "update_transaction", source: "test"}
       iex> changeset = TransactionEventMap.changeset(%TransactionEventMap{}, invalid_attrs)
       iex> changeset.valid?

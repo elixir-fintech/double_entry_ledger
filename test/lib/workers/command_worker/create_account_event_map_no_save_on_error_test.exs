@@ -5,9 +5,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Account, Event}
+  alias DoubleEntryLedger.{Account, Command}
   alias DoubleEntryLedger.Stores.InstanceStore
-  alias DoubleEntryLedger.Event.{AccountEventMap, AccountData}
+  alias DoubleEntryLedger.Command.{AccountEventMap, AccountData}
   alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnError
 
   import DoubleEntryLedger.InstanceFixtures

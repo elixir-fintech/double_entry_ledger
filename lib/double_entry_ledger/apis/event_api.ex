@@ -17,11 +17,11 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   """
   use DoubleEntryLedger.Logger
 
-  import DoubleEntryLedger.Event.Helper, only: [actions: 1]
+  import DoubleEntryLedger.Command.Helper, only: [actions: 1]
 
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.Stores.EventStore
 
   @account_actions actions(:account) |> Enum.map(&Atom.to_string/1)
@@ -58,7 +58,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     ...> })
     iex> event.event_queue_item.status
     :pending
-    iex> alias DoubleEntryLedger.Event.AccountEventMap
+    iex> alias DoubleEntryLedger.Command.AccountEventMap
     iex> {:error, %Ecto.Changeset{data: %AccountEventMap{}}= changeset} = EventApi.create_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_account",
@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
 
   """
   @spec create_from_params(event_params()) ::
-          {:ok, Event.t()}
+          {:ok, Command.t()}
           | {:error,
              Ecto.Changeset.t(AccountEventMap.t() | TransactionEventMap.t())
              | :instance_not_found

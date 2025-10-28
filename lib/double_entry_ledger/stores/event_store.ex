@@ -8,9 +8,9 @@ defmodule DoubleEntryLedger.Stores.EventStore do
 
   ## Key Functionality
 
-    * **Event Management**: Create, retrieve, and track events.
-    * **Event Processing**: Claim events for processing, mark events as processed or failed.
-    * **Event Queries**: Find events by instance, transaction ID, account ID, or other criteria.
+    * **Command Management**: Create, retrieve, and track events.
+    * **Command Processing**: Claim events for processing, mark events as processed or failed.
+    * **Command Queries**: Find events by instance, transaction ID, account ID, or other criteria.
     * **Error Handling**: Track and manage errors that occur during event processing.
 
   ## Usage Examples
@@ -71,8 +71,8 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   import DoubleEntryLedger.Utils.Pagination
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Event, Account}
-  alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.{Repo, Command, Account}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.Stores.{AccountStore, InstanceStoreHelper}
 
   @doc """
@@ -84,20 +84,20 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     - `id`: The UUID of the event to retrieve
 
   ## Returns
-    - `Event.t()`: The found event
+    - `Command.t()`: The found event
     - `nil`: If no event with the given ID exists
   """
-  @spec get_by_id(Ecto.UUID.t()) :: Event.t() | nil
+  @spec get_by_id(Ecto.UUID.t()) :: Command.t() | nil
   def get_by_id(id) do
-    Event
+    Command
     |> where(id: ^id)
     |> preload([:event_queue_item, :transactions, :account])
     |> Repo.one()
   end
 
-  @spec get_by_instance_address_and_id(String.t(), Ecto.UUID.t()) :: Event.t() | nil
+  @spec get_by_instance_address_and_id(String.t(), Ecto.UUID.t()) :: Command.t() | nil
   def get_by_instance_address_and_id(instance_address, id) do
-    from(e in Event,
+    from(e in Command,
       join: i in assoc(e, :instance),
       where: i.address == ^instance_address and e.id == ^id,
       select: e,
@@ -117,7 +117,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     - `{:error, changeset}`: If validation failed
   """
   @spec create(TransactionEventMap.t() | AccountEventMap.t()) ::
-          {:ok, Event.t()} | {:error, Ecto.Changeset.t(Event.t()) | :instance_not_found}
+          {:ok, Command.t()} | {:error, Ecto.Changeset.t(Command.t()) | :instance_not_found}
   def create(%{instance_address: address} = attrs) do
     case Multi.new()
          |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
@@ -140,7 +140,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     - `per_page`: Number of events per page (defaults to 40)
 
   ## Returns
-    - List of Event structs, ordered by insertion time descending
+    - List of Command structs, ordered by insertion time descending
 
   ## Examples
 
@@ -163,9 +163,9 @@ defmodule DoubleEntryLedger.Stores.EventStore do
 
   """
   @spec list_all_for_instance_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Event.t())
+          list(Command.t())
   def list_all_for_instance_id(instance_id, page \\ 1, per_page \\ 40) do
-    from(e in Event,
+    from(e in Command,
       where: e.instance_id == ^instance_id,
       order_by: [desc: e.inserted_at],
       select: e
@@ -182,7 +182,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     - `transaction_id`: ID of the transaction to list events for
 
   ## Returns
-    - List of Event structs, ordered by insertion time descending
+    - List of Command structs, ordered by insertion time descending
 
   ## Examples
 
@@ -201,7 +201,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> length(EventStore.list_all_for_transaction_id(id))
     2
   """
-  @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Event.t())
+  @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Command.t())
   def list_all_for_transaction_id(transaction_id) do
     base_transaction_query(transaction_id)
     |> order_by(desc: :inserted_at)
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
 
   ## Returns
 
-    - `Event.t() | nil`: The create transaction event if found and processed
+    - `Command.t() | nil`: The create transaction event if found and processed
 
   ## Examples
 
@@ -237,7 +237,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     id
 
   """
-  @spec get_create_transaction_event(Ecto.UUID.t()) :: Event.t()
+  @spec get_create_transaction_event(Ecto.UUID.t()) :: Command.t()
   def get_create_transaction_event(transaction_id) do
     base_transaction_query(transaction_id)
     |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
@@ -254,7 +254,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     - `account_id`: ID of the account to get the create event for
 
   ## Returns
-    - `Event.t() | nil`: The create account event if found and processed
+    - `Command.t() | nil`: The create account event if found and processed
 
   ### Examples
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
@@ -264,7 +264,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     iex> event.account.id
     id
   """
-  @spec get_create_account_event(Ecto.UUID.t()) :: Event.t()
+  @spec get_create_account_event(Ecto.UUID.t()) :: Command.t()
   def get_create_account_event(account_id) do
     base_account_query(account_id)
     |> join(:inner, [e], eqi in assoc(e, :event_queue_item))
@@ -282,7 +282,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     - `account_id`: ID of the account to list events for
 
   ## Returns
-    - List of Event structs, ordered by insertion time descending
+    - List of Command structs, ordered by insertion time descending
 
   ## Examples
 
@@ -310,7 +310,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
 
   """
   @spec list_all_for_account_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Event.t())
+          list(Command.t())
   def list_all_for_account_id(account_id, page \\ 1, per_page \\ 40) do
     all_processed_events_for_account_id(account_id)
     |> paginate(page, per_page)
@@ -326,7 +326,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     - `address`: Address of the account to list events for
 
   ## Returns
-    - List of Event structs, ordered by insertion time descending
+    - List of Command structs, ordered by insertion time descending
 
   ## Examples
 
@@ -356,7 +356,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     []
 
   """
-  @spec list_all_for_account_address(String.t(), String.t()) :: list(Event.t())
+  @spec list_all_for_account_address(String.t(), String.t()) :: list(Command.t())
   def list_all_for_account_address(instance_address, address) do
     case AccountStore.get_by_address(instance_address, address) do
       %Account{id: id} -> list_all_for_account_id(id)

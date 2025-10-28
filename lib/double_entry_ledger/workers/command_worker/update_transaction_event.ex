@@ -34,7 +34,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
 
   alias Ecto.Multi
 
-  alias DoubleEntryLedger.{Event, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
 
   alias DoubleEntryLedger.Stores.{EventStoreHelper, TransactionStoreHelper}
 
@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
 
   ## Parameters
 
-    - `event`: The `%Event{}` struct with action `:update` to process.
+    - `event`: The `%Command{}` struct with action `:update` to process.
     - `repo`: The Ecto repo to use for database operations (defaults to `Repo`).
 
   ## Returns
@@ -111,9 +111,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
     - Handles optimistic concurrency conflicts with retries.
     - Properly marks events as failed with meaningful error messages.
   """
-  @spec process(Event.t(), Ecto.Repo.t()) ::
+  @spec process(Command.t(), Ecto.Repo.t()) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
-  def process(%Event{event_map: %{action: :update_transaction}} = original_event, repo \\ Repo) do
+  def process(%Command{event_map: %{action: :update_transaction}} = original_event, repo \\ Repo) do
     process_with_retry(original_event, repo)
     |> default_response_handler(original_event)
   end
@@ -139,7 +139,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
 
     - An `Ecto.Multi` struct with named operations for transaction processing.
   """
-  def build_transaction(%Event{} = event, attr, repo) do
+  def build_transaction(%Command{} = event, attr, repo) do
     Multi.new()
     |> EventStoreHelper.build_get_create_transaction_event_transaction(
       :get_create_event_transaction,

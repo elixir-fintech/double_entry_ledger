@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
   import Mox
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
+  alias DoubleEntryLedger.Command.TransactionEventMap, as: TransactionEventMapSchema
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures

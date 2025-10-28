@@ -12,10 +12,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapTest 
   import DoubleEntryLedger.InstanceFixtures
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
+  alias DoubleEntryLedger.Command.TransactionEventMap, as: TransactionEventMapSchema
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Stores.EventStore
 
   doctest UpdateTransactionEventMap
@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapTest 
         UpdateTransactionEventMap.process(update_transaction_event_map)
 
       assert status == :dead_letter
-      assert error.message =~ "create Event not found for Update Event (id:"
+      assert error.message =~ "create Command not found for Update Command (id:"
     end
 
     test "update event for event_map, when create event not yet processed", ctx do
@@ -141,10 +141,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapTest 
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Event{id: id, event_queue_item: %{status: :occ_timeout}}} =
+      assert {:error, %Command{id: id, event_queue_item: %{status: :occ_timeout}}} =
                UpdateTransactionEventMap.process(update_event, DoubleEntryLedger.MockRepo)
 
-      assert %Event{
+      assert %Command{
                event_queue_item: %{status: :occ_timeout, occ_retry_count: 5, errors: errors},
                transactions: []
              } =

@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   use GenServer
   require Logger
 
-  alias DoubleEntryLedger.{Repo, Event, EventQueueItem}
+  alias DoubleEntryLedger.{Repo, Command, EventQueueItem}
 
   alias DoubleEntryLedger.CommandQueue.InstanceProcessor
 
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
     now = DateTime.utc_now()
 
     # Find distinct instance IDs with pending events
-    from(e in Event,
+    from(e in Command,
       join: eqi in EventQueueItem,
       prefix: ^@schema_prefix,
       on: e.id == eqi.event_id,

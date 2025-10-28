@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.Repo
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionEventMap
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @impl true

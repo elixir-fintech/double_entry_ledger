@@ -11,8 +11,8 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.Event.TransactionData
+  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.Command.TransactionData
   alias DoubleEntryLedger.Workers.CommandWorker.{UpdateTransactionEvent, CreateTransactionEvent}
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.EventStore
@@ -134,7 +134,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       [error | _] = evq.errors
 
       assert error.message ==
-               "create Event not found for Update Event (id: #{event.id})"
+               "create Command not found for Update Command (id: #{event.id})"
     end
 
     test "back to pending when create event is still pending", %{instance: inst} = ctx do
@@ -151,7 +151,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       [error | _] = eqm.errors
 
       assert error.message ==
-               "create Event (id: #{e_id}, status: pending) not yet processed for Update Event (id: #{event.id})"
+               "create Command (id: #{e_id}, status: pending) not yet processed for Update Command (id: #{event.id})"
     end
 
     test "back to pending when create event failed", %{instance: inst} = ctx do
@@ -175,7 +175,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       assert failed_create_event.event_queue_item.status == :failed
 
       assert error.message ==
-               "create Event (id: #{pending_event.id}, status: failed) not yet processed for Update Event (id: #{event.id})"
+               "create Command (id: #{pending_event.id}, status: failed) not yet processed for Update Command (id: #{event.id})"
     end
 
     test "dead_letter when create event in dead_letter", %{instance: inst} = ctx do
@@ -196,7 +196,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
       [error | _] = eqm.errors
 
       assert error.message ==
-               "create Event (id: #{pending_event.id}) in dead_letter for Update Event (id: #{event.id})"
+               "create Command (id: #{pending_event.id}) in dead_letter for Update Command (id: #{event.id})"
     end
 
     test "dead_letter when transaction_map_error", %{instance: inst, accounts: [a | _]} = ctx do
@@ -285,7 +285,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Event{event_queue_item: eqm}} =
+      assert {:error, %Command{event_queue_item: eqm}} =
                UpdateTransactionEvent.process(
                  event,
                  DoubleEntryLedger.MockRepo

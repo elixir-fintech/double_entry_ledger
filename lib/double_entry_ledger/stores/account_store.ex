@@ -11,12 +11,12 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   * **Account Management**: Create, retrieve, update, and delete accounts with full validation
   * **Account Queries**: Find accounts by instance, type, address, and ID combinations
   * **Balance History**: Access the historical record of account balance changes with pagination
-  * **Event Sourcing**: Create and update account operations are tracked through the event sourcing system
+  * **Command Sourcing**: Create and update account operations are tracked through the event sourcing system
 
   ## Data Integrity
 
   All account operations maintain strict data integrity through:
-  * Event sourcing for complete audit trails
+  * Command sourcing for complete audit trails
   * Validation of account types and currencies
   * Unique address constraints within instances
   * Referential integrity with instances and transactions
@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   import DoubleEntryLedger.Utils.Pagination, only: [paginate: 3]
 
-  alias DoubleEntryLedger.Event.AccountEventMap
+  alias DoubleEntryLedger.Command.AccountEventMap
   alias DoubleEntryLedger.Apis.EventApi
   alias DoubleEntryLedger.Utils.Currency
   alias DoubleEntryLedger.Stores.AccountStoreHelper

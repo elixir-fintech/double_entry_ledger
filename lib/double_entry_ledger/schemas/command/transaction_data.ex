@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.TransactionData do
+defmodule DoubleEntryLedger.Command.TransactionData do
   @moduledoc """
   Provides the TransactionData embedded schema for the Double Entry Ledger system.
 
@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
   @archived ["archived", :archived]
 
   alias DoubleEntryLedger.Transaction
-  alias DoubleEntryLedger.Event.EntryData
+  alias DoubleEntryLedger.Command.EntryData
   alias __MODULE__, as: TransactionData
 
   @derive {Jason.Encoder, only: [:status, :entries]}
@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.TransactionData
+      iex> alias DoubleEntryLedger.Command.TransactionData
       iex> attrs = %{status: :pending, entries: [
       ...>   %{account_address: "asset:account", amount: 100, currency: :USD},
       ...>   %{account_address: "cash:account", amount: -100, currency: :USD}
@@ -147,7 +147,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.TransactionData
+      iex> alias DoubleEntryLedger.Command.TransactionData
       iex> # Posting without entries is allowed
       iex> changeset = TransactionData.update_event_changeset(%TransactionData{}, %{status: :posted})
       iex> changeset.valid?
@@ -181,7 +181,7 @@ defmodule DoubleEntryLedger.Event.TransactionData do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.TransactionData
+      iex> alias DoubleEntryLedger.Command.TransactionData
       iex> transaction_data = %TransactionData{}
       iex> TransactionData.to_map(transaction_data)
       %{status: nil, entries: []}

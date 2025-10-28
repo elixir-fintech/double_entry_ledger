@@ -8,8 +8,8 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Event changesets from TransactionEventMaps or AccountEventMaps
-  * **Event Relationships**: Look up related events by source identifiers
+  * **Changeset Building**: Create Command changesets from TransactionEventMaps or AccountEventMaps
+  * **Command Relationships**: Look up related events by source identifiers
   * **Transaction Linking**: Find transactions and accounts associated with events
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
   * **Status Management**: Create changesets to update event status and error information
@@ -36,17 +36,17 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
   """
   import Ecto.Query, only: [from: 2, preload: 2, union: 2, subquery: 1]
 
-  alias DoubleEntryLedger.Event.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
   alias Ecto.Changeset
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Event, Transaction, Account, Entry}
+  alias DoubleEntryLedger.{Repo, Command, Transaction, Account, Entry}
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
 
   @doc """
-  Builds an Event changeset from a TransactionEventMap or AccountEventMap.
+  Builds an Command changeset from a TransactionEventMap or AccountEventMap.
 
-  Creates a new Event changeset suitable for database insertion, converting the
-  provided event map structure into the appropriate Event attributes.
+  Creates a new Command changeset suitable for database insertion, converting the
+  provided event map structure into the appropriate Command attributes.
 
   ## Parameters
 
@@ -54,22 +54,22 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   ## Returns
 
-  * `Ecto.Changeset.t(Event.t())` - A changeset for creating a new Event
+  * `Ecto.Changeset.t(Command.t())` - A changeset for creating a new Command
 
   """
   @spec build_create(TransactionEventMap.t() | AccountEventMap.t(), Ecto.UUID.t()) ::
-          Changeset.t(Event.t())
+          Changeset.t(Command.t())
   def build_create(%TransactionEventMap{} = event_map, instance_id) do
-    %Event{}
-    |> Event.changeset(%{
+    %Command{}
+    |> Command.changeset(%{
       instance_id: instance_id,
       event_map: TransactionEventMap.to_map(event_map)
     })
   end
 
   def build_create(%AccountEventMap{} = event_map, instance_id) do
-    %Event{}
-    |> Event.changeset(%{instance_id: instance_id, event_map: AccountEventMap.to_map(event_map)})
+    %Command{}
+    |> Command.changeset(%{instance_id: instance_id, event_map: AccountEventMap.to_map(event_map)})
   end
 
   @doc """
@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   ## Returns
 
-    - `Event.t() | nil`: The found event with preloaded associations, or nil if not found
+    - `Command.t() | nil`: The found event with preloaded associations, or nil if not found
 
   ## Preloaded Associations
 
@@ -103,9 +103,9 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   """
   @spec get_event_by(atom(), String.t(), String.t(), Ecto.UUID.t()) ::
-          Event.t() | nil
+          Command.t() | nil
   def get_event_by(action, source, source_idempk, instance_id) do
-    from(e in Event,
+    from(e in Command,
       where:
         e.instance_id == ^instance_id and
           fragment("event_map->>? = ?", "action", ^Atom.to_string(action)) and
@@ -126,17 +126,17 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   ## Parameters
 
-  * `event` - An Event struct containing source, source_idempk, and instance_id
+  * `event` - An Command struct containing source, source_idempk, and instance_id
 
   ## Returns
 
-  * `{:ok, {Transaction.t(), Event.t()}}` - The transaction and create event if found and processed
+  * `{:ok, {Transaction.t(), Command.t()}}` - The transaction and create event if found and processed
   * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
 
   """
-  @spec get_create_transaction_event_transaction(Event.t()) ::
-          {:ok, {Transaction.t(), Event.t()}}
-          | {:error | :pending_error, String.t(), Event.t() | nil}
+  @spec get_create_transaction_event_transaction(Command.t()) ::
+          {:ok, {Transaction.t(), Command.t()}}
+          | {:error | :pending_error, String.t(), Command.t() | nil}
   def get_create_transaction_event_transaction(
         %{
           instance_id: id,
@@ -167,17 +167,17 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   ## Parameters
 
-  * `event` - An Event struct containing source, source_idempk, and instance_id
+  * `event` - An Command struct containing source, source_idempk, and instance_id
 
   ## Returns
 
-  * `{:ok, {Account.t(), Event.t()}}` - The account and create event if found and processed
+  * `{:ok, {Account.t(), Command.t()}}` - The account and create event if found and processed
   * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
 
   """
-  @spec get_create_account_event_account(Event.t()) ::
-          {:ok, {Account.t(), Event.t()}}
-          | {:error | :pending_error, String.t(), Event.t() | nil}
+  @spec get_create_account_event_account(Command.t()) ::
+          {:ok, {Account.t(), Command.t()}}
+          | {:error | :pending_error, String.t(), Command.t() | nil}
   def get_create_account_event_account(
         %{
           instance_id: id,
@@ -210,14 +210,14 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   * `multi` - The Ecto.Multi instance to add the step to
   * `step` - The atom representing the step name in the Multi
-  * `event_or_step` - Either an Event struct or the name of a previous step in the Multi
+  * `event_or_step` - Either an Command struct or the name of a previous step in the Multi
 
   ## Returns
 
   * `Ecto.Multi.t()` - The updated Multi instance with the new step added
 
   """
-  @spec build_get_create_transaction_event_transaction(Ecto.Multi.t(), atom(), Event.t() | atom()) ::
+  @spec build_get_create_transaction_event_transaction(Ecto.Multi.t(), atom(), Command.t() | atom()) ::
           Ecto.Multi.t()
   def build_get_create_transaction_event_transaction(multi, step, event_or_step) do
     multi
@@ -236,7 +236,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_transaction_query(transaction_id) do
-    from(e in Event,
+    from(e in Command,
       join: evt in assoc(e, :event_transaction_links),
       where: evt.transaction_id == ^transaction_id,
       select: e
@@ -257,7 +257,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_account_query(account_id) do
-    from(e in Event,
+    from(e in Command,
       join: evt in assoc(e, :event_account_link),
       where: evt.account_id == ^account_id,
       select: e
@@ -266,7 +266,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
 
   @spec transaction_events_for_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def transaction_events_for_account_query(account_id) do
-    from(e in Event,
+    from(e in Command,
       join: t in assoc(e, :transactions),
       join: ety in Entry,
       on: ety.transaction_id == t.id,
@@ -277,10 +277,10 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
     )
   end
 
-  @spec get_event(Event.t() | atom(), map()) :: Event.t()
+  @spec get_event(Command.t() | atom(), map()) :: Command.t()
   defp get_event(event_or_step, changes) do
     cond do
-      is_struct(event_or_step, Event) -> event_or_step
+      is_struct(event_or_step, Command) -> event_or_step
       is_atom(event_or_step) -> Map.fetch!(changes, event_or_step)
     end
   end

@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
   import Ecto.Query, only: [from: 2]
 
   alias DoubleEntryLedger.Account
-  alias DoubleEntryLedger.Event.AccountData
+  alias DoubleEntryLedger.Command.AccountData
 
   @doc """
   Builds a changeset for creating a new Account from AccountData.
@@ -73,7 +73,7 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
 
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
-      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.Command.AccountData
       iex> {:ok, %{id: instance_id}} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %AccountData{address: "Cash:Account", type: :asset, currency: :USD}
       iex> changeset = AccountStoreHelper.build_create(account_data, instance_id)

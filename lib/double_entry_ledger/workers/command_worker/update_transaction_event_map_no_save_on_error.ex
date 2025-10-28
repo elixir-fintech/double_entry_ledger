@@ -33,7 +33,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSav
     only: [default_response_handler: 2]
 
   alias DoubleEntryLedger.{JournalEvent, Repo}
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionEventMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
 

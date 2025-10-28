@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Event, Account}
+  alias DoubleEntryLedger.{Command, Account}
   alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountEvent
 
@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
     test "successfully processes a valid create_account event", %{instance: instance} do
       {:ok, event} = EventStore.create(account_event_attrs(%{instance_address: instance.address}))
 
-      assert {:ok, %Account{} = account, %Event{event_queue_item: eqi} = e} =
+      assert {:ok, %Account{} = account, %Command{event_queue_item: eqi} = e} =
                CreateAccountEvent.process(preload(event))
 
       assert e.id == event.id
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
 
       CreateAccountEvent.process(preload(event1))
 
-      assert {:error, %Event{event_queue_item: %{errors: errors} = eqi}} =
+      assert {:error, %Command{event_queue_item: %{errors: errors} = eqi}} =
                CreateAccountEvent.process(preload(event2))
 
       assert eqi.status == :dead_letter

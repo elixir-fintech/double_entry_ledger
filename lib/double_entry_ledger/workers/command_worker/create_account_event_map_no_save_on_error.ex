@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
   Processes AccountEventMap for creating new accounts in the double-entry ledger system.
 
   This worker handles the creation of accounts based on validated AccountEventMap data.
-  It coordinates the creation of both the Event record (for audit trail) and the Account
+  It coordinates the creation of both the Command record (for audit trail) and the Account
   record (the actual ledger account) within a single database transaction.
 
   Unlike standard event processors, this module does not persist error states to the database.
@@ -12,15 +12,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
 
   ## Processing Flow
 
-  1. **Event Creation**: Creates an Event record from the AccountEventMap for audit purposes
+  1. **Command Creation**: Creates an Command record from the AccountEventMap for audit purposes
   2. **Account Creation**: Creates the Account record using the payload data
-  3. **Event Completion**: Marks the event as processed upon successful account creation
+  3. **Command Completion**: Marks the event as processed upon successful account creation
   4. **Linking**: Creates a link between the event and the created account for traceability
 
   ## Error Handling
 
   The module provides detailed error handling and logging:
-  - Event validation errors are mapped back to AccountEventMap changesets
+  - Command validation errors are mapped back to AccountEventMap changesets
   - Account validation errors are propagated to the event map payload
   - All processing steps are logged with appropriate trace information
   - Database transaction ensures atomicity (all-or-nothing)
@@ -47,7 +47,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
     only: [default_response_handler: 2]
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.Event.AccountEventMap
+  alias DoubleEntryLedger.Command.AccountEventMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
   alias DoubleEntryLedger.{JournalEvent, Repo}
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
   @doc """
   Processes an AccountEventMap to create a new account in the ledger system.
 
-  This function orchestrates the creation of both an Event record (for audit trail)
+  This function orchestrates the creation of both an Command record (for audit trail)
   and an Account record within a single database transaction. Upon successful completion,
   the event is marked as processed and linked to the created account.
 
@@ -67,21 +67,21 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
 
   ## Returns
 
-    - `{:ok, account, event}` - Success tuple containing the created Account and Event
+    - `{:ok, account, event}` - Success tuple containing the created Account and Command
     - `{:error, changeset}` - AccountEventMap changeset with validation errors when
       event or account creation fails
     - `{:error, message}` - String error message for unexpected failures
 
   ## Transaction Steps
 
-  1. Creates Event record from AccountEventMap
+  1. Creates Command record from AccountEventMap
   2. Creates Account record from payload data
-  3. Marks Event as processed
-  4. Creates Event-Account link for traceability
+  3. Marks Command as processed
+  4. Creates Command-Account link for traceability
 
   ## Error Mapping
 
-  - Event validation errors → AccountEventMap changeset with event-level errors
+  - Command validation errors → AccountEventMap changeset with event-level errors
   - Account validation errors → AccountEventMap changeset with payload-level errors
   - Other failures → String error message with details
 
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
       ...>   }
       ...> }
       iex> {:ok, account, event} = CreateAccountEventMapNoSaveOnError.process(event_map)
-      iex> is_struct(account, Account) and account.name == "Cash Account" and is_struct(event, Event) and event.event_queue_item.status == :processed
+      iex> is_struct(account, Account) and account.name == "Cash Account" and is_struct(event, Command) and event.event_queue_item.status == :processed
       true
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Main:Instance"})

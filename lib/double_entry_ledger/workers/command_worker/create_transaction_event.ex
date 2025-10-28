@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
   use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Event, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.TransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Workers
@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
 
   ## Parameters
 
-    - `event`: An `Event` struct containing the transaction data to be processed.
+    - `event`: An `Command` struct containing the transaction data to be processed.
     - `repo`: (Optional) The Ecto repository to use for database operations, defaults to `Repo`.
 
   ## Returns
@@ -105,9 +105,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
     - `{:error, changeset}`: When there's a validation error or database error.
     - `{:error, reason}`: When another error occurs, with a reason explaining the failure.
   """
-  @spec process(Event.t(), Ecto.Repo.t()) ::
+  @spec process(Command.t(), Ecto.Repo.t()) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
-  def process(%Event{event_map: %{action: :create_transaction}} = original_event, repo \\ Repo) do
+  def process(%Command{event_map: %{action: :create_transaction}} = original_event, repo \\ Repo) do
     process_with_retry(original_event, repo)
     |> default_response_handler(original_event)
   end

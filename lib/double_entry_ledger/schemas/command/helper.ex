@@ -1,9 +1,9 @@
-defmodule DoubleEntryLedger.Event.Helper do
+defmodule DoubleEntryLedger.Command.Helper do
   @moduledoc """
     Helper functions
   """
   alias DoubleEntryLedger.Account
-  alias DoubleEntryLedger.Event.{AccountEventMap, TransactionEventMap}
+  alias DoubleEntryLedger.Command.{AccountEventMap, TransactionEventMap}
 
   @transaction_actions [:create_transaction, :update_transaction]
   @account_actions [:create_account, :update_account]
@@ -61,7 +61,7 @@ defmodule DoubleEntryLedger.Event.Helper do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.Helper
+      iex> alias DoubleEntryLedger.Command.Helper
       iex> # Ensure atoms exist for to_existing_atom/1
       iex> :create_transaction
       :create_transaction

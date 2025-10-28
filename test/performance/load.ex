@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.LoadTesting do
 
   alias DoubleEntryLedger.{Account, Balance, Instance, Repo}
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionEventMap
   @destination_accounts 10
   # Function to run a single transaction process
 

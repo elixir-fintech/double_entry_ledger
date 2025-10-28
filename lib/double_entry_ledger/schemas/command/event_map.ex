@@ -1,13 +1,13 @@
-defmodule DoubleEntryLedger.Event.EventMap do
+defmodule DoubleEntryLedger.Command.EventMap do
   @moduledoc """
     This is an Ecto.ParameterizedType
   """
 
   use Ecto.ParameterizedType
 
-  import DoubleEntryLedger.Event.Helper, only: [action_to_mod: 1]
+  import DoubleEntryLedger.Command.Helper, only: [action_to_mod: 1]
 
-  alias DoubleEntryLedger.Event.{AccountEventMap, TransactionEventMap}
+  alias DoubleEntryLedger.Command.{AccountEventMap, TransactionEventMap}
 
   @impl true
   @spec init(any()) :: %{}

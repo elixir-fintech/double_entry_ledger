@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.IdempotencyKey do
+defmodule DoubleEntryLedger.Command.IdempotencyKey do
   @moduledoc """
   Idempotency Key
   """

@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.AccountData do
+defmodule DoubleEntryLedger.Command.AccountData do
   @moduledoc """
   Schema for account data payload embedded in events.
 
@@ -74,7 +74,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.Command.AccountData
       iex> alias DoubleEntryLedger.Utils.Currency
       iex> alias DoubleEntryLedger.Types
       iex> attrs = %{
@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> changeset.valid?
       true
 
-      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.Command.AccountData
       iex> changeset = AccountData.changeset(%AccountData{}, %{})
       iex> changeset.valid?
       false
@@ -132,7 +132,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.Command.AccountData
       iex> existing_data = %AccountData{
       ...>   currency: :USD,
       ...>   address: "account:main",
@@ -152,7 +152,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
       iex> changeset.changes.context
       %{department: "finance"}
 
-      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.Command.AccountData
       iex> existing_data = %AccountData{currency: :USD, name: "Cash", type: :asset}
       iex> # Attempting to update restricted fields should have no effect
       iex> invalid_update = %{
@@ -185,7 +185,7 @@ defmodule DoubleEntryLedger.Event.AccountData do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.AccountData
+      iex> alias DoubleEntryLedger.Command.AccountData
       iex> alias DoubleEntryLedger.Utils.Currency
       iex> alias DoubleEntryLedger.Types
       iex> data = %AccountData{

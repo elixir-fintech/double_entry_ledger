@@ -1,7 +1,7 @@
-defmodule DoubleEntryLedger.Event.HelperTest do
+defmodule DoubleEntryLedger.Command.HelperTest do
   use ExUnit.Case, async: true
 
-  alias DoubleEntryLedger.Event.Helper
+  alias DoubleEntryLedger.Command.Helper
 
   doctest Helper
 end

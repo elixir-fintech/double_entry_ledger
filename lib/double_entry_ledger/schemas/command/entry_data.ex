@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.EntryData do
+defmodule DoubleEntryLedger.Command.EntryData do
   @moduledoc """
   Represents individual transaction entry data for the Double Entry Ledger system.
 
@@ -90,13 +90,13 @@ defmodule DoubleEntryLedger.Event.EntryData do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.EntryData
+      iex> alias DoubleEntryLedger.Command.EntryData
       iex> attrs = %{account_address: "cash:user:123", amount: 5000, currency: :USD}
       iex> changeset = EntryData.changeset(%EntryData{}, attrs)
       iex> changeset.valid?
       true
 
-      iex> alias DoubleEntryLedger.Event.EntryData
+      iex> alias DoubleEntryLedger.Command.EntryData
       iex> attrs = %{amount: 5000} # Missing required fields
       iex> changeset = EntryData.changeset(%EntryData{}, attrs)
       iex> changeset.valid?
@@ -118,7 +118,7 @@ defmodule DoubleEntryLedger.Event.EntryData do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.EntryData
+      iex> alias DoubleEntryLedger.Command.EntryData
       iex> entry_data = %EntryData{}
       iex> EntryData.to_map(entry_data)
       %{}

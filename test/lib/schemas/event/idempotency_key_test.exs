@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.IdempotencyKeyTest do
+defmodule DoubleEntryLedger.Command.IdempotencyKeyTest do
   @moduledoc """
     Test idempotency key
   """
@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Event.IdempotencyKeyTest do
 
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.Event.IdempotencyKey
+  alias DoubleEntryLedger.Command.IdempotencyKey
   alias DoubleEntryLedger.Repo
 
   describe "changeset" do

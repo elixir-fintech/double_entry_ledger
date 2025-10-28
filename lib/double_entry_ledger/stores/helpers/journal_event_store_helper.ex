@@ -8,8 +8,8 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Event changesets from TransactionEventMaps or AccountEventMaps
-  * **Event Relationships**: Look up related events by source identifiers
+  * **Changeset Building**: Create Command changesets from TransactionEventMaps or AccountEventMaps
+  * **Command Relationships**: Look up related events by source identifiers
   * **Transaction Linking**: Find transactions and accounts associated with events
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
   * **Status Management**: Create changesets to update event status and error information
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   """
   import Ecto.Query, only: [from: 2, subquery: 1, union: 2]
 
-  alias DoubleEntryLedger.{Repo, Event, JournalEvent, Account, Entry}
+  alias DoubleEntryLedger.{Repo, Command, JournalEvent, Account, Entry}
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
 
   @doc """
@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   ## Returns
 
-    - `Event.t() | nil`: The found event with preloaded associations, or nil if not found
+    - `Command.t() | nil`: The found event with preloaded associations, or nil if not found
 
   ## Preloaded Associations
 
@@ -93,15 +93,15 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   ## Parameters
 
-  * `event` - An Event struct containing source, source_idempk, and instance_id
+  * `event` - An Command struct containing source, source_idempk, and instance_id
 
   ## Returns
 
-  * `{:ok, {Account.t(), Event.t()}}` - The account and create event if found and processed
+  * `{:ok, {Account.t(), Command.t()}}` - The account and create event if found and processed
   * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
 
   """
-  @spec get_create_account_event_account(Event.t()) ::
+  @spec get_create_account_event_account(Command.t()) ::
           {:ok, {Account.t(), JournalEvent.t()}}
           | {:error | :pending_error, String.t(), JournalEvent.t() | nil}
   def get_create_account_event_account(

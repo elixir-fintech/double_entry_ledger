@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.TransferErrors do
+defmodule DoubleEntryLedger.Command.TransferErrors do
   @moduledoc """
   Provides functions to extract and manipulate error information from Ecto changesets.
 
@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
 
   alias Ecto.Changeset
 
-  alias DoubleEntryLedger.Event.{
+  alias DoubleEntryLedger.Command.{
     AccountEventMap,
     TransactionEventMap,
     AccountData,
@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
     IdempotencyKey
   }
 
-  alias DoubleEntryLedger.{Account, Event, Transaction}
+  alias DoubleEntryLedger.{Account, Command, Transaction}
 
   @typedoc """
   Union type representing either an AccountEventMap or TransactionEventMap.
@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
 
   ## Returns
 
-    - `Ecto.Changeset.t()`: Event map changeset with propagated account errors
+    - `Ecto.Changeset.t()`: Command map changeset with propagated account errors
   """
   @spec from_account_to_event_map_payload(AccountEventMap.t(), Ecto.Changeset.t(Account.t())) ::
           Ecto.Changeset.t(AccountEventMap.t())
@@ -86,13 +86,13 @@ defmodule DoubleEntryLedger.Event.TransferErrors do
   ## Parameters
 
     - `event_map`: The original event map
-    - `event_changeset`: Event changeset containing validation errors
+    - `event_changeset`: Command changeset containing validation errors
 
   ## Returns
 
-    - `Ecto.Changeset.t()`: Event map changeset with propagated errors
+    - `Ecto.Changeset.t()`: Command map changeset with propagated errors
   """
-  @spec from_event_to_event_map(em, Changeset.t(Event.t())) ::
+  @spec from_event_to_event_map(em, Changeset.t(Command.t())) ::
           Changeset.t(em)
         when em: event_map
   def from_event_to_event_map(event_map, event_changeset) do

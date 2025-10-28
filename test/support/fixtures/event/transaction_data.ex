@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.TransactionDataFixtures do
+defmodule DoubleEntryLedger.Command.TransactionDataFixtures do
   @moduledoc """
   This module defines test helpers for creating
   event payload entities.

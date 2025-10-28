@@ -4,16 +4,16 @@ defmodule DoubleEntryLedger.EventTest do
   """
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
-  import DoubleEntryLedger.Event.TransactionDataFixtures
+  import DoubleEntryLedger.Command.TransactionDataFixtures
   import DoubleEntryLedger.InstanceFixtures
 
   alias Ecto.Changeset
 
-  alias DoubleEntryLedger.Event.TransactionEventMap
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Command.TransactionEventMap
+  alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Stores.EventStore
 
-  doctest Event
+  doctest Command
 
   describe "changeset/2 for action: :create_transaction" do
     test "not valid for empty payload" do
@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.EventTest do
                  instance_id: {"can't be blank", [validation: :required]},
                  event_map: {"can't be blank", [validation: :required]}
                ]
-             } = Event.changeset(%Event{}, %{})
+             } = Command.changeset(%Command{}, %{})
     end
 
     test "valid with required attributes for action create_transaction" do
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.EventTest do
 
       attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
 
-      assert %Changeset{valid?: true} = Event.changeset(%Event{}, attrs)
+      assert %Changeset{valid?: true} = Command.changeset(%Command{}, attrs)
     end
 
     test "idempotency is not enforced at event creation" do
@@ -76,7 +76,7 @@ defmodule DoubleEntryLedger.EventTest do
       assert %Changeset{
                valid?: true
              } =
-               Event.changeset(%Event{}, attrs)
+               Command.changeset(%Command{}, attrs)
     end
 
     test "idempotency is not enforced when creating events" do

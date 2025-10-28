@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSav
   import DoubleEntryLedger.InstanceFixtures
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.TransactionEventMap, as: TransactionEventMapSchema
+  alias DoubleEntryLedger.Command.TransactionEventMap, as: TransactionEventMapSchema
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSaveOnError
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
 

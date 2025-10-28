@@ -9,8 +9,8 @@ defprotocol DoubleEntryLedger.Utils.Traceable do
   def changeset_metadata(schema, changeset)
 end
 
-defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event do
-  alias DoubleEntryLedger.{Event, Account, Transaction}
+defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command do
+  alias DoubleEntryLedger.{Command, Account, Transaction}
   import DoubleEntryLedger.Utils.Changeset
 
   def metadata(%{event_queue_item: event_queue_item, event_map: event_map} = event) do
@@ -32,7 +32,7 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event do
     }
   end
 
-  @spec metadata(Event.t(), Transaction.t() | Account.t() | any()) :: map()
+  @spec metadata(Command.t(), Transaction.t() | Account.t() | any()) :: map()
   def metadata(event, %Transaction{} = transaction) do
     Map.put(
       metadata(event),
@@ -68,9 +68,9 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event do
   end
 end
 
-defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event.AccountEventMap do
+defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.AccountEventMap do
   import DoubleEntryLedger.Utils.Changeset
-  alias DoubleEntryLedger.Event.AccountEventMap
+  alias DoubleEntryLedger.Command.AccountEventMap
 
   @spec metadata(AccountEventMap.t()) :: map()
   def metadata(%AccountEventMap{} = event_map) do
@@ -106,9 +106,9 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event.AccountE
   end
 end
 
-defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Event.TransactionEventMap do
+defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.TransactionEventMap do
   import DoubleEntryLedger.Utils.Changeset
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionEventMap
 
   @spec metadata(TransactionEventMap.t()) :: map()
   def metadata(%TransactionEventMap{} = event_map) do

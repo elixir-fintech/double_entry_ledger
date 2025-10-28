@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Apis.EventApi
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionEventMap
 
   @type entry_map() :: %{
           account_address: String.t(),
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, transaction} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
       iex> transaction.status
       :posted
-      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}} = changeset} = TransactionStore.create(instance.address, create_attrs , "unique_id_123")
+      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}} = changeset} = TransactionStore.create(instance.address, create_attrs , "unique_id_123")
       iex> {idempotent_error, _} = Keyword.get(changeset.errors, :key_hash)
       iex> idempotent_error
       "idempotency violation"
@@ -149,7 +149,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
     - `update_idempk` (String.t()): A unique identifier to ensure idempotency of the update request.
     - `opts` (Keyword.t(), optional): A string indicating the source of the creation request.
       - `:update_source` Defaults to `"TransactionStore.update/4", use if the source of the change is different from the initial source when creating the event
-      - `:retry_on_error` defaults to true. If true, event will be saved in the EventQueue for retry after a processing error. Otherwise Event is not stored at all.
+      - `:retry_on_error` defaults to true. If true, event will be saved in the EventQueue for retry after a processing error. Otherwise Command is not stored at all.
 
   ## Returns
 
@@ -174,7 +174,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> update_attrs = %{status: :posted}
       iex> {:ok, posted} = TransactionStore.update(instance.address, pending.id, update_attrs, "unique_id_456")
       iex> posted.status == :posted && posted.id == pending.id
-      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}} = changeset} = TransactionStore.update(instance.address, pending.id, update_attrs , "unique_id_456")
+      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}} = changeset} = TransactionStore.update(instance.address, pending.id, update_attrs , "unique_id_456")
       iex> {idempotent_error, _} = Keyword.get(changeset.errors, :key_hash)
       iex> idempotent_error
       "idempotency violation"

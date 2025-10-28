@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
           Ecto.Multi.new()
           |> Ecto.Multi.update(
             :event_failure,
-            Event.changeset(event, %{status: :failed, errors: [inspect(error)]})
+            Command.changeset(event, %{status: :failed, errors: [inspect(error)]})
           )
         end
 
@@ -45,7 +45,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
           Ecto.Multi.new()
           |> Ecto.Multi.update(
             :event_dead_letter,
-            Event.changeset(event, %{status: :dead_letter})
+            Command.changeset(event, %{status: :dead_letter})
           )
         end
       end
@@ -53,8 +53,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
   """
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Event, Transaction}
-  alias DoubleEntryLedger.Event.ErrorMap
+  alias DoubleEntryLedger.{Command, Transaction}
+  alias DoubleEntryLedger.Command.ErrorMap
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
   alias DoubleEntryLedger.Occ.Occable
 
@@ -69,13 +69,13 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   The Multi must include specific named steps depending on the input type:
 
-    * `:create_event` (required for TransactionEventMap) - Must return the created Event struct when processing the TransactionEventMap
+    * `:create_event` (required for TransactionEventMap) - Must return the created Command struct when processing the TransactionEventMap
     * `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
-    * `:event` (required) - Must return the saved Event struct when processing the Event
+    * `:event` (required) - Must return the saved Command struct when processing the Command
 
   ## Parameters
 
-    - `occable_item`: An Event struct or TransactionEventMap containing the event details to process
+    - `occable_item`: An Command struct or TransactionEventMap containing the event details to process
     - `transaction_map`: A map of transaction data derived from the event
     - `repo`: The Ecto repository to use for database operations
 
@@ -159,12 +159,12 @@ defmodule DoubleEntryLedger.Occ.Processor do
   This callback has a default implementation through the __using__ macro.
   """
   @callback process_with_retry(Occable.t(), Ecto.Repo.t()) ::
-              {:ok, %{transaction: Transaction.t(), event_success: Event.t()}}
-              | {:ok, %{event_failure: Event.t()}}
+              {:ok, %{transaction: Transaction.t(), event_success: Command.t()}}
+              | {:ok, %{event_failure: Command.t()}}
               | Ecto.Multi.failure()
 
   @callback process_with_retry_no_save_on_error(Occable.t(), Ecto.Repo.t()) ::
-              {:ok, %{transaction: Transaction.t(), event_success: Event.t()}}
+              {:ok, %{transaction: Transaction.t(), event_success: Command.t()}}
               | Ecto.Multi.failure()
 
   # --- Use Macro for Default Implementations ---
@@ -199,8 +199,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       ## Returns
 
-        - `{:ok, %{transaction: Transaction.t(), event_success: Event.t()}}` on success
-        - `{:ok, %{event_failure: Event.t()}}` on failure
+        - `{:ok, %{transaction: Transaction.t(), event_success: Command.t()}}` on success
+        - `{:ok, %{event_failure: Command.t()}}` on failure
         - `Ecto.Multi.failure()` on unrecoverable error
       """
       def process_with_retry(
@@ -251,7 +251,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       ## Parameters
 
         - `module` - the processor module implementing the callbacks
-        - `occable_item` - the Event or TransactionEventMap being processed
+        - `occable_item` - the Command or TransactionEventMap being processed
         - `repo` - the Ecto repo to use for DB ops
 
       ## Returns
@@ -287,13 +287,13 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       ## Returns
 
-        - `{:ok, %{transaction: Transaction.t(), event_success: Event.t()}}`
-        - `{:ok, %{event_failure: Event.t()}}`
+        - `{:ok, %{transaction: Transaction.t(), event_success: Command.t()}}`
+        - `{:ok, %{event_failure: Command.t()}}`
         - `Ecto.Multi.failure()`
       """
       @spec retry(module(), Occable.t(), ErrorMap.t(), non_neg_integer(), Ecto.Repo.t()) ::
-              {:ok, %{transaction: Transaction.t(), event_success: Event.t()}}
-              | {:ok, %{event_failure: Event.t()}}
+              {:ok, %{transaction: Transaction.t(), event_success: Command.t()}}
+              | {:ok, %{event_failure: Command.t()}}
               | Ecto.Multi.failure()
       def retry(module, occable_item, error_map, attempts, repo)
           when attempts > 0 do

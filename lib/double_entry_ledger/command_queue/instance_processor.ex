@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   use GenServer
   require Logger
 
-  alias DoubleEntryLedger.{Repo, Event}
+  alias DoubleEntryLedger.{Repo, Command}
   alias DoubleEntryLedger.Workers.CommandWorker
   import Ecto.Query
 
@@ -109,7 +109,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         # Note: the error is already recorded in the event by CommandWorker.process_event_with_id
     end
 
-    # Event processing completed, check for more events
+    # Command processing completed, check for more events
     new_state = %{state | processing: false}
     send(self(), :process_next)
     {:noreply, new_state}
@@ -119,7 +119,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     now = DateTime.utc_now()
 
     # Find an event for this instance that's ready to be processed
-    from(e in Event,
+    from(e in Command,
       join: eqi in assoc(e, :event_queue_item),
       prefix: ^@schema_prefix,
       where:

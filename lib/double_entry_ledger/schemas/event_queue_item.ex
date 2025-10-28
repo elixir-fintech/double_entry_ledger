@@ -7,9 +7,9 @@ defmodule DoubleEntryLedger.EventQueueItem do
   use DoubleEntryLedger.BaseSchema
   import Ecto.Changeset
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
-  alias DoubleEntryLedger.Event.ErrorMap
-  alias DoubleEntryLedger.Event
-  import DoubleEntryLedger.Event.ErrorMap, only: [build_error: 1]
+  alias DoubleEntryLedger.Command.ErrorMap
+  alias DoubleEntryLedger.Command
+  import DoubleEntryLedger.Command.ErrorMap, only: [build_error: 1]
 
   alias __MODULE__, as: EventQueueItem
 
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.EventQueueItem do
 
     timestamps(type: :utc_datetime_usec)
 
-    belongs_to(:event, Event, type: Ecto.UUID)
+    belongs_to(:event, Command, type: Ecto.UUID)
   end
 
   @doc false

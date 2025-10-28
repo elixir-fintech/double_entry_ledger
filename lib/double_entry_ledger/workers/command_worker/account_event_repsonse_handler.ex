@@ -2,7 +2,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler do
   @moduledoc """
   Response handler for account-related event processing operations.
 
-  This module provides standardized response handling for Event processing
+  This module provides standardized response handling for Command processing
   operations, including success and error scenarios. It handles the translation of
   database transaction results into appropriate response formats and performs
   comprehensive logging for audit and debugging purposes.
@@ -15,13 +15,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler do
 
   ## Usage
 
-  This module is typically used by CommandWorker modules that process Event
+  This module is typically used by CommandWorker modules that process Command
   structures, providing a consistent interface for handling transaction results.
 
   ## Error Handling
 
   The module handles several types of errors:
-  - Event validation errors (mapped to event-level changeset errors)
+  - Command validation errors (mapped to event-level changeset errors)
   - Account validation errors (mapped to payload-level changeset errors)
   - Multi step failures (logged and returned as string errors)
   """
@@ -35,17 +35,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler do
     ]
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.{Event, Account}
+  alias DoubleEntryLedger.{Command, Account}
 
   @typedoc """
   Success response tuple containing the processed account and associated event.
   """
-  @type success_tuple :: {:ok, Account.t(), Event.t()}
+  @type success_tuple :: {:ok, Account.t(), Command.t()}
 
   @typedoc """
   Error response containing either a changeset with validation errors or a string error message.
   """
-  @type error_response :: {:error, Event.t() | Changeset.t(Event.t())}
+  @type error_response :: {:error, Command.t() | Changeset.t(Command.t())}
 
   @typedoc """
   Complete response type for event processing operations.
@@ -56,12 +56,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler do
   Handles responses from account event processing operations.
   """
   @spec default_response_handler(
-          {:ok, %{account: Account.t(), event_success: Event.t()}}
+          {:ok, %{account: Account.t(), event_success: Command.t()}}
           | {:error, :atom, any(), map()},
-          Event.t()
+          Command.t()
         ) ::
           response()
-  def default_response_handler(response, %Event{} = event) do
+  def default_response_handler(response, %Command{} = event) do
     case response do
       {:ok, %{account: account, event_success: event}} ->
         info("Processed successfully", event, account)

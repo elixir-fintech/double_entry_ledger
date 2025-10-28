@@ -1,13 +1,13 @@
-defmodule DoubleEntryLedger.Event.TransactionEventMapTest do
+defmodule DoubleEntryLedger.Command.TransactionEventMapTest do
   @moduledoc """
   Tests for the TransactionEventMap payload
   """
   use ExUnit.Case
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionEventMap
   alias Ecto.Changeset
   doctest TransactionEventMap
 
-  describe "Event.TransactionEventMap" do
+  describe "Command.TransactionEventMap" do
     test "changeset not valid for empty data" do
       assert %Changeset{valid?: false} =
                TransactionEventMap.changeset(%TransactionEventMap{}, %{})

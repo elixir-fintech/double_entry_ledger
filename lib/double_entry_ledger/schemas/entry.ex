@@ -1,7 +1,7 @@
 defmodule DoubleEntryLedger.Entry do
   @moduledoc """
   Defines and manages individual financial entries in the Double Entry Ledger system.
-  Entries should always be created or updated through an Event to ensure proper handling
+  Entries should always be created or updated through an Command to ensure proper handling
   of balance updates and history creation.
 
   This module represents the fundamental building blocks of transactions in double-entry accounting,

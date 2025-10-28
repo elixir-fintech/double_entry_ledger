@@ -1,8 +1,8 @@
-defmodule DoubleEntryLedger.Event do
+defmodule DoubleEntryLedger.Command do
   @moduledoc """
   Defines and manages events in the Double Entry Ledger system.
 
-  This module provides the Event schema, which represents a request to create or update a
+  This module provides the Command schema, which represents a request to create or update a
   transaction in the ledger. Events serve as an audit trail and queue mechanism for transaction
   processing, allowing for asynchronous handling, retries, and idempotency.
   """
@@ -18,10 +18,10 @@ defmodule DoubleEntryLedger.Event do
     EventQueueItem
   }
 
-  alias DoubleEntryLedger.Event.EventMap
-  import DoubleEntryLedger.Event.Helper, only: [action_to_mod: 1]
+  alias DoubleEntryLedger.Command.EventMap
+  import DoubleEntryLedger.Command.Helper, only: [action_to_mod: 1]
 
-  alias __MODULE__, as: Event
+  alias __MODULE__, as: Command
 
   @typedoc """
   Represents an event in the Double Entry Ledger system.
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.Event do
   * `inserted_at`: Creation timestamp
   * `updated_at`: Last update timestamp
   """
-  @type t :: %Event{
+  @type t :: %Command{
           id: Ecto.UUID.t() | nil,
           event_map: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
@@ -58,24 +58,24 @@ defmodule DoubleEntryLedger.Event do
     field(:event_map, EventMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    has_many(:event_transaction_links, EventTransactionLink)
-    many_to_many(:transactions, Transaction, join_through: EventTransactionLink)
-    has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem)
-    has_one(:event_account_link, DoubleEntryLedger.EventAccountLink)
+    has_many(:event_transaction_links, EventTransactionLink, foreign_key: :event_id)
+    many_to_many(:transactions, Transaction, join_through: EventTransactionLink, join_keys: [event_id: :id, transaction_id: :id])
+    has_one(:event_queue_item, DoubleEntryLedger.EventQueueItem, foreign_key: :event_id)
+    has_one(:event_account_link, DoubleEntryLedger.EventAccountLink, foreign_key: :event_id)
     has_one(:account, through: [:event_account_link, :account])
 
     timestamps(type: :utc_datetime_usec)
   end
 
   @doc """
-  Creates a changeset for validating and creating/updating an Event.
+  Creates a changeset for validating and creating/updating an Command.
 
   This function builds an Ecto changeset for an event with appropriate validations
   and handling based on the action type and transaction data provided.
 
   ## Parameters
 
-  * `event` - The Event struct to create a changeset for
+  * `event` - The Command struct to create a changeset for
   * `attrs` - Map of attributes to apply to the event
 
   ## Returns
@@ -96,7 +96,7 @@ defmodule DoubleEntryLedger.Event do
       ...>   ]}
       ...> }
       ...> attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
-      iex> changeset = Event.changeset(%Event{}, attrs)
+      iex> changeset = Command.changeset(%Command{}, attrs)
       iex> changeset.valid?
       true
 
@@ -109,7 +109,7 @@ defmodule DoubleEntryLedger.Event do
       ...>   payload: %{type: :wrong, address: "wrong format"}
       ...> }
       ...> attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
-      iex> changeset = Event.changeset(%Event{}, attrs)
+      iex> changeset = Command.changeset(%Command{}, attrs)
       iex> changeset.valid?
       false
       iex> Map.has_key?(changeset, :event_map_changeset)
@@ -117,7 +117,7 @@ defmodule DoubleEntryLedger.Event do
       iex> changeset.event_map_changeset.valid?
       false
   """
-  @spec changeset(Event.t(), map()) :: Ecto.Changeset.t()
+  @spec changeset(Command.t(), map()) :: Ecto.Changeset.t()
   def changeset(event, attrs) do
     event
     |> base_changeset(attrs)
@@ -131,7 +131,7 @@ defmodule DoubleEntryLedger.Event do
 
   ## Parameters
 
-  * `event` - The Event struct to update
+  * `event` - The Command struct to update
   * `processor_id` - String identifier for the processor handling the event
 
   ## Returns
@@ -149,7 +149,7 @@ defmodule DoubleEntryLedger.Event do
   * `processor_version`: Used for optimistic locking
 
   """
-  @spec processing_start_changeset(Event.t(), String.t(), non_neg_integer()) :: Ecto.Changeset.t()
+  @spec processing_start_changeset(Command.t(), String.t(), non_neg_integer()) :: Ecto.Changeset.t()
   def processing_start_changeset(
         %{event_queue_item: event_queue_item} = event,
         processor_id,
@@ -164,7 +164,7 @@ defmodule DoubleEntryLedger.Event do
     |> put_assoc(:event_queue_item, event_queue_changeset)
   end
 
-  @spec base_changeset(Event.t() | Ecto.Changeset.t(Event.t()), map()) :: Ecto.Changeset.t()
+  @spec base_changeset(Command.t() | Ecto.Changeset.t(Command.t()), map()) :: Ecto.Changeset.t()
   defp base_changeset(event, attrs) do
     attrs = Map.put_new(attrs, :event_queue_item, %{})
 

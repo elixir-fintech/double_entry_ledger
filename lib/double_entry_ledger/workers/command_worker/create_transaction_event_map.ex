@@ -27,8 +27,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
   use DoubleEntryLedger.Occ.Processor
   use DoubleEntryLedger.Logger
 
-  alias DoubleEntryLedger.{Event, Repo, JournalEvent}
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.{Command, Repo, JournalEvent}
+  alias DoubleEntryLedger.Command.TransactionEventMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper, TransactionStoreHelper}

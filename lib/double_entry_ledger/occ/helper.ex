@@ -47,13 +47,13 @@ defmodule DoubleEntryLedger.Occ.Helper do
   responsiveness for quick resolutions.
   """
 
-  import DoubleEntryLedger.Event.ErrorMap
-  alias DoubleEntryLedger.Event.ErrorMap
-  alias DoubleEntryLedger.{Event, EventQueueItem}
+  import DoubleEntryLedger.Command.ErrorMap
+  alias DoubleEntryLedger.Command.ErrorMap
+  alias DoubleEntryLedger.{Command, EventQueueItem}
   alias Ecto.Changeset
   import Ecto.Changeset, only: [put_assoc: 3, change: 2]
 
-  defdelegate create_error_map(event), to: DoubleEntryLedger.Event.ErrorMap
+  defdelegate create_error_map(event), to: DoubleEntryLedger.Command.ErrorMap
 
   @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
   @retry_interval Application.compile_env(:double_entry_ledger, :retry_interval, 200)
@@ -137,7 +137,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
 
   ## Examples
 
-      iex> error_map = %DoubleEntryLedger.Event.ErrorMap{errors: [], retries: 0, steps_so_far: %{}}
+      iex> error_map = %DoubleEntryLedger.Command.ErrorMap{errors: [], retries: 0, steps_so_far: %{}}
       iex> updated_error_map = DoubleEntryLedger.Occ.Helper.update_error_map(error_map, 3, %{step: "processing"})
       iex> updated_error_map.retries
       1
@@ -166,7 +166,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
 
   ## Parameters
 
-    - `event` (`Event.t()`): The event to update
+    - `event` (`Command.t()`): The event to update
     - `%{errors: errors, retries: retries}`: An error map containing:
       - `errors`: List of error messages accumulated during retry attempts
       - `retries`: Number of retry attempts made
@@ -176,7 +176,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
     - `Ecto.Changeset.t()`: A changeset ready to update the event with timeout information
 
   """
-  @spec occ_timeout_changeset(Event.t(), ErrorMap.t()) ::
+  @spec occ_timeout_changeset(Command.t(), ErrorMap.t()) ::
           Changeset.t()
   def occ_timeout_changeset(
         %{event_queue_item: event_queue_item} = event,

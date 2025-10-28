@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
   import Mox
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Event.{TransactionEventMap, TransactionData, EntryData}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, TransactionData, EntryData}
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap
-  alias DoubleEntryLedger.Event
+  alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Stores.EventStore
 
   doctest CreateTransactionEventMap
@@ -105,13 +105,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Event{id: id, event_queue_item: %{status: :occ_timeout}}} =
+      assert {:error, %Command{id: id, event_queue_item: %{status: :occ_timeout}}} =
                CreateTransactionEventMap.process(
                  create_transaction_event_map(ctx),
                  DoubleEntryLedger.MockRepo
                )
 
-      assert %Event{
+      assert %Command{
                event_queue_item: %{status: :occ_timeout, occ_retry_count: 5, errors: errors},
                transactions: []
              } =

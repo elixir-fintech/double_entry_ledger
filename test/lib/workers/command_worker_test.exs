@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
   This module tests the CommandWorker.
   """
   use ExUnit.Case
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionEventMap
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures

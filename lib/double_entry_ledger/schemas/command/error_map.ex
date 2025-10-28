@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.ErrorMap do
+defmodule DoubleEntryLedger.Command.ErrorMap do
   @moduledoc """
   Provides error tracking and management for event processing in the Double Entry Ledger system.
 
@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
 
   * `build_error/1`: Creates a standardized error entry from various input types
   * `build_errors/2`: Adds a new error to an existing error list
-  * `create_error_map/1`: Initializes an ErrorMap from an Event or TransactionEventMap
+  * `create_error_map/1`: Initializes an ErrorMap from an Command or TransactionEventMap
 
   ## Usage Examples
 
@@ -41,8 +41,8 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
             retries: 0,
             save_on_error: false
 
-  alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.Event.TransactionEventMap
+  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.Command.TransactionEventMap
   alias __MODULE__, as: ErrorMap
 
   @typedoc """
@@ -94,7 +94,7 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.ErrorMap
+      iex> alias DoubleEntryLedger.Command.ErrorMap
       iex> errors = []
       iex> updated_errors = ErrorMap.build_errors(errors, "Transaction failed")
       iex> length(updated_errors)
@@ -119,12 +119,12 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.ErrorMap
+      iex> alias DoubleEntryLedger.Command.ErrorMap
       iex> error = ErrorMap.build_error("Invalid amount")
       iex> is_map(error) and is_binary(error.message)
       true
 
-      iex> alias DoubleEntryLedger.Event.ErrorMap
+      iex> alias DoubleEntryLedger.Command.ErrorMap
       iex> error = ErrorMap.build_error(%{reason: :not_found})
       iex> String.contains?(error.message, "not_found")
       true
@@ -148,30 +148,30 @@ defmodule DoubleEntryLedger.Event.ErrorMap do
   end
 
   @doc """
-  Initializes an ErrorMap from an Event or TransactionEventMap.
+  Initializes an ErrorMap from an Command or TransactionEventMap.
 
   Creates a new ErrorMap structure, preserving any existing errors from the
   event while initializing other tracking fields.
 
   ## Parameters
-    - `event`: Event or TransactionEventMap to initialize from
+    - `event`: Command or TransactionEventMap to initialize from
 
   ## Returns
     - A new ErrorMap struct with initialized fields
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Event.ErrorMap
-      iex> alias DoubleEntryLedger.Event
-      iex> event = %Event{event_queue_item: %{errors: [%{message: "Previous error", inserted_at: ~U[2023-01-01 00:00:00Z]}]}}
+      iex> alias DoubleEntryLedger.Command.ErrorMap
+      iex> alias DoubleEntryLedger.Command
+      iex> event = %Command{event_queue_item: %{errors: [%{message: "Previous error", inserted_at: ~U[2023-01-01 00:00:00Z]}]}}
       iex> error_map = ErrorMap.create_error_map(event)
       iex> error_map.retries
       0
       iex> length(error_map.errors)
       1
   """
-  @spec create_error_map(Event.t() | TransactionEventMap.t()) :: t()
-  def create_error_map(%Event{event_queue_item: event_queue_item}) do
+  @spec create_error_map(Command.t() | TransactionEventMap.t()) :: t()
+  def create_error_map(%Command{event_queue_item: event_queue_item}) do
     %ErrorMap{
       errors: Map.get(event_queue_item, :errors, []),
       steps_so_far: %{},

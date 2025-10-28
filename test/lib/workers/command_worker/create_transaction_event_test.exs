@@ -11,8 +11,8 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.Event
-  alias DoubleEntryLedger.Event.TransactionData
+  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.Command.TransactionData
   alias DoubleEntryLedger.Stores.EventStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
 
@@ -54,7 +54,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
           )
         )
 
-      assert {:error, %Event{event_queue_item: eqm}} = CreateTransactionEvent.process(event)
+      assert {:error, %Command{event_queue_item: eqm}} = CreateTransactionEvent.process(event)
       assert eqm.status == :dead_letter
     end
 
@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
         Repo.transaction(multi)
       end)
 
-      assert {:error, %Event{event_queue_item: eqm}} =
+      assert {:error, %Command{event_queue_item: eqm}} =
                CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
 
       assert eqm.status == :dead_letter

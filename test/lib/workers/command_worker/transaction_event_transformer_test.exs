@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
-  alias DoubleEntryLedger.Event.{EntryData, TransactionData}
+  alias DoubleEntryLedger.Command.{EntryData, TransactionData}
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 

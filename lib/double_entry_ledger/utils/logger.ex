@@ -4,49 +4,49 @@ defmodule DoubleEntryLedger.Logger do
   """
   defmacro __using__(_opts) do
     quote do
-      alias DoubleEntryLedger.Event
-      alias DoubleEntryLedger.Event.{AccountEventMap, TransactionEventMap}
+      alias DoubleEntryLedger.Command
+      alias DoubleEntryLedger.Command.{AccountMap, TransactionMap}
       require Logger
 
       import DoubleEntryLedger.Utils.Traceable
       import DoubleEntryLedger.Utils.Changeset
 
-      @type logable() :: Event.t() | AccountEventMap.t() | TransactionEventMap.t() | map()
+      @type logable() :: Command.t() | AccountMap.t() | TransactionMap.t() | map()
 
       @module_name __MODULE__ |> Module.split() |> List.last()
 
       @spec info(String.t(), logable(), any()) :: {:ok, String.t()}
-      def info(message, event, schema) do
+      def info(message, logable, schema) do
         message = "#{@module_name}: #{message}"
-        {Logger.info(message, metadata(event, schema)), message}
+        {Logger.info(message, metadata(logable, schema)), message}
       end
 
       @spec warn(String.t(), logable()) :: {:ok, String.t()}
-      def warn(message, event) do
+      def warn(message, logable) do
         message = "#{@module_name}: #{message}"
-        {Logger.warning(message, metadata(event)), message}
+        {Logger.warning(message, metadata(logable)), message}
       end
 
       @spec warn(String.t(), logable(), any()) :: {:ok, String.t()}
-      def warn(message, event, %Ecto.Changeset{} = changeset) do
+      def warn(message, logable, %Ecto.Changeset{} = changeset) do
         message = "#{@module_name}: #{message} #{all_errors(changeset)}"
-        {Logger.warning(message, changeset_metadata(event, changeset)), message}
+        {Logger.warning(message, changeset_metadata(logable, changeset)), message}
       end
 
-      def warn(message, event, schema) do
+      def warn(message, logable, schema) do
         message = "#{@module_name}: #{message}"
-        {Logger.warning(message, metadata(event, schema)), message}
+        {Logger.warning(message, metadata(logable, schema)), message}
       end
 
       @spec error(String.t(), logable(), any()) :: {:ok, String.t()}
-      def error(message, event, %Ecto.Changeset{} = changeset) do
+      def error(message, logable, %Ecto.Changeset{} = changeset) do
         message = "#{@module_name}: #{message} #{all_errors(changeset)}"
-        {Logger.error(message, changeset_metadata(event, changeset)), message}
+        {Logger.error(message, changeset_metadata(logable, changeset)), message}
       end
 
-      def error(message, event, schema) do
+      def error(message, logable, schema) do
         message = "#{@module_name}: #{message}"
-        {Logger.error(message, metadata(event, schema)), message}
+        {Logger.error(message, metadata(logable, schema)), message}
       end
     end
   end

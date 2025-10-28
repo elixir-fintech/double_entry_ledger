@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
-      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}}}
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}}}
 
       # Map transaction validation errors to an event map changeset
       iex> default_response_handler(
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
-      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Event.TransactionEventMap{}}}
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}}}
   """
   require Logger
 
@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
 
   import DoubleEntryLedger.CommandQueue.Scheduling, only: [build_schedule_retry_with_reason: 3]
 
-  import DoubleEntryLedger.Event.TransferErrors,
+  import DoubleEntryLedger.Command.TransferErrors,
     only: [
       from_event_to_event_map: 2,
       from_transaction_to_event_map_payload: 2,
@@ -44,9 +44,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
 
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Occ.Occable
-  alias DoubleEntryLedger.Event.{TransactionEventMap, IdempotencyKey}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, IdempotencyKey}
 
-  alias DoubleEntryLedger.{Event, Transaction}
+  alias DoubleEntryLedger.{Command, Transaction}
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @doc """
@@ -84,8 +84,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
 
         {:error, changeset}
 
-      {:error, :new_event, %Changeset{data: %Event{}} = event_changeset, _steps_so_far} ->
-        warn("Event changeset failed", event_map, event_changeset)
+      {:error, :new_event, %Changeset{data: %Command{}} = event_changeset, _steps_so_far} ->
+        warn("Command changeset failed", event_map, event_changeset)
 
         {:error, from_event_to_event_map(event_map, event_changeset)}
 

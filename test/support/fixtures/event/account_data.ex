@@ -1,8 +1,8 @@
-defmodule DoubleEntryLedger.Event.AccountDataFixtures do
+defmodule DoubleEntryLedger.Command.AccountDataFixtures do
   @moduledoc """
   AccountData fixtures
   """
-  alias DoubleEntryLedger.Event.AccountData
+  alias DoubleEntryLedger.Command.AccountData
 
   def account_data_params(attrs \\ %{}) do
     attrs

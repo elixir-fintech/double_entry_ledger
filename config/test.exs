@@ -17,7 +17,7 @@ config :double_entry_ledger, Oban, testing: :inline
 
 config :logger,
   backends: [:console],
-  level: :info
+  level: :debug
 
 config :logger, :console,
   format: "$time $message $metadata[$level]\n",

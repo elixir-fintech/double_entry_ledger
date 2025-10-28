@@ -1,19 +1,19 @@
-defmodule DoubleEntryLedger.Event.TransferErrorsTest do
+defmodule DoubleEntryLedger.Command.TransferErrorsTest do
   @moduledoc """
   Tests for TransferErrors
   """
   use ExUnit.Case, async: true
 
-  alias DoubleEntryLedger.Event.TransferErrors
+  alias DoubleEntryLedger.Command.TransferErrors
 
-  alias DoubleEntryLedger.Event.{
+  alias DoubleEntryLedger.Command.{
     AccountEventMap,
     AccountData,
     TransactionEventMap,
     TransactionData
   }
 
-  alias DoubleEntryLedger.{Event, Account, Transaction}
+  alias DoubleEntryLedger.{Command, Account, Transaction}
 
   doctest TransferErrors
 
@@ -95,7 +95,7 @@ defmodule DoubleEntryLedger.Event.TransferErrorsTest do
         source: {"can't be blank", [validation: :required]}
       ]
 
-      event_changeset = Event.changeset(%Event{}, %{})
+      event_changeset = Command.changeset(%Command{}, %{})
 
       %{data: %AccountEventMap{}, errors: errors} =
         TransferErrors.from_event_to_event_map(%AccountEventMap{}, event_changeset)

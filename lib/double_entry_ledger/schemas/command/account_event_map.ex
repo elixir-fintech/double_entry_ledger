@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Event.AccountEventMap do
+defmodule DoubleEntryLedger.Command.AccountEventMap do
   @moduledoc """
   EventMap implementation for account-related operations in the Double Entry Ledger system.
 
@@ -80,14 +80,14 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       validate_inclusion: 3
     ]
 
-  import DoubleEntryLedger.Event.Helper,
+  import DoubleEntryLedger.Command.Helper,
     only: [
       fetch_action: 1,
       source_regex: 0,
       address_regex: 0
     ]
 
-  alias DoubleEntryLedger.Event.AccountData
+  alias DoubleEntryLedger.Command.AccountData
   alias Ecto.Changeset
 
   alias __MODULE__, as: AccountEventMap
@@ -184,7 +184,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>     currency: "USD"
       ...>   }
       ...> }
-      iex> {:ok, event_map} = DoubleEntryLedger.Event.AccountEventMap.create(attrs)
+      iex> {:ok, event_map} = DoubleEntryLedger.Command.AccountEventMap.create(attrs)
       iex> event_map.action
       :create_account
       iex> event_map.payload.name
@@ -194,7 +194,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
 
       # Invalid action
       iex> attrs = %{action: :invalid_action, source: "test"}
-      iex> {:error, changeset} = DoubleEntryLedger.Event.AccountEventMap.create(attrs)
+      iex> {:error, changeset} = DoubleEntryLedger.Command.AccountEventMap.create(attrs)
       iex> changeset.valid?
       false
       iex> changeset.errors[:action]
@@ -239,7 +239,7 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>   source: "test",
       ...>   payload: %{name: "Test", address: "account:main", type: :asset, currency: "USD"}
       ...> }
-      iex> changeset = DoubleEntryLedger.Event.AccountEventMap.changeset(%DoubleEntryLedger.Event.AccountEventMap{}, attrs)
+      iex> changeset = DoubleEntryLedger.Command.AccountEventMap.changeset(%DoubleEntryLedger.Command.AccountEventMap{}, attrs)
       iex> changeset.valid?
       true
 
@@ -250,12 +250,12 @@ defmodule DoubleEntryLedger.Event.AccountEventMap do
       ...>   account_address: "account:test",
       ...>   payload: %{description: "Updated Test Account"}
       ...> }
-      iex> changeset = DoubleEntryLedger.Event.AccountEventMap.changeset(%DoubleEntryLedger.Event.AccountEventMap{}, update_attrs)
+      iex> changeset = DoubleEntryLedger.Command.AccountEventMap.changeset(%DoubleEntryLedger.Command.AccountEventMap{}, update_attrs)
       iex> changeset.valid?
       true
 
       iex> invalid_attrs = %{action: :delete_account, source: "test"}
-      iex> changeset = DoubleEntryLedger.Event.AccountEventMap.changeset(%DoubleEntryLedger.Event.AccountEventMap{}, invalid_attrs)
+      iex> changeset = DoubleEntryLedger.Command.AccountEventMap.changeset(%DoubleEntryLedger.Command.AccountEventMap{}, invalid_attrs)
       iex> changeset.valid?
       false
       iex> Keyword.has_key?(changeset.errors, :action)
