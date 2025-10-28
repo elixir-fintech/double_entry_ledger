@@ -126,9 +126,6 @@ defmodule DoubleEntryLedger.Apis.EventApi do
 
   ### Examples
 
-    iex> alias DoubleEntryLedger.Repo
-    iex> alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore}
-    iex> alias DoubleEntryLedger.Apis.EventApi
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
@@ -150,11 +147,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> trx.id == transaction.id
     true
 
-    iex> alias DoubleEntryLedger.Repo
-    iex> alias DoubleEntryLedger.Stores.InstanceStore
-    iex> alias DoubleEntryLedger.Apis.EventApi
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> {:ok, account, event} = EventApi.process_from_params(%{
+    iex> {:ok, _account, _event} = EventApi.process_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_account",
     ...>   "source" => "frontend",
@@ -165,8 +159,6 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     ...>     currency: :EUR
     ...>   }
     ...> }, [on_error: :fail])
-    iex> (event |> Repo.preload(:account)).account.id == account.id
-    true
 
     iex> alias DoubleEntryLedger.Apis.EventApi
     iex> EventApi.process_from_params(%{"action" => "unsupported"})

@@ -12,9 +12,7 @@ defmodule DoubleEntryLedger.Command do
   alias DoubleEntryLedger.{
     Transaction,
     Instance,
-    Account,
     EventTransactionLink,
-    EventAccountLink,
     CommandQueueItem
   }
 
@@ -45,8 +43,6 @@ defmodule DoubleEntryLedger.Command do
           instance_id: Ecto.UUID.t() | nil,
           event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
           transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
-          event_account_link: EventAccountLink.t() | Ecto.Association.NotLoaded.t(),
-          account: Account.t() | Ecto.Association.NotLoaded.t(),
           command_queue_item: CommandQueueItem.t() | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
@@ -61,8 +57,6 @@ defmodule DoubleEntryLedger.Command do
     has_many(:event_transaction_links, EventTransactionLink, foreign_key: :event_id)
     many_to_many(:transactions, Transaction, join_through: EventTransactionLink, join_keys: [event_id: :id, transaction_id: :id])
     has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)
-    has_one(:event_account_link, DoubleEntryLedger.EventAccountLink, foreign_key: :event_id)
-    has_one(:account, through: [:event_account_link, :account])
 
     timestamps(type: :utc_datetime_usec)
   end

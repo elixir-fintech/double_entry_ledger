@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreHelper do
           fragment("event_map->>? = ?", "source", ^source) and
           fragment("event_map->>? = ?", "source_idempk", ^source_idempk),
       limit: 1,
-      preload: [:command_queue_item, :account, transactions: [entries: :account]]
+      preload: [:command_queue_item, transactions: [entries: :account]]
     )
     |> Repo.one()
   end

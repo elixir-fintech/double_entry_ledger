@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   def get_by_id(id) do
     Command
     |> where(id: ^id)
-    |> preload([:command_queue_item, :transactions, :account])
+    |> preload([:command_queue_item, :transactions])
     |> Repo.one()
   end
 
@@ -171,7 +171,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
       select: e
     )
     |> paginate(page, per_page)
-    |> preload([:command_queue_item, :transactions, :account])
+    |> preload([:command_queue_item, :transactions])
     |> Repo.all()
   end
 
