@@ -11,9 +11,9 @@ defmodule DoubleEntryLedger.PendingTransactionLookup do
 
   @primary_key false
   schema "pending_transaction_lookup" do
-    field :source, :string, primary_key: true
-    field :source_idempk, :string, primary_key: true
-    field :instance_id, :string, primary_key: true
+    field(:source, :string, primary_key: true)
+    field(:source_idempk, :string, primary_key: true)
+    field(:instance_id, :string, primary_key: true)
 
     belongs_to(:command, Command, source: :create_command_id)
     belongs_to(:transaction, Transaction)
@@ -23,11 +23,12 @@ defmodule DoubleEntryLedger.PendingTransactionLookup do
   end
 
   @req ~w(source source_idempk instance_id)a
-  @optional ~w(create_command_id transaction_id journal_event_id)a
+  @optional ~w(command_id transaction_id journal_event_id)a
 
   def upsert_changeset(struct, attrs) do
     struct
     |> cast(attrs, @req ++ @optional)
     |> validate_required(@req)
+    |> unique_constraint(@req, name: "pending_transaction_lookup_pkey")
   end
 end

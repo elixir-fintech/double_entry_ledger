@@ -19,7 +19,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
     setup [:create_instance]
 
     test "successfully processes a valid create_account event", %{instance: instance} do
-      {:ok, event} = CommandStore.create(account_event_attrs(%{instance_address: instance.address}))
+      {:ok, event} =
+        CommandStore.create(account_event_attrs(%{instance_address: instance.address}))
 
       assert {:ok, %Account{} = account, %Command{command_queue_item: eqi} = e} =
                CreateAccountEvent.process(preload(event))

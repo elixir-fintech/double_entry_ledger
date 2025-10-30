@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   import DoubleEntryLedger.Utils.Pagination
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Command}
+  alias DoubleEntryLedger.{Repo, Command, PendingTransactionLookup}
   alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
@@ -139,6 +139,42 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   """
   @spec create(TransactionEventMap.t() | AccountEventMap.t()) ::
           {:ok, Command.t()} | {:error, Ecto.Changeset.t(Command.t()) | :instance_not_found}
+  def create(
+        %TransactionEventMap{action: :create_transaction, payload: %{status: :pending}} = attrs
+      ) do
+    case Multi.new()
+         |> Multi.one(
+           :instance,
+           InstanceStoreHelper.build_get_id_by_address(attrs.instance_address)
+         )
+         |> Multi.insert(:command, fn %{instance: id} ->
+           build_create(attrs, id)
+         end)
+         |> Multi.insert(:pending_transaction_lookup, fn %{
+                                                           command: %{id: cid, event_map: em},
+                                                           instance: iid
+                                                         } ->
+           attrs = %{
+             command_id: cid,
+             source: em.source,
+             source_idempk: em.source_idempk,
+             instance_id: iid
+           }
+
+           PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
+         end)
+         |> Repo.transaction() do
+      {:ok, %{command: event}} ->
+        {:ok, event}
+
+      {:error, :pending_transaction_lookup, _, _} ->
+        {:error, :pending_transaction_idempotency_violation}
+
+      {:error, :command, changeset, _changes} ->
+        {:error, changeset}
+    end
+  end
+
   def create(%{instance_address: address} = attrs) do
     case Multi.new()
          |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))

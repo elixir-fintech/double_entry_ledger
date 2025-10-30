@@ -41,6 +41,14 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
       assert {:error, %Ecto.Changeset{errors: errors}} = CommandStore.create(trx_map)
       assert Keyword.has_key?(errors, :instance_id)
     end
+
+    test "fails when adding identical command with action: create_transaction", %{
+      instance: %{address: address}
+    } do
+      trx_map = transaction_event_attrs(instance_address: address, action: :create_transaction)
+      assert {:ok, %Command{} = _event} = CommandStore.create(trx_map)
+      assert {:error, :pending_transaction_idempotency_violation} = CommandStore.create(trx_map)
+    end
   end
 
   describe "get_event_by/4" do
