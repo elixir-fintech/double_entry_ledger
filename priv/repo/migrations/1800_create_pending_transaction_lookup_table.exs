@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreatePendingTransactionLookupTable 
     create table(:pending_transaction_lookup, primary_key: false, prefix: @schema_prefix ) do
       add :instance_id, :text, primary_key: true
       add :source, :text, primary_key: true
-      add :source_idempotent_id, :text, primary_key: true
+      add :source_idempk, :text, primary_key: true
 
       add :create_command_id, references(:commands, type: :binary_id, on_delete: :nilify_all)
       add :transaction_id, references(:transactions, type: :binary_id)
