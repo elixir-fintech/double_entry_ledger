@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateCommands do
         "(event_map->>'source')",
         "(event_map->>'source_idempk')"
       ],
-      where: "event_map->>'action' = 'update_transaction'",
+      where: "event_map->>'action' = 'create_transaction'",
       name: "idx_commands_create_transaction_triple_expr",
       prefix: @schema_prefix,
       include: [:id]

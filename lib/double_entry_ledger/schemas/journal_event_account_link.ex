@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.JournalEventAccountLink do
           account_id: Ecto.UUID.t() | nil,
           account: Account.t() | Ecto.Association.NotLoaded.t(),
           journal_event_id: Ecto.UUID.t() | nil,
-          journal_event: Command.t() | Ecto.Association.NotLoaded.t(),
+          journal_event: JournalEvent.t() | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }

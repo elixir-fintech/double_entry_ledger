@@ -17,6 +17,8 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
     TransactionStore
   }
 
+  alias DoubleEntryLedger.Command.TransactionEventMap
+
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
 
   doctest EventStoreHelper
@@ -31,6 +33,13 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
 
       assert %{id: evq_id, command_id: ^id, status: :pending} = event.command_queue_item
       assert evq_id != nil
+    end
+
+    test "fails for invalid instance_address" do
+      trx_map = transaction_event_attrs(instance_address: "1234", action: :create_transaction)
+
+      assert {:error, %Ecto.Changeset{errors: errors}} = EventStore.create(trx_map)
+      assert Keyword.has_key?(errors, :instance_id)
     end
   end
 

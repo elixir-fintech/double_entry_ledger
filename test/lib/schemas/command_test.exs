@@ -50,9 +50,9 @@ defmodule DoubleEntryLedger.EventTest do
         payload: pending_payload()
       }
 
-      transaction_event_map = struct(TransactionEventMap, attrs)
-      assert {:ok, event} = EventStore.create(transaction_event_map)
-      assert {:ok, event2} = EventStore.create(transaction_event_map)
+      changeset = Command.changeset(%Command{}, %{instance_id: inst.id, event_map: attrs})
+      assert {:ok, event} = Repo.insert(changeset)
+      assert {:ok, event2} = Repo.insert(changeset)
       assert event.id != event2.id
     end
   end
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.EventTest do
     test "idempotency is not enforced when creating events" do
       %{instance: inst} = create_instance()
 
-      attrs = %TransactionEventMap{
+      attrs = %{
         instance_address: inst.address,
         action: :update_transaction,
         source: "source",
@@ -91,8 +91,9 @@ defmodule DoubleEntryLedger.EventTest do
         payload: pending_payload()
       }
 
-      assert {:ok, event} = EventStore.create(attrs)
-      assert {:ok, event2} = EventStore.create(attrs)
+      changeset = Command.changeset(%Command{}, %{instance_id: inst.id, event_map: attrs})
+      assert {:ok, event} = Repo.insert(changeset)
+      assert {:ok, event2} = Repo.insert(changeset)
       assert event.id != event2.id
     end
   end

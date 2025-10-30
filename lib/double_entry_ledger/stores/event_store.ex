@@ -115,6 +115,27 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   ## Returns
     - `{:ok, event}`: If the event was successfully created
     - `{:error, changeset}`: If validation failed
+
+  ## Examples
+
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> transaction_map = %TransactionEventMap{
+    ...>   instance_address: instance.address,
+    ...>   action: :create_transaction,
+    ...>   source: "from-somewhere",
+    ...>   source_idempk: "unique_1234",
+    ...>   payload: %{
+    ...>     status: :pending,
+    ...>     entries: [
+    ...>       %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>       %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>     ]}}
+    iex>   {:ok, command} = EventStore.create(transaction_map)
+    iex>  command.command_queue_item.status
+    :pending
   """
   @spec create(TransactionEventMap.t() | AccountEventMap.t()) ::
           {:ok, Command.t()} | {:error, Ecto.Changeset.t(Command.t()) | :instance_not_found}
