@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEvent do
         |> Multi.update(:event_success, build_mark_as_processed(event))
         |> Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->
           Workers.Oban.CreateAccountLink.new(%{
-            event_id: event.id,
+            command_id: event.id,
             account_id: aid,
             journal_event_id: jid
           })

@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEvent do
                                               journal_event: journal_event
                                             } ->
       Workers.Oban.CreateAccountLink.new(%{
-        event_id: event.id,
+        command_id: event.id,
         account_id: account.id,
         journal_event_id: journal_event.id
       })

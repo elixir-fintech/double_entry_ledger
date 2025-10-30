@@ -8,15 +8,15 @@ defmodule DoubleEntryLedger.Workers.Oban.CreateTransactionLink do
 
   @impl Oban.Worker
   def perform(%Oban.Job{
-        args: %{"event_id" => eid, "transaction_id" => tid, "journal_event_id" => jid}
+        args: %{"command_id" => eid, "transaction_id" => tid, "journal_event_id" => jid}
       }) do
     Repo.insert(changeset(eid, tid, jid))
   end
 
-  defp changeset(event_id, transaction_id, journal_event_id) do
+  defp changeset(command_id, transaction_id, journal_event_id) do
     %EventTransactionLink{}
     |> EventTransactionLink.changeset(%{
-      event_id: event_id,
+      command_id: command_id,
       transaction_id: transaction_id,
       journal_event_id: journal_event_id
     })

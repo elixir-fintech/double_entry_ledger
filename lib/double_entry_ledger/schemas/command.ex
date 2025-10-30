@@ -50,15 +50,15 @@ defmodule DoubleEntryLedger.Command do
 
   @derive {Jason.Encoder, only: [:id, :event_map, :command_queue_item]}
 
-  schema "events" do
+  schema "commands" do
     field(:event_map, EventMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    has_many(:event_transaction_links, EventTransactionLink, foreign_key: :event_id)
+    has_many(:event_transaction_links, EventTransactionLink, foreign_key: :command_id)
 
     many_to_many(:transactions, Transaction,
       join_through: EventTransactionLink,
-      join_keys: [event_id: :id, transaction_id: :id]
+      join_keys: [command_id: :id, transaction_id: :id]
     )
 
     has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)

@@ -190,7 +190,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
         end)
         |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
           Workers.Oban.CreateTransactionLink.new(%{
-            event_id: eid,
+            command_id: eid,
             transaction_id: tid,
             journal_event_id: jid
           })

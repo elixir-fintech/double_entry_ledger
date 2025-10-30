@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateCommandQueueItem do
     create table(:command_queue_items, primary_key: false, prefix: @schema_prefix) do
       add :id, :binary_id, primary_key: true
 
-      add :command_id, references(:events, on_delete: :nothing, type: :binary_id), null: false
+      add :command_id, references(:commands, on_delete: :delete_all, type: :binary_id), null: false
       add :status, :string, null: false, default: "pending"
 
       add :processor_id, :string, null: true
