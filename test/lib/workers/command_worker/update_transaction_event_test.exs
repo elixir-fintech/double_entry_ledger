@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
   alias DoubleEntryLedger.Command.TransactionData
   alias DoubleEntryLedger.Workers.CommandWorker.{UpdateTransactionEvent, CreateTransactionEvent}
   alias DoubleEntryLedger.CommandQueue.Scheduling
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
 
   doctest UpdateTransactionEvent
 
@@ -204,7 +204,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
         new_create_transaction_event(ctx, :pending)
 
       {:ok, event} =
-        EventStore.create(
+        CommandStore.create(
           transaction_event_attrs(
             action: :update_transaction,
             source: s,

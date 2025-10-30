@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   This module defines test helpers for creating
   event entities.
   """
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
 
   alias DoubleEntryLedger.Command.{
     TransactionEventMap,
@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.EventFixtures do
         trx_status \\ :posted
       ) do
     {:ok, event} =
-      EventStore.create(
+      CommandStore.create(
         transaction_event_attrs(
           instance_address: inst.address,
           payload: %TransactionData{
@@ -84,7 +84,7 @@ defmodule DoubleEntryLedger.EventFixtures do
         entries: entries
       }
     })
-    |> EventStore.create()
+    |> CommandStore.create()
   end
 
   def create_transaction_event_map(

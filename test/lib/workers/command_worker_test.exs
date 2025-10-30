@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
 
   alias DoubleEntryLedger.Workers.CommandWorker
 
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = EventStore.get_by_id(processed_event.id)
+      %{transactions: [processed_transaction | []]} = CommandStore.get_by_id(processed_event.id)
 
       assert return_available_balances(ctx) == [100, 100]
       assert processed_transaction.id == transaction.id
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = EventStore.get_by_id(processed_event.id)
+      %{transactions: [processed_transaction | []]} = CommandStore.get_by_id(processed_event.id)
 
       assert processed_transaction.id == pending_transaction.id
       assert transaction.id == pending_transaction.id

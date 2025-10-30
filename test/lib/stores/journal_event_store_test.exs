@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Stores.JournalEventStoreTest do
   @moduledoc """
-  This module tests the EventStore module.
+  This module tests the CommandStore module.
   """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase

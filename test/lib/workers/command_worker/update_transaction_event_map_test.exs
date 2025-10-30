@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapTest 
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
   alias DoubleEntryLedger.Command
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
 
   doctest UpdateTransactionEventMap
 
@@ -148,7 +148,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapTest 
                command_queue_item: %{status: :occ_timeout, occ_retry_count: 5, errors: errors},
                transactions: []
              } =
-               EventStore.get_by_id(id) |> Repo.preload(:transactions)
+               CommandStore.get_by_id(id) |> Repo.preload(:transactions)
 
       assert length(errors) == 5
       assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] = errors

@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
 
   alias DoubleEntryLedger.{Command, JournalEvent, Repo}
 
-  alias DoubleEntryLedger.Stores.{EventStoreHelper, TransactionStoreHelper}
+  alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
 
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
@@ -141,7 +141,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
   """
   def build_transaction(%Command{} = event, attr, repo) do
     Multi.new()
-    |> EventStoreHelper.build_get_create_transaction_event_transaction(
+    |> CommandStoreHelper.build_get_create_transaction_event_transaction(
       :get_create_event_transaction,
       event
     )

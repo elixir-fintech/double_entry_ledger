@@ -38,23 +38,23 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
       {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_params(event_params)
 
       # create event for asynchronous processing later
-      {:ok, event} = DoubleEntryLedger.Stores.EventStore.create(event_params)
+      {:ok, event} = DoubleEntryLedger.Stores.CommandStore.create(event_params)
 
   ### Retrieving events for an instance
 
-      events = DoubleEntryLedger.Stores.EventStore.list_all_for_instance(instance.id)
+      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_instance(instance.id)
 
   ### Retrieving events for a transaction
 
-      events = DoubleEntryLedger.Stores.EventStore.list_all_for_transaction(transaction.id)
+      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_transaction(transaction.id)
 
   ### Retrieving events for an account
 
-      events = DoubleEntryLedger.Stores.EventStore.list_all_for_account(account.id)
+      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_account(account.id)
 
-  ### Process event without saving it in the EventStore on error
+  ### Process event without saving it in the CommandStore on error
   If you want more control over error handling, you can process an event without saving it
-  in the EventStore on error. This allows you to handle the event processing logic
+  in the CommandStore on error. This allows you to handle the event processing logic
   without automatically persisting the event, which can be useful for debugging or custom error handling.
 
       {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_params(event_params, [on_error: :fail])

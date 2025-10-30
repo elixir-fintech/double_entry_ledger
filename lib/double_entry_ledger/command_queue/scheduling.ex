@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     Transaction
   }
 
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.CommandQueueItem
   alias Ecto.Changeset
 
@@ -100,7 +100,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   @spec claim_event_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
           {:ok, Command.t()} | {:error, atom()}
   def claim_event_for_processing(id, processor_id, repo \\ Repo) do
-    case EventStore.get_by_id(id) do
+    case CommandStore.get_by_id(id) do
       nil ->
         {:error, :event_not_found}
 

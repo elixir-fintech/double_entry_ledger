@@ -33,7 +33,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
   alias DoubleEntryLedger.{Command, JournalEvent, Repo}
 
   alias DoubleEntryLedger.Command.TransactionEventMap
-  alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
+  alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
@@ -153,9 +153,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(:new_event, fn %{instance: id} ->
-      EventStoreHelper.build_create(new_event_map, id)
+      CommandStoreHelper.build_create(new_event_map, id)
     end)
-    |> EventStoreHelper.build_get_create_transaction_event_transaction(
+    |> CommandStoreHelper.build_get_create_transaction_event_transaction(
       :get_create_transaction_event_transaction,
       :new_event
     )

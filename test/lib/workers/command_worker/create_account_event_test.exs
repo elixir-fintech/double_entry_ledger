@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Command, Account}
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountEvent
 
   import DoubleEntryLedger.InstanceFixtures
@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
     setup [:create_instance]
 
     test "successfully processes a valid create_account event", %{instance: instance} do
-      {:ok, event} = EventStore.create(account_event_attrs(%{instance_address: instance.address}))
+      {:ok, event} = CommandStore.create(account_event_attrs(%{instance_address: instance.address}))
 
       assert {:ok, %Account{} = account, %Command{command_queue_item: eqi} = e} =
                CreateAccountEvent.process(preload(event))
@@ -33,12 +33,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
       address = "same:address"
 
       {:ok, event1} =
-        EventStore.create(
+        CommandStore.create(
           account_event_attrs(%{address: address, instance_address: instance.address})
         )
 
       {:ok, event2} =
-        EventStore.create(
+        CommandStore.create(
           account_event_attrs(%{address: address, instance_address: instance.address})
         )
 

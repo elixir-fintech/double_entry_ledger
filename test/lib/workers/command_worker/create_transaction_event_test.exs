@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
 
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Command.TransactionData
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
 
   doctest CreateTransactionEvent
@@ -41,7 +41,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       accounts: [a | _]
     } do
       {:ok, event} =
-        EventStore.create(
+        CommandStore.create(
           transaction_event_attrs(
             instance_address: inst.address,
             payload: %TransactionData{

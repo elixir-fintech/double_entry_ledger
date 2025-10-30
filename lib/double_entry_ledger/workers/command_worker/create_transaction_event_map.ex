@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
   alias DoubleEntryLedger.Command.TransactionEventMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
+  alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
 
   alias Ecto.Multi
 
@@ -154,7 +154,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(:new_event, fn %{instance: id} ->
-      EventStoreHelper.build_create(new_event_map, id)
+      CommandStoreHelper.build_create(new_event_map, id)
     end)
     |> Multi.insert(:journal_event, fn %{new_event: %{event_map: em, instance_id: id}} ->
       JournalEvent.build_create(%{event_map: em, instance_id: id})

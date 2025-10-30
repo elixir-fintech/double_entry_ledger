@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
   alias DoubleEntryLedger.Workers.CommandWorker.{AccountEventMapResponseHandler}
   alias DoubleEntryLedger.Command.AccountEventMap
   alias DoubleEntryLedger.{JournalEvent, Repo}
-  alias DoubleEntryLedger.Stores.{AccountStoreHelper, EventStoreHelper, InstanceStoreHelper}
+  alias DoubleEntryLedger.Stores.{AccountStoreHelper, CommandStoreHelper, InstanceStoreHelper}
 
   @doc """
   Processes an AccountEventMap to update an existing account in the ledger system.
@@ -109,7 +109,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(iaddr))
     |> Multi.insert(:new_event, fn %{instance: id} ->
-      EventStoreHelper.build_create(event_map, id)
+      CommandStoreHelper.build_create(event_map, id)
     end)
     |> Multi.one(:get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))
     |> Multi.merge(fn

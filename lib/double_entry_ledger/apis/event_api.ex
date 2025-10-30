@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
 
   @account_actions actions(:account) |> Enum.map(&Atom.to_string/1)
   @transaction_actions actions(:transaction) |> Enum.map(&Atom.to_string/1)
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
              | :action_not_supported}
   def create_from_params(%{"action" => action} = event_params) when action in @account_actions do
     case AccountEventMap.create(event_params) do
-      {:ok, event_map} -> EventStore.create(event_map)
+      {:ok, event_map} -> CommandStore.create(event_map)
       error -> error
     end
   end
@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   def create_from_params(%{"action" => action} = event_params)
       when action in @transaction_actions do
     case TransactionEventMap.create(event_params) do
-      {:ok, event_map} -> EventStore.create(event_map)
+      {:ok, event_map} -> CommandStore.create(event_map)
       error -> error
     end
   end
@@ -104,7 +104,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   This only works for parameters that translate into a `TransactionEventMap`.
 
   This function creates a TransactionEventMap from the parameters, then processes it through
-  the CommandWorker to create both an event record in the EventStore and creates the necessary projections.
+  the CommandWorker to create both an event record in the CommandStore and creates the necessary projections.
 
   If the processing fails, it will return an error tuple with details about the failure.
   The event is saved to the EventQueue and then retried later.

@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Transaction do
   - Transactions cannot be modified once posted or archived
 
   Usage Details:
-  Transactions should not be created directly. Instead, use the `DoubleEntryLedger.Stores.EventStore` module
+  Transactions should not be created directly. Instead, use the `DoubleEntryLedger.Stores.CommandStore` module
   to create events that will generate transactions. The `CommandWorker` will handle the processing of these events
   and the creation of transactions in the ledger.
   """

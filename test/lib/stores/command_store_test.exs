@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Stores.EventStoreTest do
   @moduledoc """
-  This module tests the EventStore module.
+  This module tests the CommandStore module.
   """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
@@ -10,8 +10,8 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
   alias DoubleEntryLedger.Command
 
   alias DoubleEntryLedger.Stores.{
-    EventStore,
-    EventStoreHelper,
+    CommandStore,
+    CommandStoreHelper,
     AccountStore,
     InstanceStore,
     TransactionStore
@@ -21,15 +21,15 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
 
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
 
-  doctest EventStoreHelper
-  doctest EventStore
+  doctest CommandStoreHelper
+  doctest CommandStore
 
   describe "create/1" do
     setup [:create_instance]
 
     test "inserts a new event and adds an command_queue_item", %{instance: instance} do
       assert {:ok, %Command{id: id} = event} =
-               EventStore.create(transaction_event_attrs(instance_address: instance.address))
+               CommandStore.create(transaction_event_attrs(instance_address: instance.address))
 
       assert %{id: evq_id, command_id: ^id, status: :pending} = event.command_queue_item
       assert evq_id != nil
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
     test "fails for invalid instance_address" do
       trx_map = transaction_event_attrs(instance_address: "1234", action: :create_transaction)
 
-      assert {:error, %Ecto.Changeset{errors: errors}} = EventStore.create(trx_map)
+      assert {:error, %Ecto.Changeset{errors: errors}} = CommandStore.create(trx_map)
       assert Keyword.has_key?(errors, :instance_id)
     end
   end
@@ -48,11 +48,11 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
 
     test "gets an event by source", %{instance: instance} do
       {:ok, event} =
-        EventStore.create(transaction_event_attrs(instance_address: instance.address))
+        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
 
       assert %Command{} =
                found_event =
-               EventStoreHelper.get_event_by(
+               CommandStoreHelper.get_event_by(
                  :create_transaction,
                  event.event_map.source,
                  event.event_map.source_idempk,
@@ -68,7 +68,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
 
       assert %Command{} =
                found_event =
-               EventStoreHelper.get_event_by(
+               CommandStoreHelper.get_event_by(
                  :create_transaction,
                  event_map.source,
                  event_map.source_idempk,
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
 
     test "returns nil for non-existent event", %{instance: instance} do
       assert nil ==
-               EventStoreHelper.get_event_by(
+               CommandStoreHelper.get_event_by(
                  :create_transaction,
                  "source",
                  "source_idempk",

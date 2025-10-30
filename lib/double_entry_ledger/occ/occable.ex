@@ -128,7 +128,7 @@ end
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.TransactionEventMap do
   alias Ecto.{Multi, Repo}
   alias DoubleEntryLedger.Command.{ErrorMap, TransactionEventMap, IdempotencyKey}
-  alias DoubleEntryLedger.Stores.{EventStoreHelper, InstanceStoreHelper}
+  alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
 
@@ -195,7 +195,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
     Multi.new()
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(new_event_step, fn %{_instance: id} ->
-      EventStoreHelper.build_create(event_map, id)
+      CommandStoreHelper.build_create(event_map, id)
     end)
     |> Multi.update(name, fn %{^new_event_step => event} ->
       Helper.occ_timeout_changeset(event, error_map)

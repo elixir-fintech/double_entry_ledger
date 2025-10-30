@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Stores.EventStore do
+defmodule DoubleEntryLedger.Stores.CommandStore do
   @moduledoc """
   Provides functions for managing events in the double-entry ledger system.
 
@@ -38,23 +38,23 @@ defmodule DoubleEntryLedger.Stores.EventStore do
       {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_params(event_params)
 
       # create event for asynchronous processing later
-      {:ok, event} = DoubleEntryLedger.Stores.EventStore.create(event_params)
+      {:ok, event} = DoubleEntryLedger.Stores.CommandStore.create(event_params)
 
   ### Retrieving events for an instance
 
-      events = DoubleEntryLedger.Stores.EventStore.list_all_for_instance(instance.id)
+      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_instance(instance.id)
 
   ### Retrieving events for a transaction
 
-      events = DoubleEntryLedger.Stores.EventStore.list_all_for_transaction(transaction.id)
+      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_transaction(transaction.id)
 
   ### Retrieving events for an account
 
-      events = DoubleEntryLedger.Stores.EventStore.list_all_for_account(account.id)
+      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_account(account.id)
 
-  ### Process event without saving it in the EventStore on error
+  ### Process event without saving it in the CommandStore on error
   If you want more control over error handling, you can process an event without saving it
-  in the EventStore on error. This allows you to handle the event processing logic
+  in the CommandStore on error. This allows you to handle the event processing logic
   without automatically persisting the event, which can be useful for debugging or custom error handling.
 
       {:ok, transaction, event} = DoubleEntryLedger.Apis.EventApi.process_from_params(event_params, [on_error: :fail])
@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
   - Error handling is explicit, with clear return values for all failure modes.
   """
   import Ecto.Query
-  import DoubleEntryLedger.Stores.EventStoreHelper
+  import DoubleEntryLedger.Stores.CommandStoreHelper
   import DoubleEntryLedger.Utils.Pagination
 
   alias Ecto.Multi
@@ -133,7 +133,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     ...>       %{account_address: asset_account.address, amount: 100, currency: :USD},
     ...>       %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>     ]}}
-    iex>   {:ok, command} = EventStore.create(transaction_map)
+    iex>   {:ok, command} = CommandStore.create(transaction_map)
     iex>  command.command_queue_item.status
     :pending
   """
@@ -147,7 +147,6 @@ defmodule DoubleEntryLedger.Stores.EventStore do
          end)
          |> Repo.transaction() do
       {:ok, %{event: event}} -> {:ok, event}
-      {:error, :instance, _reason, _changes} -> {:error, :instance_not_found}
       {:error, :event, changeset, _changes} -> {:error, changeset}
     end
   end
@@ -176,10 +175,10 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
     iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> length(EventStore.list_all_for_instance_id(instance.id))
+    iex> length(CommandStore.list_all_for_instance_id(instance.id))
     3
     iex> # test pagination
-    iex> length(EventStore.list_all_for_instance_id(instance.id, 2, 2))
+    iex> length(CommandStore.list_all_for_instance_id(instance.id, 2, 2))
     1
 
   """
@@ -219,7 +218,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     ...>   ]}
     iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
     iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
-    iex> length(EventStore.list_all_for_transaction_id(id))
+    iex> length(CommandStore.list_all_for_transaction_id(id))
     2
   """
   @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Command.t())
@@ -252,7 +251,7 @@ defmodule DoubleEntryLedger.Stores.EventStore do
     ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
     ...>   ]}
     iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> event = EventStore.get_create_transaction_event(id)
+    iex> event = CommandStore.get_create_transaction_event(id)
     iex> [%{id: trx_id} | _] = event.transactions
     iex> trx_id
     id

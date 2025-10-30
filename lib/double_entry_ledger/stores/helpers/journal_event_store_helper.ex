@@ -18,20 +18,20 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   Building a changeset from an EventMap:
 
-      event_changeset = EventStoreHelper.build_create(event_map)
+      event_changeset = CommandStoreHelper.build_create(event_map)
 
   Adding a step to get a create event's transaction:
 
       multi =
         Ecto.Multi.new()
-        |> EventStoreHelper.build_get_create_transaction_event_transaction(:transaction, update_event)
+        |> CommandStoreHelper.build_get_create_transaction_event_transaction(:transaction, update_event)
         |> Ecto.Multi.update(:event, fn %{transaction: transaction} ->
-          EventStoreHelper.build_mark_as_processed(update_event, transaction.id)
+          CommandStoreHelper.build_mark_as_processed(update_event, transaction.id)
         end)
 
   ## Implementation Notes
 
-  This module is primarily used internally by EventStore and CommandWorker modules to
+  This module is primarily used internally by CommandStore and CommandWorker modules to
   share common functionality and reduce code duplication.
   """
   import Ecto.Query, only: [from: 2, subquery: 1, union: 2]

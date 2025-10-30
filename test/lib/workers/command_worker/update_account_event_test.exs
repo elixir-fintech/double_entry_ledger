@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Command, Account, Repo, CommandQueueItem}
-  alias DoubleEntryLedger.Stores.EventStore
+  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.{CreateAccountEvent, UpdateAccountEvent}
   alias DoubleEntryLedger.Command.AccountData
 
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
           payload: account_data_attrs(%{name: "Old Name"})
         })
 
-      {:ok, %{event_map: %{payload: payload}} = create_event} = EventStore.create(attrs)
+      {:ok, %{event_map: %{payload: payload}} = create_event} = CommandStore.create(attrs)
 
       CreateAccountEvent.process(create_event)
 
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
           payload: %AccountData{name: "New Name"}
         })
 
-      {:ok, update_event} = EventStore.create(update_attrs)
+      {:ok, update_event} = CommandStore.create(update_attrs)
 
       assert {:ok, %Account{} = account, %Command{command_queue_item: eqi} = e} =
                UpdateAccountEvent.process(update_event)
@@ -53,7 +53,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
 
     test "moves to dead_letter when create account event does not exist", %{instance: instance} do
       {:ok, update_event} =
-        EventStore.create(
+        CommandStore.create(
           account_event_attrs(%{
             action: :update_account,
             instance_address: instance.address,
@@ -74,7 +74,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
       instance: instance
     } do
       {:ok, %{event_map: %{payload: payload}}} =
-        EventStore.create(
+        CommandStore.create(
           account_event_attrs(%{
             instance_address: instance.address,
             payload: account_data_attrs(%{name: "Old Name"})
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
         )
 
       {:ok, update_event} =
-        EventStore.create(
+        CommandStore.create(
           account_event_attrs(%{
             action: :update_account,
             instance_address: instance.address,
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
 
     test "moves to dead letter when create event is in dead letter", %{instance: instance} do
       {:ok, %{event_map: %{payload: create_payload}, command_queue_item: event_qi}} =
-        EventStore.create(
+        CommandStore.create(
           account_event_attrs(%{
             instance_address: instance.address,
             payload: %AccountData{address: "sss", type: :asset, currency: :EUR}
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
       |> Repo.update_all(set: [status: :dead_letter])
 
       {:ok, update_event} =
-        EventStore.create(
+        CommandStore.create(
           account_event_attrs(%{
             action: :update_account,
             instance_address: instance.address,
