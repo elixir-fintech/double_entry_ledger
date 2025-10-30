@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
-  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.{Command, Repo, PendingTransactionLookup}
 
   alias DoubleEntryLedger.Stores.{
     CommandStore,
@@ -35,12 +35,21 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
       assert evq_id != nil
     end
 
+    test "creates a lookup for pending create_transactions", %{instance: instance} do
+      assert {:ok, %Command{id: id, event_map: %{source: s, source_idempk: sidpk}}} =
+               CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+
+       assert %{command_id: ^id, source: ^s, source_idempk: ^sidpk} = Repo.get_by(PendingTransactionLookup, command_id: id)
+    end
+
     test "fails for invalid instance_address" do
       trx_map = transaction_event_attrs(instance_address: "1234", action: :create_transaction)
 
       assert {:error, %Ecto.Changeset{errors: errors}} = CommandStore.create(trx_map)
       assert Keyword.has_key?(errors, :instance_id)
     end
+
+
 
     test "fails when adding identical command with action: create_transaction", %{
       instance: %{address: address}

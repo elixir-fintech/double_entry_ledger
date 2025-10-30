@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.PendingTransactionLookup do
     field(:source_idempk, :string, primary_key: true)
     field(:instance_id, :string, primary_key: true)
 
-    belongs_to(:command, Command, source: :create_command_id)
+    belongs_to(:command, Command)
     belongs_to(:transaction, Transaction)
     belongs_to(:journal_event, JournalEvent)
 
