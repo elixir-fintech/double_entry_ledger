@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
 
     - An `Ecto.Multi` that inserts the transaction.
   """
-  def build_transaction(_event, transaction_map, repo) do
+  def build_transaction(_event, transaction_map, _instance_id,  repo) do
     Multi.new()
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
   end

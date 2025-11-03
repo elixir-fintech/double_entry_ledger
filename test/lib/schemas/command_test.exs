@@ -9,9 +9,7 @@ defmodule DoubleEntryLedger.EventTest do
 
   alias Ecto.Changeset
 
-  alias DoubleEntryLedger.Command.TransactionEventMap
   alias DoubleEntryLedger.Command
-  alias DoubleEntryLedger.Stores.CommandStore
 
   doctest Command
 

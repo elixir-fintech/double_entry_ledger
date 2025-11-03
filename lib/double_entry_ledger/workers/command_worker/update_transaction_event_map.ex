@@ -33,7 +33,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
   alias DoubleEntryLedger.{Command, JournalEvent, Repo}
 
   alias DoubleEntryLedger.Command.TransactionEventMap
-  alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
+  alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
@@ -144,16 +144,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
     - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
   def build_transaction(
-        %{action: :update_transaction, instance_address: address} = event_map,
+        %{action: :update_transaction} = event_map,
         transaction_map,
+        instance_id,
         repo
       ) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
-    |> Multi.insert(:new_event, fn %{instance: id} ->
-      CommandStoreHelper.build_create(new_event_map, id)
+    |> Multi.insert(:new_event, fn _ ->
+      CommandStoreHelper.build_create(new_event_map, instance_id)
     end)
     |> CommandStoreHelper.build_get_create_transaction_event_transaction(
       :get_create_transaction_event_transaction,

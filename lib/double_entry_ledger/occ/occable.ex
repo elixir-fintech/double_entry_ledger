@@ -83,6 +83,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
   def build_multi(event) do
     Multi.new()
     |> Multi.put(:occable_item, event)
+    |> Multi.put(:instance, fn %{occable_item: %{instance_id: id}} -> id end)
     |> Multi.insert(:idempotency, fn %{occable_item: %{instance_id: id, event_map: em}} ->
       IdempotencyKey.changeset(id, em)
     end)
@@ -153,14 +154,14 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
   def build_multi(%TransactionEventMap{instance_address: address} = event_map) do
     Multi.new()
     |> Multi.put(:occable_item, event_map)
-    |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
-    |> Multi.insert(:idempotency, fn %{_instance: id} ->
+    |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
+    |> Multi.insert(:idempotency, fn %{instance: id} ->
       IdempotencyKey.changeset(id, event_map)
     end)
     |> Multi.run(:transaction_map, fn _,
                                       %{
                                         occable_item: %{payload: td},
-                                        _instance: id
+                                        instance: id
                                       } ->
       case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
         {:ok, transaction_map} -> {:ok, transaction_map}

@@ -93,6 +93,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
   @callback build_transaction(
               Occable.t(),
               TransactionEventTransformer.transaction_map(),
+              Ecto.UUID.t(),
               Ecto.Repo.t()
             ) :: Ecto.Multi.t()
 
@@ -221,7 +222,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       end
 
       @impl true
-      def build_transaction(_event, _transaction_map, _repo) do
+      def build_transaction(_event, _transaction_map, _instance_id, _repo) do
         raise "build_transaction/3 not implemented"
       end
 
@@ -246,7 +247,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       1. `:transaction_map` – converts raw data to a map or returns an error tuple
       2. merges in either:
          - `handle_transaction_map_error/3` when conversion fails
-         - `build_transaction/3` + `handle_build_transaction/3` on success
+         - `build_transaction/4` + `handle_build_transaction/3` on success
 
       ## Parameters
 
@@ -265,8 +266,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
           %{transaction_map: {:error, error}, occable_item: item} ->
             module.handle_transaction_map_error(item, error, repo)
 
-          %{transaction_map: transaction_map, occable_item: item} ->
-            module.build_transaction(item, transaction_map, repo)
+          %{transaction_map: transaction_map, occable_item: item, instance: instance_id} ->
+            module.build_transaction(item, transaction_map, instance_id, repo)
             |> module.handle_build_transaction(item, repo)
         end)
       end
@@ -346,7 +347,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
         |> repo.transaction()
       end
 
-      defoverridable build_transaction: 3,
+      defoverridable build_transaction: 4,
                      handle_build_transaction: 3,
                      handle_transaction_map_error: 3,
                      handle_occ_final_timeout: 2

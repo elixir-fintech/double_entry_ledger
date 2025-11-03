@@ -139,7 +139,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
 
     - An `Ecto.Multi` struct with named operations for transaction processing.
   """
-  def build_transaction(%Command{} = event, attr, repo) do
+  def build_transaction(%Command{} = event, attr, _instance_id, repo) do
     Multi.new()
     |> CommandStoreHelper.build_get_create_transaction_event_transaction(
       :get_create_event_transaction,

@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
   doctest CommandStore
 
   describe "create/1" do
-    setup [:create_instance]
+    setup [:create_instance, :create_accounts]
 
     test "inserts a new event and adds an command_queue_item", %{instance: instance} do
       assert {:ok, %Command{id: id} = event} =
@@ -40,6 +40,14 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
                CommandStore.create(transaction_event_attrs(instance_address: instance.address))
 
        assert %{command_id: ^id, source: ^s, source_idempk: ^sidpk} = Repo.get_by(PendingTransactionLookup, command_id: id)
+
+    end
+
+    test "no lookup for posted create_transactions", ctx do
+      assert {:ok, %Command{id: id, event_map: %{source: _s, source_idempk: _sidpk}}} =
+               CommandStore.create(create_transaction_event_map(ctx, :posted))
+
+       assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
     end
 
     test "fails for invalid instance_address" do
@@ -48,8 +56,6 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
       assert {:error, %Ecto.Changeset{errors: errors}} = CommandStore.create(trx_map)
       assert Keyword.has_key?(errors, :instance_id)
     end
-
-
 
     test "fails when adding identical command with action: create_transaction", %{
       instance: %{address: address}

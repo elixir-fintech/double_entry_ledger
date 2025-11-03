@@ -45,7 +45,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSav
     as: :handle_occ_final_timeout
 
   @impl true
-  defdelegate build_transaction(event_map, transaction_map, repo),
+  defdelegate build_transaction(event_map, transaction_map, instance_id, repo),
     to: Workers.CommandWorker.UpdateTransactionEventMap,
     as: :build_transaction
 

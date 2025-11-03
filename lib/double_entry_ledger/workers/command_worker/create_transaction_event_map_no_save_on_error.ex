@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
     as: :handle_transaction_map_error
 
   @impl true
-  defdelegate build_transaction(event_map, transaction_map, repo),
+  defdelegate build_transaction(event_map, transaction_map, instance_id, repo),
     to: DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap,
     as: :build_transaction
 

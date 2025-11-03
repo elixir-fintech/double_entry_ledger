@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
   alias DoubleEntryLedger.Command.TransactionEventMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper, TransactionStoreHelper}
+  alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
 
   alias Ecto.Multi
 
@@ -145,19 +145,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
     - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
   def build_transaction(
-        %{action: :create_transaction, instance_address: address} = event_map,
+        %{action: :create_transaction} = event_map,
         transaction_map,
+        instance_id,
         repo
       ) do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
-    |> Multi.insert(:new_event, fn %{instance: id} ->
-      CommandStoreHelper.build_create(new_event_map, id)
+    |> Multi.insert(:new_event, fn _ ->
+      CommandStoreHelper.build_create(new_event_map, instance_id)
     end)
-    |> Multi.insert(:journal_event, fn %{new_event: %{event_map: em, instance_id: id}} ->
-      JournalEvent.build_create(%{event_map: em, instance_id: id})
+    |> Multi.insert(:journal_event, fn %{new_event: %{event_map: em}} ->
+      JournalEvent.build_create(%{event_map: em, instance_id: instance_id})
     end)
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
   end
