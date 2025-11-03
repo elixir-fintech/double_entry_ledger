@@ -83,14 +83,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
     now = DateTime.utc_now()
 
     # Find distinct instance IDs with pending events
-    from(e in Command,
-      join: eqi in CommandQueueItem,
+    from(c in Command,
+      join: cqi in CommandQueueItem,
       prefix: ^@schema_prefix,
-      on: e.id == eqi.event_id,
+      on: c.id == cqi.command_id,
       where:
-        eqi.status in [:pending, :occ_timeout, :failed] and
-          (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
-      select: e.instance_id,
+        cqi.status in [:pending, :occ_timeout, :failed] and
+          (is_nil(cqi.next_retry_after) or cqi.next_retry_after <= ^now),
+      select: c.instance_id,
       distinct: true
     )
     |> Repo.all()
