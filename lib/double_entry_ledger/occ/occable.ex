@@ -87,18 +87,21 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
     |> Multi.insert(:idempotency, fn %{occable_item: %{instance_id: id, event_map: em}} ->
       IdempotencyKey.changeset(id, em)
     end)
-    |> Multi.run(:transaction_map, fn _,
-                                      %{
-                                        occable_item: %{
-                                          instance_id: id,
-                                          event_map: %{payload: td}
-                                        }
-                                      } ->
-      case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
-        {:ok, transaction_map} -> {:ok, transaction_map}
-        {:error, error} -> {:ok, {:error, error}}
+    |> Multi.run(
+      :transaction_map,
+      fn _,
+         %{
+           occable_item: %{
+             instance_id: id,
+             event_map: %{payload: td}
+           }
+         } ->
+        case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
+          {:ok, transaction_map} -> {:ok, transaction_map}
+          {:error, error} -> {:ok, {:error, error}}
+        end
       end
-    end)
+    )
   end
 
   @doc """
@@ -159,16 +162,19 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
     |> Multi.insert(:idempotency, fn %{instance: id} ->
       IdempotencyKey.changeset(id, event_map)
     end)
-    |> Multi.run(:transaction_map, fn _,
-                                      %{
-                                        occable_item: %{payload: td},
-                                        instance: id
-                                      } ->
-      case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
-        {:ok, transaction_map} -> {:ok, transaction_map}
-        {:error, error} -> {:ok, {:error, error}}
+    |> Multi.run(
+      :transaction_map,
+      fn _,
+         %{
+           occable_item: %{payload: td},
+           instance: id
+         } ->
+        case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
+          {:ok, transaction_map} -> {:ok, transaction_map}
+          {:error, error} -> {:ok, {:error, error}}
+        end
       end
-    end)
+    )
   end
 
   @doc """
@@ -192,7 +198,6 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
         name,
         %{save_on_error: true} = error_map
       ) do
-
     Multi.new()
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(:new_event, fn %{_instance: id} ->
@@ -201,19 +206,22 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
     |> Multi.update(name, fn %{new_event: event} ->
       Helper.occ_timeout_changeset(event, error_map)
     end)
-    |> Multi.insert(:pending_transaction_lookup, fn %{
-                                                      new_event: %{id: cid},
-                                                      _instance: iid
-                                                    } ->
-      attrs = %{
-        command_id: cid,
-        source: event_map.source,
-        source_idempk: event_map.source_idempk,
-        instance_id: iid
-      }
+    |> Multi.insert(
+      :pending_transaction_lookup,
+      fn %{
+           new_event: %{id: cid},
+           _instance: iid
+         } ->
+        attrs = %{
+          command_id: cid,
+          source: event_map.source,
+          source_idempk: event_map.source_idempk,
+          instance_id: iid
+        }
 
-      PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
-    end)
+        PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
+      end
+    )
   end
 
   def timed_out(
@@ -221,7 +229,6 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
         name,
         %{save_on_error: true} = error_map
       ) do
-
     Multi.new()
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(:new_event, fn %{_instance: id} ->

@@ -39,15 +39,15 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
       assert {:ok, %Command{id: id, event_map: %{source: s, source_idempk: sidpk}}} =
                CommandStore.create(transaction_event_attrs(instance_address: instance.address))
 
-       assert %{command_id: ^id, source: ^s, source_idempk: ^sidpk} = Repo.get_by(PendingTransactionLookup, command_id: id)
-
+      assert %{command_id: ^id, source: ^s, source_idempk: ^sidpk} =
+               Repo.get_by(PendingTransactionLookup, command_id: id)
     end
 
     test "no lookup for posted create_transactions", ctx do
       assert {:ok, %Command{id: id, event_map: %{source: _s, source_idempk: _sidpk}}} =
                CommandStore.create(create_transaction_event_map(ctx, :posted))
 
-       assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
+      assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
     end
 
     test "fails for invalid instance_address" do

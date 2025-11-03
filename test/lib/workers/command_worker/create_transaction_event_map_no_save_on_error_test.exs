@@ -37,11 +37,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
       assert evq.processing_completed_at != nil
       assert transaction.status == :pending
     end
+
     test "pending transaction also creates a pending transaction lookup", ctx do
       event_map = create_transaction_event_map(ctx, :pending)
 
       {:ok, %{id: trx_id}, %{id: id}} = CreateTransactionEventMapNoSaveOnError.process(event_map)
-      assert %{command_id: ^id, transaction_id: ^trx_id} = Repo.get_by(PendingTransactionLookup, command_id: id)
+
+      assert %{command_id: ^id, transaction_id: ^trx_id} =
+               Repo.get_by(PendingTransactionLookup, command_id: id)
     end
 
     test "posted transaction don't create a pending transaction lookup", ctx do

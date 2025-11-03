@@ -41,7 +41,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
       event_map = create_transaction_event_map(ctx, :pending)
 
       {:ok, %{id: trx_id}, %{id: id}} = CreateTransactionEventMap.process(event_map)
-      assert %{command_id: ^id, transaction_id: ^trx_id} = Repo.get_by(PendingTransactionLookup, command_id: id)
+
+      assert %{command_id: ^id, transaction_id: ^trx_id} =
+               Repo.get_by(PendingTransactionLookup, command_id: id)
     end
 
     test "posted transaction don't create a pending transaction lookup", ctx do
@@ -143,10 +145,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
       |> expect(:transaction, 6, fn multi -> Repo.transaction(multi) end)
 
       {:error, %Command{id: id}} =
-               CreateTransactionEventMap.process(
-                 create_transaction_event_map(ctx, :pending),
-                 DoubleEntryLedger.MockRepo
-               )
+        CreateTransactionEventMap.process(
+          create_transaction_event_map(ctx, :pending),
+          DoubleEntryLedger.MockRepo
+        )
 
       assert %Command{
                command_queue_item: %{status: :occ_timeout, occ_retry_count: 5}
@@ -164,10 +166,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
       |> expect(:transaction, 6, fn multi -> Repo.transaction(multi) end)
 
       {:error, %Command{id: id}} =
-               CreateTransactionEventMap.process(
-                 create_transaction_event_map(ctx, :posted),
-                 DoubleEntryLedger.MockRepo
-               )
+        CreateTransactionEventMap.process(
+          create_transaction_event_map(ctx, :posted),
+          DoubleEntryLedger.MockRepo
+        )
 
       assert %Command{
                command_queue_item: %{status: :occ_timeout, occ_retry_count: 5}

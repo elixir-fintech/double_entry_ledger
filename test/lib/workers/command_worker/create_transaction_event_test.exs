@@ -29,7 +29,8 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
 
       assert evq.status == :processed
 
-      %{transactions: [%{id: trx_id} = processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+      %{transactions: [%{id: trx_id} = processed_transaction | []]} =
+        Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
@@ -45,12 +46,15 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
 
       assert evq.status == :processed
 
-      %{transactions: [%{id: trx_id} = processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+      %{transactions: [%{id: trx_id} = processed_transaction | []]} =
+        Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
       assert transaction.status == :pending
-      assert %{command_id: ^id, transaction_id: ^trx_id} = Repo.get_by(PendingTransactionLookup, command_id: id)
+
+      assert %{command_id: ^id, transaction_id: ^trx_id} =
+               Repo.get_by(PendingTransactionLookup, command_id: id)
     end
 
     test "fails for transaction_map_error due to non existent account", %{
