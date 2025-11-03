@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.{Command, PendingTransactionLookup}
   alias DoubleEntryLedger.Command.TransactionData
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
@@ -21,19 +21,36 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
   describe "process_create_event/2" do
     setup [:create_instance, :create_accounts]
 
-    test "successful", ctx do
+    test "successful fro posted transaction", ctx do
       %{event: event} = new_create_transaction_event(ctx)
 
-      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{id: id, command_queue_item: evq} = processed_event} =
         CreateTransactionEvent.process(event)
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+      %{transactions: [%{id: trx_id} = processed_transaction | []]} = Repo.preload(processed_event, :transactions)
 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
       assert transaction.status == :posted
+      assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
+    end
+
+    test "pending transaction also updates the pending transaction lookup", ctx do
+      %{event: event} = new_create_transaction_event(ctx, :pending)
+
+      {:ok, transaction, %{id: id, command_queue_item: evq} = processed_event} =
+        CreateTransactionEvent.process(event)
+
+      assert evq.status == :processed
+
+      %{transactions: [%{id: trx_id} = processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+
+      assert processed_transaction.id == transaction.id
+      assert evq.processing_completed_at != nil
+      assert transaction.status == :pending
+      assert %{command_id: ^id, transaction_id: ^trx_id} = Repo.get_by(PendingTransactionLookup, command_id: id)
     end
 
     test "fails for transaction_map_error due to non existent account", %{

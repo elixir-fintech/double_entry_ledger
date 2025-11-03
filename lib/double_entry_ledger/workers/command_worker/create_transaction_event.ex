@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
   use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent, Repo, PendingTransactionLookup}
   alias DoubleEntryLedger.Stores.TransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Workers
@@ -107,9 +107,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
   """
   @spec process(Command.t(), Ecto.Repo.t()) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
-  def process(%Command{event_map: %{action: :create_transaction}} = original_event, repo \\ Repo) do
-    process_with_retry(original_event, repo)
-    |> default_response_handler(original_event)
+  def process(%Command{event_map: %{action: :create_transaction}} = command, repo \\ Repo) do
+    process_with_retry(command, repo)
+    |> default_response_handler(command)
   end
 
   @impl true
@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
 
     - An `Ecto.Multi` that inserts the transaction.
   """
-  def build_transaction(_event, transaction_map, _instance_id,  repo) do
+  def build_transaction(_command, transaction_map, _instance_id,  repo) do
     Multi.new()
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
   end
@@ -145,10 +145,46 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
 
     - The updated `Ecto.Multi` with an `:event_success` update step.
   """
-  def handle_build_transaction(multi, %{id: eid} = event, _repo) do
+  def handle_build_transaction(multi, %{id: cid, event_map: %{payload: %{status: :pending}}} = command, _repo) do
     multi
     |> Multi.update(:event_success, fn _ ->
-      build_mark_as_processed(event)
+      build_mark_as_processed(command)
+    end)
+    |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id}} ->
+      JournalEvent.build_create(%{event_map: em, instance_id: id})
+    end)
+    |> Multi.insert(:pending_transaction_lookup, fn %{
+                                                    event_success: %{event_map: em, instance_id: id},
+                                                    transaction: %{id: tid},
+                                                    journal_event: %{id: jid}
+                                                    } ->
+      PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, %{
+        instance_id: id,
+        source: em.source,
+        source_idempk: em.source_idempk,
+        command_id: cid,
+        transaction_id: tid,
+        journal_event_id: jid
+      })
+    end,
+    conflict_target: [:source, :source_idempk, :instance_id],
+    on_conflict: {:replace, [:transaction_id, :journal_event_id]})
+    |> Oban.insert(:create_transaction_link, fn %{
+                                                  transaction: %{id: tid},
+                                                  journal_event: %{id: jid}
+                                                } ->
+      Workers.Oban.CreateTransactionLink.new(%{
+        command_id: cid,
+        transaction_id: tid,
+        journal_event_id: jid
+      })
+    end)
+  end
+
+  def handle_build_transaction(multi, %{id: cid} = command, _repo) do
+    multi
+    |> Multi.update(:event_success, fn _ ->
+      build_mark_as_processed(command)
     end)
     |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id}} ->
       JournalEvent.build_create(%{event_map: em, instance_id: id})
@@ -158,10 +194,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
                                                   journal_event: %{id: jid}
                                                 } ->
       Workers.Oban.CreateTransactionLink.new(%{
-        command_id: eid,
+        command_id: cid,
         transaction_id: tid,
         journal_event_id: jid
       })
     end)
   end
+
 end
