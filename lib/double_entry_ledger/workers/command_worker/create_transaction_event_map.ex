@@ -153,10 +153,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.insert(:new_event, fn _ ->
+    |> Multi.insert(:new_command, fn _ ->
       CommandStoreHelper.build_create(new_event_map, instance_id)
     end)
-    |> Multi.insert(:journal_event, fn %{new_event: %{event_map: em}} ->
+    |> Multi.insert(:journal_event, fn %{new_command: %{event_map: em}} ->
       JournalEvent.build_create(%{event_map: em, instance_id: instance_id})
     end)
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
@@ -187,7 +187,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
   def handle_build_transaction(multi, %{payload: %{status: :pending}} = event_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_event: %{id: cid} = command, journal_event: %{id: jid}} ->
+      %{transaction: %{id: tid}, new_command: %{id: cid} = command, journal_event: %{id: jid}} ->
         Multi.update(Multi.new(), :event_success, fn _ ->
           build_mark_as_processed(command)
         end)
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
   def handle_build_transaction(multi, _event_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_event: %{id: cid} = command, journal_event: %{id: jid}} ->
+      %{transaction: %{id: tid}, new_command: %{id: cid} = command, journal_event: %{id: jid}} ->
         Multi.update(Multi.new(), :event_success, fn _ ->
           build_mark_as_processed(command)
         end)

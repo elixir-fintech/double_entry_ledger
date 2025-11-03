@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
        when not is_nil(iaddr) and not is_nil(aaddr) do
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(iaddr))
-    |> Multi.insert(:new_event, fn %{instance: id} ->
+    |> Multi.insert(:new_command, fn %{instance: id} ->
       CommandStoreHelper.build_create(event_map, id)
     end)
     |> Multi.one(:get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))
@@ -127,7 +127,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
         ) :: Ecto.Multi.t()
   defp handle_build_update_account(multi, %AccountEventMap{} = event_map) do
     Multi.merge(multi, fn
-      %{account: %{id: aid}, new_event: %{id: eid, instance_id: iid} = event} ->
+      %{account: %{id: aid}, new_command: %{id: eid, instance_id: iid} = event} ->
         Multi.insert(
           Multi.new(),
           :journal_event,

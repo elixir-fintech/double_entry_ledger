@@ -73,16 +73,16 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
     - The updated Command struct
   """
   @spec update!(Command.t(), ErrorMap.t(), Repo.t()) :: Command.t()
-  def update!(event, error_map, repo) do
-    event
+  def update!(command, error_map, repo) do
+    command
     |> Changeset.change(occ_retry_count: error_map.retries, errors: error_map.errors)
     |> repo.update!()
   end
 
   @spec build_multi(Command.t()) :: Multi.t()
-  def build_multi(event) do
+  def build_multi(command) do
     Multi.new()
-    |> Multi.put(:occable_item, event)
+    |> Multi.put(:occable_item, command)
     |> Multi.put(:instance, fn %{occable_item: %{instance_id: id}} -> id end)
     |> Multi.insert(:idempotency, fn %{occable_item: %{instance_id: id, event_map: em}} ->
       IdempotencyKey.changeset(id, em)
@@ -120,10 +120,10 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
   """
   @spec timed_out(Command.t(), atom(), ErrorMap.t()) ::
           Multi.t()
-  def timed_out(event, name, error_map) do
+  def timed_out(command, name, error_map) do
     Multi.new()
     |> Multi.update(name, fn _ ->
-      event
+      command
       |> Helper.occ_timeout_changeset(error_map)
     end)
   end
@@ -200,16 +200,16 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
       ) do
     Multi.new()
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
-    |> Multi.insert(:new_event, fn %{_instance: id} ->
+    |> Multi.insert(:new_command, fn %{_instance: id} ->
       CommandStoreHelper.build_create(event_map, id)
     end)
-    |> Multi.update(name, fn %{new_event: event} ->
-      Helper.occ_timeout_changeset(event, error_map)
+    |> Multi.update(name, fn %{new_command: command} ->
+      Helper.occ_timeout_changeset(command, error_map)
     end)
     |> Multi.insert(
       :pending_transaction_lookup,
       fn %{
-           new_event: %{id: cid},
+           new_command: %{id: cid},
            _instance: iid
          } ->
         attrs = %{
@@ -231,11 +231,11 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
       ) do
     Multi.new()
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
-    |> Multi.insert(:new_event, fn %{_instance: id} ->
+    |> Multi.insert(:new_command, fn %{_instance: id} ->
       CommandStoreHelper.build_create(event_map, id)
     end)
-    |> Multi.update(name, fn %{new_event: event} ->
-      Helper.occ_timeout_changeset(event, error_map)
+    |> Multi.update(name, fn %{new_command: command} ->
+      Helper.occ_timeout_changeset(command, error_map)
     end)
   end
 

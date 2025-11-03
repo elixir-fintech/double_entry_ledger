@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
 
       # Map event validation errors to an event map changeset
       iex> default_response_handler(
-      ...>   {:error, :new_event, event_changeset, %{}},
+      ...>   {:error, :new_command, event_changeset, %{}},
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
@@ -84,7 +84,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
 
         {:error, changeset}
 
-      {:error, :new_event, %Changeset{data: %Command{}} = event_changeset, _steps_so_far} ->
+      {:error, :new_command, %Changeset{data: %Command{}} = event_changeset, _steps_so_far} ->
         warn("Command changeset failed", event_map, event_changeset)
 
         {:error, from_event_to_event_map(event_map, event_changeset)}

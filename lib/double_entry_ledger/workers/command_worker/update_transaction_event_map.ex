@@ -152,12 +152,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
     new_event_map = Map.put_new(event_map, :status, :pending)
 
     Multi.new()
-    |> Multi.insert(:new_event, fn _ ->
+    |> Multi.insert(:new_command, fn _ ->
       CommandStoreHelper.build_create(new_event_map, instance_id)
     end)
     |> CommandStoreHelper.build_get_create_transaction_event_transaction(
       :get_create_transaction_event_transaction,
-      :new_event
+      :new_command
     )
     |> Multi.merge(fn
       %{get_create_transaction_event_transaction: {:error, %UpdateEventError{} = exception}} ->
@@ -199,7 +199,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
   def handle_build_transaction(multi, _event_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_event: %{id: eid, event_map: em, instance_id: iid} = event} ->
+      %{transaction: %{id: tid}, new_command: %{id: eid, event_map: em, instance_id: iid} = event} ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{event_map: em, instance_id: iid})
         end)
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
 
       %{
         get_create_transaction_event_error: %{reason: :create_event_not_processed} = exception,
-        new_event: event
+        new_command: event
       } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
@@ -224,13 +224,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
 
       %{
         get_create_transaction_event_error: %{reason: :create_event_failed} = exception,
-        new_event: event
+        new_command: event
       } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_schedule_update_retry(event, exception)
         end)
 
-      %{get_create_transaction_event_error: exception, new_event: event} ->
+      %{get_create_transaction_event_error: exception, new_command: event} ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_mark_as_dead_letter(event, exception.message)
         end)

@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
        ) do
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
-    |> Multi.insert(:new_event, fn %{instance: id} ->
+    |> Multi.insert(:new_command, fn %{instance: id} ->
       CommandStoreHelper.build_create(event_map, id)
     end)
     |> Multi.insert(:journal_event, fn %{instance: id} ->
@@ -137,7 +137,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
     |> Multi.insert(:account, fn %{instance: id} ->
       AccountStoreHelper.build_create(payload, id)
     end)
-    |> Multi.update(:event_success, fn %{new_event: event} ->
+    |> Multi.update(:event_success, fn %{new_command: event} ->
       build_mark_as_processed(event)
     end)
     |> Oban.insert(:create_account_link, fn %{

@@ -113,7 +113,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSav
   def handle_build_transaction(multi, event_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_event: %{id: eid, event_map: em, instance_id: iid} = event} ->
+      %{transaction: %{id: tid}, new_command: %{id: eid, event_map: em, instance_id: iid} = event} ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{event_map: em, instance_id: iid})
         end)
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMapNoSav
           })
         end)
 
-      %{get_create_transaction_event_error: %{reason: reason}, new_event: _event} ->
+      %{get_create_transaction_event_error: %{reason: reason}, new_command: _event} ->
         event_map_changeset =
           cast_to_event_map(event_map)
           |> TransactionEventMap.changeset(%{})

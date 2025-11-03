@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
 
   ## Error Handling
 
-  - `:new_event` errors: Command validation failures mapped to event-level changeset errors
+  - `:new_command` errors: Command validation failures mapped to event-level changeset errors
   - `:account` errors: Account validation failures mapped to payload-level changeset errors
   - Other step failures: Logged and returned as descriptive string errors
 
@@ -104,7 +104,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
 
         {:ok, account, event}
 
-      {:error, :new_event, changeset, _changes} ->
+      {:error, :new_command, changeset, _changes} ->
         warn("Command changeset failed", event_map, changeset)
 
         {:error, from_event_to_event_map(event_map, changeset)}
