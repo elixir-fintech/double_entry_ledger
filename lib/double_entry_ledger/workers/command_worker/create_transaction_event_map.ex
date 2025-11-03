@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
   use DoubleEntryLedger.Occ.Processor
   use DoubleEntryLedger.Logger
 
-  alias DoubleEntryLedger.{Command, Repo, JournalEvent}
+  alias DoubleEntryLedger.{Command, Repo, JournalEvent, PendingTransactionLookup}
   alias DoubleEntryLedger.Command.TransactionEventMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
@@ -184,16 +184,44 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap do
 
     - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step.
   """
-  def handle_build_transaction(multi, _event_map, _repo) do
+  def handle_build_transaction(multi, %{payload: %{status: :pending}} = event_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_event: %{id: eid} = event, journal_event: %{id: jid}} ->
+      %{transaction: %{id: tid}, new_event: %{id: cid} = command, journal_event: %{id: jid}} ->
         Multi.update(Multi.new(), :event_success, fn _ ->
-          build_mark_as_processed(event)
+          build_mark_as_processed(command)
+        end)
+        |> Multi.insert(:pending_transaction_lookup, fn _ ->
+          attrs = %{
+            command_id: cid,
+            source: event_map.source,
+            source_idempk: event_map.source_idempk,
+            instance_id: command.instance_id,
+            transaction_id: tid,
+            journal_event_id: jid
+          }
+          PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
         end)
         |> Oban.insert(:create_transaction_link, fn _ ->
           Workers.Oban.CreateTransactionLink.new(%{
-            command_id: eid,
+            command_id: cid,
+            transaction_id: tid,
+            journal_event_id: jid
+          })
+        end)
+    end)
+  end
+
+  def handle_build_transaction(multi, _event_map, _repo) do
+    multi
+    |> Multi.merge(fn
+      %{transaction: %{id: tid}, new_event: %{id: cid} = command, journal_event: %{id: jid}} ->
+        Multi.update(Multi.new(), :event_success, fn _ ->
+          build_mark_as_processed(command)
+        end)
+        |> Oban.insert(:create_transaction_link, fn _ ->
+          Workers.Oban.CreateTransactionLink.new(%{
+            command_id: cid,
             transaction_id: tid,
             journal_event_id: jid
           })

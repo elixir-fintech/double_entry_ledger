@@ -129,6 +129,7 @@ end
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.TransactionEventMap do
   alias Ecto.{Multi, Repo}
   alias DoubleEntryLedger.Command.{ErrorMap, TransactionEventMap, IdempotencyKey}
+  alias DoubleEntryLedger.PendingTransactionLookup
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
@@ -187,18 +188,46 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
   @spec timed_out(TransactionEventMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()
   def timed_out(
+        %{instance_address: address, payload: %{status: :pending}} = event_map,
+        name,
+        %{save_on_error: true} = error_map
+      ) do
+
+    Multi.new()
+    |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
+    |> Multi.insert(:new_event, fn %{_instance: id} ->
+      CommandStoreHelper.build_create(event_map, id)
+    end)
+    |> Multi.update(name, fn %{new_event: event} ->
+      Helper.occ_timeout_changeset(event, error_map)
+    end)
+    |> Multi.insert(:pending_transaction_lookup, fn %{
+                                                      new_event: %{id: cid},
+                                                      _instance: iid
+                                                    } ->
+      attrs = %{
+        command_id: cid,
+        source: event_map.source,
+        source_idempk: event_map.source_idempk,
+        instance_id: iid
+      }
+
+      PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
+    end)
+  end
+
+  def timed_out(
         %{instance_address: address} = event_map,
         name,
         %{save_on_error: true} = error_map
       ) do
-    new_event_step = :new_event
 
     Multi.new()
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
-    |> Multi.insert(new_event_step, fn %{_instance: id} ->
+    |> Multi.insert(:new_event, fn %{_instance: id} ->
       CommandStoreHelper.build_create(event_map, id)
     end)
-    |> Multi.update(name, fn %{^new_event_step => event} ->
+    |> Multi.update(name, fn %{new_event: event} ->
       Helper.occ_timeout_changeset(event, error_map)
     end)
   end

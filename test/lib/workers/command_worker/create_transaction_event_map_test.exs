@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
   import DoubleEntryLedger.InstanceFixtures
 
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap
-  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.{Command, PendingTransactionLookup}
   alias DoubleEntryLedger.Stores.CommandStore
 
   doctest CreateTransactionEventMap
@@ -35,6 +35,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
       assert transaction.status == :pending
+    end
+
+    test "pending transaction also creates a pending transaction lookup", ctx do
+      event_map = create_transaction_event_map(ctx, :pending)
+
+      {:ok, %{id: trx_id}, %{id: id}} = CreateTransactionEventMap.process(event_map)
+      assert %{command_id: ^id, transaction_id: ^trx_id} = Repo.get_by(PendingTransactionLookup, command_id: id)
+    end
+
+    test "posted transaction don't create a pending transaction lookup", ctx do
+      event_map = create_transaction_event_map(ctx, :posted)
+
+      {:ok, _, %{id: id}} = CreateTransactionEventMap.process(event_map)
+      assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
     end
 
     test "return TransactionEventMap changeset for duplicate source_idempk", ctx do
@@ -107,7 +121,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
 
       assert {:error, %Command{id: id, command_queue_item: %{status: :occ_timeout}}} =
                CreateTransactionEventMap.process(
-                 create_transaction_event_map(ctx),
+                 create_transaction_event_map(ctx, :pending),
                  DoubleEntryLedger.MockRepo
                )
 
@@ -119,6 +133,48 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
 
       assert length(errors) == 5
       assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] = errors
+    end
+
+    test "creates a pending_transaction_lookup for commands with pending status", ctx do
+      DoubleEntryLedger.MockRepo
+      |> expect(:insert, 5, fn changeset ->
+        raise Ecto.StaleEntryError, action: :update_transaction, changeset: changeset
+      end)
+      |> expect(:transaction, 6, fn multi -> Repo.transaction(multi) end)
+
+      {:error, %Command{id: id}} =
+               CreateTransactionEventMap.process(
+                 create_transaction_event_map(ctx, :pending),
+                 DoubleEntryLedger.MockRepo
+               )
+
+      assert %Command{
+               command_queue_item: %{status: :occ_timeout, occ_retry_count: 5}
+             } =
+               CommandStore.get_by_id(id)
+
+      assert %{command_id: ^id} = Repo.get_by(PendingTransactionLookup, command_id: id)
+    end
+
+    test "does not create a pending_transaction_lookup for other commands", ctx do
+      DoubleEntryLedger.MockRepo
+      |> expect(:insert, 5, fn changeset ->
+        raise Ecto.StaleEntryError, action: :update_transaction, changeset: changeset
+      end)
+      |> expect(:transaction, 6, fn multi -> Repo.transaction(multi) end)
+
+      {:error, %Command{id: id}} =
+               CreateTransactionEventMap.process(
+                 create_transaction_event_map(ctx, :posted),
+                 DoubleEntryLedger.MockRepo
+               )
+
+      assert %Command{
+               command_queue_item: %{status: :occ_timeout, occ_retry_count: 5}
+             } =
+               CommandStore.get_by_id(id)
+
+      assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
     end
   end
 end
