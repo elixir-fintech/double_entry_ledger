@@ -143,7 +143,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     ...>     ]
     ...>   }
     ...> })
-    iex> [trx | _] =  (event |> Repo.preload(:transactions)).transactions
+    iex> trx =  (event |> Repo.preload(:transaction)).transaction
     iex> trx.id == transaction.id
     true
 

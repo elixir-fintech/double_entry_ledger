@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   def get_by_id(id) do
     Command
     |> where(id: ^id)
-    |> preload([:command_queue_item, :transactions])
+    |> preload([:command_queue_item, :transaction])
     |> Repo.one()
   end
 
@@ -227,7 +227,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
       select: e
     )
     |> paginate(page, per_page)
-    |> preload([:command_queue_item, :transactions])
+    |> preload([:command_queue_item, :transaction])
     |> Repo.all()
   end
 
@@ -288,7 +288,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     ...>   ]}
     iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
     iex> event = CommandStore.get_create_transaction_event(id)
-    iex> [%{id: trx_id} | _] = event.transactions
+    iex> %{id: trx_id} = event.transaction
     iex> trx_id
     id
 

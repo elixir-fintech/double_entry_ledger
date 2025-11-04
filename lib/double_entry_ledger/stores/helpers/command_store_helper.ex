@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
           fragment("event_map->>? = ?", "source", ^source) and
           fragment("event_map->>? = ?", "source_idempk", ^source_idempk),
       limit: 1,
-      preload: [:command_queue_item, transactions: [entries: :account]]
+      preload: [:command_queue_item, transaction: [entries: :account]]
     )
     |> Repo.one()
   end
@@ -147,7 +147,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
         } = event
       ) do
     case get_event_by(:create_transaction, source, source_idempk, id) do
-      %{transactions: [transaction | _], command_queue_item: %{status: :processed}} =
+      %{transaction: transaction, command_queue_item: %{status: :processed}} =
           create_transaction_event ->
         {:ok, {transaction, create_transaction_event}}
 
@@ -200,11 +200,11 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_transaction_query(transaction_id) do
     from(e in Command,
-      join: evt in assoc(e, :event_transaction_links),
+      join: evt in assoc(e, :event_transaction_link),
       where: evt.transaction_id == ^transaction_id,
       select: e
     )
-    |> preload([:command_queue_item, transactions: :entries])
+    |> preload([:command_queue_item, transaction: :entries])
   end
 
   @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
@@ -219,7 +219,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   @spec transaction_events_for_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def transaction_events_for_account_query(account_id) do
     from(e in Command,
-      join: t in assoc(e, :transactions),
+      join: t in assoc(e, :transaction),
       join: ety in Entry,
       on: ety.transaction_id == t.id,
       join: a in Account,

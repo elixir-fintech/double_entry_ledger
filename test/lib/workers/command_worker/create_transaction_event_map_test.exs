@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+      %{transaction: processed_transaction} = Repo.preload(processed_event, :transaction)
 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
@@ -129,9 +129,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
 
       assert %Command{
                command_queue_item: %{status: :occ_timeout, occ_retry_count: 5, errors: errors},
-               transactions: []
+               transaction: nil
              } =
-               CommandStore.get_by_id(id) |> Repo.preload(:transactions)
+               CommandStore.get_by_id(id) |> Repo.preload(:transaction)
 
       assert length(errors) == 5
       assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] = errors

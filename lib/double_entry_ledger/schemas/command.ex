@@ -41,8 +41,8 @@ defmodule DoubleEntryLedger.Command do
           event_map: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
-          event_transaction_links: [EventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
-          transactions: [Transaction.t()] | Ecto.Association.NotLoaded.t(),
+          event_transaction_link: EventTransactionLink.t() | Ecto.Association.NotLoaded.t(),
+          transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
           command_queue_item: CommandQueueItem.t() | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
@@ -54,12 +54,8 @@ defmodule DoubleEntryLedger.Command do
     field(:event_map, EventMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    has_many(:event_transaction_links, EventTransactionLink, foreign_key: :command_id)
-
-    many_to_many(:transactions, Transaction,
-      join_through: EventTransactionLink,
-      join_keys: [command_id: :id, transaction_id: :id]
-    )
+    has_one(:event_transaction_link, EventTransactionLink)
+    has_one(:transaction, through: [:event_transaction_link, :transaction])
 
     has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)
 

@@ -256,7 +256,7 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
 
       assert eqm.status == :occ_timeout
       assert eqm.occ_retry_count == 5
-      %{transactions: []} = Repo.preload(updated_event, :transactions)
+      %{transaction: nil} = Repo.preload(updated_event, :transaction)
       assert eqm.processing_completed_at != nil
       assert length(eqm.errors) == 5
       assert eqm.retry_count == 0
@@ -307,8 +307,8 @@ defmodule DoubleEntryLedger.UpdateTransactionEventTest do
   defp shared_event_asserts(transaction, processed_event, pending_transaction) do
     assert processed_event.command_queue_item.status == :processed
 
-    %{transactions: [processed_transaction | []]} =
-      processed_event = Repo.preload(processed_event, :transactions)
+    %{transaction: processed_transaction} =
+      processed_event = Repo.preload(processed_event, :transaction)
 
     assert processed_transaction.id == pending_transaction.id
     assert transaction.id == pending_transaction.id

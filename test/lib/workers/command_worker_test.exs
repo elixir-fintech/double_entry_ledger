@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = CommandStore.get_by_id(processed_event.id)
+      %{transaction: processed_transaction} = CommandStore.get_by_id(processed_event.id)
 
       assert return_available_balances(ctx) == [100, 100]
       assert processed_transaction.id == transaction.id
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = CommandStore.get_by_id(processed_event.id)
+      %{transaction: processed_transaction} = CommandStore.get_by_id(processed_event.id)
 
       assert processed_transaction.id == pending_transaction.id
       assert transaction.id == pending_transaction.id
@@ -116,7 +116,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+      %{transaction: processed_transaction} = Repo.preload(processed_event, :transaction)
 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil

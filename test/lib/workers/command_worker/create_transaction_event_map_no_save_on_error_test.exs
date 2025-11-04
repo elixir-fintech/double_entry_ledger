@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
 
       assert evq.status == :processed
 
-      %{transactions: [processed_transaction | []]} = Repo.preload(processed_event, :transactions)
+      %{transaction: processed_transaction} = Repo.preload(processed_event, :transaction)
 
       assert processed_transaction.id == transaction.id
 

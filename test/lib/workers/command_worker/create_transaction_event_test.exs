@@ -29,8 +29,8 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
 
       assert evq.status == :processed
 
-      %{transactions: [%{id: trx_id} = processed_transaction | []]} =
-        Repo.preload(processed_event, :transactions)
+      %{transaction: %{id: trx_id} = processed_transaction} =
+        Repo.preload(processed_event, :transaction)
 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
@@ -46,8 +46,8 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
 
       assert evq.status == :processed
 
-      %{transactions: [%{id: trx_id} = processed_transaction | []]} =
-        Repo.preload(processed_event, :transactions)
+      %{transaction: %{id: trx_id} = processed_transaction} =
+        Repo.preload(processed_event, :transaction)
 
       assert processed_transaction.id == transaction.id
       assert evq.processing_completed_at != nil
@@ -123,7 +123,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       {:error, %{command_queue_item: eqm} = updated_event} =
         CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
 
-      %{transactions: []} = Repo.preload(updated_event, :transactions)
+      %{transaction: nil} = Repo.preload(updated_event, :transaction)
       assert eqm.processing_completed_at != nil
       assert eqm.occ_retry_count == 5
       assert eqm.retry_count == 0
