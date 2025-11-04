@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
   alias Ecto.Changeset
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Command, Transaction, Account, Entry}
+  alias DoubleEntryLedger.{Repo, Command, Transaction, Account, Entry, PendingTransactionLookup}
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
 
   @doc """
@@ -102,9 +102,9 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   - `transactions: [entries: :account]` - Transactions with their entries and accounts
 
   """
-  @spec get_event_by(atom(), String.t(), String.t(), Ecto.UUID.t()) ::
+  @spec get_command_by(atom(), String.t(), String.t(), Ecto.UUID.t()) ::
           Command.t() | nil
-  def get_event_by(action, source, source_idempk, instance_id) do
+  def get_command_by(action, source, source_idempk, instance_id) do
     from(e in Command,
       where:
         e.instance_id == ^instance_id and
@@ -146,7 +146,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
           }
         } = event
       ) do
-    case get_event_by(:create_transaction, source, source_idempk, id) do
+    case get_command_by(:create_transaction, source, source_idempk, id) do
       %{transaction: transaction, command_queue_item: %{status: :processed}} =
           create_transaction_event ->
         {:ok, {transaction, create_transaction_event}}
@@ -182,10 +182,10 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
           Command.t() | atom()
         ) ::
           Ecto.Multi.t()
-  def build_get_create_transaction_event_transaction(multi, step, event_or_step) do
+  def build_get_create_transaction_event_transaction(multi, step, command_or_step) do
     multi
     |> Multi.run(step, fn _, changes ->
-      event = get_event(event_or_step, changes)
+      event = get_command(command_or_step, changes)
 
       try do
         {:ok, {transaction, _}} = get_create_transaction_event_transaction(event)
@@ -197,43 +197,53 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
     end)
   end
 
+  @spec pending_transaction_lookup(Command.t()) :: Command.t()
+  def pending_transaction_lookup(%{instance_id: iid, event_map: %{source: s, source_idempk: sidpk}}) do
+    from(ptl in PendingTransactionLookup,
+      where: ptl.instance_id == ^iid and ptl.source == ^s and ptl.source_idempk == ^sidpk,
+      limit: 1,
+      preload: [command: :command_queue_item, transaction: [entries: :account]]
+    )
+    |> Repo.one()
+  end
+
   @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_transaction_query(transaction_id) do
-    from(e in Command,
-      join: evt in assoc(e, :event_transaction_link),
+    from(c in Command,
+      join: evt in assoc(c, :event_transaction_link),
       where: evt.transaction_id == ^transaction_id,
-      select: e
+      select: c
     )
     |> preload([:command_queue_item, transaction: :entries])
   end
 
   @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_account_query(account_id) do
-    from(e in Command,
-      join: evt in assoc(e, :event_account_link),
+    from(c in Command,
+      join: evt in assoc(c, :event_account_link),
       where: evt.account_id == ^account_id,
-      select: e
+      select: c
     )
   end
 
   @spec transaction_events_for_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def transaction_events_for_account_query(account_id) do
-    from(e in Command,
-      join: t in assoc(e, :transaction),
+    from(c in Command,
+      join: t in assoc(c, :transaction),
       join: ety in Entry,
       on: ety.transaction_id == t.id,
       join: a in Account,
       on: a.id == ety.account_id,
       where: a.id == ^account_id,
-      select: e
+      select: c
     )
   end
 
-  @spec get_event(Command.t() | atom(), map()) :: Command.t()
-  defp get_event(event_or_step, changes) do
+  @spec get_command(Command.t() | atom(), map()) :: Command.t()
+  defp get_command(command_or_step, changes) do
     cond do
-      is_struct(event_or_step, Command) -> event_or_step
-      is_atom(event_or_step) -> Map.fetch!(changes, event_or_step)
+      is_struct(command_or_step, Command) -> command_or_step
+      is_atom(command_or_step) -> Map.fetch!(changes, command_or_step)
     end
   end
 end

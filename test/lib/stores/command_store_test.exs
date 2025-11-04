@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
 
       assert %Command{} =
                found_event =
-               CommandStoreHelper.get_event_by(
+               CommandStoreHelper.get_command_by(
                  :create_transaction,
                  event.event_map.source,
                  event.event_map.source_idempk,
@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
 
       assert %Command{} =
                found_event =
-               CommandStoreHelper.get_event_by(
+               CommandStoreHelper.get_command_by(
                  :create_transaction,
                  event_map.source,
                  event_map.source_idempk,
@@ -103,7 +103,7 @@ defmodule DoubleEntryLedger.Stores.EventStoreTest do
 
     test "returns nil for non-existent event", %{instance: instance} do
       assert nil ==
-               CommandStoreHelper.get_event_by(
+               CommandStoreHelper.get_command_by(
                  :create_transaction,
                  "source",
                  "source_idempk",
