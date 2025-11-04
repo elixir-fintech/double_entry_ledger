@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
       multi =
         Ecto.Multi.new()
-        |> CommandStoreHelper.build_get_create_transaction_event_transaction(:transaction, update_event)
+        |> CommandStoreHelper.build_get_create_transaction_command_transaction(:transaction, update_event)
         |> Ecto.Multi.update(:event, fn %{transaction: transaction} ->
           CommandStoreHelper.build_mark_as_processed(update_event, transaction.id)
         end)
@@ -134,27 +134,24 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
 
   """
-  @spec get_create_transaction_event_transaction(Command.t()) ::
+  @spec get_create_transaction_command_transaction(Command.t()) ::
           {:ok, {Transaction.t(), Command.t()}}
           | {:error | :pending_error, String.t(), Command.t() | nil}
-  def get_create_transaction_event_transaction(
-        %{
-          instance_id: id,
-          event_map: %{
-            source: source,
-            source_idempk: source_idempk
-          }
-        } = event
-      ) do
-    case get_command_by(:create_transaction, source, source_idempk, id) do
-      %{transaction: transaction, command_queue_item: %{status: :processed}} =
-          create_transaction_event ->
-        {:ok, {transaction, create_transaction_event}}
+  def get_create_transaction_command_transaction(command) do
+    case pending_transaction_lookup(command) do
+      %{transaction: transaction, command: create_command} when not is_nil(transaction) ->
+        {:ok, {transaction, create_command}}
 
-      create_transaction_event ->
+      %{command: create_command} when not is_nil(create_command) ->
         raise UpdateEventError,
-          create_event: create_transaction_event,
-          update_event: event
+          create_event: create_command,
+          update_event: command
+
+      _ ->
+        raise UpdateEventError,
+          create_event: nil,
+          update_event: command
+
     end
   end
 
@@ -176,19 +173,19 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   * `Ecto.Multi.t()` - The updated Multi instance with the new step added
 
   """
-  @spec build_get_create_transaction_event_transaction(
+  @spec build_get_create_transaction_command_transaction(
           Ecto.Multi.t(),
           atom(),
           Command.t() | atom()
         ) ::
           Ecto.Multi.t()
-  def build_get_create_transaction_event_transaction(multi, step, command_or_step) do
+  def build_get_create_transaction_command_transaction(multi, step, command_or_step) do
     multi
     |> Multi.run(step, fn _, changes ->
       event = get_command(command_or_step, changes)
 
       try do
-        {:ok, {transaction, _}} = get_create_transaction_event_transaction(event)
+        {:ok, {transaction, _}} = get_create_transaction_command_transaction(event)
         {:ok, transaction}
       rescue
         e in UpdateEventError ->
@@ -197,8 +194,8 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
     end)
   end
 
-  @spec pending_transaction_lookup(Command.t()) :: Command.t()
-  def pending_transaction_lookup(%{instance_id: iid, event_map: %{source: s, source_idempk: sidpk}}) do
+  @spec pending_transaction_lookup(Command.t()) :: PendingTransactionLookup.t()
+  defp pending_transaction_lookup(%{instance_id: iid, event_map: %{source: s, source_idempk: sidpk}}) do
     from(ptl in PendingTransactionLookup,
       where: ptl.instance_id == ^iid and ptl.source == ^s and ptl.source_idempk == ^sidpk,
       limit: 1,

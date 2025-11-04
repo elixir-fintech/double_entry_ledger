@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreatePendingTransactionLookupTable 
 
   def change do
     create table(:pending_transaction_lookup, primary_key: false, prefix: @schema_prefix ) do
-      add :instance_id, :text, primary_key: true
+      add :instance_id, references(:instances, type: :binary_id), primary_key: true
       add :source, :text, primary_key: true
       add :source_idempk, :text, primary_key: true
 
@@ -17,6 +17,8 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreatePendingTransactionLookupTable 
       timestamps(type: :utc_datetime_usec)
     end
 
+    create index(:pending_transaction_lookup, [:instance_id], prefix: @schema_prefix)
+    create index(:pending_transaction_lookup, [:command_id], prefix: @schema_prefix)
     create index(:pending_transaction_lookup, [:transaction_id], prefix: @schema_prefix)
     create index(:pending_transaction_lookup, [:journal_event_id], prefix: @schema_prefix)
   end

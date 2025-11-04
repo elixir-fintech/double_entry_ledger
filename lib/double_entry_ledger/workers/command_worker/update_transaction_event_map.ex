@@ -155,15 +155,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEventMap do
     |> Multi.insert(:new_command, fn _ ->
       CommandStoreHelper.build_create(new_event_map, instance_id)
     end)
-    |> CommandStoreHelper.build_get_create_transaction_event_transaction(
-      :get_create_transaction_event_transaction,
+    |> CommandStoreHelper.build_get_create_transaction_command_transaction(
+      :get_create_transaction_command_transaction,
       :new_command
     )
     |> Multi.merge(fn
-      %{get_create_transaction_event_transaction: {:error, %UpdateEventError{} = exception}} ->
+      %{get_create_transaction_command_transaction: {:error, %UpdateEventError{} = exception}} ->
         Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
 
-      %{get_create_transaction_event_transaction: create_transaction} ->
+      %{get_create_transaction_command_transaction: create_transaction} ->
         TransactionStoreHelper.build_update(
           Multi.new(),
           :transaction,

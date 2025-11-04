@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
       multi =
         Ecto.Multi.new()
-        |> CommandStoreHelper.build_get_create_transaction_event_transaction(:transaction, update_event)
+        |> CommandStoreHelper.build_get_create_transaction_command_transaction(:transaction, update_event)
         |> Ecto.Multi.update(:event, fn %{transaction: transaction} ->
           CommandStoreHelper.build_mark_as_processed(update_event, transaction.id)
         end)

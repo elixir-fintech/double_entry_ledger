@@ -141,7 +141,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
   """
   def build_transaction(%Command{} = event, attr, _instance_id, repo) do
     Multi.new()
-    |> CommandStoreHelper.build_get_create_transaction_event_transaction(
+    |> CommandStoreHelper.build_get_create_transaction_command_transaction(
       :get_create_event_transaction,
       event
     )
