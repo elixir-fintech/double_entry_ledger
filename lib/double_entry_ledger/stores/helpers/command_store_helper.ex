@@ -151,7 +151,6 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
         raise UpdateEventError,
           create_event: nil,
           update_event: command
-
     end
   end
 
@@ -195,7 +194,10 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   end
 
   @spec pending_transaction_lookup(Command.t()) :: PendingTransactionLookup.t()
-  defp pending_transaction_lookup(%{instance_id: iid, event_map: %{source: s, source_idempk: sidpk}}) do
+  defp pending_transaction_lookup(%{
+         instance_id: iid,
+         event_map: %{source: s, source_idempk: sidpk}
+       }) do
     from(ptl in PendingTransactionLookup,
       where: ptl.instance_id == ^iid and ptl.source == ^s and ptl.source_idempk == ^sidpk,
       limit: 1,
