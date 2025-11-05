@@ -192,11 +192,11 @@ defmodule DoubleEntryLedger.Instance do
 
       iex> alias DoubleEntryLedger.{Account, Repo}
       iex> alias DoubleEntryLedger.Stores.AccountStore
-      iex> alias DoubleEntryLedger.Apis.EventApi
+      iex> alias DoubleEntryLedger.Apis.CommandApi
       iex> {:ok, instance} = Repo.insert(%Instance{address: "Balanced Ledger"})
       iex> {:ok, acc1} = AccountStore.create(instance.address, %{address: "account:main1", type: :asset, currency: :USD, posted: %{amount: 10, debit: 10, credit: 0}}, "unique_id_123")
       iex> {:ok, acc2} = AccountStore.create(instance.address, %{address: "account:main2", type: :liability, currency: :USD, posted: %{amount: 10, debit: 0, credit: 10}}, "unique_id_456")
-      iex> {:ok, _, _} = EventApi.process_from_params(%{"instance_address" => instance.address,
+      iex> {:ok, _, _} = CommandApi.process_from_params(%{"instance_address" => instance.address,
       ...>  "source" => "s1", "source_idempk" => "1", "action" => "create_transaction",
       ...>  "payload" => %{"status" => :posted, "entries" => [
       ...>      %{"account_address" => acc1.address, "amount" => 10, "currency" => :USD},

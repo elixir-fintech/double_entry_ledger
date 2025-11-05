@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Apis.EventApi do
+defmodule DoubleEntryLedger.Apis.CommandApi do
   @moduledoc """
 
   The event_params should be as follows (Elixir does not allow string keys in the typespec
@@ -46,10 +46,10 @@ defmodule DoubleEntryLedger.Apis.EventApi do
   ## Examples
     iex> alias DoubleEntryLedger.Repo
     iex> alias DoubleEntryLedger.Stores.InstanceStore
-    iex> alias DoubleEntryLedger.Apis.EventApi
+    iex> alias DoubleEntryLedger.Apis.CommandApi
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-    iex> {:ok, event} = EventApi.create_from_params(%{
+    iex> {:ok, event} = CommandApi.create_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_account",
     ...>   "source" => "frontend",
@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> event.command_queue_item.status
     :pending
     iex> alias DoubleEntryLedger.Command.AccountEventMap
-    iex> {:error, %Ecto.Changeset{data: %AccountEventMap{}}= changeset} = EventApi.create_from_params(%{
+    iex> {:error, %Ecto.Changeset{data: %AccountEventMap{}}= changeset} = CommandApi.create_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_account",
     ...>   "source" => "frontend",
@@ -69,8 +69,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> changeset.valid?
     false
 
-    iex> alias DoubleEntryLedger.Apis.EventApi
-    iex> EventApi.create_from_params(%{"action" => "unsupported"})
+    iex> alias DoubleEntryLedger.Apis.CommandApi
+    iex> CommandApi.create_from_params(%{"action" => "unsupported"})
     iex> {:error, :action_not_supported}
 
   """
@@ -130,7 +130,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
     iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> {:ok, transaction, event} = EventApi.process_from_params(%{
+    iex> {:ok, transaction, event} = CommandApi.process_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_transaction",
     ...>   "source" => "frontend",
@@ -148,7 +148,7 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     true
 
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> {:ok, _account, _event} = EventApi.process_from_params(%{
+    iex> {:ok, _account, _event} = CommandApi.process_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_account",
     ...>   "source" => "frontend",
@@ -160,8 +160,8 @@ defmodule DoubleEntryLedger.Apis.EventApi do
     ...>   }
     ...> }, [on_error: :fail])
 
-    iex> alias DoubleEntryLedger.Apis.EventApi
-    iex> EventApi.process_from_params(%{"action" => "unsupported"})
+    iex> alias DoubleEntryLedger.Apis.CommandApi
+    iex> CommandApi.process_from_params(%{"action" => "unsupported"})
     iex> {:error, :action_not_supported}
   """
   @spec process_from_params(event_params(), on_error: on_error()) ::

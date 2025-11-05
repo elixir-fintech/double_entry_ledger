@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   import DoubleEntryLedger.Utils.Pagination, only: [paginate: 3]
 
   alias DoubleEntryLedger.Command.AccountEventMap
-  alias DoubleEntryLedger.Apis.EventApi
+  alias DoubleEntryLedger.Apis.CommandApi
   alias DoubleEntryLedger.Utils.Currency
   alias DoubleEntryLedger.Stores.AccountStoreHelper
 
@@ -217,7 +217,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
         source \\ "account_store-create"
       ) do
     response =
-      EventApi.process_from_params(%{
+      CommandApi.process_from_params(%{
         "instance_address" => instance_address,
         "action" => "create_account",
         "source" => source,
@@ -284,7 +284,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
     account = get_by_address(instance_address, account_address)
 
     response =
-      EventApi.process_from_params(%{
+      CommandApi.process_from_params(%{
         "instance_address" => instance_address,
         "account_address" => account.address,
         "action" => "update_account",

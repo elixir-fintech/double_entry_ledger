@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
   }
 
   alias DoubleEntryLedger.Stores.JournalEventStore
-  alias DoubleEntryLedger.Apis.EventApi
+  alias DoubleEntryLedger.Apis.CommandApi
   alias DoubleEntryLedger.Command.TransactionEventMap
 
   @type entry_map() :: %{
@@ -108,7 +108,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   """
   @spec create(String.t(), create_map(), String.t(),
-          on_error: EventApi.on_error(),
+          on_error: CommandApi.on_error(),
           source: String.t()
         ) ::
           {:ok, Transaction.t()}
@@ -125,7 +125,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "payload" => attrs
     }
 
-    EventApi.process_from_params(params, Keyword.new(on_error: on_error))
+    CommandApi.process_from_params(params, Keyword.new(on_error: on_error))
     |> case do
       {:ok, transaction, _event} -> {:ok, transaction}
       {:error, reason} -> {:error, reason}
@@ -181,7 +181,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   """
   @spec update(String.t(), Ecto.UUID.t(), update_map(), String.t(),
-          on_error: EventApi.on_error(),
+          on_error: CommandApi.on_error(),
           update_source: String.t()
         ) ::
           {:ok, Transaction.t()}
@@ -201,7 +201,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       "payload" => attrs
     }
 
-    EventApi.process_from_params(params, Keyword.new(on_error: on_error))
+    CommandApi.process_from_params(params, Keyword.new(on_error: on_error))
     |> case do
       {:ok, transaction, _event} -> {:ok, transaction}
       {:error, reason} -> {:error, reason}
