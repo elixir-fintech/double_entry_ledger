@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
       join: i in assoc(e, :instance),
       where: i.address == ^instance_address and e.id == ^id,
       select: e,
-      preload: [:command_queue_item, :transactions, :account, :instance]
+      preload: [:command_queue_item, :transaction, :instance]
     )
     |> Repo.one()
   end
@@ -264,42 +264,4 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     |> Repo.all()
   end
 
-  @doc """
-  Gets the create transaction event associated with a specific transaction.
-
-  ## Parameters
-    - `transaction_id`: ID of the transaction to get the create event for
-
-  ## Returns
-
-    - `Command.t() | nil`: The create transaction event if found and processed
-
-  ## Examples
-
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :posted,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> event = CommandStore.get_create_transaction_event(id)
-    iex> %{id: trx_id} = event.transaction
-    iex> trx_id
-    id
-
-  """
-  @spec get_create_transaction_event(Ecto.UUID.t()) :: Command.t()
-  def get_create_transaction_event(transaction_id) do
-    base_transaction_query(transaction_id)
-    |> join(:inner, [e], eqi in assoc(e, :command_queue_item))
-    |> where([e], fragment("?->> 'action' = 'create_transaction'", e.event_map))
-    |> where([_, _, eqi], eqi.status == :processed)
-    |> order_by(asc: :inserted_at)
-    |> Repo.one()
-  end
 end

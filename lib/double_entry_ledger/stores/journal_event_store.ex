@@ -296,4 +296,40 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     |> order_by(desc: :inserted_at)
     |> Repo.all()
   end
+
+  @doc """
+  Gets the create transaction journal event associated with a specific transaction.
+
+  ## Parameters
+    - `transaction_id`: ID of the transaction to get the create event for
+
+  ## Returns
+
+    - `JournalEvent.t() | nil`: The create transaction journal event if found
+
+  ## Examples
+
+    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+    iex> create_attrs = %{
+    ...>   status: :pending,
+    ...>   entries: [
+    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+    ...>   ]}
+    iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+    iex> event = JournalEventStore.get_create_transaction_journal_event(id)
+    iex> %{id: trx_id} = event.transaction
+    iex> trx_id
+    id
+
+  """
+  @spec get_create_transaction_journal_event(Ecto.UUID.t()) :: Command.t()
+  def get_create_transaction_journal_event(transaction_id) do
+    base_transaction_query(transaction_id)
+    |> where([je], fragment("?->> 'action' = 'create_transaction'", je.event_map))
+    |> Repo.one()
+  end
 end

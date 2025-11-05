@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
     BalanceHistoryEntry
   }
 
-  alias DoubleEntryLedger.Stores.CommandStore
+  alias DoubleEntryLedger.Stores.JournalEventStore
   alias DoubleEntryLedger.Apis.EventApi
   alias DoubleEntryLedger.Command.TransactionEventMap
 
@@ -189,7 +189,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
   def update(instance_address, id, attrs, update_idempotent_id, opts \\ []) do
     update_source = Keyword.get(opts, :update_source, "transaction_store-update")
     on_error = Keyword.get(opts, :on_error, :retry)
-    %{event_map: event_map} = CommandStore.get_create_transaction_event(id)
+    %{event_map: event_map} = JournalEventStore.get_create_transaction_journal_event(id)
 
     params = %{
       "instance_address" => instance_address,
