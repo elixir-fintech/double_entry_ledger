@@ -182,7 +182,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
            transaction: %{id: tid},
            journal_event: %{id: jid}
          } ->
-        Workers.Oban.CreateTransactionLink.new(%{
+        Workers.Oban.JournalEventLinks.new(%{
           command_id: cid,
           transaction_id: tid,
           journal_event_id: jid
@@ -205,7 +205,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent do
            transaction: %{id: tid},
            journal_event: %{id: jid}
          } ->
-        Workers.Oban.CreateTransactionLink.new(%{
+        Workers.Oban.JournalEventLinks.new(%{
           command_id: cid,
           transaction_id: tid,
           journal_event_id: jid
