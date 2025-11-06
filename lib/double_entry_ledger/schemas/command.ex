@@ -12,7 +12,9 @@ defmodule DoubleEntryLedger.Command do
   alias DoubleEntryLedger.{
     Transaction,
     Instance,
+    JournalEvent,
     EventTransactionLink,
+    JournalEventCommandLink,
     CommandQueueItem
   }
 
@@ -41,6 +43,8 @@ defmodule DoubleEntryLedger.Command do
           event_map: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
+          journal_event_command_link: JournalEventCommandLink.t() | Ecto.Association.NotLoaded.t(),
+          journal_event: JournalEvent.t() | Ecto.Association.NotLoaded.t(),
           event_transaction_link: EventTransactionLink.t() | Ecto.Association.NotLoaded.t(),
           transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
           command_queue_item: CommandQueueItem.t() | Ecto.Association.NotLoaded.t(),
@@ -56,6 +60,8 @@ defmodule DoubleEntryLedger.Command do
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_one(:event_transaction_link, EventTransactionLink)
     has_one(:transaction, through: [:event_transaction_link, :transaction])
+    has_one(:journal_event_command_link, JournalEventCommandLink)
+    has_one(:journal_event, through: [:journal_event_command_link, :command])
 
     has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)
 

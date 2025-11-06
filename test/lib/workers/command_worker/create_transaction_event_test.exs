@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
 
       assert evq.status == :processed
 
-      %{transaction: %{id: trx_id} = processed_transaction} =
+      %{transaction: %{id: _trx_id} = processed_transaction} =
         Repo.preload(processed_event, :transaction)
 
       assert processed_transaction.id == transaction.id

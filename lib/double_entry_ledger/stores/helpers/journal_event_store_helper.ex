@@ -138,7 +138,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_account_query(account_id) do
     from(je in JournalEvent,
-      join: evt in assoc(je, :event_account_link),
+      join: evt in assoc(je, :journal_event_account_link),
       where: evt.account_id == ^account_id,
       select: je
     )
