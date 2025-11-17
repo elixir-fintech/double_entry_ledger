@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateJournalEventAccountLinksTable 
 
     # Optionally, add indexes for performance optimization
     create index(:journal_event_account_links, [:account_id], prefix: @schema_prefix)
-    create index(:journal_event_account_links, [:journal_event_id], prefix: @schema_prefix)
+    create unique_index(:journal_event_account_links, [:journal_event_id], prefix: @schema_prefix)
     create unique_index(:journal_event_account_links, [:account_id, :journal_event_id],  prefix: @schema_prefix)
   end
 end

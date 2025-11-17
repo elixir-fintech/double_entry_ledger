@@ -13,8 +13,8 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateJournalEventCommandLinksTable 
     end
 
     # Optionally, add indexes for performance optimization
-    create index(:journal_event_command_links, [:command_id], prefix: @schema_prefix)
-    create index(:journal_event_command_links, [:journal_event_id], prefix: @schema_prefix)
+    create unique_index(:journal_event_command_links, [:command_id], prefix: @schema_prefix)
+    create unique_index(:journal_event_command_links, [:journal_event_id], prefix: @schema_prefix)
     create unique_index(:journal_event_command_links, [:command_id, :journal_event_id],  prefix: @schema_prefix)
   end
 end
