@@ -28,11 +28,14 @@ defmodule DoubleEntryLedger.JournalEvent do
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           inserted_at: DateTime.t() | nil,
-          journal_event_command_link: JournalEventCommandLink.t() | Ecto.Association.NotLoaded.t() | nil,
+          journal_event_command_link:
+            JournalEventCommandLink.t() | Ecto.Association.NotLoaded.t() | nil,
           command: Command.t() | Ecto.Association.NotLoaded.t() | nil,
-          journal_event_account_link: JournalEventAccountLink.t() | Ecto.Association.NotLoaded.t() | nil,
+          journal_event_account_link:
+            JournalEventAccountLink.t() | Ecto.Association.NotLoaded.t() | nil,
           account: Account.t() | Ecto.Association.NotLoaded.t() | nil,
-          journal_event_transaction_link: JournalEventTransactionLink.t() | Ecto.Association.NotLoaded.t() | nil,
+          journal_event_transaction_link:
+            JournalEventTransactionLink.t() | Ecto.Association.NotLoaded.t() | nil,
           transaction: Transaction.t() | Ecto.Association.NotLoaded.t() | nil,
           updated_at: DateTime.t() | nil
         }

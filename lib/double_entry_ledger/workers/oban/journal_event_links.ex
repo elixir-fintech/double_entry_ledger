@@ -5,6 +5,7 @@ defmodule DoubleEntryLedger.Workers.Oban.JournalEventLinks do
   use Oban.Worker, queue: :double_entry_ledger
 
   alias Ecto.Multi
+
   alias DoubleEntryLedger.{
     JournalEventTransactionLink,
     JournalEventAccountLink,

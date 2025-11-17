@@ -208,10 +208,11 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
   @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_transaction_query(transaction_id) do
-    from c in Command,
+    from(c in Command,
       join: t in assoc(c, :transaction),
       where: t.id == ^transaction_id,
       preload: [:command_queue_item, transaction: :entries]
+    )
   end
 
   @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()

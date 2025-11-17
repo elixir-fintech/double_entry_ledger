@@ -34,7 +34,16 @@ defmodule DoubleEntryLedger.Transaction do
   use DoubleEntryLedger.BaseSchema
   import Ecto.Query, only: [from: 2]
 
-  alias DoubleEntryLedger.{Account, Entry, JournalEvent, JournalEventTransactionLink, Instance, Repo, Types}
+  alias DoubleEntryLedger.{
+    Account,
+    Entry,
+    JournalEvent,
+    JournalEventTransactionLink,
+    Instance,
+    Repo,
+    Types
+  }
+
   alias __MODULE__, as: Transaction
 
   @states [:pending, :posted, :archived]
@@ -75,7 +84,8 @@ defmodule DoubleEntryLedger.Transaction do
           posted_at: DateTime.t() | nil,
           status: state() | nil,
           entries: [Entry.t()] | Ecto.Association.NotLoaded.t(),
-          journal_event_transaction_links: [JournalEventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
+          journal_event_transaction_links:
+            [JournalEventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
           journal_events: [JournalEvent.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil

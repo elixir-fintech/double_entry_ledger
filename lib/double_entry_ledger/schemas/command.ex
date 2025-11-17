@@ -43,7 +43,8 @@ defmodule DoubleEntryLedger.Command do
           event_map: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
-          journal_event_command_link: JournalEventCommandLink.t() | Ecto.Association.NotLoaded.t(),
+          journal_event_command_link:
+            JournalEventCommandLink.t() | Ecto.Association.NotLoaded.t(),
           journal_event: JournalEvent.t() | Ecto.Association.NotLoaded.t(),
           transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
           account: Account.t() | Ecto.Association.NotLoaded.t(),
