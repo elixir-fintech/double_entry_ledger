@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.{
     Repo,
     Command,
-    EventTransactionLink,
+    JournalEventTransactionLink,
     JournalEventAccountLink,
     Account,
     Transaction
@@ -147,8 +147,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   def build_create_transaction_event_transaction_link(%Command{id: event_id}, %Transaction{
         id: transaction_id
       }) do
-    %EventTransactionLink{}
-    |> EventTransactionLink.changeset(%{
+    %JournalEventTransactionLink{}
+    |> JournalEventTransactionLink.changeset(%{
       event_id: event_id,
       transaction_id: transaction_id
     })

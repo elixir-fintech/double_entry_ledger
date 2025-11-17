@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.EventTransactionLink do
+defmodule DoubleEntryLedger.JournalEventTransactionLink do
   @moduledoc """
   Join schema linking events and transactions in the Double Entry Ledger.
 
@@ -21,9 +21,9 @@ defmodule DoubleEntryLedger.EventTransactionLink do
   """
   use DoubleEntryLedger.BaseSchema
   alias DoubleEntryLedger.{Command, Transaction, JournalEvent}
-  alias __MODULE__, as: EventTransactionLink
+  alias __MODULE__, as: JournalEventTransactionLink
 
-  @type t :: %EventTransactionLink{
+  @type t :: %JournalEventTransactionLink{
           id: Ecto.UUID.t() | nil,
           command: Command.t() | Ecto.Association.NotLoaded.t(),
           command_id: Ecto.UUID.t() | nil,

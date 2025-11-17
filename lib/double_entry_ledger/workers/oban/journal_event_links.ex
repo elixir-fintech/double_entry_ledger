@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Workers.Oban.JournalEventLinks do
 
   alias Ecto.Multi
   alias DoubleEntryLedger.{
-    EventTransactionLink,
+    JournalEventTransactionLink,
     JournalEventAccountLink,
     JournalEventCommandLink,
     Repo
@@ -40,8 +40,8 @@ defmodule DoubleEntryLedger.Workers.Oban.JournalEventLinks do
   end
 
   defp transaction_changeset(command_id, transaction_id, journal_event_id) do
-    %EventTransactionLink{}
-    |> EventTransactionLink.changeset(%{
+    %JournalEventTransactionLink{}
+    |> JournalEventTransactionLink.changeset(%{
       command_id: command_id,
       transaction_id: transaction_id,
       journal_event_id: journal_event_id

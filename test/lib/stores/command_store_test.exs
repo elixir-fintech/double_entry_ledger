@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Stores.EventStoreTest do
+defmodule DoubleEntryLedger.Stores.CommandStoreTest do
   @moduledoc """
   This module tests the CommandStore module.
   """
