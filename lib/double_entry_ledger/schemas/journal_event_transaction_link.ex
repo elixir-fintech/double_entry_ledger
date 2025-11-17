@@ -8,7 +8,6 @@ defmodule DoubleEntryLedger.JournalEventTransactionLink do
 
   ## Fields
 
-    * `:command_id` - References the associated event.
     * `:transaction_id` - References the associated transaction.
     * `:inserted_at` - Timestamp when the link was created.
     * `:updated_at` - Timestamp when the link was last updated.
@@ -25,8 +24,6 @@ defmodule DoubleEntryLedger.JournalEventTransactionLink do
 
   @type t :: %JournalEventTransactionLink{
           id: Ecto.UUID.t() | nil,
-          command: Command.t() | Ecto.Association.NotLoaded.t(),
-          command_id: Ecto.UUID.t() | nil,
           transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
           transaction_id: Ecto.UUID.t() | nil,
           journal_event: Command.t() | Ecto.Association.NotLoaded.t(),
@@ -36,7 +33,6 @@ defmodule DoubleEntryLedger.JournalEventTransactionLink do
         }
 
   schema "journal_event_transaction_links" do
-    belongs_to(:command, Command)
     belongs_to(:transaction, Transaction)
     belongs_to(:journal_event, JournalEvent)
 
@@ -46,7 +42,7 @@ defmodule DoubleEntryLedger.JournalEventTransactionLink do
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(event_transaction_link, attrs) do
     event_transaction_link
-    |> cast(attrs, [:command_id, :transaction_id, :journal_event_id])
-    |> validate_required([:command_id, :transaction_id, :journal_event_id])
+    |> cast(attrs, [:transaction_id, :journal_event_id])
+    |> validate_required([:transaction_id, :journal_event_id])
   end
 end

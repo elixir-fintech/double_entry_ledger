@@ -21,11 +21,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   alias DoubleEntryLedger.{
     Repo,
-    Command,
-    JournalEventTransactionLink,
-    JournalEventAccountLink,
-    Account,
-    Transaction
+    Command
   }
 
   alias DoubleEntryLedger.Stores.CommandStore
@@ -140,27 +136,6 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     event
     |> change(%{})
     |> put_assoc(:command_queue_item, event_queue_changeset)
-  end
-
-  @spec build_create_transaction_event_transaction_link(Command.t(), Transaction.t()) ::
-          Changeset.t()
-  def build_create_transaction_event_transaction_link(%Command{id: event_id}, %Transaction{
-        id: transaction_id
-      }) do
-    %JournalEventTransactionLink{}
-    |> JournalEventTransactionLink.changeset(%{
-      event_id: event_id,
-      transaction_id: transaction_id
-    })
-  end
-
-  @spec build_create_account_event_account_link(Command.t(), Account.t()) :: Changeset.t()
-  def build_create_account_event_account_link(%Command{id: event_id}, %Account{id: account_id}) do
-    %JournalEventAccountLink{}
-    |> JournalEventAccountLink.changeset(%{
-      event_id: event_id,
-      account_id: account_id
-    })
   end
 
   @doc """

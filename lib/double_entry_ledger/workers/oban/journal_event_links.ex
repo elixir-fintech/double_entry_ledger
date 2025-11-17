@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Workers.Oban.JournalEventLinks do
         args: %{"command_id" => cid, "transaction_id" => tid, "journal_event_id" => jid}
       }) do
     Multi.new()
-    |> Multi.insert(:transaction_link, transaction_changeset(cid, tid, jid))
+    |> Multi.insert(:transaction_link, transaction_changeset(tid, jid))
     |> Multi.insert(:command_link, command_changeset(cid, jid))
     |> Repo.transaction()
   end
@@ -40,10 +40,9 @@ defmodule DoubleEntryLedger.Workers.Oban.JournalEventLinks do
     })
   end
 
-  defp transaction_changeset(command_id, transaction_id, journal_event_id) do
+  defp transaction_changeset(transaction_id, journal_event_id) do
     %JournalEventTransactionLink{}
     |> JournalEventTransactionLink.changeset(%{
-      command_id: command_id,
       transaction_id: transaction_id,
       journal_event_id: journal_event_id
     })
