@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Repo.Migrations.AddEventTransactionLinksTable do
+defmodule DoubleEntryLedger.Repo.Migrations.CreateJournalEventTransactionLinksTable do
   use Ecto.Migration
 
   @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)

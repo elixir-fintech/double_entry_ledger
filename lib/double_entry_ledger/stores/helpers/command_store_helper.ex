@@ -34,7 +34,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   This module is primarily used internally by CommandStore and CommandWorker modules to
   share common functionality and reduce code duplication.
   """
-  import Ecto.Query, only: [from: 2, preload: 2]
+  import Ecto.Query, only: [from: 2]
 
   alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
   alias Ecto.Changeset
@@ -208,19 +208,17 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
   @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_transaction_query(transaction_id) do
-    from(c in Command,
-      join: evt in assoc(c, :event_transaction_link),
-      where: evt.transaction_id == ^transaction_id,
-      select: c
-    )
-    |> preload([:command_queue_item, transaction: :entries])
+    from c in Command,
+      join: t in assoc(c, :transaction),
+      where: t.id == ^transaction_id,
+      preload: [:command_queue_item, transaction: :entries]
   end
 
   @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_account_query(account_id) do
     from(c in Command,
-      join: evt in assoc(c, :event_account_link),
-      where: evt.account_id == ^account_id,
+      join: a in assoc(c, :account),
+      where: a.id == ^account_id,
       select: c
     )
   end

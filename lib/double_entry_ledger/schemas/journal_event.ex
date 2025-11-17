@@ -12,6 +12,7 @@ defmodule DoubleEntryLedger.JournalEvent do
     Instance,
     Account,
     Command,
+    Transaction,
     JournalEventAccountLink,
     JournalEventCommandLink,
     JournalEventTransactionLink
@@ -31,8 +32,8 @@ defmodule DoubleEntryLedger.JournalEvent do
           command: Command.t() | Ecto.Association.NotLoaded.t() | nil,
           journal_event_account_link: JournalEventAccountLink.t() | Ecto.Association.NotLoaded.t() | nil,
           account: Account.t() | Ecto.Association.NotLoaded.t() | nil,
-          event_transaction_link: JournalEventTransactionLink.t() | Ecto.Association.NotLoaded.t() | nil,
-          account: Transaction.t() | Ecto.Association.NotLoaded.t() | nil,
+          journal_event_transaction_link: JournalEventTransactionLink.t() | Ecto.Association.NotLoaded.t() | nil,
+          transaction: Transaction.t() | Ecto.Association.NotLoaded.t() | nil,
           updated_at: DateTime.t() | nil
         }
 
@@ -46,8 +47,8 @@ defmodule DoubleEntryLedger.JournalEvent do
     has_one(:command, through: [:journal_event_command_link, :command])
     has_one(:journal_event_account_link, JournalEventAccountLink)
     has_one(:account, through: [:journal_event_account_link, :account])
-    has_one(:event_transaction_link, JournalEventTransactionLink)
-    has_one(:transaction, through: [:event_transaction_link, :transaction])
+    has_one(:journal_event_transaction_link, JournalEventTransactionLink)
+    has_one(:transaction, through: [:journal_event_transaction_link, :transaction])
 
     timestamps(type: :utc_datetime_usec)
   end

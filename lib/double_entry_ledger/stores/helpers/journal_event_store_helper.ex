@@ -138,8 +138,8 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   @spec base_account_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_account_query(account_id) do
     from(je in JournalEvent,
-      join: evt in assoc(je, :journal_event_account_link),
-      where: evt.account_id == ^account_id,
+      join: a in assoc(je, :account),
+      where: a.id == ^account_id,
       select: je
     )
   end
@@ -160,8 +160,8 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   @spec base_transaction_query(Ecto.UUID.t()) :: Ecto.Query.t()
   def base_transaction_query(transaction_id) do
     from(je in JournalEvent,
-      join: evt in assoc(je, :event_transaction_link),
-      where: evt.transaction_id == ^transaction_id,
+      join: t in assoc(je, :transaction),
+      where: t.id == ^transaction_id,
       select: je,
       preload: [transaction: :entries]
     )
