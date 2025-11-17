@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.JournalEventTransactionLink do
           updated_at: DateTime.t() | nil
         }
 
-  schema "event_transaction_links" do
+  schema "journal_event_transaction_links" do
     belongs_to(:command, Command)
     belongs_to(:transaction, Transaction)
     belongs_to(:journal_event, JournalEvent)
