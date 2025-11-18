@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
+defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
   @moduledoc """
-  Tests for CreateAccountEvent
+  Tests for CreateAccountCommand
   """
 
   use ExUnit.Case, async: true
@@ -8,14 +8,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
 
   alias DoubleEntryLedger.{Command, Account, Repo, CommandQueueItem}
   alias DoubleEntryLedger.Stores.CommandStore
-  alias DoubleEntryLedger.Workers.CommandWorker.{CreateAccountEvent, UpdateAccountEvent}
+  alias DoubleEntryLedger.Workers.CommandWorker.{CreateAccountCommand, UpdateAccountCommand}
   alias DoubleEntryLedger.Command.AccountData
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.Command.AccountDataFixtures
 
-  doctest UpdateAccountEvent
+  doctest UpdateAccountCommand
 
   describe "process/1" do
     setup [:create_instance]
@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
 
       {:ok, %{event_map: %{payload: payload}} = create_event} = CommandStore.create(attrs)
 
-      CreateAccountEvent.process(create_event)
+      CreateAccountCommand.process(create_event)
 
       update_attrs =
         account_event_attrs(%{
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
       {:ok, update_event} = CommandStore.create(update_attrs)
 
       assert {:ok, %Account{} = account, %Command{command_queue_item: eqi} = e} =
-               UpdateAccountEvent.process(update_event)
+               UpdateAccountCommand.process(update_event)
 
       assert e.id == update_event.id
       assert eqi.status == :processed
@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
         )
 
       assert {:error, %Command{command_queue_item: eqi} = e} =
-               UpdateAccountEvent.process(update_event)
+               UpdateAccountCommand.process(update_event)
 
       assert e.id == update_event.id
       assert eqi.status == :dead_letter
@@ -93,7 +93,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
         )
 
       assert {:error, %Command{command_queue_item: eqi} = e} =
-               UpdateAccountEvent.process(update_event)
+               UpdateAccountCommand.process(update_event)
 
       assert e.id == update_event.id
       assert eqi.status == :dead_letter
@@ -123,7 +123,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventTest do
         )
 
       assert {:error, %Command{command_queue_item: eqi} = e} =
-               UpdateAccountEvent.process(update_event)
+               UpdateAccountCommand.process(update_event)
 
       assert e.id == update_event.id
       assert eqi.status == :dead_letter

@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
+defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandTest do
   @moduledoc """
-  Tests for CreateAccountEvent
+  Tests for CreateAccountCommand
   """
 
   use ExUnit.Case, async: true
@@ -8,12 +8,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
 
   alias DoubleEntryLedger.{Command, Account}
   alias DoubleEntryLedger.Stores.CommandStore
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountEvent
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.EventFixtures
 
-  doctest CreateAccountEvent
+  doctest CreateAccountCommand
 
   describe "process/1" do
     setup [:create_instance]
@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
         CommandStore.create(account_event_attrs(%{instance_address: instance.address}))
 
       assert {:ok, %Account{} = account, %Command{command_queue_item: eqi} = e} =
-               CreateAccountEvent.process(preload(event))
+               CreateAccountCommand.process(preload(event))
 
       assert e.id == event.id
       assert eqi.status == :processed
@@ -43,17 +43,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventTest do
           account_event_attrs(%{address: address, instance_address: instance.address})
         )
 
-      CreateAccountEvent.process(preload(event1))
+      CreateAccountCommand.process(preload(event1))
 
       assert {:error, %Command{command_queue_item: %{errors: errors} = eqi}} =
-               CreateAccountEvent.process(preload(event2))
+               CreateAccountCommand.process(preload(event2))
 
       assert eqi.status == :dead_letter
 
       assert [
                %{
                  message:
-                   "AccountEventResponseHandler: Account changeset failed: %{address: [\"has already been taken\"]}"
+                   "AccountCommandResponseHandler: Account changeset failed: %{address: [\"has already been taken\"]}"
                }
                | _
              ] =

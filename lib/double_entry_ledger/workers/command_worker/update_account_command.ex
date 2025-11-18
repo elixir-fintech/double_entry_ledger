@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEvent do
+defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
   @moduledoc """
-  UpdateAccountEvent
+  UpdateAccountCommand
   """
   use DoubleEntryLedger.Logger
 
@@ -10,16 +10,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEvent do
       build_mark_as_dead_letter: 2
     ]
 
-  import DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler,
+  import DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler,
     only: [default_response_handler: 2]
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.{Command, JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.AccountStoreHelper
-  alias DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler
+  alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 
-  @spec process(Command.t()) :: AccountEventResponseHandler.response()
+  @spec process(Command.t()) :: AccountCommandResponseHandler.response()
   def process(%Command{event_map: %{action: :update_account}} = event) do
     build_update_account(event)
     |> handle_build_update_account(event)

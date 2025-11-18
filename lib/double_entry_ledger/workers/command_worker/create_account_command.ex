@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEvent do
+defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
   @moduledoc """
    Processes :create_account actions
   """
@@ -9,16 +9,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEvent do
       build_mark_as_processed: 1
     ]
 
-  import DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler,
+  import DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler,
     only: [default_response_handler: 2]
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.{Command, JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.AccountStoreHelper
-  alias DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler
+  alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 
-  @spec process(Command.t()) :: AccountEventResponseHandler.response()
+  @spec process(Command.t()) :: AccountCommandResponseHandler.response()
   def process(%Command{event_map: %{action: :create_account}} = event) do
     build_create_account(event)
     |> Repo.transaction()

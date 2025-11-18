@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandlerTest do
   @moduledoc """
-    Tests for the AccountEventResponseHandler
+    Tests for the AccountCommandResponseHandler
   """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase

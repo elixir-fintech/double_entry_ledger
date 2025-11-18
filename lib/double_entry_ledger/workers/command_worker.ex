@@ -129,9 +129,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
-    CreateAccountEvent,
+    CreateAccountCommand,
     CreateTransactionEvent,
-    UpdateAccountEvent,
+    UpdateAccountCommand,
     UpdateTransactionEvent,
     CreateTransactionEventMap,
     UpdateTransactionEventMap,
@@ -575,7 +575,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
          } =
            event
        ) do
-    CreateAccountEvent.process(event)
+    CreateAccountCommand.process(event)
   end
 
   defp process_event(
@@ -585,7 +585,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
          } =
            event
        ) do
-    UpdateAccountEvent.process(event)
+    UpdateAccountCommand.process(event)
   end
 
   defp process_event(%Command{command_queue_item: %{status: :processing}}) do
