@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.Command.Helper do
     Helper functions
   """
   alias DoubleEntryLedger.Account
-  alias DoubleEntryLedger.Command.{AccountEventMap, TransactionEventMap}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionEventMap}
 
   @transaction_actions [:create_transaction, :update_transaction]
   @account_actions [:create_account, :update_account]
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Command.Helper do
   def action_to_mod(event_map) do
     case fetch_action(event_map) do
       a when a in @transaction_actions -> {:ok, TransactionEventMap}
-      a when a in @account_actions -> {:ok, AccountEventMap}
+      a when a in @account_actions -> {:ok, AccountCommandMap}
       _ -> :error
     end
   end

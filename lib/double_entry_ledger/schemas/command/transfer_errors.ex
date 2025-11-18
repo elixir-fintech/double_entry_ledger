@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   alias Ecto.Changeset
 
   alias DoubleEntryLedger.Command.{
-    AccountEventMap,
+    AccountCommandMap,
     TransactionEventMap,
     AccountData,
     TransactionData,
@@ -28,12 +28,12 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   alias DoubleEntryLedger.{Account, Command, Transaction}
 
   @typedoc """
-  Union type representing either an AccountEventMap or TransactionEventMap.
+  Union type representing either an AccountCommandMap or TransactionEventMap.
 
   These are the two main event map types that can contain validation errors
   that need to be transferred and properly attributed.
   """
-  @type event_map :: AccountEventMap.t() | TransactionEventMap.t()
+  @type event_map :: AccountCommandMap.t() | TransactionEventMap.t()
 
   @typedoc """
   Union type representing either AccountData or TransactionData.
@@ -62,8 +62,8 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
 
     - `Ecto.Changeset.t()`: Command map changeset with propagated account errors
   """
-  @spec from_account_to_event_map_payload(AccountEventMap.t(), Ecto.Changeset.t(Account.t())) ::
-          Ecto.Changeset.t(AccountEventMap.t())
+  @spec from_account_to_event_map_payload(AccountCommandMap.t(), Ecto.Changeset.t(Account.t())) ::
+          Ecto.Changeset.t(AccountCommandMap.t())
   def from_account_to_event_map_payload(event_map, account_changeset) do
     cs =
       build_event_map_changeset(event_map)
@@ -191,9 +191,9 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
 
   @doc false
   @spec build_event_map_changeset(em) :: Changeset.t(em) when em: event_map
-  defp build_event_map_changeset(%AccountEventMap{} = event_map) do
-    %AccountEventMap{}
-    |> AccountEventMap.changeset(AccountEventMap.to_map(event_map))
+  defp build_event_map_changeset(%AccountCommandMap{} = event_map) do
+    %AccountCommandMap{}
+    |> AccountCommandMap.changeset(AccountCommandMap.to_map(event_map))
   end
 
   @doc false
@@ -204,7 +204,7 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   end
 
   @doc false
-  @spec build_payload_changeset(AccountEventMap.t(), Changeset.t()) ::
+  @spec build_payload_changeset(AccountCommandMap.t(), Changeset.t()) ::
           Changeset.t(AccountData.t())
   @spec build_payload_changeset(TransactionEventMap.t(), Changeset.t()) ::
           Changeset.t(TransactionData.t())

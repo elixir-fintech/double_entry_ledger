@@ -1,13 +1,13 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandlerTest do
+defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandlerTest do
   @moduledoc """
     Tests for the AccountEventResponseHandler
   """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler
+  alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler
   alias DoubleEntryLedger.{Account, Command}
-  alias DoubleEntryLedger.Command.{AccountEventMap, AccountData}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, AccountData}
 
-  doctest AccountEventMapResponseHandler
+  doctest AccountCommandMapResponseHandler
 end

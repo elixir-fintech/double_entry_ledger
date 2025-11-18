@@ -1,7 +1,7 @@
-defmodule DoubleEntryLedger.Command.AccountEventMapTest do
+defmodule DoubleEntryLedger.Command.AccountCommandMapTest do
   use ExUnit.Case, async: true
 
-  alias DoubleEntryLedger.Command.AccountEventMap
+  alias DoubleEntryLedger.Command.AccountCommandMap
 
-  doctest AccountEventMap
+  doctest AccountCommandMap
 end

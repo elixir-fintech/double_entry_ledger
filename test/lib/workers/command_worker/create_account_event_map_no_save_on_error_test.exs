@@ -1,24 +1,24 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnErrorTest do
+defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveOnErrorTest do
   @moduledoc """
-    Tests for the CreateAccountEventMapNoSaveOnError
+    Tests for the CreateAccountCommandMapNoSaveOnError
   """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Account, Command}
   alias DoubleEntryLedger.Stores.InstanceStore
-  alias DoubleEntryLedger.Command.{AccountEventMap, AccountData}
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnError
+  alias DoubleEntryLedger.Command.{AccountCommandMap, AccountData}
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveOnError
 
   import DoubleEntryLedger.InstanceFixtures
 
-  doctest CreateAccountEventMapNoSaveOnError
+  doctest CreateAccountCommandMapNoSaveOnError
 
   describe "process/1" do
     setup [:create_instance]
 
     test "successfully processes a valid account event map", %{instance: instance} do
-      event_map = %AccountEventMap{
+      event_map = %AccountCommandMap{
         action: :create_account,
         instance_address: instance.address,
         source: "manual",
@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
         }
       }
 
-      {:ok, account, event} = CreateAccountEventMapNoSaveOnError.process(event_map)
+      {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(event_map)
       assert account.currency == :USD
       assert account.name == "Test Account"
       assert account.type == :asset
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
     end
 
     test "returns an error for an invalid account event map", %{instance: instance} do
-      event_map = %AccountEventMap{
+      event_map = %AccountCommandMap{
         action: :create_account,
         instance_address: instance.address,
         source: "manual",
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnE
         }
       }
 
-      assert {:error, changeset} = CreateAccountEventMapNoSaveOnError.process(event_map)
+      assert {:error, changeset} = CreateAccountCommandMapNoSaveOnError.process(event_map)
       assert %Ecto.Changeset{} = changeset
       assert changeset.valid? == false
       assert Keyword.has_key?(changeset.changes.payload.errors, :address)

@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Command.EventMap do
 
   import DoubleEntryLedger.Command.Helper, only: [action_to_mod: 1]
 
-  alias DoubleEntryLedger.Command.{AccountEventMap, TransactionEventMap}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionEventMap}
 
   @impl true
   @spec init(any()) :: %{}
@@ -18,9 +18,9 @@ defmodule DoubleEntryLedger.Command.EventMap do
   def type(_), do: :map
 
   @impl true
-  @spec cast(map() | AccountEventMap.t() | TransactionEventMap.t() | nil, map()) ::
-          {:ok, AccountEventMap.t() | TransactionEventMap.t()} | :error
-  def cast(%AccountEventMap{} = struct, _params), do: {:ok, struct}
+  @spec cast(map() | AccountCommandMap.t() | TransactionEventMap.t() | nil, map()) ::
+          {:ok, AccountCommandMap.t() | TransactionEventMap.t()} | :error
+  def cast(%AccountCommandMap{} = struct, _params), do: {:ok, struct}
   def cast(%TransactionEventMap{} = struct, _params), do: {:ok, struct}
 
   def cast(%{} = map, _params) do
@@ -36,9 +36,9 @@ defmodule DoubleEntryLedger.Command.EventMap do
   def cast(_, _), do: :error
 
   @impl true
-  @spec dump(AccountEventMap.t() | TransactionEventMap.t() | nil, any(), any()) ::
+  @spec dump(AccountCommandMap.t() | TransactionEventMap.t() | nil, any(), any()) ::
           {:ok, map()} | :error
-  def dump(%AccountEventMap{} = struct, _, _), do: {:ok, AccountEventMap.to_map(struct)}
+  def dump(%AccountCommandMap{} = struct, _, _), do: {:ok, AccountCommandMap.to_map(struct)}
   def dump(%TransactionEventMap{} = struct, _, _), do: {:ok, TransactionEventMap.to_map(struct)}
   def dump(nil, _, _), do: nil
   def dump(_, _, _), do: :error

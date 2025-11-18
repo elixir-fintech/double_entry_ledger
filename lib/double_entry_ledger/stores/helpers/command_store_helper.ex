@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Command changesets from TransactionEventMaps or AccountEventMaps
+  * **Changeset Building**: Create Command changesets from TransactionEventMaps or AccountCommandMaps
   * **Command Relationships**: Look up related events by source identifiers
   * **Transaction Linking**: Find transactions and accounts associated with events
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
@@ -36,28 +36,28 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   """
   import Ecto.Query, only: [from: 2]
 
-  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
   alias Ecto.Changeset
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Command, Transaction, Account, Entry, PendingTransactionLookup}
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
 
   @doc """
-  Builds an Command changeset from a TransactionEventMap or AccountEventMap.
+  Builds an Command changeset from a TransactionEventMap or AccountCommandMap.
 
   Creates a new Command changeset suitable for database insertion, converting the
   provided event map structure into the appropriate Command attributes.
 
   ## Parameters
 
-  * `event_map` - Either a TransactionEventMap or AccountEventMap struct containing event data
+  * `event_map` - Either a TransactionEventMap or AccountCommandMap struct containing event data
 
   ## Returns
 
   * `Ecto.Changeset.t(Command.t())` - A changeset for creating a new Command
 
   """
-  @spec build_create(TransactionEventMap.t() | AccountEventMap.t(), Ecto.UUID.t()) ::
+  @spec build_create(TransactionEventMap.t() | AccountCommandMap.t(), Ecto.UUID.t()) ::
           Changeset.t(Command.t())
   def build_create(%TransactionEventMap{} = event_map, instance_id) do
     %Command{}
@@ -67,9 +67,9 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
     })
   end
 
-  def build_create(%AccountEventMap{} = event_map, instance_id) do
+  def build_create(%AccountCommandMap{} = event_map, instance_id) do
     %Command{}
-    |> Command.changeset(%{instance_id: instance_id, event_map: AccountEventMap.to_map(event_map)})
+    |> Command.changeset(%{instance_id: instance_id, event_map: AccountCommandMap.to_map(event_map)})
   end
 
   @doc """

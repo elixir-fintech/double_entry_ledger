@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Command changesets from TransactionEventMaps or AccountEventMaps
+  * **Changeset Building**: Create Command changesets from TransactionEventMaps or AccountCommandMaps
   * **Command Relationships**: Look up related events by source identifiers
   * **Transaction Linking**: Find transactions and accounts associated with events
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions

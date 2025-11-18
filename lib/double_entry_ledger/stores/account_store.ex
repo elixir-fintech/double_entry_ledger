@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   import DoubleEntryLedger.Utils.Pagination, only: [paginate: 3]
 
-  alias DoubleEntryLedger.Command.AccountEventMap
+  alias DoubleEntryLedger.Command.AccountCommandMap
   alias DoubleEntryLedger.Apis.CommandApi
   alias DoubleEntryLedger.Utils.Currency
   alias DoubleEntryLedger.Stores.AccountStoreHelper
@@ -210,7 +210,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   """
   @spec create(String.t(), create_map(), String.t()) ::
-          {:ok, Account.t()} | {:error, Ecto.Changeset.t(AccountEventMap.t()) | String.t()}
+          {:ok, Account.t()} | {:error, Ecto.Changeset.t(AccountCommandMap.t()) | String.t()}
   def create(
         instance_address,
         attrs,
@@ -274,7 +274,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   """
   @spec update(String.t(), String.t(), update_map(), String.t()) ::
-          {:ok, Account.t()} | {:error, Ecto.Changeset.t(AccountEventMap.t()) | String.t()}
+          {:ok, Account.t()} | {:error, Ecto.Changeset.t(AccountCommandMap.t()) | String.t()}
   def update(
         instance_address,
         account_address,

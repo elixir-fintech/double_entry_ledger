@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - `:create_transaction` - Creates new double-entry transactions with balanced entries
   - `:update_transaction` - Updates pending transactions only
 
-  ### AccountEventMap
+  ### AccountCommandMap
   - `:create_account` - Creates new ledger accounts with specified types and currencies
   - `:update_account` - Updates existing account properties
 
@@ -80,8 +80,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - `UpdateTransactionEvent` - Transaction updates from stored events
   - `CreateTransactionEventMapNoSaveOnError` - Transaction creation without error persistence
   - `UpdateTransactionEventMapNoSaveOnError` - Transaction updates without error persistence
-  - `CreateAccountEventMapNoSaveOnError` - Account creation without error persistence
-  - `UpdateAccountEventMapNoSaveOnError` - Account updates without error persistence
+  - `CreateAccountCommandMapNoSaveOnError` - Account creation without error persistence
+  - `UpdateAccountCommandMapNoSaveOnError` - Account updates without error persistence
 
   ## Examples
 
@@ -117,7 +117,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - Processing is idempotent based on source identifiers
   - Retry logic and error tracking handled through CommandQueueItem state management
   """
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnError
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveOnError
   alias Ecto.Changeset
 
   alias DoubleEntryLedger.{
@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     Account
   }
 
-  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
     CreateAccountEvent,
@@ -135,8 +135,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     UpdateTransactionEvent,
     CreateTransactionEventMap,
     UpdateTransactionEventMap,
-    CreateAccountEventMapNoSaveOnError,
-    UpdateAccountEventMapNoSaveOnError,
+    CreateAccountCommandMapNoSaveOnError,
+    UpdateAccountCommandMapNoSaveOnError,
     CreateTransactionEventMapNoSaveOnError,
     UpdateTransactionEventMapNoSaveOnError
   }
@@ -364,9 +364,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       :processed
 
       # Create a new account
-      iex> alias DoubleEntryLedger.Command.{AccountEventMap, AccountData}
+      iex> alias DoubleEntryLedger.Command.{AccountCommandMap, AccountData}
       iex> {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Sample:Instance"})
-      iex> event_map = %AccountEventMap{
+      iex> event_map = %AccountCommandMap{
       ...>   action: :create_account,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
@@ -402,7 +402,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   """
   @spec process_new_event_no_save_on_error(em) ::
           success_tuple() | {:error, Changeset.t(em) | String.t()}
-        when em: TransactionEventMap.t() | AccountEventMap.t()
+        when em: TransactionEventMap.t() | AccountCommandMap.t()
   def process_new_event_no_save_on_error(
         %TransactionEventMap{action: :create_transaction} = event_map
       ) do
@@ -415,12 +415,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     UpdateTransactionEventMapNoSaveOnError.process(event_map)
   end
 
-  def process_new_event_no_save_on_error(%AccountEventMap{action: :create_account} = event_map) do
-    CreateAccountEventMapNoSaveOnError.process(event_map)
+  def process_new_event_no_save_on_error(%AccountCommandMap{action: :create_account} = event_map) do
+    CreateAccountCommandMapNoSaveOnError.process(event_map)
   end
 
-  def process_new_event_no_save_on_error(%AccountEventMap{action: :update_account} = event_map) do
-    UpdateAccountEventMapNoSaveOnError.process(event_map)
+  def process_new_event_no_save_on_error(%AccountCommandMap{action: :update_account} = event_map) do
+    UpdateAccountCommandMapNoSaveOnError.process(event_map)
   end
 
   def process_new_event_no_save_on_error(_event_map), do: {:error, :action_not_supported}

@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountEventResponseHandler do
   ## Key Features
 
   * **Response Translation**: Converts Ecto.Multi transaction results into standardized responses
-  * **Error Mapping**: Maps validation errors from Events and Accounts back to AccountEventMap changesets
+  * **Error Mapping**: Maps validation errors from Events and Accounts back to AccountCommandMap changesets
   * **Comprehensive Logging**: Provides detailed logging for success and failure scenarios
 
   ## Usage

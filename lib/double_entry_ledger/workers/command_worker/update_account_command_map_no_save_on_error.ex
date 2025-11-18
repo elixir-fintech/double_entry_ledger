@@ -1,8 +1,8 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveOnError do
   @moduledoc """
-  Processes AccountEventMap structures for atomic update of events and their associated accounts.
+  Processes AccountCommandMap structures for atomic update of events and their associated accounts.
 
-  This module handles the update of accounts based on validated AccountEventMap data within
+  This module handles the update of accounts based on validated AccountCommandMap data within
   the Double Entry Ledger system. Unlike standard update event processors, this variant
   does not persist error states to the database, instead returning changesets with error
   details for client handling.
@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
 
   ## Processing Flow
 
-  1. **Command Creation**: Creates an Command record from the AccountEventMap for audit purposes
+  1. **Command Creation**: Creates an Command record from the AccountCommandMap for audit purposes
   2. **Dependency Resolution**: Locates the original create account event and its account
   3. **Account Update**: Updates the account using the payload data
   4. **Command Completion**: Marks the event as processed upon successful account update
@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
   ## Error Handling
 
   The module provides comprehensive error handling:
-  - Command validation errors are mapped back to AccountEventMap changesets
+  - Command validation errors are mapped back to AccountCommandMap changesets
   - Account validation errors are propagated to the event map payload
   - Dependency errors (missing create events) are handled gracefully
   - All errors are returned as changesets without database persistence
@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
   ## Supported Actions
 
   Currently supports:
-  - `:update_account` - Updates an existing account from AccountEventMap payload
+  - `:update_account` - Updates an existing account from AccountCommandMap payload
 
   ## Usage
 
@@ -47,18 +47,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
   import DoubleEntryLedger.CommandQueue.Scheduling,
     only: [build_mark_as_processed: 1]
 
-  import DoubleEntryLedger.Workers.CommandWorker.AccountEventMapResponseHandler,
+  import DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler,
     only: [default_response_handler: 2]
 
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Workers
-  alias DoubleEntryLedger.Workers.CommandWorker.{AccountEventMapResponseHandler}
-  alias DoubleEntryLedger.Command.AccountEventMap
+  alias DoubleEntryLedger.Workers.CommandWorker.{AccountCommandMapResponseHandler}
+  alias DoubleEntryLedger.Command.AccountCommandMap
   alias DoubleEntryLedger.{JournalEvent, Repo}
   alias DoubleEntryLedger.Stores.{AccountStoreHelper, CommandStoreHelper, InstanceStoreHelper}
 
   @doc """
-  Processes an AccountEventMap to update an existing account in the ledger system.
+  Processes an AccountCommandMap to update an existing account in the ledger system.
 
   This function orchestrates the update of both an Command record (for audit trail)
   and an Account record within a single database transaction. It first locates the
@@ -67,18 +67,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
 
   ## Parameters
 
-  * `event_map` - AccountEventMap struct containing validated account update data.
+  * `event_map` - AccountCommandMap struct containing validated account update data.
     Must have `:update_account` action.
 
   ## Returns
 
   * `{:ok, Account.t(), Command.t()}` - Success tuple containing the updated Account and Command
-  * `{:error, Changeset.t(AccountEventMap.t())}` - AccountEventMap changeset with validation errors
+  * `{:error, Changeset.t(AccountCommandMap.t())}` - AccountCommandMap changeset with validation errors
   * `{:error, String.t()}` - String error message for unexpected failures
 
   ## Transaction Steps
 
-  1. Creates Command record from AccountEventMap
+  1. Creates Command record from AccountCommandMap
   2. Locates original create account event and its account
   3. Updates Account record with payload data
   4. Marks Command as processed
@@ -86,23 +86,23 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
 
   ## Error Scenarios
 
-  - Command validation errors → AccountEventMap changeset with event-level errors
-  - Missing create account event → AccountEventMap changeset with dependency error
-  - Account validation errors → AccountEventMap changeset with payload-level errors
+  - Command validation errors → AccountCommandMap changeset with event-level errors
+  - Missing create account event → AccountCommandMap changeset with dependency error
+  - Account validation errors → AccountCommandMap changeset with payload-level errors
   - Other failures → String error message with details
 
   """
-  @spec process(AccountEventMap.t()) :: AccountEventMapResponseHandler.response()
-  def process(%AccountEventMap{action: :update_account} = event_map) do
+  @spec process(AccountCommandMap.t()) :: AccountCommandMapResponseHandler.response()
+  def process(%AccountCommandMap{action: :update_account} = event_map) do
     build_update_account(event_map)
     |> handle_build_update_account(event_map)
     |> Repo.transaction()
     |> default_response_handler(event_map)
   end
 
-  @spec build_update_account(AccountEventMap.t()) :: Ecto.Multi.t()
+  @spec build_update_account(AccountCommandMap.t()) :: Ecto.Multi.t()
   defp build_update_account(
-         %AccountEventMap{payload: payload, instance_address: iaddr, account_address: aaddr} =
+         %AccountCommandMap{payload: payload, instance_address: iaddr, account_address: aaddr} =
            event_map
        )
        when not is_nil(iaddr) and not is_nil(aaddr) do
@@ -123,9 +123,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
 
   @spec handle_build_update_account(
           Ecto.Multi.t(),
-          AccountEventMap.t()
+          AccountCommandMap.t()
         ) :: Ecto.Multi.t()
-  defp handle_build_update_account(multi, %AccountEventMap{} = event_map) do
+  defp handle_build_update_account(multi, %AccountCommandMap{} = event_map) do
     Multi.merge(multi, fn
       %{account: %{id: aid}, new_command: %{id: eid, instance_id: iid} = event} ->
         Multi.insert(
@@ -145,7 +145,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
       _ ->
         event_map_changeset =
           event_map
-          |> AccountEventMap.changeset(%{})
+          |> AccountCommandMap.changeset(%{})
           |> Changeset.add_error(:create_account_event_error, to_string("Account does not exist"))
 
         Multi.error(Multi.new(), :create_account_event_error, event_map_changeset)

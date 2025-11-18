@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   alias DoubleEntryLedger.Command.{
     TransactionEventMap,
     TransactionData,
-    AccountEventMap,
+    AccountCommandMap,
     AccountData
   }
 
@@ -34,7 +34,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       instance_address: "123",
       payload: account_data_attrs()
     })
-    |> then(&struct(AccountEventMap, &1))
+    |> then(&struct(AccountCommandMap, &1))
   end
 
   def new_create_transaction_event(
@@ -129,7 +129,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   end
 
   def create_account_event_map(%{instance: %{address: address}}) do
-    %AccountEventMap{
+    %AccountCommandMap{
       action: :create_account,
       instance_address: address,
       source: "source",

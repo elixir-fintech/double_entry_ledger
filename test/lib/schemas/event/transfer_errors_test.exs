@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
   alias DoubleEntryLedger.Command.TransferErrors
 
   alias DoubleEntryLedger.Command.{
-    AccountEventMap,
+    AccountCommandMap,
     AccountData,
     TransactionEventMap,
     TransactionData
@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
     test "transfers errors from account changeset to event map" do
       account_changeset = Account.changeset(%Account{}, %{})
 
-      event_map = %AccountEventMap{payload: %AccountData{}}
+      event_map = %AccountCommandMap{payload: %AccountData{}}
 
       %{changes: %{payload: %{errors: errors}}} =
         TransferErrors.from_account_to_event_map_payload(event_map, account_changeset)
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
           normal_balance: "yy"
         })
 
-      event_map = %AccountEventMap{
+      event_map = %AccountCommandMap{
         payload: %AccountData{
           name: "A",
           type: :asset,
@@ -70,7 +70,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
           address: "account:main"
         })
 
-      event_map = %AccountEventMap{
+      event_map = %AccountCommandMap{
         payload: %AccountData{
           name: "Valid Name",
           type: :asset,
@@ -97,8 +97,8 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
 
       event_changeset = Command.changeset(%Command{}, %{})
 
-      %{data: %AccountEventMap{}, errors: errors} =
-        TransferErrors.from_event_to_event_map(%AccountEventMap{}, event_changeset)
+      %{data: %AccountCommandMap{}, errors: errors} =
+        TransferErrors.from_event_to_event_map(%AccountCommandMap{}, event_changeset)
 
       assert Keyword.equal?(errors, expected_errors)
 
@@ -137,7 +137,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
   describe "get_all_errors_with_opts/1" do
     test "returns all errors with options" do
       changeset =
-        AccountEventMap.changeset(%AccountEventMap{}, %{action: :create_account, payload: %{}})
+        AccountCommandMap.changeset(%AccountCommandMap{}, %{action: :create_account, payload: %{}})
 
       assert Map.equal?(
                TransferErrors.get_all_errors_with_opts(changeset),

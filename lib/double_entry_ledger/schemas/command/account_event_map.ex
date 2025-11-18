@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Command.AccountEventMap do
+defmodule DoubleEntryLedger.Command.AccountCommandMap do
   @moduledoc """
   EventMap implementation for account-related operations in the Double Entry Ledger system.
 
@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
 
   ## Purpose
 
-  The AccountEventMap is responsible for:
+  The AccountCommandMap is responsible for:
   * Validating account creation event data before persistence
   * Ensuring proper structure and required fields for account operations
   * Providing type safety for account-specific payloads
@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
   ## Usage
 
       # Create a valid account event
-      {:ok, event_map} = AccountEventMap.create(%{
+      {:ok, event_map} = AccountCommandMap.create(%{
         action: :create_account,
         instance_id: "550e8400-e29b-41d4-a716-446655440000",
         source: "accounting_system",
@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
       })
 
       # Convert to map for serialization
-      map_data = AccountEventMap.to_map(event_map)
+      map_data = AccountCommandMap.to_map(event_map)
 
   ## Validation
 
@@ -48,13 +48,13 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
   ## Error Handling
 
       # Invalid action
-      {:error, changeset} = AccountEventMap.create(%{
+      {:error, changeset} = AccountCommandMap.create(%{
         action: :invalid_action,
         # ... other fields
       })
 
       # Missing required fields
-      {:error, changeset} = AccountEventMap.create(%{
+      {:error, changeset} = AccountCommandMap.create(%{
         action: :create_account,
         # missing required fields
       })
@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
   alias DoubleEntryLedger.Command.AccountData
   alias Ecto.Changeset
 
-  alias __MODULE__, as: AccountEventMap
+  alias __MODULE__, as: AccountCommandMap
 
   @derive {Jason.Encoder,
            only: [
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
              :payload
            ]}
   @typedoc """
-  Type definition for AccountEventMap struct.
+  Type definition for AccountCommandMap struct.
 
   Represents an EventMap specifically for account operations with an `AccountData`
   payload. This provides type safety and clear documentation for functions that
@@ -109,18 +109,18 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
 
   ## Usage in Function Signatures
 
-      @spec process_account_event(AccountEventMap.t()) :: {:ok, Account.t()} | {:error, term()}
-      def process_account_event(%AccountEventMap{} = event_map) do
+      @spec process_account_event(AccountCommandMap.t()) :: {:ok, Account.t()} | {:error, term()}
+      def process_account_event(%AccountCommandMap{} = event_map) do
         # Implementation with type-safe access to AccountData payload
       end
 
   ## Pattern Matching
 
-      def handle_event(%AccountEventMap{action: :create_account, payload: payload}) do
+      def handle_event(%AccountCommandMap{action: :create_account, payload: payload}) do
         # payload is guaranteed to be AccountData.t()
       end
   """
-  @type t() :: %AccountEventMap{
+  @type t() :: %AccountCommandMap{
           action: :create_account | :update_account,
           instance_address: String.t(),
           account_address: String.t() | nil,
@@ -143,7 +143,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
   def actions(), do: @actions
 
   @doc """
-  Creates and validates an AccountEventMap from the given attributes.
+  Creates and validates an AccountCommandMap from the given attributes.
 
   This is the primary entry point for creating account events. It performs
   full validation including payload validation and returns either a valid
@@ -155,7 +155,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
 
   ## Returns
 
-  * `{:ok, AccountEventMap.t()}` - Successfully created and validated event map
+  * `{:ok, AccountCommandMap.t()}` - Successfully created and validated event map
   * `{:error, Ecto.Changeset.t()}` - Validation errors
 
   ## Required Attributes
@@ -184,7 +184,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
       ...>     currency: "USD"
       ...>   }
       ...> }
-      iex> {:ok, event_map} = DoubleEntryLedger.Command.AccountEventMap.create(attrs)
+      iex> {:ok, event_map} = DoubleEntryLedger.Command.AccountCommandMap.create(attrs)
       iex> event_map.action
       :create_account
       iex> event_map.payload.name
@@ -194,21 +194,21 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
 
       # Invalid action
       iex> attrs = %{action: :invalid_action, source: "test"}
-      iex> {:error, changeset} = DoubleEntryLedger.Command.AccountEventMap.create(attrs)
+      iex> {:error, changeset} = DoubleEntryLedger.Command.AccountCommandMap.create(attrs)
       iex> changeset.valid?
       false
       iex> changeset.errors[:action]
       {"invalid in this context", [{:value, "invalid_action"}]}
   """
-  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t(AccountEventMap.t())}
+  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t(AccountCommandMap.t())}
   def create(attrs) do
-    %AccountEventMap{}
+    %AccountCommandMap{}
     |> changeset(attrs)
     |> apply_action(:insert)
   end
 
   @doc """
-  Creates a changeset for AccountEventMap validation.
+  Creates a changeset for AccountCommandMap validation.
 
   This function handles action-specific validation logic. It validates the base
   EventMap fields and then applies account-specific payload validation based
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
 
   ## Parameters
 
-  * `event_map` - The AccountEventMap struct to validate (can be empty for new records)
+  * `event_map` - The AccountCommandMap struct to validate (can be empty for new records)
   * `attrs` - Map of attributes to validate and apply
 
   ## Returns
@@ -239,7 +239,7 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
       ...>   source: "test",
       ...>   payload: %{name: "Test", address: "account:main", type: :asset, currency: "USD"}
       ...> }
-      iex> changeset = DoubleEntryLedger.Command.AccountEventMap.changeset(%DoubleEntryLedger.Command.AccountEventMap{}, attrs)
+      iex> changeset = DoubleEntryLedger.Command.AccountCommandMap.changeset(%DoubleEntryLedger.Command.AccountCommandMap{}, attrs)
       iex> changeset.valid?
       true
 
@@ -250,18 +250,18 @@ defmodule DoubleEntryLedger.Command.AccountEventMap do
       ...>   account_address: "account:test",
       ...>   payload: %{description: "Updated Test Account"}
       ...> }
-      iex> changeset = DoubleEntryLedger.Command.AccountEventMap.changeset(%DoubleEntryLedger.Command.AccountEventMap{}, update_attrs)
+      iex> changeset = DoubleEntryLedger.Command.AccountCommandMap.changeset(%DoubleEntryLedger.Command.AccountCommandMap{}, update_attrs)
       iex> changeset.valid?
       true
 
       iex> invalid_attrs = %{action: :delete_account, source: "test"}
-      iex> changeset = DoubleEntryLedger.Command.AccountEventMap.changeset(%DoubleEntryLedger.Command.AccountEventMap{}, invalid_attrs)
+      iex> changeset = DoubleEntryLedger.Command.AccountCommandMap.changeset(%DoubleEntryLedger.Command.AccountCommandMap{}, invalid_attrs)
       iex> changeset.valid?
       false
       iex> Keyword.has_key?(changeset.errors, :action)
       true
   """
-  @spec changeset(t() | map(), map()) :: Changeset.t(AccountEventMap.t())
+  @spec changeset(t() | map(), map()) :: Changeset.t(AccountCommandMap.t())
   def changeset(event_map, attrs) do
     case fetch_action(attrs) do
       :create_account ->

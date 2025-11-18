@@ -72,7 +72,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Command, PendingTransactionLookup}
-  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @doc """
@@ -137,7 +137,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     iex>  command.command_queue_item.status
     :pending
   """
-  @spec create(TransactionEventMap.t() | AccountEventMap.t()) ::
+  @spec create(TransactionEventMap.t() | AccountCommandMap.t()) ::
           {:ok, Command.t()} | {:error, Ecto.Changeset.t(Command.t()) | :instance_not_found}
   def create(
         %TransactionEventMap{action: :create_transaction, payload: %{status: :pending}} = attrs

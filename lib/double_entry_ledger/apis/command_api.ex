@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
 
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountEventMap}
+  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
   alias DoubleEntryLedger.Stores.CommandStore
 
   @account_actions actions(:account) |> Enum.map(&Atom.to_string/1)
@@ -58,8 +58,8 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     ...> })
     iex> event.command_queue_item.status
     :pending
-    iex> alias DoubleEntryLedger.Command.AccountEventMap
-    iex> {:error, %Ecto.Changeset{data: %AccountEventMap{}}= changeset} = CommandApi.create_from_params(%{
+    iex> alias DoubleEntryLedger.Command.AccountCommandMap
+    iex> {:error, %Ecto.Changeset{data: %AccountCommandMap{}}= changeset} = CommandApi.create_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_account",
     ...>   "source" => "frontend",
@@ -77,11 +77,11 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   @spec create_from_params(event_params()) ::
           {:ok, Command.t()}
           | {:error,
-             Ecto.Changeset.t(AccountEventMap.t() | TransactionEventMap.t())
+             Ecto.Changeset.t(AccountCommandMap.t() | TransactionEventMap.t())
              | :instance_not_found
              | :action_not_supported}
   def create_from_params(%{"action" => action} = event_params) when action in @account_actions do
-    case AccountEventMap.create(event_params) do
+    case AccountCommandMap.create(event_params) do
       {:ok, event_map} -> CommandStore.create(event_map)
       error -> error
     end
@@ -188,7 +188,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   # currently the Account related actions do not implement retries
   def process_from_params(%{"action" => action} = event_params, _opts)
       when action in @account_actions do
-    case AccountEventMap.create(event_params) do
+    case AccountCommandMap.create(event_params) do
       {:ok, event_map} ->
         CommandWorker.process_new_event_no_save_on_error(event_map)
 

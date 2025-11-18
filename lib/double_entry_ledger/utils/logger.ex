@@ -5,13 +5,13 @@ defmodule DoubleEntryLedger.Logger do
   defmacro __using__(_opts) do
     quote do
       alias DoubleEntryLedger.Command
-      alias DoubleEntryLedger.Command.{AccountEventMap, TransactionEventMap}
+      alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionEventMap}
       require Logger
 
       import DoubleEntryLedger.Utils.Traceable
       import DoubleEntryLedger.Utils.Changeset
 
-      @type logable() :: Command.t() | AccountEventMap.t() | TransactionEventMap.t() | map()
+      @type logable() :: Command.t() | AccountCommandMap.t() | TransactionEventMap.t() | map()
 
       @module_name __MODULE__ |> Module.split() |> List.last()
 

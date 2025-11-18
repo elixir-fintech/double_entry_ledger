@@ -1,16 +1,16 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnErrorTest do
+defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveOnErrorTest do
   @moduledoc false
 
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Command.{AccountEventMap, AccountData}
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnError
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountEventMapNoSaveOnError
+  alias DoubleEntryLedger.Command.{AccountCommandMap, AccountData}
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveOnError
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveOnError
 
   import DoubleEntryLedger.InstanceFixtures
 
-  doctest UpdateAccountEventMapNoSaveOnError
+  doctest UpdateAccountCommandMapNoSaveOnError
 
   describe "process/1" do
     setup [:create_instance, :create_account]
@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
       instance: instance,
       account: account
     } do
-      event_map = %AccountEventMap{
+      event_map = %AccountCommandMap{
         action: :update_account,
         instance_address: instance.address,
         account_address: account.address,
@@ -29,14 +29,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
         }
       }
 
-      {:ok, account, event} = UpdateAccountEventMapNoSaveOnError.process(event_map)
+      {:ok, account, event} = UpdateAccountCommandMapNoSaveOnError.process(event_map)
       assert account.description == "Updated Description"
       assert event.command_queue_item.status == :processed
     end
   end
 
   defp create_account(%{instance: instance} = ctx) do
-    event_map = %AccountEventMap{
+    event_map = %AccountCommandMap{
       action: :create_account,
       instance_address: instance.address,
       source: "manual",
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountEventMapNoSaveOnE
       }
     }
 
-    {:ok, account, event} = CreateAccountEventMapNoSaveOnError.process(event_map)
+    {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(event_map)
 
     Map.put(ctx, :account, account)
     |> Map.put(:event, event)
