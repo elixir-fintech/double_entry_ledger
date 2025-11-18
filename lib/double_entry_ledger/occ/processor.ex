@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
   alias Ecto.Multi
   alias DoubleEntryLedger.{Command, Transaction}
   alias DoubleEntryLedger.Command.ErrorMap
-  alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
   alias DoubleEntryLedger.Occ.Occable
 
   @doc """
@@ -86,13 +86,13 @@ defmodule DoubleEntryLedger.Occ.Processor do
   ## Implementation Examples
 
   See implementations in:
-    * `DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent.build_transaction/3`
+    * `DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand.build_transaction/3`
     * `DoubleEntryLedger.Workers.CommandWorker.UpdateEvent.build_transaction/3`
     * `DoubleEntryLedger.Workers.CommandWorker.ProcessTransactionCommandMap.build_transaction/3`
   """
   @callback build_transaction(
               Occable.t(),
-              TransactionEventTransformer.transaction_map(),
+              TransactionCommandTransformer.transaction_map(),
               Ecto.UUID.t(),
               Ecto.Repo.t()
             ) :: Ecto.Multi.t()
@@ -180,7 +180,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       import DoubleEntryLedger.Occ.Helper
       import DoubleEntryLedger.CommandQueue.Scheduling
 
-      import DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer,
+      import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer,
         only: [transaction_data_to_transaction_map: 2]
 
       @max_retries max_retries()

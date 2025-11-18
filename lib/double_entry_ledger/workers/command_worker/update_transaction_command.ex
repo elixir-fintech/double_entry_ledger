@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
+defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
   @moduledoc """
   Processes update (transaction) events in the double-entry ledger system.
 
@@ -43,14 +43,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
   import DoubleEntryLedger.CommandQueue.Scheduling
 
-  import DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandler,
+  import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
     only: [default_response_handler: 2]
 
   @impl true
   @doc """
   Handles errors that occur when converting event data to a transaction map.
 
-  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandler.handle_transaction_map_error/3`.
+  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler.handle_transaction_map_error/3`.
 
   ## Parameters
 
@@ -63,14 +63,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(event_map, error, repo),
-    to: Workers.CommandWorker.TransactionEventResponseHandler,
+    to: Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
   @doc """
   Handles the case when OCC retries are exhausted.
 
-  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandler.handle_occ_final_timeout/2`.
+  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler.handle_occ_final_timeout/2`.
 
   ## Parameters
 
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionEvent do
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(event_map, repo),
-    to: Workers.CommandWorker.TransactionEventResponseHandler,
+    to: Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_occ_final_timeout
 
   @doc """

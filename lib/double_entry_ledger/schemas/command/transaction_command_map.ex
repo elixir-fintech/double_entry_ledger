@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   This module provides an embedded schema and related functions for creating and validating
   transaction event maps, which serve as the primary data structure for transaction creation and updates.
-  TransactionCommandMap represents the pre-persistence state of a TransactionEvent, containing all necessary data
+  TransactionCommandMap represents the pre-persistence state of a TransactionCommand, containing all necessary data
   to either create a new transaction or update an existing one.
 
   ## Purpose
@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   Both combinations are protected by unique indexes in the database to prevent duplicate processing.
   The TransactionCommandMap schema itself does not enforce these constraints, as it is not persisted directly.
-  Instead, the TransactionEvent schema handles this at the database level.
+  Instead, the TransactionCommand schema handles this at the database level.
   Only transactions with status `:pending` can be updated.
 
   ## Workflow Integration

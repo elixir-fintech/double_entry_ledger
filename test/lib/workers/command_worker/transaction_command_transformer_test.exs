@@ -1,17 +1,17 @@
-defmodule DoubleEntryLedger.TransactionEventTransformerTest do
+defmodule DoubleEntryLedger.TransactionCommandTransformerTest do
   @moduledoc """
-  This module tests the TransactionEventTransformer.
+  This module tests the TransactionCommandTransformer.
   """
 
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
   alias DoubleEntryLedger.Command.{EntryData, TransactionData}
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  doctest TransactionEventTransformer
+  doctest TransactionCommandTransformer
 
   describe "transaction_data_to_transaction_map/2" do
     setup [:create_instance, :create_accounts]
@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
       {:ok, transaction_map} =
-        TransactionEventTransformer.transaction_data_to_transaction_map(
+        TransactionCommandTransformer.transaction_data_to_transaction_map(
           transaction_data,
           instance.id
         )
@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
       {:ok, transaction_map} =
-        TransactionEventTransformer.transaction_data_to_transaction_map(
+        TransactionCommandTransformer.transaction_data_to_transaction_map(
           transaction_data,
           instance.id
         )
@@ -70,7 +70,7 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       transaction_data = %TransactionData{status: :posted}
 
       {:ok, transaction_map} =
-        TransactionEventTransformer.transaction_data_to_transaction_map(
+        TransactionCommandTransformer.transaction_data_to_transaction_map(
           transaction_data,
           instance.id
         )
@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
       assert {:error, :no_accounts_found} =
-               TransactionEventTransformer.transaction_data_to_transaction_map(
+               TransactionCommandTransformer.transaction_data_to_transaction_map(
                  transaction_data,
                  instance.id
                )
@@ -105,7 +105,7 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       transaction_data = %TransactionData{entries: entries, status: :posted}
 
       assert {:error, :some_accounts_not_found} =
-               TransactionEventTransformer.transaction_data_to_transaction_map(
+               TransactionCommandTransformer.transaction_data_to_transaction_map(
                  transaction_data,
                  instance.id
                )
@@ -123,7 +123,7 @@ defmodule DoubleEntryLedger.TransactionEventTransformerTest do
       transaction_data = %TransactionData{status: :posted, entries: entries}
 
       assert {:error, :invalid_entry_data} =
-               TransactionEventTransformer.transaction_data_to_transaction_map(
+               TransactionCommandTransformer.transaction_data_to_transaction_map(
                  transaction_data,
                  instance.id
                )

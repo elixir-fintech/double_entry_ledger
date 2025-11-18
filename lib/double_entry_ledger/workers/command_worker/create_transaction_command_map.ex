@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
   @doc """
   Handles errors that occur when converting event map data to a transaction map.
 
-  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandler.handle_transaction_map_error/3`.
+  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler.handle_transaction_map_error/3`.
 
   ## Parameters
 
@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
   @doc """
   Handles the case when OCC retries are exhausted for an event map.
 
-  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandler.handle_occ_final_timeout/2`.
+  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler.handle_occ_final_timeout/2`.
 
   ## Parameters
 
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
   """
   defdelegate handle_occ_final_timeout(event_map, repo),
     as: :handle_occ_final_timeout,
-    to: DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandler
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler
 
   @doc """
   Processes an `TransactionCommandMap` by creating both an event record and its associated transaction atomically.

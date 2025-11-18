@@ -57,7 +57,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Command.{ErrorMap, IdempotencyKey}
   alias DoubleEntryLedger.Occ.Helper
-  alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
   @doc """
   Updates an Command with retry information during OCC retry cycles.
@@ -96,7 +96,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
              event_map: %{payload: td}
            }
          } ->
-        case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
+        case TransactionCommandTransformer.transaction_data_to_transaction_map(td, id) do
           {:ok, transaction_map} -> {:ok, transaction_map}
           {:error, error} -> {:ok, {:error, error}}
         end
@@ -135,7 +135,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
   alias DoubleEntryLedger.PendingTransactionLookup
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper}
   alias DoubleEntryLedger.Occ.Helper
-  alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
   @doc """
   Updates an TransactionCommandMap during OCC retry cycles.
@@ -169,7 +169,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
            occable_item: %{payload: td},
            instance: id
          } ->
-        case TransactionEventTransformer.transaction_data_to_transaction_map(td, id) do
+        case TransactionCommandTransformer.transaction_data_to_transaction_map(td, id) do
           {:ok, transaction_map} -> {:ok, transaction_map}
           {:error, error} -> {:ok, {:error, error}}
         end

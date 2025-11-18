@@ -1,6 +1,6 @@
-defmodule DoubleEntryLedger.CreateTransactionEventTest do
+defmodule DoubleEntryLedger.CreateTransactionCommandTest do
   @moduledoc """
-  This module tests the CreateTransactionEvent module.
+  This module tests the CreateTransactionCommand module.
   """
   use ExUnit.Case
   import Mox
@@ -14,9 +14,9 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
   alias DoubleEntryLedger.{Command, PendingTransactionLookup}
   alias DoubleEntryLedger.Command.TransactionData
   alias DoubleEntryLedger.Stores.CommandStore
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
 
-  doctest CreateTransactionEvent
+  doctest CreateTransactionCommand
 
   describe "process_create_event/2" do
     setup [:create_instance, :create_accounts]
@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       %{event: event} = new_create_transaction_event(ctx)
 
       {:ok, transaction, %{id: id, command_queue_item: evq} = processed_event} =
-        CreateTransactionEvent.process(event)
+        CreateTransactionCommand.process(event)
 
       assert evq.status == :processed
 
@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       %{event: event} = new_create_transaction_event(ctx, :pending)
 
       {:ok, transaction, %{id: id, command_queue_item: evq} = processed_event} =
-        CreateTransactionEvent.process(event)
+        CreateTransactionCommand.process(event)
 
       assert evq.status == :processed
 
@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
           )
         )
 
-      assert {:error, %Command{command_queue_item: eqm}} = CreateTransactionEvent.process(event)
+      assert {:error, %Command{command_queue_item: eqm}} = CreateTransactionCommand.process(event)
       assert eqm.status == :dead_letter
     end
 
@@ -93,14 +93,14 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       end)
 
       assert {:error, %Command{command_queue_item: eqm}} =
-               CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
+               CreateTransactionCommand.process(event, DoubleEntryLedger.MockRepo)
 
       assert eqm.status == :dead_letter
 
       assert [
                %{
                  message:
-                   "TransactionEventResponseHandler: Transaction changeset failed %{entries: [\":conflict\"]}"
+                   "TransactionCommandResponseHandler: Transaction changeset failed %{entries: [\":conflict\"]}"
                }
                | _
              ] =
@@ -121,7 +121,7 @@ defmodule DoubleEntryLedger.CreateTransactionEventTest do
       end)
 
       {:error, %{command_queue_item: eqm} = updated_event} =
-        CreateTransactionEvent.process(event, DoubleEntryLedger.MockRepo)
+        CreateTransactionCommand.process(event, DoubleEntryLedger.MockRepo)
 
       %{transaction: nil} = Repo.preload(updated_event, :transaction)
       assert eqm.processing_completed_at != nil

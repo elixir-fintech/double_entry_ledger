@@ -14,7 +14,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   alias Ecto.Changeset
   alias DoubleEntryLedger.Command.TransactionCommandMap, as: TransactionCommandMapSchema
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoSaveOnError
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
 
   doctest UpdateTransactionCommandMapNoSaveOnError
 
@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
       {:ok, pending_transaction, _} =
-        CreateTransactionEvent.process(pending_event)
+        CreateTransactionCommand.process(pending_event)
 
       update_event = update_transaction_event_map(ctx, pending_event, :posted)
 
@@ -45,7 +45,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
     test "return TransactionCommandMap changeset for duplicate update_idempk", ctx do
       # successfully create event
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
-      CreateTransactionEvent.process(pending_event)
+      CreateTransactionCommand.process(pending_event)
       update_event = update_transaction_event_map(ctx, pending_event, :posted)
       UpdateTransactionCommandMapNoSaveOnError.process(update_event)
 
@@ -228,7 +228,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
     test "with last retry that fails", ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
-      CreateTransactionEvent.process(pending_event)
+      CreateTransactionCommand.process(pending_event)
       update_event = update_transaction_event_map(ctx, pending_event, :posted)
 
       DoubleEntryLedger.MockRepo

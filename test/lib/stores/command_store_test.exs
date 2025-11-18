@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
 
   alias DoubleEntryLedger.Command.TransactionCommandMap
 
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
 
   doctest CommandStoreHelper
   doctest CommandStore
@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
 
     test "returns processed_transaction", %{instance: instance} = ctx do
       %{event: %{event_map: event_map} = event} = new_create_transaction_event(ctx, :pending)
-      {:ok, transaction, _} = CreateTransactionEvent.process(event)
+      {:ok, transaction, _} = CreateTransactionCommand.process(event)
 
       assert %Command{} =
                found_event =

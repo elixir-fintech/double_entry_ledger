@@ -76,8 +76,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   - `CreateTransactionCommandMap` - New transaction creation from event maps
   - `UpdateTransactionCommandMap` - Transaction updates from event maps
-  - `CreateTransactionEvent` - Transaction creation from stored events
-  - `UpdateTransactionEvent` - Transaction updates from stored events
+  - `CreateTransactionCommand` - Transaction creation from stored events
+  - `UpdateTransactionCommand` - Transaction updates from stored events
   - `CreateTransactionCommandMapNoSaveOnError` - Transaction creation without error persistence
   - `UpdateTransactionCommandMapNoSaveOnError` - Transaction updates without error persistence
   - `CreateAccountCommandMapNoSaveOnError` - Account creation without error persistence
@@ -130,9 +130,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
     CreateAccountCommand,
-    CreateTransactionEvent,
+    CreateTransactionCommand,
     UpdateAccountCommand,
-    UpdateTransactionEvent,
+    UpdateTransactionCommand,
     CreateTransactionCommandMap,
     UpdateTransactionCommandMap,
     CreateAccountCommandMapNoSaveOnError,
@@ -538,7 +538,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
            event_map: %{action: :create_transaction}
          } = event
        ) do
-    CreateTransactionEvent.process(event)
+    CreateTransactionCommand.process(event)
   end
 
   defp process_event(
@@ -547,7 +547,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
            event_map: %{"action" => "create_transaction"}
          } = event
        ) do
-    CreateTransactionEvent.process(event)
+    CreateTransactionCommand.process(event)
   end
 
   defp process_event(
@@ -556,7 +556,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
            event_map: %{action: :update_transaction}
          } = event
        ) do
-    UpdateTransactionEvent.process(event)
+    UpdateTransactionCommand.process(event)
   end
 
   defp process_event(
@@ -565,7 +565,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
            event_map: %{"action" => "update_transaction"}
          } = event
        ) do
-    UpdateTransactionEvent.process(event)
+    UpdateTransactionCommand.process(event)
   end
 
   defp process_event(
