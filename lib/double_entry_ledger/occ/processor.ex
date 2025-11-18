@@ -69,13 +69,13 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   The Multi must include specific named steps depending on the input type:
 
-    * `:create_event` (required for TransactionEventMap) - Must return the created Command struct when processing the TransactionEventMap
+    * `:create_event` (required for TransactionCommandMap) - Must return the created Command struct when processing the TransactionCommandMap
     * `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
     * `:event` (required) - Must return the saved Command struct when processing the Command
 
   ## Parameters
 
-    - `occable_item`: An Command struct or TransactionEventMap containing the event details to process
+    - `occable_item`: An Command struct or TransactionCommandMap containing the event details to process
     - `transaction_map`: A map of transaction data derived from the event
     - `repo`: The Ecto repository to use for database operations
 
@@ -88,7 +88,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
   See implementations in:
     * `DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent.build_transaction/3`
     * `DoubleEntryLedger.Workers.CommandWorker.UpdateEvent.build_transaction/3`
-    * `DoubleEntryLedger.Workers.CommandWorker.ProcessTransactionEventMap.build_transaction/3`
+    * `DoubleEntryLedger.Workers.CommandWorker.ProcessTransactionCommandMap.build_transaction/3`
   """
   @callback build_transaction(
               Occable.t(),
@@ -252,7 +252,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       ## Parameters
 
         - `module` - the processor module implementing the callbacks
-        - `occable_item` - the Command or TransactionEventMap being processed
+        - `occable_item` - the Command or TransactionCommandMap being processed
         - `repo` - the Ecto repo to use for DB ops
 
       ## Returns

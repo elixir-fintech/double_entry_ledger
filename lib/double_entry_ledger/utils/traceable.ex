@@ -106,12 +106,12 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Accoun
   end
 end
 
-defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.TransactionEventMap do
+defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.TransactionCommandMap do
   import DoubleEntryLedger.Utils.Changeset
-  alias DoubleEntryLedger.Command.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionCommandMap
 
-  @spec metadata(TransactionEventMap.t()) :: map()
-  def metadata(%TransactionEventMap{} = event_map) do
+  @spec metadata(TransactionCommandMap.t()) :: map()
+  def metadata(%TransactionCommandMap{} = event_map) do
     %{
       is_event_map: true,
       instance_address: Map.get(event_map, :instance_address),
@@ -129,12 +129,12 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Transa
     }
   end
 
-  @spec metadata(TransactionEventMap.t(), any()) :: map()
+  @spec metadata(TransactionCommandMap.t(), any()) :: map()
   def metadata(event_map, error) do
     Map.put(metadata(event_map), :error, inspect(error))
   end
 
-  @spec changeset_metadata(TransactionEventMap.t(), any()) :: map()
+  @spec changeset_metadata(TransactionCommandMap.t(), any()) :: map()
   def changeset_metadata(event_map, %Ecto.Changeset{} = changeset) do
     Map.put(
       metadata(event_map),

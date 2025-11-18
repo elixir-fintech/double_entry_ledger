@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Command changesets from TransactionEventMaps or AccountCommandMaps
+  * **Changeset Building**: Create Command changesets from TransactionCommandMaps or AccountCommandMaps
   * **Command Relationships**: Look up related events by source identifiers
   * **Transaction Linking**: Find transactions and accounts associated with events
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
@@ -36,34 +36,34 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   """
   import Ecto.Query, only: [from: 2]
 
-  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
   alias Ecto.Changeset
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Command, Transaction, Account, Entry, PendingTransactionLookup}
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
 
   @doc """
-  Builds an Command changeset from a TransactionEventMap or AccountCommandMap.
+  Builds an Command changeset from a TransactionCommandMap or AccountCommandMap.
 
   Creates a new Command changeset suitable for database insertion, converting the
   provided event map structure into the appropriate Command attributes.
 
   ## Parameters
 
-  * `event_map` - Either a TransactionEventMap or AccountCommandMap struct containing event data
+  * `event_map` - Either a TransactionCommandMap or AccountCommandMap struct containing event data
 
   ## Returns
 
   * `Ecto.Changeset.t(Command.t())` - A changeset for creating a new Command
 
   """
-  @spec build_create(TransactionEventMap.t() | AccountCommandMap.t(), Ecto.UUID.t()) ::
+  @spec build_create(TransactionCommandMap.t() | AccountCommandMap.t(), Ecto.UUID.t()) ::
           Changeset.t(Command.t())
-  def build_create(%TransactionEventMap{} = event_map, instance_id) do
+  def build_create(%TransactionCommandMap{} = event_map, instance_id) do
     %Command{}
     |> Command.changeset(%{
       instance_id: instance_id,
-      event_map: TransactionEventMap.to_map(event_map)
+      event_map: TransactionCommandMap.to_map(event_map)
     })
   end
 
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
   This function looks up an event using i
       event_map
-      |> TransactionEventMap.to_map()
+      |> TransactionCommandMap.to_map()
       |> Map.put(:instance_id, instance_id)
       |> Mts action, source system identifier,
   source-specific identifier, and instance ID. The returned event includes preloaded

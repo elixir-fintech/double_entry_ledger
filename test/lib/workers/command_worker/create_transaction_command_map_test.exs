@@ -1,23 +1,23 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest do
+defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTest do
   @moduledoc """
-  This module tests the CreateTransactionEventMap module, which processes event maps for atomic creation and update of events and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
+  This module tests the CreateTransactionCommandMap module, which processes event maps for atomic creation and update of events and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
   """
   use ExUnit.Case
   import Mox
 
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Command.{TransactionEventMap, TransactionData, EntryData}
+  alias DoubleEntryLedger.Command.{TransactionCommandMap, TransactionData, EntryData}
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap
   alias DoubleEntryLedger.{Command, PendingTransactionLookup}
   alias DoubleEntryLedger.Stores.CommandStore
 
-  doctest CreateTransactionEventMap
+  doctest CreateTransactionCommandMap
 
   describe "process_map/1" do
     setup [:create_instance, :create_accounts]
@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
       event_map = create_transaction_event_map(ctx)
 
       {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        CreateTransactionEventMap.process(event_map)
+        CreateTransactionCommandMap.process(event_map)
 
       assert evq.status == :processed
 
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
     test "pending transaction also creates a pending transaction lookup", ctx do
       event_map = create_transaction_event_map(ctx, :pending)
 
-      {:ok, %{id: trx_id}, %{id: id}} = CreateTransactionEventMap.process(event_map)
+      {:ok, %{id: trx_id}, %{id: id}} = CreateTransactionCommandMap.process(event_map)
 
       assert %{command_id: ^id, transaction_id: ^trx_id} =
                Repo.get_by(PendingTransactionLookup, command_id: id)
@@ -49,22 +49,22 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
     test "posted transaction don't create a pending transaction lookup", ctx do
       event_map = create_transaction_event_map(ctx, :posted)
 
-      {:ok, _, %{id: id}} = CreateTransactionEventMap.process(event_map)
+      {:ok, _, %{id: id}} = CreateTransactionCommandMap.process(event_map)
       assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
     end
 
-    test "return TransactionEventMap changeset for duplicate source_idempk", ctx do
+    test "return TransactionCommandMap changeset for duplicate source_idempk", ctx do
       # successfully create event
       event_map = create_transaction_event_map(ctx)
-      CreateTransactionEventMap.process(event_map)
+      CreateTransactionCommandMap.process(event_map)
 
       # process same event_map again which should fail
-      {:error, changeset} = CreateTransactionEventMap.process(event_map)
-      assert %Changeset{data: %TransactionEventMap{}} = changeset
+      {:error, changeset} = CreateTransactionCommandMap.process(event_map)
+      assert %Changeset{data: %TransactionCommandMap{}} = changeset
       assert Keyword.has_key?(changeset.errors, :key_hash)
     end
 
-    test "return TransactionEventMap changeset for other errors", ctx do
+    test "return TransactionCommandMap changeset for other errors", ctx do
       # successfully create event
       event_map = create_transaction_event_map(ctx, :pending)
 
@@ -78,12 +78,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
         )
 
       {:error, changeset} =
-        CreateTransactionEventMap.process(updated_event_map)
+        CreateTransactionCommandMap.process(updated_event_map)
 
-      assert %Changeset{data: %TransactionEventMap{}} = changeset
+      assert %Changeset{data: %TransactionCommandMap{}} = changeset
     end
 
-    test "return TransactionEventMap for transaction_map error", %{
+    test "return TransactionCommandMap for transaction_map error", %{
       instance: inst,
       accounts: [a | _]
     } do
@@ -100,9 +100,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
         )
 
       {:error, changeset} =
-        CreateTransactionEventMap.process(event_map)
+        CreateTransactionCommandMap.process(event_map)
 
-      assert %Changeset{data: %TransactionEventMap{}} = changeset
+      assert %Changeset{data: %TransactionCommandMap{}} = changeset
     end
   end
 
@@ -122,7 +122,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
       end)
 
       assert {:error, %Command{id: id, command_queue_item: %{status: :occ_timeout}}} =
-               CreateTransactionEventMap.process(
+               CreateTransactionCommandMap.process(
                  create_transaction_event_map(ctx, :pending),
                  DoubleEntryLedger.MockRepo
                )
@@ -145,7 +145,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
       |> expect(:transaction, 6, fn multi -> Repo.transaction(multi) end)
 
       {:error, %Command{id: id}} =
-        CreateTransactionEventMap.process(
+        CreateTransactionCommandMap.process(
           create_transaction_event_map(ctx, :pending),
           DoubleEntryLedger.MockRepo
         )
@@ -166,7 +166,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapTest 
       |> expect(:transaction, 6, fn multi -> Repo.transaction(multi) end)
 
       {:error, %Command{id: id}} =
-        CreateTransactionEventMap.process(
+        CreateTransactionCommandMap.process(
           create_transaction_event_map(ctx, :posted),
           DoubleEntryLedger.MockRepo
         )

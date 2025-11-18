@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Command changesets from TransactionEventMaps or AccountCommandMaps
+  * **Changeset Building**: Create Command changesets from TransactionCommandMaps or AccountCommandMaps
   * **Command Relationships**: Look up related events by source identifiers
   * **Transaction Linking**: Find transactions and accounts associated with events
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   This function looks up an event using i
       event_map
-      |> TransactionEventMap.to_map()
+      |> TransactionCommandMap.to_map()
       |> Map.put(:instance_id, instance_id)
       |> Mts action, source system identifier,
   source-specific identifier, and instance ID. The returned event includes preloaded

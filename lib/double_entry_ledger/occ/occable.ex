@@ -129,33 +129,33 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
   end
 end
 
-defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.TransactionEventMap do
+defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.TransactionCommandMap do
   alias Ecto.{Multi, Repo}
-  alias DoubleEntryLedger.Command.{ErrorMap, TransactionEventMap, IdempotencyKey}
+  alias DoubleEntryLedger.Command.{ErrorMap, TransactionCommandMap, IdempotencyKey}
   alias DoubleEntryLedger.PendingTransactionLookup
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionEventTransformer
 
   @doc """
-  Updates an TransactionEventMap during OCC retry cycles.
+  Updates an TransactionCommandMap during OCC retry cycles.
 
-  For TransactionEventMap, this is a no-op since TransactionEventMaps are transient and
+  For TransactionCommandMap, this is a no-op since TransactionCommandMaps are transient and
   not stored in the database.
 
   ## Parameters
-    - `event_map` - The TransactionEventMap struct
+    - `event_map` - The TransactionCommandMap struct
     - `_error_map` - Contains retry count and errors (unused)
     - `_repo` - Ecto.Repo to use (unused)
 
   ## Returns
-    - The unchanged TransactionEventMap struct
+    - The unchanged TransactionCommandMap struct
   """
-  @spec update!(TransactionEventMap.t(), ErrorMap.t(), Repo.t()) :: TransactionEventMap.t()
+  @spec update!(TransactionCommandMap.t(), ErrorMap.t(), Repo.t()) :: TransactionCommandMap.t()
   def update!(event_map, _error_map, _repo), do: event_map
 
-  @spec build_multi(TransactionEventMap.t()) :: Multi.t()
-  def build_multi(%TransactionEventMap{instance_address: address} = event_map) do
+  @spec build_multi(TransactionCommandMap.t()) :: Multi.t()
+  def build_multi(%TransactionCommandMap{instance_address: address} = event_map) do
     Multi.new()
     |> Multi.put(:occable_item, event_map)
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
@@ -178,20 +178,20 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
   end
 
   @doc """
-  Handles OCC timeout for an TransactionEventMap when maximum retries are reached.
+  Handles OCC timeout for an TransactionCommandMap when maximum retries are reached.
 
-  Creates and stores a permanent Command record from the TransactionEventMap data
+  Creates and stores a permanent Command record from the TransactionCommandMap data
   with timeout status, then returns an error tuple.
 
   ## Parameters
-    - `_event_map` - The TransactionEventMap that has reached maximum retries
+    - `_event_map` - The TransactionCommandMap that has reached maximum retries
     - `error_map` - Contains retry count, errors, and created Command
     - `repo` - Ecto.Repo to use for storing the Command
 
   ## Returns
     - Error tuple containing the created Command and timeout indication
   """
-  @spec timed_out(TransactionEventMap.t(), atom(), ErrorMap.t()) ::
+  @spec timed_out(TransactionCommandMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()
   def timed_out(
         %{instance_address: address, payload: %{status: :pending}} = event_map,

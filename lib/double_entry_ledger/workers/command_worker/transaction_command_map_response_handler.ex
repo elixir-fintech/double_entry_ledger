@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHandler do
+defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler do
   @moduledoc """
   Specialized error handling for the event processing pipeline in the double-entry ledger system.
 
@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
-      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}}}
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}}}
 
       # Map transaction validation errors to an event map changeset
       iex> default_response_handler(
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
-      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}}}
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}}}
   """
   require Logger
 
@@ -44,13 +44,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
 
   alias Ecto.{Changeset, Multi}
   alias DoubleEntryLedger.Occ.Occable
-  alias DoubleEntryLedger.Command.{TransactionEventMap, IdempotencyKey}
+  alias DoubleEntryLedger.Command.{TransactionCommandMap, IdempotencyKey}
 
   alias DoubleEntryLedger.{Command, Transaction}
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @doc """
-  Default response handler for functions that operate on a TransactionEventMap.
+  Default response handler for functions that operate on a TransactionCommandMap.
 
   Returns:
   - `{:ok, transaction, event}` on success
@@ -60,13 +60,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
   """
   @spec default_response_handler(
           {:ok, map()} | {:error, :atom, any(), map()},
-          TransactionEventMap.t()
+          TransactionCommandMap.t()
         ) ::
           CommandWorker.success_tuple()
-          | {:error, Changeset.t(TransactionEventMap.t()) | String.t()}
+          | {:error, Changeset.t(TransactionCommandMap.t()) | String.t()}
   def default_response_handler(
         response,
-        %TransactionEventMap{} = event_map
+        %TransactionCommandMap{} = event_map
       ) do
     case response do
       {:ok, %{transaction: transaction, event_success: event}} ->
@@ -79,7 +79,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
 
         {:error, from_idempotency_key_to_event_map(event_map, changeset)}
 
-      {:error, :input_event_map_error, %Changeset{data: %TransactionEventMap{}} = changeset, _} ->
+      {:error, :input_event_map_error, %Changeset{data: %TransactionCommandMap{}} = changeset, _} ->
         error("Input event map error", event_map, changeset)
 
         {:error, changeset}
@@ -119,7 +119,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHan
   def handle_transaction_map_error(event_map, error, _repo) do
     event_map_changeset =
       event_map
-      |> TransactionEventMap.changeset(%{})
+      |> TransactionCommandMap.changeset(%{})
       |> Changeset.add_error(:input_event_map, to_string(error))
 
     Multi.new()

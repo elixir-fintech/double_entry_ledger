@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSaveOnError do
+defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnError do
   @moduledoc """
   Processes event maps for creating transactions, returning changesets on error instead of raising or saving invalid data.
 
@@ -12,27 +12,27 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
   use DoubleEntryLedger.Occ.Processor
   use DoubleEntryLedger.Logger
 
-  import DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHandler,
+  import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
     only: [default_response_handler: 2]
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.Repo
-  alias DoubleEntryLedger.Command.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @impl true
   defdelegate handle_transaction_map_error(event_map, error, repo),
-    to: DoubleEntryLedger.Workers.CommandWorker.TransactionEventMapResponseHandler,
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
   defdelegate build_transaction(event_map, transaction_map, instance_id, repo),
-    to: DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap,
+    to: DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap,
     as: :build_transaction
 
   @impl true
   defdelegate handle_build_transaction(multi, event_map, repo),
-    to: DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMap,
+    to: DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap,
     as: :handle_build_transaction
 
   @doc """
@@ -45,12 +45,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
   - `{:error, changeset}` if validation or OCC fails (see changeset errors for details)
   - `{:error, string}` for unexpected errors
   """
-  @spec process(TransactionEventMap.t(), Ecto.Repo.t() | nil) ::
+  @spec process(TransactionCommandMap.t(), Ecto.Repo.t() | nil) ::
           CommandWorker.success_tuple()
-          | {:errors, Changeset.t(TransactionEventMap.t()) | String.t()}
+          | {:errors, Changeset.t(TransactionCommandMap.t()) | String.t()}
   def process(%{action: :create_transaction} = event_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(event_map, repo) do
-      {:error, :occ_timeout, %Changeset{data: %TransactionEventMap{}} = changeset, _steps_so_far} ->
+      {:error, :occ_timeout, %Changeset{data: %TransactionCommandMap{}} = changeset, _steps_so_far} ->
         warn("OCC timeout reached", event_map, changeset)
 
         {:error, changeset}
@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEventMapNoSav
   def handle_occ_final_timeout(event_map, _repo) do
     event_map_changeset =
       event_map
-      |> TransactionEventMap.changeset(%{})
+      |> TransactionCommandMap.changeset(%{})
       |> Changeset.add_error(:occ_timeout, "OCC retries exhausted")
 
     Multi.new()

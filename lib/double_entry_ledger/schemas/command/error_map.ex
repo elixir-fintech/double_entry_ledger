@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
 
   * `build_error/1`: Creates a standardized error entry from various input types
   * `build_errors/2`: Adds a new error to an existing error list
-  * `create_error_map/1`: Initializes an ErrorMap from an Command or TransactionEventMap
+  * `create_error_map/1`: Initializes an ErrorMap from an Command or TransactionCommandMap
 
   ## Usage Examples
 
@@ -42,7 +42,7 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
             save_on_error: false
 
   alias DoubleEntryLedger.Command
-  alias DoubleEntryLedger.Command.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionCommandMap
   alias __MODULE__, as: ErrorMap
 
   @typedoc """
@@ -148,13 +148,13 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
   end
 
   @doc """
-  Initializes an ErrorMap from an Command or TransactionEventMap.
+  Initializes an ErrorMap from an Command or TransactionCommandMap.
 
   Creates a new ErrorMap structure, preserving any existing errors from the
   event while initializing other tracking fields.
 
   ## Parameters
-    - `event`: Command or TransactionEventMap to initialize from
+    - `event`: Command or TransactionCommandMap to initialize from
 
   ## Returns
     - A new ErrorMap struct with initialized fields
@@ -170,7 +170,7 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
       iex> length(error_map.errors)
       1
   """
-  @spec create_error_map(Command.t() | TransactionEventMap.t()) :: t()
+  @spec create_error_map(Command.t() | TransactionCommandMap.t()) :: t()
   def create_error_map(%Command{command_queue_item: command_queue_item}) do
     %ErrorMap{
       errors: Map.get(command_queue_item, :errors, []),

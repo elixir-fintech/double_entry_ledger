@@ -1,15 +1,15 @@
-defmodule DoubleEntryLedger.Command.TransactionEventMap do
+defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   @moduledoc """
-  Defines the TransactionEventMap schema for representing transaction event data in the Double Entry Ledger system.
+  Defines the TransactionCommandMap schema for representing transaction event data in the Double Entry Ledger system.
 
   This module provides an embedded schema and related functions for creating and validating
   transaction event maps, which serve as the primary data structure for transaction creation and updates.
-  TransactionEventMap represents the pre-persistence state of a TransactionEvent, containing all necessary data
+  TransactionCommandMap represents the pre-persistence state of a TransactionEvent, containing all necessary data
   to either create a new transaction or update an existing one.
 
   ## Purpose
 
-  TransactionEventMap acts as a validation and structuring layer for transaction-related events
+  TransactionCommandMap acts as a validation and structuring layer for transaction-related events
   before they are processed into persistent database records. It ensures data integrity and
   provides a consistent interface for transaction operations across the system.
 
@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
 
   ## Structure
 
-  TransactionEventMap extends the base EventMap functionality with transaction-specific payload handling.
+  TransactionCommandMap extends the base EventMap functionality with transaction-specific payload handling.
   It contains the following fields:
 
   * `action`: The type of action to perform (`:create_transaction` or `:update_transaction`)
@@ -38,11 +38,11 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
 
   ## Key Functions
 
-  * `create/1`: Creates and validates a TransactionEventMap from a map of attributes
-  * `changeset/2`: Builds a changeset for validating TransactionEventMap data with action-specific logic
+  * `create/1`: Creates and validates a TransactionCommandMap from a map of attributes
+  * `changeset/2`: Builds a changeset for validating TransactionCommandMap data with action-specific logic
   * `payload_to_map/1`: Converts TransactionData payload to a plain map (EventMap callback)
-  * `to_map/1`: Converts a TransactionEventMap struct to a plain map representation (inherited)
-  * `log_trace/1,2`: Builds a map of trace metadata for logging from a TransactionEventMap (inherited)
+  * `to_map/1`: Converts a TransactionCommandMap struct to a plain map representation (inherited)
+  * `log_trace/1,2`: Builds a map of trace metadata for logging from a TransactionCommandMap (inherited)
 
   ## Implementation Details
 
@@ -68,20 +68,20 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
     original transaction.
 
   Both combinations are protected by unique indexes in the database to prevent duplicate processing.
-  The TransactionEventMap schema itself does not enforce these constraints, as it is not persisted directly.
+  The TransactionCommandMap schema itself does not enforce these constraints, as it is not persisted directly.
   Instead, the TransactionEvent schema handles this at the database level.
   Only transactions with status `:pending` can be updated.
 
   ## Workflow Integration
 
-  TransactionEventMaps are typically created from external input data, validated, and then processed
+  TransactionCommandMaps are typically created from external input data, validated, and then processed
   by the CommandWorker system to create or update transactions in the ledger.
 
   ## Examples
 
-  Creating a TransactionEventMap for a new transaction:
+  Creating a TransactionCommandMap for a new transaction:
 
-      {:ok, event_map} = TransactionEventMap.create(%{
+      {:ok, event_map} = TransactionCommandMap.create(%{
         action: "create_transaction",
         instance_address: "some:address",
         source: "accounting_system",
@@ -95,9 +95,9 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
         }
       })
 
-  Creating a TransactionEventMap for updating an existing transaction:
+  Creating a TransactionCommandMap for updating an existing transaction:
 
-      {:ok, update_map} = TransactionEventMap.create(%{
+      {:ok, update_map} = TransactionCommandMap.create(%{
         action: "update_transaction",
         instance_address: "some:address",
         source: "accounting_system",
@@ -129,10 +129,10 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
   alias DoubleEntryLedger.Command.TransactionData
   alias Ecto.Changeset
 
-  alias __MODULE__, as: TransactionEventMap
+  alias __MODULE__, as: TransactionCommandMap
 
   @typedoc """
-  Represents a TransactionEventMap structure for transaction creation or updates.
+  Represents a TransactionCommandMap structure for transaction creation or updates.
 
   This type extends the parameterized EventMap type with TransactionData as the payload type,
   providing type safety and clear documentation for transaction-specific event operations.
@@ -156,18 +156,18 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
 
   ## Usage in Function Signatures
 
-      @spec process_transaction_event(TransactionEventMap.t()) ::
+      @spec process_transaction_event(TransactionCommandMap.t()) ::
         {:ok, Transaction.t()} | {:error, Changeset.t()}
 
   ## Examples
 
       # Type annotation in function
-      @spec validate_event(TransactionEventMap.t()) :: boolean()
-      def validate_event(%TransactionEventMap{} = event_map) do
+      @spec validate_event(TransactionCommandMap.t()) :: boolean()
+      def validate_event(%TransactionCommandMap{} = event_map) do
         # Implementation
       end
   """
-  @type t() :: %TransactionEventMap{
+  @type t() :: %TransactionCommandMap{
           action: :create_transaction | :update_transaction,
           instance_address: String.t(),
           source: String.t(),
@@ -204,9 +204,9 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
   def actions(), do: @actions
 
   @doc """
-  Builds a validated TransactionEventMap or returns a changeset with errors.
+  Builds a validated TransactionCommandMap or returns a changeset with errors.
 
-  This function creates a complete TransactionEventMap from raw input data by applying
+  This function creates a complete TransactionCommandMap from raw input data by applying
   all necessary validations. It serves as the primary entry point for creating
   validated transaction events from external input.
 
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
 
   ## Returns
 
-  * `{:ok, event_map}` - Successfully validated TransactionEventMap struct
+  * `{:ok, event_map}` - Successfully validated TransactionCommandMap struct
   * `{:error, changeset}` - Ecto.Changeset containing validation errors
 
   ## Validation Process
@@ -230,7 +230,7 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Command.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionCommandMap
       iex> attrs = %{
       ...>   action: "create_transaction",
       ...>   instance_address: "some:address",
@@ -244,35 +244,35 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
       ...>     ]
       ...>   }
       ...> }
-      iex> {:ok, event_map} = TransactionEventMap.create(attrs)
+      iex> {:ok, event_map} = TransactionCommandMap.create(attrs)
       iex> event_map.action
       :create_transaction
       iex> event_map.source
       "accounting_system"
 
-      iex> alias DoubleEntryLedger.Command.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionCommandMap
       iex> invalid_attrs = %{action: "create_transaction", source: "test"}
-      iex> {:error, changeset} = TransactionEventMap.create(invalid_attrs)
+      iex> {:error, changeset} = TransactionCommandMap.create(invalid_attrs)
       iex> changeset.valid?
       false
   """
-  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t(TransactionEventMap.t())}
+  @spec create(map()) :: {:ok, t()} | {:error, Changeset.t(TransactionCommandMap.t())}
   def create(attrs) do
-    %TransactionEventMap{}
+    %TransactionCommandMap{}
     |> changeset(attrs)
     |> apply_action(:insert)
   end
 
   @doc """
-  Creates a changeset for validating TransactionEventMap attributes with action-specific logic.
+  Creates a changeset for validating TransactionCommandMap attributes with action-specific logic.
 
   This function builds an Ecto changeset that validates the required fields and structure
-  of a TransactionEventMap. It applies different validation rules depending on the action type,
+  of a TransactionCommandMap. It applies different validation rules depending on the action type,
   ensuring that create and update operations have appropriate requirements.
 
   ## Parameters
 
-  * `event_map`: The TransactionEventMap struct to create a changeset for
+  * `event_map`: The TransactionCommandMap struct to create a changeset for
   * `attrs`: Map of attributes to apply to the struct
 
   ## Returns
@@ -300,7 +300,7 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Command.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionCommandMap
       iex> attrs = %{
       ...>   action: "create_transaction",
       ...>   instance_address: "some:address",
@@ -314,11 +314,11 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
       ...>     ]
       ...>   }
       ...> }
-      iex> changeset = TransactionEventMap.changeset(%TransactionEventMap{}, attrs)
+      iex> changeset = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
       iex> changeset.valid?
       true
 
-      iex> alias DoubleEntryLedger.Command.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionCommandMap
       iex> update_attrs = %{
       ...>   action: "update_transaction",
       ...>   instance_address: "some:address",
@@ -327,17 +327,17 @@ defmodule DoubleEntryLedger.Command.TransactionEventMap do
       ...>   update_idempk: "update_1",
       ...>   payload: %{status: "posted"}
       ...> }
-      iex> changeset = TransactionEventMap.changeset(%TransactionEventMap{}, update_attrs)
+      iex> changeset = TransactionCommandMap.changeset(%TransactionCommandMap{}, update_attrs)
       iex> changeset.valid?
       true
 
-      iex> alias DoubleEntryLedger.Command.TransactionEventMap
+      iex> alias DoubleEntryLedger.Command.TransactionCommandMap
       iex> invalid_attrs = %{action: "update_transaction", source: "test"}
-      iex> changeset = TransactionEventMap.changeset(%TransactionEventMap{}, invalid_attrs)
+      iex> changeset = TransactionCommandMap.changeset(%TransactionCommandMap{}, invalid_attrs)
       iex> changeset.valid?
       false
   """
-  @spec changeset(t() | map(), map()) :: Changeset.t(TransactionEventMap.t())
+  @spec changeset(t() | map(), map()) :: Changeset.t(TransactionCommandMap.t())
   def changeset(event_map, attrs) do
     case fetch_action(attrs) do
       :update_transaction ->

@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   alias DoubleEntryLedger.Stores.JournalEventStore
   alias DoubleEntryLedger.Apis.CommandApi
-  alias DoubleEntryLedger.Command.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionCommandMap
 
   @type entry_map() :: %{
           account_address: String.t(),
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> {:ok, transaction} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
       iex> transaction.status
       :posted
-      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}} = changeset} = TransactionStore.create(instance.address, create_attrs , "unique_id_123")
+      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}} = changeset} = TransactionStore.create(instance.address, create_attrs , "unique_id_123")
       iex> {idempotent_error, _} = Keyword.get(changeset.errors, :key_hash)
       iex> idempotent_error
       "idempotency violation"
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
           source: String.t()
         ) ::
           {:ok, Transaction.t()}
-          | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
+          | {:error, Ecto.Changeset.t(TransactionCommandMap.t()) | String.t()}
   def create(instance_address, attrs, idempotent_id, opts \\ []) do
     source = Keyword.get(opts, :source, "transaction_store-create")
     on_error = Keyword.get(opts, :on_error, :retry)
@@ -174,7 +174,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       iex> update_attrs = %{status: :posted}
       iex> {:ok, posted} = TransactionStore.update(instance.address, pending.id, update_attrs, "unique_id_456")
       iex> posted.status == :posted && posted.id == pending.id
-      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}} = changeset} = TransactionStore.update(instance.address, pending.id, update_attrs , "unique_id_456")
+      iex> {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}} = changeset} = TransactionStore.update(instance.address, pending.id, update_attrs , "unique_id_456")
       iex> {idempotent_error, _} = Keyword.get(changeset.errors, :key_hash)
       iex> idempotent_error
       "idempotency violation"
@@ -185,7 +185,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
           update_source: String.t()
         ) ::
           {:ok, Transaction.t()}
-          | {:error, Ecto.Changeset.t(TransactionEventMap.t()) | String.t()}
+          | {:error, Ecto.Changeset.t(TransactionCommandMap.t()) | String.t()}
   def update(instance_address, id, attrs, update_idempotent_id, opts \\ []) do
     update_source = Keyword.get(opts, :update_source, "transaction_store-update")
     on_error = Keyword.get(opts, :on_error, :retry)

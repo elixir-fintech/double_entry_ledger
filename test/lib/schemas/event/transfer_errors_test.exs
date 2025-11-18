@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
   alias DoubleEntryLedger.Command.{
     AccountCommandMap,
     AccountData,
-    TransactionEventMap,
+    TransactionCommandMap,
     TransactionData
   }
 
@@ -102,8 +102,8 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
 
       assert Keyword.equal?(errors, expected_errors)
 
-      %{data: %TransactionEventMap{}, errors: errors} =
-        TransferErrors.from_event_to_event_map(%TransactionEventMap{}, event_changeset)
+      %{data: %TransactionCommandMap{}, errors: errors} =
+        TransferErrors.from_event_to_event_map(%TransactionCommandMap{}, event_changeset)
 
       assert Keyword.equal?(
                errors,
@@ -124,7 +124,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
         Ecto.Changeset.change(%Transaction{}, %{})
         |> Ecto.Changeset.add_error(:status, "some error message")
 
-      event_map = %TransactionEventMap{payload: %TransactionData{}}
+      event_map = %TransactionCommandMap{payload: %TransactionData{}}
 
       %{changes: %{payload: %{errors: errors}}} =
         TransferErrors.from_transaction_to_event_map_payload(event_map, transaction_changeset)

@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
 
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
   alias DoubleEntryLedger.Stores.CommandStore
 
   @account_actions actions(:account) |> Enum.map(&Atom.to_string/1)
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   @spec create_from_params(event_params()) ::
           {:ok, Command.t()}
           | {:error,
-             Ecto.Changeset.t(AccountCommandMap.t() | TransactionEventMap.t())
+             Ecto.Changeset.t(AccountCommandMap.t() | TransactionCommandMap.t())
              | :instance_not_found
              | :action_not_supported}
   def create_from_params(%{"action" => action} = event_params) when action in @account_actions do
@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
 
   def create_from_params(%{"action" => action} = event_params)
       when action in @transaction_actions do
-    case TransactionEventMap.create(event_params) do
+    case TransactionCommandMap.create(event_params) do
       {:ok, event_map} -> CommandStore.create(event_map)
       error -> error
     end
@@ -101,9 +101,9 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
 
   @doc """
   Processes an event from provided parameters, handling the entire workflow.
-  This only works for parameters that translate into a `TransactionEventMap`.
+  This only works for parameters that translate into a `TransactionCommandMap`.
 
-  This function creates a TransactionEventMap from the parameters, then processes it through
+  This function creates a TransactionCommandMap from the parameters, then processes it through
   the CommandWorker to create both an event record in the CommandStore and creates the necessary projections.
 
   If the processing fails, it will return an error tuple with details about the failure.
@@ -172,7 +172,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
       when action in @transaction_actions do
     on_error = Keyword.get(opts, :on_error, :retry)
 
-    case TransactionEventMap.create(event_params) do
+    case TransactionCommandMap.create(event_params) do
       {:ok, event_map} ->
         case on_error do
           :fail -> CommandWorker.process_new_event_no_save_on_error(event_map)

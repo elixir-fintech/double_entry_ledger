@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
     TransactionStore
   }
 
-  alias DoubleEntryLedger.Command.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionCommandMap
 
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionEvent
 

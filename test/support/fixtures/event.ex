@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   alias DoubleEntryLedger.Stores.CommandStore
 
   alias DoubleEntryLedger.Command.{
-    TransactionEventMap,
+    TransactionCommandMap,
     TransactionData,
     AccountCommandMap,
     AccountData
@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.EventFixtures do
       source_idempk: "source_idempk",
       payload: struct(TransactionData, pending_payload())
     })
-    |> then(&struct(TransactionEventMap, &1))
+    |> then(&struct(TransactionCommandMap, &1))
   end
 
   def account_event_attrs(attrs \\ %{}) do
@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.EventFixtures do
         %{instance: %{address: address}, accounts: [a1, a2, _, _]},
         trx_status \\ :pending
       ) do
-    %TransactionEventMap{
+    %TransactionCommandMap{
       action: :create_transaction,
       instance_address: address,
       source: "source",
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.EventFixtures do
         %{event_map: event_map},
         trx_status \\ :posted
       ) do
-    %TransactionEventMap{
+    %TransactionCommandMap{
       action: :update_transaction,
       instance_address: address,
       source: event_map.source,

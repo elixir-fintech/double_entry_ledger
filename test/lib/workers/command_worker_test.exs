@@ -3,7 +3,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
   This module tests the CommandWorker.
   """
   use ExUnit.Case
-  alias DoubleEntryLedger.Command.TransactionEventMap
+  alias DoubleEntryLedger.Command.TransactionCommandMap
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.EventFixtures
@@ -109,7 +109,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
             ]
           }
         }
-        |> TransactionEventMap.create()
+        |> TransactionCommandMap.create()
 
       {:ok, transaction, %{command_queue_item: evq} = processed_event} =
         CommandWorker.process_new_event(event_map)

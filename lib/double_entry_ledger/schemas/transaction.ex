@@ -205,7 +205,7 @@ defmodule DoubleEntryLedger.Transaction do
 
       Enum.count(entries) == 1 ->
         add_error(changeset, :entry_count, "must have at least 2 entries")
-        # added for transfer to TransactionEventMap
+        # added for transfer to TransactionCommandMap
         |> add_errors_to_entries(:account_id, "at least 2 accounts are required")
 
       true ->
@@ -219,7 +219,7 @@ defmodule DoubleEntryLedger.Transaction do
 
     if debit_equals_credit_per_currency(entries) == false do
       add_errors_to_entries(changeset, :value, "must have equal debit and credit")
-      # added for transfer to TransactionEventMap
+      # added for transfer to TransactionCommandMap
       |> add_errors_to_entries(:amount, "must have equal debit and credit")
     else
       changeset

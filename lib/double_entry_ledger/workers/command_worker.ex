@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Supported Command Types and Actions
 
-  ### TransactionEventMap
+  ### TransactionCommandMap
   - `:create_transaction` - Creates new double-entry transactions with balanced entries
   - `:update_transaction` - Updates pending transactions only
 
@@ -74,19 +74,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   The CommandWorker delegates to specialized handlers in the `DoubleEntryLedger.Workers.CommandWorker` namespace:
 
-  - `CreateTransactionEventMap` - New transaction creation from event maps
-  - `UpdateTransactionEventMap` - Transaction updates from event maps
+  - `CreateTransactionCommandMap` - New transaction creation from event maps
+  - `UpdateTransactionCommandMap` - Transaction updates from event maps
   - `CreateTransactionEvent` - Transaction creation from stored events
   - `UpdateTransactionEvent` - Transaction updates from stored events
-  - `CreateTransactionEventMapNoSaveOnError` - Transaction creation without error persistence
-  - `UpdateTransactionEventMapNoSaveOnError` - Transaction updates without error persistence
+  - `CreateTransactionCommandMapNoSaveOnError` - Transaction creation without error persistence
+  - `UpdateTransactionCommandMapNoSaveOnError` - Transaction updates without error persistence
   - `CreateAccountCommandMapNoSaveOnError` - Account creation without error persistence
   - `UpdateAccountCommandMapNoSaveOnError` - Account updates without error persistence
 
   ## Examples
 
       # Process a new transaction event
-      event_map = %TransactionEventMap{
+      event_map = %TransactionCommandMap{
         action: :create_transaction,
         instance_id: instance_id,
         source: "payment_system",
@@ -126,19 +126,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     Account
   }
 
-  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
     CreateAccountCommand,
     CreateTransactionEvent,
     UpdateAccountCommand,
     UpdateTransactionEvent,
-    CreateTransactionEventMap,
-    UpdateTransactionEventMap,
+    CreateTransactionCommandMap,
+    UpdateTransactionCommandMap,
     CreateAccountCommandMapNoSaveOnError,
     UpdateAccountCommandMapNoSaveOnError,
-    CreateTransactionEventMapNoSaveOnError,
-    UpdateTransactionEventMapNoSaveOnError
+    CreateTransactionCommandMapNoSaveOnError,
+    UpdateTransactionCommandMapNoSaveOnError
   }
 
   import DoubleEntryLedger.CommandQueue.Scheduling, only: [claim_event_for_processing: 2]
@@ -253,11 +253,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       # Create a new transaction
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
-      iex> alias DoubleEntryLedger.Command.{TransactionEventMap, TransactionData}
+      iex> alias DoubleEntryLedger.Command.{TransactionCommandMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "instance1"})
       iex> {:ok, revenue_account} = AccountStore.create(instance.address, %{address: "account:revenue", type: :liability, currency: :USD}, "unique_id_123")
       iex> {:ok, cash_account} = AccountStore.create(instance.address, %{address: "account:cash", type: :asset, currency: :USD}, "unique_id_456")
-      iex> event_map = %TransactionEventMap{
+      iex> event_map = %TransactionCommandMap{
       ...>   action: :create_transaction,
       ...>   instance_address: instance.address,
       ...>   source: "payment_api",
@@ -275,7 +275,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       {:pending, :processed}
 
       # Unsupported action
-      iex> invalid_map = %TransactionEventMap{action: :delete_transaction}
+      iex> invalid_map = %TransactionCommandMap{action: :delete_transaction}
       iex> CommandWorker.process_new_event(invalid_map)
       {:error, :action_not_supported}
 
@@ -293,14 +293,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       # System error
       {:error, "Database connection timeout"}
   """
-  @spec process_new_event(TransactionEventMap.t()) ::
+  @spec process_new_event(TransactionCommandMap.t()) ::
           success_tuple() | error_tuple()
-  def process_new_event(%TransactionEventMap{action: :create_transaction} = event_map) do
-    CreateTransactionEventMap.process(event_map)
+  def process_new_event(%TransactionCommandMap{action: :create_transaction} = event_map) do
+    CreateTransactionCommandMap.process(event_map)
   end
 
-  def process_new_event(%TransactionEventMap{action: :update_transaction} = event_map) do
-    UpdateTransactionEventMap.process(event_map)
+  def process_new_event(%TransactionCommandMap{action: :update_transaction} = event_map) do
+    UpdateTransactionCommandMap.process(event_map)
   end
 
   def process_new_event(_event_map), do: {:error, :action_not_supported}
@@ -332,7 +332,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Parameters
 
-  - `event_map` - A TransactionEventMap struct with action and payload data
+  - `event_map` - A TransactionCommandMap struct with action and payload data
 
   ## Returns
 
@@ -344,11 +344,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       iex> # Valid event processes successfully
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
-      iex> alias DoubleEntryLedger.Command.{TransactionEventMap, TransactionData}
+      iex> alias DoubleEntryLedger.Command.{TransactionCommandMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> {:ok, revenue_account} = AccountStore.create(instance.address, %{address: "account:revenue", type: :liability, currency: :USD}, "unique_id_123")
       iex> {:ok, cash_account} = AccountStore.create(instance.address, %{address: "account:cash", type: :asset, currency: :USD}, "unique_id_456")
-      iex> valid_event = %TransactionEventMap{action: :create_transaction,
+      iex> valid_event = %TransactionCommandMap{action: :create_transaction,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
       ...>   source_idempk: "acc_create_456",
@@ -384,7 +384,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       :processed
 
       iex> # Unsupported action
-      iex> unsupported = %TransactionEventMap{action: :invalid_action}
+      iex> unsupported = %TransactionCommandMap{action: :invalid_action}
       iex> CommandWorker.process_new_event_no_save_on_error(unsupported)
       {:error, :action_not_supported}
 
@@ -402,17 +402,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   """
   @spec process_new_event_no_save_on_error(em) ::
           success_tuple() | {:error, Changeset.t(em) | String.t()}
-        when em: TransactionEventMap.t() | AccountCommandMap.t()
+        when em: TransactionCommandMap.t() | AccountCommandMap.t()
   def process_new_event_no_save_on_error(
-        %TransactionEventMap{action: :create_transaction} = event_map
+        %TransactionCommandMap{action: :create_transaction} = event_map
       ) do
-    CreateTransactionEventMapNoSaveOnError.process(event_map)
+    CreateTransactionCommandMapNoSaveOnError.process(event_map)
   end
 
   def process_new_event_no_save_on_error(
-        %TransactionEventMap{action: :update_transaction} = event_map
+        %TransactionCommandMap{action: :update_transaction} = event_map
       ) do
-    UpdateTransactionEventMapNoSaveOnError.process(event_map)
+    UpdateTransactionCommandMapNoSaveOnError.process(event_map)
   end
 
   def process_new_event_no_save_on_error(%AccountCommandMap{action: :create_account} = event_map) do

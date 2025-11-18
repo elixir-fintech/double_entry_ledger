@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
-      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}}}
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}}}
 
       # Map transaction validation errors to an event map changeset
       iex> default_response_handler(
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionEventResponseHandle
       ...>   event_map,
       ...>   "MyWorker"
       ...> )
-      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionEventMap{}}}
+      {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}}}
   """
   require Logger
   use DoubleEntryLedger.Logger

@@ -72,7 +72,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Command, PendingTransactionLookup}
-  alias DoubleEntryLedger.Command.{TransactionEventMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @doc """
@@ -122,7 +122,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
     iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
     iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> transaction_map = %TransactionEventMap{
+    iex> transaction_map = %TransactionCommandMap{
     ...>   instance_address: instance.address,
     ...>   action: :create_transaction,
     ...>   source: "from-somewhere",
@@ -137,10 +137,10 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     iex>  command.command_queue_item.status
     :pending
   """
-  @spec create(TransactionEventMap.t() | AccountCommandMap.t()) ::
+  @spec create(TransactionCommandMap.t() | AccountCommandMap.t()) ::
           {:ok, Command.t()} | {:error, Ecto.Changeset.t(Command.t()) | :instance_not_found}
   def create(
-        %TransactionEventMap{action: :create_transaction, payload: %{status: :pending}} = attrs
+        %TransactionCommandMap{action: :create_transaction, payload: %{status: :pending}} = attrs
       ) do
     case Multi.new()
          |> Multi.one(
