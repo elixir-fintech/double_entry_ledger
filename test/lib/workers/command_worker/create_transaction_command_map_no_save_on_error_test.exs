@@ -21,11 +21,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
   describe "process/1" do
     setup [:create_instance, :create_accounts]
 
-    test "create event for event_map, which must also create the event", ctx do
-      event_map = create_transaction_event_map(ctx)
+    test "create event for command_map, which must also create the event", ctx do
+      command_map = create_transaction_command_map(ctx)
 
       {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        CreateTransactionCommandMapNoSaveOnError.process(event_map)
+        CreateTransactionCommandMapNoSaveOnError.process(command_map)
 
       assert evq.status == :processed
 
@@ -39,39 +39,39 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
     end
 
     test "pending transaction also creates a pending transaction lookup", ctx do
-      event_map = create_transaction_event_map(ctx, :pending)
+      command_map = create_transaction_command_map(ctx, :pending)
 
-      {:ok, %{id: trx_id}, %{id: id}} = CreateTransactionCommandMapNoSaveOnError.process(event_map)
+      {:ok, %{id: trx_id}, %{id: id}} = CreateTransactionCommandMapNoSaveOnError.process(command_map)
 
       assert %{command_id: ^id, transaction_id: ^trx_id} =
                Repo.get_by(PendingTransactionLookup, command_id: id)
     end
 
     test "posted transaction don't create a pending transaction lookup", ctx do
-      event_map = create_transaction_event_map(ctx, :posted)
+      command_map = create_transaction_command_map(ctx, :posted)
 
-      {:ok, _, %{id: id}} = CreateTransactionCommandMapNoSaveOnError.process(event_map)
+      {:ok, _, %{id: id}} = CreateTransactionCommandMapNoSaveOnError.process(command_map)
       assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
     end
 
     test "return TransactionCommandMap changeset for duplicate source_idempk", ctx do
       # successfully create event
-      event_map = create_transaction_event_map(ctx)
-      CreateTransactionCommandMapNoSaveOnError.process(event_map)
+      command_map = create_transaction_command_map(ctx)
+      CreateTransactionCommandMapNoSaveOnError.process(command_map)
 
-      # process same event_map again which should fail
-      {:error, changeset} = CreateTransactionCommandMapNoSaveOnError.process(event_map)
+      # process same command_map again which should fail
+      {:error, changeset} = CreateTransactionCommandMapNoSaveOnError.process(command_map)
       assert %Changeset{data: %TransactionCommandMapSchema{}} = changeset
       assert Keyword.has_key?(changeset.errors, :key_hash)
     end
 
     test "return TransactionCommandMap changeset for other errors", ctx do
       # successfully create event
-      event_map = create_transaction_event_map(ctx, :pending)
+      command_map = create_transaction_command_map(ctx, :pending)
 
-      updated_event_map =
+      updated_command_map =
         update_in(
-          event_map,
+          command_map,
           [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)],
           fn _ ->
             "USD"
@@ -80,17 +80,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
 
       # process same update_event again which should fail
       {:error, changeset} =
-        CreateTransactionCommandMapNoSaveOnError.process(updated_event_map)
+        CreateTransactionCommandMapNoSaveOnError.process(updated_command_map)
 
       assert %Changeset{data: %TransactionCommandMapSchema{}} = changeset
     end
 
     test "return TransactionCommandMap changeset for invalid entry data currency", ctx do
-      event_map = create_transaction_event_map(ctx, :pending)
+      command_map = create_transaction_command_map(ctx, :pending)
 
-      updated_event_map =
+      updated_command_map =
         update_in(
-          event_map,
+          command_map,
           [Access.key!(:payload), Access.key!(:entries), Access.at(1), Access.key!(:currency)],
           fn _ ->
             "XYZ"
@@ -98,23 +98,23 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
         )
 
       {:error, changeset} =
-        CreateTransactionCommandMapNoSaveOnError.process(updated_event_map)
+        CreateTransactionCommandMapNoSaveOnError.process(updated_command_map)
 
       assert %Changeset{
                data: %TransactionCommandMapSchema{},
                errors: [
-                 input_event_map: {"invalid_entry_data", []},
+                 input_command_map: {"invalid_entry_data", []},
                  action: {"invalid in this context", [value: ""]}
                ]
              } = changeset
     end
 
     test "return TransactionCommandMap changeset for non existing account", ctx do
-      event_map = create_transaction_event_map(ctx, :pending)
+      command_map = create_transaction_command_map(ctx, :pending)
 
-      updated_event_map =
+      updated_command_map =
         update_in(
-          event_map,
+          command_map,
           [
             Access.key!(:payload),
             Access.key!(:entries),
@@ -127,12 +127,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
         )
 
       {:error, changeset} =
-        CreateTransactionCommandMapNoSaveOnError.process(updated_event_map)
+        CreateTransactionCommandMapNoSaveOnError.process(updated_command_map)
 
       assert %Changeset{
                data: %TransactionCommandMapSchema{},
                errors: [
-                 input_event_map: {"some_accounts_not_found", []},
+                 input_command_map: {"some_accounts_not_found", []},
                  action: {"invalid in this context", [value: ""]}
                ]
              } = changeset
@@ -157,7 +157,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
       assert {:error,
               %Changeset{data: %TransactionCommandMapSchema{}, errors: [occ_timeout: _, action: _]}} =
                CreateTransactionCommandMapNoSaveOnError.process(
-                 create_transaction_event_map(ctx),
+                 create_transaction_command_map(ctx),
                  DoubleEntryLedger.MockRepo
                )
     end

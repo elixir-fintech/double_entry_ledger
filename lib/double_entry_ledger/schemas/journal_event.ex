@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.JournalEvent do
 
   @type t :: %JournalEvent{
           id: Ecto.UUID.t() | nil,
-          event_map: map() | nil,
+          command_map: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           inserted_at: DateTime.t() | nil,
@@ -40,10 +40,10 @@ defmodule DoubleEntryLedger.JournalEvent do
           updated_at: DateTime.t() | nil
         }
 
-  @derive {Jason.Encoder, only: [:id, :event_map]}
+  @derive {Jason.Encoder, only: [:id, :command_map]}
 
   schema "journal_events" do
-    field(:event_map, CommandMap, skip_default_validation: true)
+    field(:command_map, CommandMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_one(:journal_event_command_link, JournalEventCommandLink)
@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.JournalEvent do
   ## Examples
 
       # Create event changeset
-      iex> event_map = %{
+      iex> command_map = %{
       ...>   action: :create_transaction,
       ...>   source: "api",
       ...>   source_idempk: "order-123",
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.JournalEvent do
       ...>     %{account_address: "account2", amount: 100, currency: :USD}
       ...>   ]}
       ...> }
-      ...> attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
+      ...> attrs = %{instance_id: Ecto.UUID.generate(), command_map: command_map}
       iex> changeset = JournalEvent.changeset(%Command{}, attrs)
       iex> changeset.valid?
       true
@@ -91,8 +91,8 @@ defmodule DoubleEntryLedger.JournalEvent do
     %JournalEvent{}
     |> cast(attrs, [
       :instance_id,
-      :event_map
+      :command_map
     ])
-    |> validate_required([:instance_id, :event_map])
+    |> validate_required([:instance_id, :command_map])
   end
 end

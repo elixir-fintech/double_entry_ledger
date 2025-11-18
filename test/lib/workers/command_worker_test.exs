@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
          %{instance: inst, accounts: [a1, a2 | _]} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
+      {:ok, pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
         CommandWorker.process_event_with_id(pending_event.id)
 
       assert return_available_balances(ctx) == [0, 0]
@@ -86,14 +86,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
     end
   end
 
-  describe "process_event_map/1" do
+  describe "process_command_map/1" do
     setup [:create_instance, :create_accounts]
 
-    test "create event for event_map, which must also create the event", %{
+    test "create event for command_map, which must also create the event", %{
       instance: inst,
       accounts: [a1, a2, _, _]
     } do
-      {:ok, event_map} =
+      {:ok, command_map} =
         %{
           action: :create_transaction,
           instance_address: inst.address,
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
         |> TransactionCommandMap.create()
 
       {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        CommandWorker.process_new_event(event_map)
+        CommandWorker.process_new_event(command_map)
 
       assert evq.status == :processed
 

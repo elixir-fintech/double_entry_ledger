@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
          %{instance: inst} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
+      {:ok, pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
          %{instance: inst} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
+      {:ok, pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
          %{instance: inst, accounts: [a1, a2 | _]} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
+      {:ok, pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
          %{instance: inst, accounts: [a1, a2 | _]} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
+      {:ok, pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
          %{instance: inst, accounts: [a1, a2 | _]} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
+      {:ok, pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_event)
 
       assert return_available_balances(ctx) == [0, 0]
@@ -138,7 +138,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     end
 
     test "back to pending when create event is still pending", %{instance: inst} = ctx do
-      %{event: %{id: e_id, event_map: %{source: s, source_idempk: s_id}}} =
+      %{event: %{id: e_id, command_map: %{source: s, source_idempk: s_id}}} =
         new_create_transaction_event(ctx, :pending)
 
       {:ok, event} = new_update_transaction_event(s, s_id, inst.address, :posted)
@@ -155,7 +155,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     end
 
     test "back to pending when create event failed", %{instance: inst} = ctx do
-      %{event: %{event_map: %{source: s, source_idempk: s_id}} = pending_event} =
+      %{event: %{command_map: %{source: s, source_idempk: s_id}} = pending_event} =
         new_create_transaction_event(ctx, :pending)
 
       {:error, failed_create_event} =
@@ -179,7 +179,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     end
 
     test "dead_letter when create event in dead_letter", %{instance: inst} = ctx do
-      %{event: %{event_map: %{source: s, source_idempk: s_id}} = pending_event} =
+      %{event: %{command_map: %{source: s, source_idempk: s_id}} = pending_event} =
         new_create_transaction_event(ctx, :pending)
 
       DoubleEntryLedger.CommandQueue.Scheduling.build_mark_as_dead_letter(
@@ -200,7 +200,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     end
 
     test "dead_letter when transaction_map_error", %{instance: inst, accounts: [a | _]} = ctx do
-      %{event: %{event_map: %{source: s, source_idempk: s_id}}} =
+      %{event: %{command_map: %{source: s, source_idempk: s_id}}} =
         new_create_transaction_event(ctx, :pending)
 
       {:ok, event} =
@@ -232,7 +232,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     test "update event with last retry that fails", %{instance: inst} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, _pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
+      {:ok, _pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_event)
 
       {:ok, event} = new_update_transaction_event(s, s_id, inst.address, :posted)
@@ -269,7 +269,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     test "when transaction can't be created for other reasons", %{instance: inst} = ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
-      {:ok, _pending_transaction, %{event_map: %{source: s, source_idempk: s_id}}} =
+      {:ok, _pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_event)
 
       {:ok, event} =

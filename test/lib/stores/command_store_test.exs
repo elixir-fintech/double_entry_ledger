@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
     end
 
     test "creates a lookup for pending create_transactions", %{instance: instance} do
-      assert {:ok, %Command{id: id, event_map: %{source: s, source_idempk: sidpk}}} =
+      assert {:ok, %Command{id: id, command_map: %{source: s, source_idempk: sidpk}}} =
                CommandStore.create(transaction_event_attrs(instance_address: instance.address))
 
       assert %{command_id: ^id, source: ^s, source_idempk: ^sidpk} =
@@ -44,8 +44,8 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
     end
 
     test "no lookup for posted create_transactions", ctx do
-      assert {:ok, %Command{id: id, event_map: %{source: _s, source_idempk: _sidpk}}} =
-               CommandStore.create(create_transaction_event_map(ctx, :posted))
+      assert {:ok, %Command{id: id, command_map: %{source: _s, source_idempk: _sidpk}}} =
+               CommandStore.create(create_transaction_command_map(ctx, :posted))
 
       assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
     end
@@ -77,8 +77,8 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
                found_event =
                CommandStoreHelper.get_command_by(
                  :create_transaction,
-                 event.event_map.source,
-                 event.event_map.source_idempk,
+                 event.command_map.source,
+                 event.command_map.source_idempk,
                  instance.id
                )
 
@@ -86,15 +86,15 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
     end
 
     test "returns processed_transaction", %{instance: instance} = ctx do
-      %{event: %{event_map: event_map} = event} = new_create_transaction_event(ctx, :pending)
+      %{event: %{command_map: command_map} = event} = new_create_transaction_event(ctx, :pending)
       {:ok, transaction, _} = CreateTransactionCommand.process(event)
 
       assert %Command{} =
                found_event =
                CommandStoreHelper.get_command_by(
                  :create_transaction,
-                 event_map.source,
-                 event_map.source_idempk,
+                 command_map.source,
+                 command_map.source_idempk,
                  instance.id
                )
 

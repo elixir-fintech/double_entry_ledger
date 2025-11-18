@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
 
   ## Parameters
 
-  * `event_map` - AccountCommandMap struct containing validated account update data.
+  * `command_map` - AccountCommandMap struct containing validated account update data.
     Must have `:update_account` action.
 
   ## Returns
@@ -93,23 +93,23 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
 
   """
   @spec process(AccountCommandMap.t()) :: AccountCommandMapResponseHandler.response()
-  def process(%AccountCommandMap{action: :update_account} = event_map) do
-    build_update_account(event_map)
-    |> handle_build_update_account(event_map)
+  def process(%AccountCommandMap{action: :update_account} = command_map) do
+    build_update_account(command_map)
+    |> handle_build_update_account(command_map)
     |> Repo.transaction()
-    |> default_response_handler(event_map)
+    |> default_response_handler(command_map)
   end
 
   @spec build_update_account(AccountCommandMap.t()) :: Ecto.Multi.t()
   defp build_update_account(
          %AccountCommandMap{payload: payload, instance_address: iaddr, account_address: aaddr} =
-           event_map
+           command_map
        )
        when not is_nil(iaddr) and not is_nil(aaddr) do
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(iaddr))
     |> Multi.insert(:new_command, fn %{instance: id} ->
-      CommandStoreHelper.build_create(event_map, id)
+      CommandStoreHelper.build_create(command_map, id)
     end)
     |> Multi.one(:get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))
     |> Multi.merge(fn
@@ -125,13 +125,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
           Ecto.Multi.t(),
           AccountCommandMap.t()
         ) :: Ecto.Multi.t()
-  defp handle_build_update_account(multi, %AccountCommandMap{} = event_map) do
+  defp handle_build_update_account(multi, %AccountCommandMap{} = command_map) do
     Multi.merge(multi, fn
       %{account: %{id: aid}, new_command: %{id: eid, instance_id: iid} = event} ->
         Multi.insert(
           Multi.new(),
           :journal_event,
-          JournalEvent.build_create(%{event_map: event_map, instance_id: iid})
+          JournalEvent.build_create(%{command_map: command_map, instance_id: iid})
         )
         |> Multi.update(:event_success, build_mark_as_processed(event))
         |> Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->
@@ -143,12 +143,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
         end)
 
       _ ->
-        event_map_changeset =
-          event_map
+        command_map_changeset =
+          command_map
           |> AccountCommandMap.changeset(%{})
           |> Changeset.add_error(:create_account_event_error, to_string("Account does not exist"))
 
-        Multi.error(Multi.new(), :create_account_event_error, event_map_changeset)
+        Multi.error(Multi.new(), :create_account_event_error, command_map_changeset)
     end)
   end
 end

@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
   ## Parameters
 
-    - `event_map`: The event map being processed.
+    - `command_map`: The event map being processed.
     - `error`: The error encountered during transaction map conversion.
     - `repo`: The Ecto repository.
 
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
     - An `Ecto.Multi` that updates the event with error information.
   """
-  defdelegate handle_transaction_map_error(event_map, error, repo),
+  defdelegate handle_transaction_map_error(command_map, error, repo),
     as: :handle_transaction_map_error,
     to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler
 
@@ -68,14 +68,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
   ## Parameters
 
-    - `event_map`: The event map being processed.
+    - `command_map`: The event map being processed.
     - `repo`: The Ecto repository.
 
   ## Returns
 
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
-  defdelegate handle_occ_final_timeout(event_map, repo),
+  defdelegate handle_occ_final_timeout(command_map, repo),
     as: :handle_occ_final_timeout,
     to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler
 
@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
   ## Parameters
 
-    - `event_map`: An `TransactionCommandMap` struct containing all event and transaction data.
+    - `command_map`: An `TransactionCommandMap` struct containing all event and transaction data.
     - `repo`: The repository to use for database operations (defaults to `Repo`).
 
   ## Returns
@@ -105,14 +105,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
   """
   @spec process(TransactionCommandMap.t(), Ecto.Repo.t() | nil) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
-  def process(%{action: :create_transaction} = event_map, repo \\ Repo) do
-    case process_with_retry(event_map, repo) do
+  def process(%{action: :create_transaction} = command_map, repo \\ Repo) do
+    case process_with_retry(command_map, repo) do
       {:ok, %{event_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
         warn("#{last_error.message}", event)
         {:error, event}
 
       response ->
-        default_response_handler(response, event_map)
+        default_response_handler(response, command_map)
     end
   end
 
@@ -136,7 +136,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
   ## Parameters
 
-    - `event_map`: An `TransactionCommandMap` struct containing the event details and action type.
+    - `command_map`: An `TransactionCommandMap` struct containing the event details and action type.
     - `transaction_map`: A map containing the transaction data to be created or updated.
     - `repo`: The Ecto repository to use for database operations.
 
@@ -145,19 +145,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
     - An `Ecto.Multi` struct containing the operations to execute within a transaction.
   """
   def build_transaction(
-        %{action: :create_transaction} = event_map,
+        %{action: :create_transaction} = command_map,
         transaction_map,
         instance_id,
         repo
       ) do
-    new_event_map = Map.put_new(event_map, :status, :pending)
+    new_command_map = Map.put_new(command_map, :status, :pending)
 
     Multi.new()
     |> Multi.insert(:new_command, fn _ ->
-      CommandStoreHelper.build_create(new_event_map, instance_id)
+      CommandStoreHelper.build_create(new_command_map, instance_id)
     end)
-    |> Multi.insert(:journal_event, fn %{new_command: %{event_map: em}} ->
-      JournalEvent.build_create(%{event_map: em, instance_id: instance_id})
+    |> Multi.insert(:journal_event, fn %{new_command: %{command_map: em}} ->
+      JournalEvent.build_create(%{command_map: em, instance_id: instance_id})
     end)
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
   end
@@ -177,14 +177,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
   ## Parameters
 
     - `multi`: The `Ecto.Multi` built so far.
-    - `event_map`: The event map being processed.
+    - `command_map`: The event map being processed.
     - `_repo`: The Ecto repository (unused).
 
   ## Returns
 
     - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step.
   """
-  def handle_build_transaction(multi, %{payload: %{status: :pending}} = event_map, _repo) do
+  def handle_build_transaction(multi, %{payload: %{status: :pending}} = command_map, _repo) do
     multi
     |> Multi.merge(fn
       %{transaction: %{id: tid}, new_command: %{id: cid} = command, journal_event: %{id: jid}} ->
@@ -194,8 +194,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
         |> Multi.insert(:pending_transaction_lookup, fn _ ->
           attrs = %{
             command_id: cid,
-            source: event_map.source,
-            source_idempk: event_map.source_idempk,
+            source: command_map.source,
+            source_idempk: command_map.source_idempk,
             instance_id: command.instance_id,
             transaction_id: tid,
             journal_event_id: jid
@@ -213,7 +213,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
     end)
   end
 
-  def handle_build_transaction(multi, _event_map, _repo) do
+  def handle_build_transaction(multi, _command_map, _repo) do
     multi
     |> Multi.merge(fn
       %{transaction: %{id: tid}, new_command: %{id: cid} = command, journal_event: %{id: jid}} ->

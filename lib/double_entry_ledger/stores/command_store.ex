@@ -151,7 +151,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
            build_create(attrs, id)
          end)
          |> Multi.insert(:pending_transaction_lookup, fn %{
-                                                           command: %{id: cid, event_map: em},
+                                                           command: %{id: cid, command_map: em},
                                                            instance: iid
                                                          } ->
            attrs = %{

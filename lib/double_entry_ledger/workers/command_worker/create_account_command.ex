@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 
   @spec process(Command.t()) :: AccountCommandResponseHandler.response()
-  def process(%Command{event_map: %{action: :create_account}} = event) do
+  def process(%Command{command_map: %{action: :create_account}} = event) do
     build_create_account(event)
     |> Repo.transaction()
     |> default_response_handler(event)
@@ -27,14 +27,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
 
   @spec build_create_account(Command.t()) :: Ecto.Multi.t()
   defp build_create_account(
-         %Command{event_map: %{payload: account_data} = event_map, instance_id: instance_id} =
+         %Command{command_map: %{payload: account_data} = command_map, instance_id: instance_id} =
            event
        ) do
     Multi.new()
     |> Multi.insert(:account, AccountStoreHelper.build_create(account_data, instance_id))
     |> Multi.insert(
       :journal_event,
-      JournalEvent.build_create(%{event_map: event_map, instance_id: instance_id})
+      JournalEvent.build_create(%{command_map: command_map, instance_id: instance_id})
     )
     |> Multi.update(:event_success, build_mark_as_processed(event))
     |> Oban.insert(:create_account_link, fn %{

@@ -104,7 +104,7 @@ defmodule DoubleEntryLedger.LoadTesting do
 
   # insert a single event and then create the transaction from it
   defp run_transaction(instance, params) do
-    {:ok, event_map} =
+    {:ok, command_map} =
       TransactionCommandMap.create(%{
         action: :create_transaction,
         status: :pending,
@@ -114,7 +114,7 @@ defmodule DoubleEntryLedger.LoadTesting do
         instance_address: instance.address
       })
 
-    CommandWorker.process_new_event(event_map)
+    CommandWorker.process_new_event(command_map)
   end
 
   # create as many source debit accounts as concurrent transactions to minimize contention

@@ -40,12 +40,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   alias Ecto.{Multi, Changeset}
 
   @impl true
-  defdelegate handle_occ_final_timeout(event_map, repo),
+  defdelegate handle_occ_final_timeout(command_map, repo),
     to: Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnError,
     as: :handle_occ_final_timeout
 
   @impl true
-  defdelegate build_transaction(event_map, transaction_map, instance_id, repo),
+  defdelegate build_transaction(command_map, transaction_map, instance_id, repo),
     to: Workers.CommandWorker.UpdateTransactionCommandMap,
     as: :build_transaction
 
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
   ## Parameters
 
-    - `event_map`: An `TransactionCommandMap` struct containing all event and transaction data.
+    - `command_map`: An `TransactionCommandMap` struct containing all event and transaction data.
     - `repo`: The repository to use for database operations (defaults to `Repo`).
 
   ## Returns
@@ -68,21 +68,21 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   @spec process(TransactionCommandMap.t(), Ecto.Repo.t() | nil) ::
           CommandWorker.success_tuple()
           | {:error, Changeset.t(TransactionCommandMap.t()) | String.t()}
-  def process(%{action: :update_transaction} = event_map, repo \\ Repo) do
-    case process_with_retry_no_save_on_error(event_map, repo) do
+  def process(%{action: :update_transaction} = command_map, repo \\ Repo) do
+    case process_with_retry_no_save_on_error(command_map, repo) do
       {:error, :occ_timeout, %Changeset{data: %TransactionCommandMap{}} = changeset, _steps_so_far} ->
-        warn("OCC timeout reached", event_map, changeset)
+        warn("OCC timeout reached", command_map, changeset)
 
         {:error, changeset}
 
       {:error, :create_transaction_event_error,
        %Changeset{data: %TransactionCommandMap{}} = changeset, _steps_so_far} ->
-        error("Update event error", event_map, changeset)
+        error("Update event error", command_map, changeset)
 
         {:error, changeset}
 
       response ->
-        default_response_handler(response, event_map)
+        default_response_handler(response, command_map)
     end
   end
 
@@ -103,19 +103,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   ## Parameters
 
     - `multi`: The `Ecto.Multi` built so far.
-    - `event_map`: The event map being processed.
+    - `command_map`: The event map being processed.
     - `_repo`: The Ecto repository (unused).
 
   ## Returns
 
     - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step, or a changeset with error details.
   """
-  def handle_build_transaction(multi, event_map, _repo) do
+  def handle_build_transaction(multi, command_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_command: %{id: eid, event_map: em, instance_id: iid} = event} ->
+      %{transaction: %{id: tid}, new_command: %{id: eid, command_map: em, instance_id: iid} = event} ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
-          JournalEvent.build_create(%{event_map: em, instance_id: iid})
+          JournalEvent.build_create(%{command_map: em, instance_id: iid})
         end)
         |> Multi.update(:event_success, fn _ ->
           build_mark_as_processed(event)
@@ -129,13 +129,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
         end)
 
       %{get_create_transaction_event_error: %{reason: reason}, new_command: _event} ->
-        event_map_changeset =
-          cast_to_event_map(event_map)
+        command_map_changeset =
+          cast_to_command_map(command_map)
           |> TransactionCommandMap.changeset(%{})
           |> Changeset.add_error(:create_transaction_event_error, to_string(reason))
 
         Multi.new()
-        |> Multi.error(:create_transaction_event_error, event_map_changeset)
+        |> Multi.error(:create_transaction_event_error, command_map_changeset)
     end)
   end
 
@@ -146,18 +146,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   This function is used to handle errors in transaction mapping, providing a changeset that
   describes the error without affecting the database state.
   """
-  def handle_transaction_map_error(event_map, error, _repo) do
-    event_map_changeset =
-      cast_to_event_map(event_map)
+  def handle_transaction_map_error(command_map, error, _repo) do
+    command_map_changeset =
+      cast_to_command_map(command_map)
       |> TransactionCommandMap.changeset(%{})
-      |> Changeset.add_error(:input_event_map, to_string(error))
+      |> Changeset.add_error(:input_command_map, to_string(error))
 
     Multi.new()
-    |> Multi.error(:input_event_map_error, event_map_changeset)
+    |> Multi.error(:input_command_map_error, command_map_changeset)
   end
 
-  defp cast_to_event_map(%TransactionCommandMap{} = event_map), do: event_map
+  defp cast_to_command_map(%TransactionCommandMap{} = command_map), do: command_map
   # Only cast if it's a plain map
-  defp cast_to_event_map(event_map) when is_map(event_map),
-    do: struct(TransactionCommandMap, event_map)
+  defp cast_to_command_map(command_map) when is_map(command_map),
+    do: struct(TransactionCommandMap, command_map)
 end

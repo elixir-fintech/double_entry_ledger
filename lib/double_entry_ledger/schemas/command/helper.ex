@@ -33,8 +33,8 @@ defmodule DoubleEntryLedger.Command.Helper do
 
   defdelegate address_regex(), to: Account
 
-  def action_to_mod(event_map) do
-    case fetch_action(event_map) do
+  def action_to_mod(command_map) do
+    case fetch_action(command_map) do
       a when a in @transaction_actions -> {:ok, TransactionCommandMap}
       a when a in @account_actions -> {:ok, AccountCommandMap}
       _ -> :error

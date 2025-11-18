@@ -18,13 +18,13 @@ defmodule DoubleEntryLedger.EventTest do
       assert %Changeset{
                errors: [
                  instance_id: {"can't be blank", [validation: :required]},
-                 event_map: {"can't be blank", [validation: :required]}
+                 command_map: {"can't be blank", [validation: :required]}
                ]
              } = Command.changeset(%Command{}, %{})
     end
 
     test "valid with required attributes for action create_transaction" do
-      event_map = %{
+      command_map = %{
         action: :create_transaction,
         source: "source",
         instance_address: "inst1",
@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.EventTest do
         payload: pending_payload()
       }
 
-      attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
+      attrs = %{instance_id: Ecto.UUID.generate(), command_map: command_map}
 
       assert %Changeset{valid?: true} = Command.changeset(%Command{}, attrs)
     end
@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.EventTest do
         payload: pending_payload()
       }
 
-      changeset = Command.changeset(%Command{}, %{instance_id: inst.id, event_map: attrs})
+      changeset = Command.changeset(%Command{}, %{instance_id: inst.id, command_map: attrs})
       assert {:ok, event} = Repo.insert(changeset)
       assert {:ok, event2} = Repo.insert(changeset)
       assert event.id != event2.id
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.EventTest do
 
   describe "changeset/2 for action: :update_transaction" do
     test "changeset valid for simple update action, without any entry information" do
-      event_map = %{
+      command_map = %{
         action: :update_transaction,
         source: "source",
         instance_id: Ecto.UUID.generate(),
@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.EventTest do
         }
       }
 
-      attrs = Map.put(event_map, :event_map, event_map)
+      attrs = Map.put(command_map, :command_map, command_map)
 
       assert %Changeset{
                valid?: true
@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.EventTest do
         payload: pending_payload()
       }
 
-      changeset = Command.changeset(%Command{}, %{instance_id: inst.id, event_map: attrs})
+      changeset = Command.changeset(%Command{}, %{instance_id: inst.id, command_map: attrs})
       assert {:ok, event} = Repo.insert(changeset)
       assert {:ok, event2} = Repo.insert(changeset)
       assert event.id != event2.id

@@ -22,7 +22,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   ## Usage
 
       # Create a valid account event
-      {:ok, event_map} = AccountCommandMap.create(%{
+      {:ok, command_map} = AccountCommandMap.create(%{
         action: :create_account,
         instance_id: "550e8400-e29b-41d4-a716-446655440000",
         source: "accounting_system",
@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
       })
 
       # Convert to map for serialization
-      map_data = AccountCommandMap.to_map(event_map)
+      map_data = AccountCommandMap.to_map(command_map)
 
   ## Validation
 
@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   ## Usage in Function Signatures
 
       @spec process_account_event(AccountCommandMap.t()) :: {:ok, Account.t()} | {:error, term()}
-      def process_account_event(%AccountCommandMap{} = event_map) do
+      def process_account_event(%AccountCommandMap{} = command_map) do
         # Implementation with type-safe access to AccountData payload
       end
 
@@ -184,10 +184,10 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
       ...>     currency: "USD"
       ...>   }
       ...> }
-      iex> {:ok, event_map} = DoubleEntryLedger.Command.AccountCommandMap.create(attrs)
-      iex> event_map.action
+      iex> {:ok, command_map} = DoubleEntryLedger.Command.AccountCommandMap.create(attrs)
+      iex> command_map.action
       :create_account
-      iex> event_map.payload.name
+      iex> command_map.payload.name
       "Test Account"
 
   ## Error Examples
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
 
   ## Parameters
 
-  * `event_map` - The AccountCommandMap struct to validate (can be empty for new records)
+  * `command_map` - The AccountCommandMap struct to validate (can be empty for new records)
   * `attrs` - Map of attributes to validate and apply
 
   ## Returns
@@ -262,18 +262,18 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
       true
   """
   @spec changeset(t() | map(), map()) :: Changeset.t(AccountCommandMap.t())
-  def changeset(event_map, attrs) do
+  def changeset(command_map, attrs) do
     case fetch_action(attrs) do
       :create_account ->
-        base_changeset(event_map, attrs)
+        base_changeset(command_map, attrs)
         |> cast_embed(:payload, with: &AccountData.changeset/2, required: true)
 
       :update_account ->
-        update_changeset(event_map, attrs)
+        update_changeset(command_map, attrs)
         |> cast_embed(:payload, with: &AccountData.update_changeset/2, required: true)
 
       val ->
-        base_changeset(event_map, attrs)
+        base_changeset(command_map, attrs)
         |> add_error(:action, "invalid in this context", value: "#{val}")
     end
   end
@@ -299,13 +299,13 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   end
 
   @spec to_map(struct()) :: map()
-  def to_map(event_map) do
+  def to_map(command_map) do
     %{
-      action: Map.get(event_map, :action),
-      instance_address: Map.get(event_map, :instance_address),
-      account_address: Map.get(event_map, :account_address),
-      source: Map.get(event_map, :source),
-      payload: AccountData.to_map(Map.get(event_map, :payload))
+      action: Map.get(command_map, :action),
+      instance_address: Map.get(command_map, :instance_address),
+      account_address: Map.get(command_map, :account_address),
+      source: Map.get(command_map, :source),
+      payload: AccountData.to_map(Map.get(command_map, :payload))
     }
     |> Map.reject(fn {_, v} -> is_nil(v) end)
   end

@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   Building a changeset from an CommandMap:
 
-      event_changeset = CommandStoreHelper.build_create(event_map)
+      event_changeset = CommandStoreHelper.build_create(command_map)
 
   Adding a step to get a create event's transaction:
 
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   Retrieves an event by its action and source identifiers with preloaded associations.
 
   This function looks up an event using i
-      event_map
+      command_map
       |> TransactionCommandMap.to_map()
       |> Map.put(:instance_id, instance_id)
       |> Mts action, source system identifier,
@@ -75,9 +75,9 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
     from(e in JournalEvent,
       where:
         e.instance_id == ^instance_id and
-          fragment("event_map->>? = ?", "action", ^Atom.to_string(action)) and
-          fragment("event_map->>? = ?", "source", ^source) and
-          fragment("event_map->>? = ?", "source_idempk", ^source_idempk),
+          fragment("command_map->>? = ?", "action", ^Atom.to_string(action)) and
+          fragment("command_map->>? = ?", "source", ^source) and
+          fragment("command_map->>? = ?", "source_idempk", ^source_idempk),
       limit: 1,
       preload: [:account]
     )
@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   def get_create_account_event_account(
         %{
           instance_id: id,
-          event_map: %{
+          command_map: %{
             source: source,
             source_idempk: source_idempk
           }

@@ -13,19 +13,19 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command do
   alias DoubleEntryLedger.{Command, Account, Transaction}
   import DoubleEntryLedger.Utils.Changeset
 
-  def metadata(%{command_queue_item: command_queue_item, event_map: event_map} = event) do
+  def metadata(%{command_queue_item: command_queue_item, command_map: command_map} = event) do
     %{
       event_id: event.id,
-      instance_address: Map.get(event_map, :instance_address),
+      instance_address: Map.get(command_map, :instance_address),
       event_status: command_queue_item.status,
-      event_action: Map.get(event_map, :action),
-      event_source: Map.get(event_map, :source),
+      event_action: Map.get(command_map, :action),
+      event_source: Map.get(command_map, :source),
       event_trace_id:
         [
-          Map.get(event_map, :source),
-          Map.get(event_map, :source_idempk),
-          Map.get(event_map, :update_idempk),
-          Map.get(event_map, :update_source)
+          Map.get(command_map, :source),
+          Map.get(command_map, :source_idempk),
+          Map.get(command_map, :update_idempk),
+          Map.get(command_map, :update_source)
         ]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("-")
@@ -73,18 +73,18 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Accoun
   alias DoubleEntryLedger.Command.AccountCommandMap
 
   @spec metadata(AccountCommandMap.t()) :: map()
-  def metadata(%AccountCommandMap{} = event_map) do
+  def metadata(%AccountCommandMap{} = command_map) do
     %{
-      is_event_map: true,
-      instance_address: Map.get(event_map, :instance_address),
-      event_action: Map.get(event_map, :action),
-      event_source: Map.get(event_map, :source),
+      is_command_map: true,
+      instance_address: Map.get(command_map, :instance_address),
+      event_action: Map.get(command_map, :action),
+      event_source: Map.get(command_map, :source),
       event_trace_id:
         [
-          Map.get(event_map, :source),
-          Map.get(event_map, :source_idempk),
-          Map.get(event_map, :update_idempk),
-          Map.get(event_map, :update_source)
+          Map.get(command_map, :source),
+          Map.get(command_map, :source_idempk),
+          Map.get(command_map, :update_idempk),
+          Map.get(command_map, :update_source)
         ]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("-")
@@ -92,14 +92,14 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Accoun
   end
 
   @spec metadata(AccountCommandMap.t(), any()) :: map()
-  def metadata(event_map, error) do
-    Map.put(metadata(event_map), :error, inspect(error))
+  def metadata(command_map, error) do
+    Map.put(metadata(command_map), :error, inspect(error))
   end
 
   @spec changeset_metadata(AccountCommandMap.t(), any()) :: map()
-  def changeset_metadata(event_map, %Ecto.Changeset{} = changeset) do
+  def changeset_metadata(command_map, %Ecto.Changeset{} = changeset) do
     Map.put(
-      metadata(event_map),
+      metadata(command_map),
       :changeset_errors,
       all_errors_with_opts(changeset)
     )
@@ -111,18 +111,18 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Transa
   alias DoubleEntryLedger.Command.TransactionCommandMap
 
   @spec metadata(TransactionCommandMap.t()) :: map()
-  def metadata(%TransactionCommandMap{} = event_map) do
+  def metadata(%TransactionCommandMap{} = command_map) do
     %{
-      is_event_map: true,
-      instance_address: Map.get(event_map, :instance_address),
-      event_action: Map.get(event_map, :action),
-      event_source: Map.get(event_map, :source),
+      is_command_map: true,
+      instance_address: Map.get(command_map, :instance_address),
+      event_action: Map.get(command_map, :action),
+      event_source: Map.get(command_map, :source),
       event_trace_id:
         [
-          Map.get(event_map, :source),
-          Map.get(event_map, :source_idempk),
-          Map.get(event_map, :update_idempk),
-          Map.get(event_map, :update_source)
+          Map.get(command_map, :source),
+          Map.get(command_map, :source_idempk),
+          Map.get(command_map, :update_idempk),
+          Map.get(command_map, :update_source)
         ]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("-")
@@ -130,14 +130,14 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Transa
   end
 
   @spec metadata(TransactionCommandMap.t(), any()) :: map()
-  def metadata(event_map, error) do
-    Map.put(metadata(event_map), :error, inspect(error))
+  def metadata(command_map, error) do
+    Map.put(metadata(command_map), :error, inspect(error))
   end
 
   @spec changeset_metadata(TransactionCommandMap.t(), any()) :: map()
-  def changeset_metadata(event_map, %Ecto.Changeset{} = changeset) do
+  def changeset_metadata(command_map, %Ecto.Changeset{} = changeset) do
     Map.put(
-      metadata(event_map),
+      metadata(command_map),
       :changeset_errors,
       all_errors_with_opts(changeset)
     )
@@ -148,19 +148,19 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: Map do
   import DoubleEntryLedger.Utils.Changeset
 
   @spec metadata(map()) :: map()
-  def metadata(%{} = event_map) do
+  def metadata(%{} = command_map) do
     %{
       is_map: true,
       instance_address:
-        Map.get(event_map, :instance_address) || Map.get(event_map, "instance_address"),
-      event_action: Map.get(event_map, :action) || Map.get(event_map, "action"),
-      event_source: Map.get(event_map, :source) || Map.get(event_map, "source"),
+        Map.get(command_map, :instance_address) || Map.get(command_map, "instance_address"),
+      event_action: Map.get(command_map, :action) || Map.get(command_map, "action"),
+      event_source: Map.get(command_map, :source) || Map.get(command_map, "source"),
       event_trace_id:
         [
-          Map.get(event_map, :source) || Map.get(event_map, "source"),
-          Map.get(event_map, :source_idempk) || Map.get(event_map, "source_idempk"),
-          Map.get(event_map, :update_idempk) || Map.get(event_map, "update_idempk"),
-          Map.get(event_map, :update_source) || Map.get(event_map, "update_idempk")
+          Map.get(command_map, :source) || Map.get(command_map, "source"),
+          Map.get(command_map, :source_idempk) || Map.get(command_map, "source_idempk"),
+          Map.get(command_map, :update_idempk) || Map.get(command_map, "update_idempk"),
+          Map.get(command_map, :update_source) || Map.get(command_map, "update_idempk")
         ]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("-")
@@ -168,14 +168,14 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: Map do
   end
 
   @spec metadata(map(), any()) :: map()
-  def metadata(event_map, error) do
-    Map.put(metadata(event_map), :error, inspect(error))
+  def metadata(command_map, error) do
+    Map.put(metadata(command_map), :error, inspect(error))
   end
 
   @spec changeset_metadata(map(), any()) :: map()
-  def changeset_metadata(event_map, %Ecto.Changeset{} = changeset) do
+  def changeset_metadata(command_map, %Ecto.Changeset{} = changeset) do
     Map.put(
-      metadata(event_map),
+      metadata(command_map),
       :changeset_errors,
       all_errors_with_opts(changeset)
     )

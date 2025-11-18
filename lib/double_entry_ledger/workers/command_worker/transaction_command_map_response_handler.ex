@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
       # Map event validation errors to an event map changeset
       iex> default_response_handler(
       ...>   {:error, :new_command, event_changeset, %{}},
-      ...>   event_map,
+      ...>   command_map,
       ...>   "MyWorker"
       ...> )
       {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}}}
@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
       # Map transaction validation errors to an event map changeset
       iex> default_response_handler(
       ...>   {:error, :transaction, trx_changeset, %{}},
-      ...>   event_map,
+      ...>   command_map,
       ...>   "MyWorker"
       ...> )
       {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}}}
@@ -37,9 +37,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
 
   import DoubleEntryLedger.Command.TransferErrors,
     only: [
-      from_event_to_event_map: 2,
-      from_transaction_to_event_map_payload: 2,
-      from_idempotency_key_to_event_map: 2
+      from_event_to_command_map: 2,
+      from_transaction_to_command_map_payload: 2,
+      from_idempotency_key_to_command_map: 2
     ]
 
   alias Ecto.{Changeset, Multi}
@@ -66,7 +66,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
           | {:error, Changeset.t(TransactionCommandMap.t()) | String.t()}
   def default_response_handler(
         response,
-        %TransactionCommandMap{} = event_map
+        %TransactionCommandMap{} = command_map
       ) do
     case response do
       {:ok, %{transaction: transaction, event_success: event}} ->
@@ -75,27 +75,27 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
         {:ok, transaction, event}
 
       {:error, :idempotency, %Changeset{data: %IdempotencyKey{}} = changeset, _} ->
-        error("Idempotency violation", event_map, changeset)
+        error("Idempotency violation", command_map, changeset)
 
-        {:error, from_idempotency_key_to_event_map(event_map, changeset)}
+        {:error, from_idempotency_key_to_command_map(command_map, changeset)}
 
-      {:error, :input_event_map_error, %Changeset{data: %TransactionCommandMap{}} = changeset, _} ->
-        error("Input event map error", event_map, changeset)
+      {:error, :input_command_map_error, %Changeset{data: %TransactionCommandMap{}} = changeset, _} ->
+        error("Input event map error", command_map, changeset)
 
         {:error, changeset}
 
       {:error, :new_command, %Changeset{data: %Command{}} = event_changeset, _steps_so_far} ->
-        warn("Command changeset failed", event_map, event_changeset)
+        warn("Command changeset failed", command_map, event_changeset)
 
-        {:error, from_event_to_event_map(event_map, event_changeset)}
+        {:error, from_event_to_command_map(command_map, event_changeset)}
 
       {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
-        warn("Transaction changeset failed", event_map, trx_changeset)
+        warn("Transaction changeset failed", command_map, trx_changeset)
 
-        {:error, from_transaction_to_event_map_payload(event_map, trx_changeset)}
+        {:error, from_transaction_to_command_map_payload(command_map, trx_changeset)}
 
       {:error, step, error, _steps_so_far} ->
-        {:ok, message} = error("Step :#{step} failed.", event_map, error)
+        {:ok, message} = error("Step :#{step} failed.", command_map, error)
 
         {:error, "#{message} #{inspect(error)}"}
     end
@@ -116,14 +116,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
 
     - An `Ecto.Multi` that updates the event with error information.
   """
-  def handle_transaction_map_error(event_map, error, _repo) do
-    event_map_changeset =
-      event_map
+  def handle_transaction_map_error(command_map, error, _repo) do
+    command_map_changeset =
+      command_map
       |> TransactionCommandMap.changeset(%{})
-      |> Changeset.add_error(:input_event_map, to_string(error))
+      |> Changeset.add_error(:input_command_map, to_string(error))
 
     Multi.new()
-    |> Multi.error(:input_event_map_error, event_map_changeset)
+    |> Multi.error(:input_command_map_error, command_map_changeset)
   end
 
   @doc """

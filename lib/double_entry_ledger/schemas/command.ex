@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.Command do
   ## Fields
 
   * `id`: UUID primary key
-  * `event_map`: map containing the event payload
+  * `command_map`: map containing the event payload
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
   * `inserted_at`: Creation timestamp
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Command do
   """
   @type t :: %Command{
           id: Ecto.UUID.t() | nil,
-          event_map: map() | nil,
+          command_map: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           journal_event_command_link:
@@ -53,10 +53,10 @@ defmodule DoubleEntryLedger.Command do
           updated_at: DateTime.t() | nil
         }
 
-  @derive {Jason.Encoder, only: [:id, :event_map, :command_queue_item]}
+  @derive {Jason.Encoder, only: [:id, :command_map, :command_queue_item]}
 
   schema "commands" do
-    field(:event_map, CommandMap, skip_default_validation: true)
+    field(:command_map, CommandMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_one(:journal_event_command_link, JournalEventCommandLink)
@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.Command do
   ## Examples
 
       # Create event changeset
-      iex> event_map = %{
+      iex> command_map = %{
       ...>   action: :create_transaction,
       ...>   source: "api",
       ...>   source_idempk: "order-123",
@@ -96,26 +96,26 @@ defmodule DoubleEntryLedger.Command do
       ...>     %{account_address: "account2", amount: 100, currency: :USD}
       ...>   ]}
       ...> }
-      ...> attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
+      ...> attrs = %{instance_id: Ecto.UUID.generate(), command_map: command_map}
       iex> changeset = Command.changeset(%Command{}, attrs)
       iex> changeset.valid?
       true
 
       # Error changeset is added
-      iex> event_map = %{
+      iex> command_map = %{
       ...>   action: :create_account,
       ...>   source: "api",
       ...>   source_idempk: "order-123",
       ...>   instance_address: "instance1",
       ...>   payload: %{type: :wrong, address: "wrong format"}
       ...> }
-      ...> attrs = %{instance_id: Ecto.UUID.generate(), event_map: event_map}
+      ...> attrs = %{instance_id: Ecto.UUID.generate(), command_map: command_map}
       iex> changeset = Command.changeset(%Command{}, attrs)
       iex> changeset.valid?
       false
-      iex> Map.has_key?(changeset, :event_map_changeset)
+      iex> Map.has_key?(changeset, :command_map_changeset)
       true
-      iex> changeset.event_map_changeset.valid?
+      iex> changeset.command_map_changeset.valid?
       false
   """
   @spec changeset(Command.t(), map()) :: Ecto.Changeset.t()
@@ -173,20 +173,20 @@ defmodule DoubleEntryLedger.Command do
     event
     |> cast(attrs, [
       :instance_id,
-      :event_map
+      :command_map
     ])
-    |> validate_required([:instance_id, :event_map])
+    |> validate_required([:instance_id, :command_map])
     |> cast_assoc(:command_queue_item, with: &CommandQueueItem.changeset/2, required: true)
-    |> validate_event_map(attrs)
+    |> validate_command_map(attrs)
   end
 
-  defp validate_event_map(changeset, attrs) do
-    case Map.get(attrs, :event_map) || Map.get(attrs, "event_map") do
-      %{} = event_map ->
-        with {:ok, mod} <- action_to_mod(event_map),
-             inner_cs <- mod.changeset(struct(mod), event_map),
+  defp validate_command_map(changeset, attrs) do
+    case Map.get(attrs, :command_map) || Map.get(attrs, "command_map") do
+      %{} = command_map ->
+        with {:ok, mod} <- action_to_mod(command_map),
+             inner_cs <- mod.changeset(struct(mod), command_map),
              false <- inner_cs.valid? do
-          Map.put(changeset, :event_map_changeset, inner_cs)
+          Map.put(changeset, :command_map_changeset, inner_cs)
         else
           _ -> changeset
         end

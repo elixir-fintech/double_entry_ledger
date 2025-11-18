@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
 
   ## Parameters
 
-    - `event_map`: The event being processed.
+    - `command_map`: The event being processed.
     - `error`: The error encountered during transaction map conversion.
     - `repo`: The Ecto repository.
 
@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
 
     - An `Ecto.Multi` that updates the event with error information.
   """
-  defdelegate handle_transaction_map_error(event_map, error, repo),
+  defdelegate handle_transaction_map_error(command_map, error, repo),
     to: Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_transaction_map_error
 
@@ -75,14 +75,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
 
   ## Parameters
 
-    - `event_map`: The event being processed.
+    - `command_map`: The event being processed.
     - `repo`: The Ecto repository.
 
   ## Returns
 
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
-  defdelegate handle_occ_final_timeout(event_map, repo),
+  defdelegate handle_occ_final_timeout(command_map, repo),
     to: Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_occ_final_timeout
 
@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
   """
   @spec process(Command.t(), Ecto.Repo.t()) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
-  def process(%Command{event_map: %{action: :create_transaction}} = command, repo \\ Repo) do
+  def process(%Command{command_map: %{action: :create_transaction}} = command, repo \\ Repo) do
     process_with_retry(command, repo)
     |> default_response_handler(command)
   end
@@ -147,20 +147,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
   """
   def handle_build_transaction(
         multi,
-        %{id: cid, event_map: %{payload: %{status: :pending}}} = command,
+        %{id: cid, command_map: %{payload: %{status: :pending}}} = command,
         _repo
       ) do
     multi
     |> Multi.update(:event_success, fn _ ->
       build_mark_as_processed(command)
     end)
-    |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id}} ->
-      JournalEvent.build_create(%{event_map: em, instance_id: id})
+    |> Multi.insert(:journal_event, fn %{event_success: %{command_map: em, instance_id: id}} ->
+      JournalEvent.build_create(%{command_map: em, instance_id: id})
     end)
     |> Multi.insert(
       :pending_transaction_lookup,
       fn %{
-           event_success: %{event_map: em, instance_id: id},
+           event_success: %{command_map: em, instance_id: id},
            transaction: %{id: tid},
            journal_event: %{id: jid}
          } ->
@@ -196,8 +196,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
     |> Multi.update(:event_success, fn _ ->
       build_mark_as_processed(command)
     end)
-    |> Multi.insert(:journal_event, fn %{event_success: %{event_map: em, instance_id: id}} ->
-      JournalEvent.build_create(%{event_map: em, instance_id: id})
+    |> Multi.insert(:journal_event, fn %{event_success: %{command_map: em, instance_id: id}} ->
+      JournalEvent.build_create(%{command_map: em, instance_id: id})
     end)
     |> Oban.insert(
       :create_transaction_link,

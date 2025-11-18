@@ -33,7 +33,7 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   These are the two main event map types that can contain validation errors
   that need to be transferred and properly attributed.
   """
-  @type event_map :: AccountCommandMap.t() | TransactionCommandMap.t()
+  @type command_map :: AccountCommandMap.t() | TransactionCommandMap.t()
 
   @typedoc """
   Union type representing either AccountData or TransactionData.
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   Union of event-related types used for parameterizing changeset specs when
   transferring errors. This can be an event map or its payload type.
   """
-  @type event_related :: event_map | payload
+  @type event_related :: command_map | payload
 
   @doc """
   Transfers validation errors from an account changeset to an event map changeset.
@@ -55,21 +55,21 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
 
   ## Parameters
 
-    - `event_map`: The event map that contains the account data
+    - `command_map`: The event map that contains the account data
     - `account_changeset`: Account changeset containing validation errors
 
   ## Returns
 
     - `Ecto.Changeset.t()`: Command map changeset with propagated account errors
   """
-  @spec from_account_to_event_map_payload(AccountCommandMap.t(), Ecto.Changeset.t(Account.t())) ::
+  @spec from_account_to_command_map_payload(AccountCommandMap.t(), Ecto.Changeset.t(Account.t())) ::
           Ecto.Changeset.t(AccountCommandMap.t())
-  def from_account_to_event_map_payload(event_map, account_changeset) do
+  def from_account_to_command_map_payload(command_map, account_changeset) do
     cs =
-      build_event_map_changeset(event_map)
+      build_command_map_changeset(command_map)
       |> Changeset.put_embed(
         :payload,
-        build_payload_changeset(event_map, account_changeset)
+        build_payload_changeset(command_map, account_changeset)
       )
       |> Map.put(:action, :insert)
 
@@ -85,18 +85,18 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
 
   ## Parameters
 
-    - `event_map`: The original event map
+    - `command_map`: The original event map
     - `event_changeset`: Command changeset containing validation errors
 
   ## Returns
 
     - `Ecto.Changeset.t()`: Command map changeset with propagated errors
   """
-  @spec from_event_to_event_map(em, Changeset.t(Command.t())) ::
+  @spec from_event_to_command_map(em, Changeset.t(Command.t())) ::
           Changeset.t(em)
-        when em: event_map
-  def from_event_to_event_map(event_map, event_changeset) do
-    build_event_map_changeset(event_map)
+        when em: command_map
+  def from_event_to_command_map(command_map, event_changeset) do
+    build_command_map_changeset(command_map)
     |> transfer_errors_between_changesets(event_changeset, [:update_idempk, :source_idempk])
     |> Map.put(:action, :insert)
   end
@@ -107,27 +107,27 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   The returned event map changeset embeds a payload changeset that includes the
   propagated transaction errors (e.g., status and entry-level errors).
   """
-  @spec from_transaction_to_event_map_payload(
+  @spec from_transaction_to_command_map_payload(
           TransactionCommandMap.t(),
           Ecto.Changeset.t(Transaction.t())
         ) ::
           Ecto.Changeset.t(TransactionCommandMap.t())
-  def from_transaction_to_event_map_payload(event_map, trx_changeset) do
-    build_event_map_changeset(event_map)
+  def from_transaction_to_command_map_payload(command_map, trx_changeset) do
+    build_command_map_changeset(command_map)
     |> Changeset.put_embed(
       :payload,
-      build_payload_changeset(event_map, trx_changeset)
+      build_payload_changeset(command_map, trx_changeset)
     )
     |> Map.put(:action, :insert)
   end
 
-  @spec from_idempotency_key_to_event_map(
+  @spec from_idempotency_key_to_command_map(
           TransactionCommandMap.t(),
           Ecto.Changeset.t(IdempotencyKey.t())
         ) ::
           Ecto.Changeset.t(TransactionCommandMap.t())
-  def from_idempotency_key_to_event_map(event_map, ik_changeset) do
-    build_event_map_changeset(event_map)
+  def from_idempotency_key_to_command_map(command_map, ik_changeset) do
+    build_command_map_changeset(command_map)
     |> transfer_errors_between_changesets(ik_changeset, [:key_hash])
   end
 
@@ -190,16 +190,16 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   end
 
   @doc false
-  @spec build_event_map_changeset(em) :: Changeset.t(em) when em: event_map
-  defp build_event_map_changeset(%AccountCommandMap{} = event_map) do
+  @spec build_command_map_changeset(em) :: Changeset.t(em) when em: command_map
+  defp build_command_map_changeset(%AccountCommandMap{} = command_map) do
     %AccountCommandMap{}
-    |> AccountCommandMap.changeset(AccountCommandMap.to_map(event_map))
+    |> AccountCommandMap.changeset(AccountCommandMap.to_map(command_map))
   end
 
   @doc false
-  defp build_event_map_changeset(%TransactionCommandMap{} = event_map) do
+  defp build_command_map_changeset(%TransactionCommandMap{} = command_map) do
     %TransactionCommandMap{}
-    |> TransactionCommandMap.changeset(TransactionCommandMap.to_map(event_map))
+    |> TransactionCommandMap.changeset(TransactionCommandMap.to_map(command_map))
     |> Map.put(:action, "insert")
   end
 

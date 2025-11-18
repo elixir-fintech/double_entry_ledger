@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
     setup [:create_instance]
 
     test "successfully processes a valid account event map", %{instance: instance} do
-      event_map = %AccountCommandMap{
+      command_map = %AccountCommandMap{
         action: :create_account,
         instance_address: instance.address,
         source: "manual",
@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
         }
       }
 
-      {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(event_map)
+      {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(command_map)
       assert account.currency == :USD
       assert account.name == "Test Account"
       assert account.type == :asset
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
     end
 
     test "returns an error for an invalid account event map", %{instance: instance} do
-      event_map = %AccountCommandMap{
+      command_map = %AccountCommandMap{
         action: :create_account,
         instance_address: instance.address,
         source: "manual",
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
         }
       }
 
-      assert {:error, changeset} = CreateAccountCommandMapNoSaveOnError.process(event_map)
+      assert {:error, changeset} = CreateAccountCommandMapNoSaveOnError.process(command_map)
       assert %Ecto.Changeset{} = changeset
       assert changeset.valid? == false
       assert Keyword.has_key?(changeset.changes.payload.errors, :address)

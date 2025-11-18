@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   Creating a TransactionCommandMap for a new transaction:
 
-      {:ok, event_map} = TransactionCommandMap.create(%{
+      {:ok, command_map} = TransactionCommandMap.create(%{
         action: "create_transaction",
         instance_address: "some:address",
         source: "accounting_system",
@@ -163,7 +163,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
       # Type annotation in function
       @spec validate_event(TransactionCommandMap.t()) :: boolean()
-      def validate_event(%TransactionCommandMap{} = event_map) do
+      def validate_event(%TransactionCommandMap{} = command_map) do
         # Implementation
       end
   """
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   ## Returns
 
-  * `{:ok, event_map}` - Successfully validated TransactionCommandMap struct
+  * `{:ok, command_map}` - Successfully validated TransactionCommandMap struct
   * `{:error, changeset}` - Ecto.Changeset containing validation errors
 
   ## Validation Process
@@ -244,10 +244,10 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
       ...>     ]
       ...>   }
       ...> }
-      iex> {:ok, event_map} = TransactionCommandMap.create(attrs)
-      iex> event_map.action
+      iex> {:ok, command_map} = TransactionCommandMap.create(attrs)
+      iex> command_map.action
       :create_transaction
-      iex> event_map.source
+      iex> command_map.source
       "accounting_system"
 
       iex> alias DoubleEntryLedger.Command.TransactionCommandMap
@@ -272,7 +272,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   ## Parameters
 
-  * `event_map`: The TransactionCommandMap struct to create a changeset for
+  * `command_map`: The TransactionCommandMap struct to create a changeset for
   * `attrs`: Map of attributes to apply to the struct
 
   ## Returns
@@ -338,18 +338,18 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
       false
   """
   @spec changeset(t() | map(), map()) :: Changeset.t(TransactionCommandMap.t())
-  def changeset(event_map, attrs) do
+  def changeset(command_map, attrs) do
     case fetch_action(attrs) do
       :update_transaction ->
-        update_changeset(event_map, attrs)
+        update_changeset(command_map, attrs)
         |> cast_embed(:payload, with: &TransactionData.update_event_changeset/2, required: true)
 
       :create_transaction ->
-        base_changeset(event_map, attrs)
+        base_changeset(command_map, attrs)
         |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
 
       val ->
-        base_changeset(event_map, attrs)
+        base_changeset(command_map, attrs)
         |> cast_embed(:payload, with: &TransactionData.changeset/2, required: true)
         |> add_error(:action, "invalid in this context", value: "#{val}")
     end
@@ -377,15 +377,15 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   end
 
   @spec to_map(struct()) :: map()
-  def to_map(event_map) do
+  def to_map(command_map) do
     %{
-      action: Map.get(event_map, :action),
-      instance_address: Map.get(event_map, :instance_address),
-      source: Map.get(event_map, :source),
-      source_idempk: Map.get(event_map, :source_idempk),
-      update_idempk: Map.get(event_map, :update_idempk),
-      update_source: Map.get(event_map, :update_source),
-      payload: TransactionData.to_map(Map.get(event_map, :payload))
+      action: Map.get(command_map, :action),
+      instance_address: Map.get(command_map, :instance_address),
+      source: Map.get(command_map, :source),
+      source_idempk: Map.get(command_map, :source_idempk),
+      update_idempk: Map.get(command_map, :update_idempk),
+      update_source: Map.get(command_map, :update_source),
+      payload: TransactionData.to_map(Map.get(command_map, :payload))
     }
     |> Map.reject(fn {_, v} -> is_nil(v) end)
   end

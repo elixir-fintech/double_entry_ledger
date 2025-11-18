@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
              | :action_not_supported}
   def create_from_params(%{"action" => action} = event_params) when action in @account_actions do
     case AccountCommandMap.create(event_params) do
-      {:ok, event_map} -> CommandStore.create(event_map)
+      {:ok, command_map} -> CommandStore.create(command_map)
       error -> error
     end
   end
@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   def create_from_params(%{"action" => action} = event_params)
       when action in @transaction_actions do
     case TransactionCommandMap.create(event_params) do
-      {:ok, event_map} -> CommandStore.create(event_map)
+      {:ok, command_map} -> CommandStore.create(command_map)
       error -> error
     end
   end
@@ -173,15 +173,15 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     on_error = Keyword.get(opts, :on_error, :retry)
 
     case TransactionCommandMap.create(event_params) do
-      {:ok, event_map} ->
+      {:ok, command_map} ->
         case on_error do
-          :fail -> CommandWorker.process_new_event_no_save_on_error(event_map)
-          _ -> CommandWorker.process_new_event(event_map)
+          :fail -> CommandWorker.process_new_event_no_save_on_error(command_map)
+          _ -> CommandWorker.process_new_event(command_map)
         end
 
-      {:error, event_map_changeset} ->
-        warn("Invalid transaction event params", event_params, event_map_changeset)
-        {:error, event_map_changeset}
+      {:error, command_map_changeset} ->
+        warn("Invalid transaction event params", event_params, command_map_changeset)
+        {:error, command_map_changeset}
     end
   end
 
@@ -189,12 +189,12 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   def process_from_params(%{"action" => action} = event_params, _opts)
       when action in @account_actions do
     case AccountCommandMap.create(event_params) do
-      {:ok, event_map} ->
-        CommandWorker.process_new_event_no_save_on_error(event_map)
+      {:ok, command_map} ->
+        CommandWorker.process_new_event_no_save_on_error(command_map)
 
-      {:error, event_map_changeset} ->
-        warn("Invalid account event params", event_params, event_map_changeset)
-        {:error, event_map_changeset}
+      {:error, command_map_changeset} ->
+        warn("Invalid account event params", event_params, command_map_changeset)
+        {:error, command_map_changeset}
     end
   end
 

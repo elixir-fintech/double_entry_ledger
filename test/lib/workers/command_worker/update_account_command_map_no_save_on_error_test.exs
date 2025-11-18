@@ -19,7 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
       instance: instance,
       account: account
     } do
-      event_map = %AccountCommandMap{
+      command_map = %AccountCommandMap{
         action: :update_account,
         instance_address: instance.address,
         account_address: account.address,
@@ -29,14 +29,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
         }
       }
 
-      {:ok, account, event} = UpdateAccountCommandMapNoSaveOnError.process(event_map)
+      {:ok, account, event} = UpdateAccountCommandMapNoSaveOnError.process(command_map)
       assert account.description == "Updated Description"
       assert event.command_queue_item.status == :processed
     end
   end
 
   defp create_account(%{instance: instance} = ctx) do
-    event_map = %AccountCommandMap{
+    command_map = %AccountCommandMap{
       action: :create_account,
       instance_address: instance.address,
       source: "manual",
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
       }
     }
 
-    {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(event_map)
+    {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(command_map)
 
     Map.put(ctx, :account, account)
     |> Map.put(:event, event)

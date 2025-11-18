@@ -84,7 +84,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
     Multi.new()
     |> Multi.put(:occable_item, command)
     |> Multi.put(:instance, fn %{occable_item: %{instance_id: id}} -> id end)
-    |> Multi.insert(:idempotency, fn %{occable_item: %{instance_id: id, event_map: em}} ->
+    |> Multi.insert(:idempotency, fn %{occable_item: %{instance_id: id, command_map: em}} ->
       IdempotencyKey.changeset(id, em)
     end)
     |> Multi.run(
@@ -93,7 +93,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
          %{
            occable_item: %{
              instance_id: id,
-             event_map: %{payload: td}
+             command_map: %{payload: td}
            }
          } ->
         case TransactionCommandTransformer.transaction_data_to_transaction_map(td, id) do
@@ -144,7 +144,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
   not stored in the database.
 
   ## Parameters
-    - `event_map` - The TransactionCommandMap struct
+    - `command_map` - The TransactionCommandMap struct
     - `_error_map` - Contains retry count and errors (unused)
     - `_repo` - Ecto.Repo to use (unused)
 
@@ -152,15 +152,15 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
     - The unchanged TransactionCommandMap struct
   """
   @spec update!(TransactionCommandMap.t(), ErrorMap.t(), Repo.t()) :: TransactionCommandMap.t()
-  def update!(event_map, _error_map, _repo), do: event_map
+  def update!(command_map, _error_map, _repo), do: command_map
 
   @spec build_multi(TransactionCommandMap.t()) :: Multi.t()
-  def build_multi(%TransactionCommandMap{instance_address: address} = event_map) do
+  def build_multi(%TransactionCommandMap{instance_address: address} = command_map) do
     Multi.new()
-    |> Multi.put(:occable_item, event_map)
+    |> Multi.put(:occable_item, command_map)
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(:idempotency, fn %{instance: id} ->
-      IdempotencyKey.changeset(id, event_map)
+      IdempotencyKey.changeset(id, command_map)
     end)
     |> Multi.run(
       :transaction_map,
@@ -184,7 +184,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
   with timeout status, then returns an error tuple.
 
   ## Parameters
-    - `_event_map` - The TransactionCommandMap that has reached maximum retries
+    - `_command_map` - The TransactionCommandMap that has reached maximum retries
     - `error_map` - Contains retry count, errors, and created Command
     - `repo` - Ecto.Repo to use for storing the Command
 
@@ -194,14 +194,14 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
   @spec timed_out(TransactionCommandMap.t(), atom(), ErrorMap.t()) ::
           Multi.t()
   def timed_out(
-        %{instance_address: address, payload: %{status: :pending}} = event_map,
+        %{instance_address: address, payload: %{status: :pending}} = command_map,
         name,
         %{save_on_error: true} = error_map
       ) do
     Multi.new()
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(:new_command, fn %{_instance: id} ->
-      CommandStoreHelper.build_create(event_map, id)
+      CommandStoreHelper.build_create(command_map, id)
     end)
     |> Multi.update(name, fn %{new_command: command} ->
       Helper.occ_timeout_changeset(command, error_map)
@@ -214,8 +214,8 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
          } ->
         attrs = %{
           command_id: cid,
-          source: event_map.source,
-          source_idempk: event_map.source_idempk,
+          source: command_map.source,
+          source_idempk: command_map.source_idempk,
           instance_id: iid
         }
 
@@ -225,22 +225,22 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.Transactio
   end
 
   def timed_out(
-        %{instance_address: address} = event_map,
+        %{instance_address: address} = command_map,
         name,
         %{save_on_error: true} = error_map
       ) do
     Multi.new()
     |> Multi.one(:_instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(:new_command, fn %{_instance: id} ->
-      CommandStoreHelper.build_create(event_map, id)
+      CommandStoreHelper.build_create(command_map, id)
     end)
     |> Multi.update(name, fn %{new_command: command} ->
       Helper.occ_timeout_changeset(command, error_map)
     end)
   end
 
-  def timed_out(event_map, name, %{save_on_error: false}) do
+  def timed_out(command_map, name, %{save_on_error: false}) do
     Multi.new()
-    |> Multi.put(name, event_map)
+    |> Multi.put(name, command_map)
   end
 end

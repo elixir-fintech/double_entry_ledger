@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     |> CommandStore.create()
   end
 
-  def create_transaction_event_map(
+  def create_transaction_command_map(
         %{instance: %{address: address}, accounts: [a1, a2, _, _]},
         trx_status \\ :pending
       ) do
@@ -107,16 +107,16 @@ defmodule DoubleEntryLedger.EventFixtures do
     }
   end
 
-  def update_transaction_event_map(
+  def update_transaction_command_map(
         %{instance: %{address: address}, accounts: [a1, a2, _, _]},
-        %{event_map: event_map},
+        %{command_map: command_map},
         trx_status \\ :posted
       ) do
     %TransactionCommandMap{
       action: :update_transaction,
       instance_address: address,
-      source: event_map.source,
-      source_idempk: event_map.source_idempk,
+      source: command_map.source,
+      source_idempk: command_map.source_idempk,
       update_idempk: Ecto.UUID.generate(),
       payload: %TransactionData{
         status: trx_status,
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     }
   end
 
-  def create_account_event_map(%{instance: %{address: address}}) do
+  def create_account_command_map(%{instance: %{address: address}}) do
     %AccountCommandMap{
       action: :create_account,
       instance_address: address,

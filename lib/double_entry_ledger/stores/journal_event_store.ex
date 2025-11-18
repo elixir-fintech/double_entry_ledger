@@ -168,7 +168,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
   @spec get_create_account_event(Ecto.UUID.t()) :: Command.t()
   def get_create_account_event(account_id) do
     base_account_query(account_id)
-    |> where([e], fragment("?->> 'action' = 'create_account'", e.event_map))
+    |> where([e], fragment("?->> 'action' = 'create_account'", e.command_map))
     |> order_by(asc: :inserted_at)
     |> preload([:account])
     |> Repo.one()
@@ -199,9 +199,9 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_id(asset_account.id)
     iex> length(events)
     2
-    iex> acc_event.event_map.action
+    iex> acc_event.command_map.action
     :create_account
-    iex> trx_event.event_map.action
+    iex> trx_event.command_map.action
     :create_transaction
 
     iex> JournalEventStore.list_all_for_account_id(Ecto.UUID.generate())
@@ -243,9 +243,9 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_address(instance.address, liability_account.address)
     iex> length(events)
     2
-    iex> acc_event.event_map.action
+    iex> acc_event.command_map.action
     :create_account
-    iex> trx_event.event_map.action
+    iex> trx_event.command_map.action
     :create_transaction
 
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
@@ -329,7 +329,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
   @spec get_create_transaction_journal_event(Ecto.UUID.t()) :: Command.t()
   def get_create_transaction_journal_event(transaction_id) do
     base_transaction_query(transaction_id)
-    |> where([je], fragment("?->> 'action' = 'create_transaction'", je.event_map))
+    |> where([je], fragment("?->> 'action' = 'create_transaction'", je.command_map))
     |> Repo.one()
   end
 end

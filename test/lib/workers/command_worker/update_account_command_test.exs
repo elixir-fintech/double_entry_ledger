@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
           payload: account_data_attrs(%{name: "Old Name"})
         })
 
-      {:ok, %{event_map: %{payload: payload}} = create_event} = CommandStore.create(attrs)
+      {:ok, %{command_map: %{payload: payload}} = create_event} = CommandStore.create(attrs)
 
       CreateAccountCommand.process(create_event)
 
@@ -73,7 +73,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
     test "goes to dead letter when create account event is not yet processed", %{
       instance: instance
     } do
-      {:ok, %{event_map: %{payload: payload}}} =
+      {:ok, %{command_map: %{payload: payload}}} =
         CommandStore.create(
           account_event_attrs(%{
             instance_address: instance.address,
@@ -100,7 +100,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
     end
 
     test "moves to dead letter when create event is in dead letter", %{instance: instance} do
-      {:ok, %{event_map: %{payload: create_payload}, command_queue_item: event_qi}} =
+      {:ok, %{command_map: %{payload: create_payload}, command_queue_item: event_qi}} =
         CommandStore.create(
           account_event_attrs(%{
             instance_address: instance.address,

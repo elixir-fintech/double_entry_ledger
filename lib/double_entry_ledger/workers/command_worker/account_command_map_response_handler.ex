@@ -31,8 +31,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
 
   import DoubleEntryLedger.Command.TransferErrors,
     only: [
-      from_event_to_event_map: 2,
-      from_account_to_event_map_payload: 2
+      from_event_to_command_map: 2,
+      from_account_to_command_map_payload: 2
     ]
 
   alias Ecto.Changeset
@@ -64,7 +64,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
   ## Parameters
 
   * `response` - The result from an Ecto.Multi transaction (success or error tuple)
-  * `event_map` - The original AccountCommandMap that was being processed
+  * `command_map` - The original AccountCommandMap that was being processed
   * `module_name` - String identifier of the calling module for logging purposes
 
   ## Returns
@@ -82,14 +82,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
   ## Examples
 
       iex> account = %Account{}
-      iex> event = %Command{command_queue_item: %{status: :processed}, event_map: %{}}
+      iex> event = %Command{command_queue_item: %{status: :processed}, command_map: %{}}
       iex> response = {:ok, %{account: account, event_success: event}}
       iex> {:ok, ^account, ^event} = AccountCommandMapResponseHandler.default_response_handler(response, %AccountCommandMap{})
 
       iex> changeset = %Ecto.Changeset{}
       iex> response = {:error, :account, changeset, %{}}
-      iex> event_map = %AccountCommandMap{payload: %AccountData{}}
-      iex> {:error, %Ecto.Changeset{} = _changeset} = AccountCommandMapResponseHandler.default_response_handler(response, event_map)
+      iex> command_map = %AccountCommandMap{payload: %AccountData{}}
+      iex> {:error, %Ecto.Changeset{} = _changeset} = AccountCommandMapResponseHandler.default_response_handler(response, command_map)
   """
   @spec default_response_handler(
           {:ok, %{account: Account.t(), event_success: Command.t()}}
@@ -97,7 +97,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
           AccountCommandMap.t()
         ) ::
           response()
-  def default_response_handler(response, %AccountCommandMap{} = event_map) do
+  def default_response_handler(response, %AccountCommandMap{} = command_map) do
     case response do
       {:ok, %{account: account, event_success: event}} ->
         info("Processed successfully", event, account)
@@ -105,17 +105,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
         {:ok, account, event}
 
       {:error, :new_command, changeset, _changes} ->
-        warn("Command changeset failed", event_map, changeset)
+        warn("Command changeset failed", command_map, changeset)
 
-        {:error, from_event_to_event_map(event_map, changeset)}
+        {:error, from_event_to_command_map(command_map, changeset)}
 
       {:error, :account, changeset, _changes} ->
-        warn("Account changeset failed", event_map, changeset)
+        warn("Account changeset failed", command_map, changeset)
 
-        {:error, from_account_to_event_map_payload(event_map, changeset)}
+        {:error, from_account_to_command_map_payload(command_map, changeset)}
 
       {:error, step, error, _steps_so_far} ->
-        {:ok, message} = error("Step :#{step} failed.", event_map, error)
+        {:ok, message} = error("Step :#{step} failed.", command_map, error)
 
         {:error, "#{message} #{inspect(error)}"}
     end

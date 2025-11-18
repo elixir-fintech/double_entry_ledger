@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
   Building a changeset from an CommandMap:
 
-      event_changeset = CommandStoreHelper.build_create(event_map)
+      event_changeset = CommandStoreHelper.build_create(command_map)
 
   Adding a step to get a create event's transaction:
 
@@ -50,7 +50,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
   ## Parameters
 
-  * `event_map` - Either a TransactionCommandMap or AccountCommandMap struct containing event data
+  * `command_map` - Either a TransactionCommandMap or AccountCommandMap struct containing event data
 
   ## Returns
 
@@ -59,24 +59,24 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   """
   @spec build_create(TransactionCommandMap.t() | AccountCommandMap.t(), Ecto.UUID.t()) ::
           Changeset.t(Command.t())
-  def build_create(%TransactionCommandMap{} = event_map, instance_id) do
+  def build_create(%TransactionCommandMap{} = command_map, instance_id) do
     %Command{}
     |> Command.changeset(%{
       instance_id: instance_id,
-      event_map: TransactionCommandMap.to_map(event_map)
+      command_map: TransactionCommandMap.to_map(command_map)
     })
   end
 
-  def build_create(%AccountCommandMap{} = event_map, instance_id) do
+  def build_create(%AccountCommandMap{} = command_map, instance_id) do
     %Command{}
-    |> Command.changeset(%{instance_id: instance_id, event_map: AccountCommandMap.to_map(event_map)})
+    |> Command.changeset(%{instance_id: instance_id, command_map: AccountCommandMap.to_map(command_map)})
   end
 
   @doc """
   Retrieves an event by its action and source identifiers with preloaded associations.
 
   This function looks up an event using i
-      event_map
+      command_map
       |> TransactionCommandMap.to_map()
       |> Map.put(:instance_id, instance_id)
       |> Mts action, source system identifier,
@@ -108,9 +108,9 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
     from(e in Command,
       where:
         e.instance_id == ^instance_id and
-          fragment("event_map->>? = ?", "action", ^Atom.to_string(action)) and
-          fragment("event_map->>? = ?", "source", ^source) and
-          fragment("event_map->>? = ?", "source_idempk", ^source_idempk),
+          fragment("command_map->>? = ?", "action", ^Atom.to_string(action)) and
+          fragment("command_map->>? = ?", "source", ^source) and
+          fragment("command_map->>? = ?", "source_idempk", ^source_idempk),
       limit: 1,
       preload: [:command_queue_item, transaction: [entries: :account]]
     )
@@ -196,7 +196,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   @spec pending_transaction_lookup(Command.t()) :: PendingTransactionLookup.t()
   defp pending_transaction_lookup(%{
          instance_id: iid,
-         event_map: %{source: s, source_idempk: sidpk}
+         command_map: %{source: s, source_idempk: sidpk}
        }) do
     from(ptl in PendingTransactionLookup,
       where: ptl.instance_id == ^iid and ptl.source == ^s and ptl.source_idempk == ^sidpk,

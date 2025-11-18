@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateJournalEvents do
 
       add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
 
-      add :event_map, :map, null: false
+      add :command_map, :map, null: false
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -18,9 +18,9 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateJournalEvents do
     create index(:journal_events, [:instance_id], prefix: @schema_prefix)
     create index(:journal_events, [
         :instance_id,
-        "(event_map->>'action')",
-        "(event_map->>'source')",
-        "(event_map->>'source_idempk')"
+        "(command_map->>'action')",
+        "(command_map->>'source')",
+        "(command_map->>'source_idempk')"
       ],
       name: "idx_journal_events_create_transaction_triple_expr",
       prefix: @schema_prefix,
@@ -28,11 +28,11 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateJournalEvents do
     )
     create index(:journal_events, [
         :instance_id,
-        "(event_map->>'source')",
-        "(event_map->>'source_idempk')",
-        "(event_map->>'update_idempk')"
+        "(command_map->>'source')",
+        "(command_map->>'source_idempk')",
+        "(command_map->>'update_idempk')"
       ],
-      where: "event_map->>'action' = 'update_transaction'",
+      where: "command_map->>'action' = 'update_transaction'",
       name: "idx_journal_events_update_transaction_triple_expr",
       prefix: @schema_prefix,
       include: [:id]

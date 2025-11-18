@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
 
   ## Parameters
 
-    - `event_map`: AccountCommandMap struct containing validated account creation data.
+    - `command_map`: AccountCommandMap struct containing validated account creation data.
       Must have `:create_account` action.
 
   ## Returns
@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
 
       # Successful account creation
       iex> {:ok, instance} = InstanceStore.create(%{address: "Main:Instance"})
-      iex> event_map = %AccountCommandMap{
+      iex> command_map = %AccountCommandMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",
       ...>   instance_address: instance.address,
@@ -100,39 +100,39 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
       ...>     currency: :USD
       ...>   }
       ...> }
-      iex> {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(event_map)
+      iex> {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(command_map)
       iex> is_struct(account, Account) and account.name == "Cash Account" and is_struct(event, Command) and event.command_queue_item.status == :processed
       true
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Main:Instance"})
-      iex> invalid_event_map = %AccountCommandMap{
+      iex> invalid_command_map = %AccountCommandMap{
       ...>   action: :create_account,
       ...>   source: "test_suite",
       ...>   instance_address: instance.address,
       ...>   payload: %AccountData{name: "", type: nil}  # missing required fields
       ...> }
-      iex> {:error, changeset} = CreateAccountCommandMapNoSaveOnError.process(invalid_event_map)
+      iex> {:error, changeset} = CreateAccountCommandMapNoSaveOnError.process(invalid_command_map)
       iex> changeset.valid?
       false
   """
   @spec process(AccountCommandMap.t()) :: AccountCommandMapResponseHandler.response()
-  def process(%AccountCommandMap{action: :create_account} = event_map) do
-    build_create_account(event_map)
+  def process(%AccountCommandMap{action: :create_account} = command_map) do
+    build_create_account(command_map)
     |> Repo.transaction()
-    |> default_response_handler(event_map)
+    |> default_response_handler(command_map)
   end
 
   @spec build_create_account(AccountCommandMap.t()) :: Ecto.Multi.t()
   defp build_create_account(
-         %AccountCommandMap{payload: payload, instance_address: address} = event_map
+         %AccountCommandMap{payload: payload, instance_address: address} = command_map
        ) do
     Multi.new()
     |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
     |> Multi.insert(:new_command, fn %{instance: id} ->
-      CommandStoreHelper.build_create(event_map, id)
+      CommandStoreHelper.build_create(command_map, id)
     end)
     |> Multi.insert(:journal_event, fn %{instance: id} ->
-      JournalEvent.build_create(%{event_map: event_map, instance_id: id})
+      JournalEvent.build_create(%{command_map: command_map, instance_id: id})
     end)
     |> Multi.insert(:account, fn %{instance: id} ->
       AccountStoreHelper.build_create(payload, id)

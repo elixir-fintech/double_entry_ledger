@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
       # Map event validation errors to an event map changeset
       iex> default_response_handler(
       ...>   {:error, :new_command, event_changeset, %{}},
-      ...>   event_map,
+      ...>   command_map,
       ...>   "MyWorker"
       ...> )
       {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}}}
@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
       # Map transaction validation errors to an event map changeset
       iex> default_response_handler(
       ...>   {:error, :transaction, trx_changeset, %{}},
-      ...>   event_map,
+      ...>   command_map,
       ...>   "MyWorker"
       ...> )
       {:error, %Ecto.Changeset{data: %DoubleEntryLedger.Command.TransactionCommandMap{}}}

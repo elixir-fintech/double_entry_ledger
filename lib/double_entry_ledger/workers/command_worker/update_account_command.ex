@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 
   @spec process(Command.t()) :: AccountCommandResponseHandler.response()
-  def process(%Command{event_map: %{action: :update_account}} = event) do
+  def process(%Command{command_map: %{action: :update_account}} = event) do
     build_update_account(event)
     |> handle_build_update_account(event)
     |> Repo.transaction()
@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
 
   @spec build_update_account(Command.t()) :: Ecto.Multi.t()
   defp build_update_account(%Command{
-         event_map: %{payload: account_data, instance_address: iaddr, account_address: aaddr}
+         command_map: %{payload: account_data, instance_address: iaddr, account_address: aaddr}
        }) do
     Multi.new()
     |> Multi.one(:_get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))
@@ -50,11 +50,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
           Ecto.Multi.t(),
           Command.t()
         ) :: Ecto.Multi.t()
-  defp handle_build_update_account(multi, %Command{event_map: event_map, instance_id: id} = event) do
+  defp handle_build_update_account(multi, %Command{command_map: command_map, instance_id: id} = event) do
     Multi.merge(multi, fn
       %{account: %{id: aid}} ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
-          JournalEvent.build_create(%{event_map: event_map, instance_id: id})
+          JournalEvent.build_create(%{command_map: command_map, instance_id: id})
         end)
         |> Multi.update(:event_success, build_mark_as_processed(event))
         |> Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->

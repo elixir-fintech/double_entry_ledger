@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateCommands do
 
       add :instance_id, references(:instances, on_delete: :nothing, type: :binary_id), null: false
 
-      add :event_map, :map, null: false
+      add :command_map, :map, null: false
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -18,21 +18,21 @@ defmodule DoubleEntryLedger.Repo.Migrations.CreateCommands do
     create index(:commands, [:instance_id], prefix: @schema_prefix)
     create index(:commands, [
         :instance_id,
-        "(event_map->>'source')",
-        "(event_map->>'source_idempk')"
+        "(command_map->>'source')",
+        "(command_map->>'source_idempk')"
       ],
-      where: "event_map->>'action' = 'create_transaction'",
+      where: "command_map->>'action' = 'create_transaction'",
       name: "idx_commands_create_transaction_triple_expr",
       prefix: @schema_prefix,
       include: [:id]
     )
     create index(:commands, [
         :instance_id,
-        "(event_map->>'source')",
-        "(event_map->>'source_idempk')",
-        "(event_map->>'update_idempk')"
+        "(command_map->>'source')",
+        "(command_map->>'source_idempk')",
+        "(command_map->>'update_idempk')"
       ],
-      where: "event_map->>'action' = 'update_transaction'",
+      where: "command_map->>'action' = 'update_transaction'",
       name: "idx_commands_update_transaction_triple_expr",
       prefix: @schema_prefix,
       include: [:id]

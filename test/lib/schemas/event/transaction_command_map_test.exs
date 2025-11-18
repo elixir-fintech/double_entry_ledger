@@ -40,14 +40,14 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMapTest do
     end
 
     test "changeset valid for valid entry data" do
-      attrs = event_map_attrs()
+      attrs = command_map_attrs()
 
       assert %Changeset{valid?: true} =
                TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
     end
 
     test "changeset invalid for update action without update_idempk" do
-      attrs = event_map_attrs(%{action: "update_transaction"})
+      attrs = command_map_attrs(%{action: "update_transaction"})
 
       assert %Changeset{
                errors: [
@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMapTest do
                ]
              } = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
 
-      attrs2 = event_map_attrs(%{action: :update_transaction})
+      attrs2 = command_map_attrs(%{action: :update_transaction})
 
       assert %Changeset{
                errors: [
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMapTest do
     end
   end
 
-  def event_map_attrs(attrs \\ %{}) do
+  def command_map_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{
       instance_address: "some:address",

@@ -17,14 +17,14 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
 
   doctest TransferErrors
 
-  describe "from_account_to_event_map_payload/2" do
+  describe "from_account_to_command_map_payload/2" do
     test "transfers errors from account changeset to event map" do
       account_changeset = Account.changeset(%Account{}, %{})
 
-      event_map = %AccountCommandMap{payload: %AccountData{}}
+      command_map = %AccountCommandMap{payload: %AccountData{}}
 
       %{changes: %{payload: %{errors: errors}}} =
-        TransferErrors.from_account_to_event_map_payload(event_map, account_changeset)
+        TransferErrors.from_account_to_command_map_payload(command_map, account_changeset)
 
       assert Keyword.equal?(errors,
                currency: {"can't be blank", [validation: :required]},
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
           normal_balance: "yy"
         })
 
-      event_map = %AccountCommandMap{
+      command_map = %AccountCommandMap{
         payload: %AccountData{
           name: "A",
           type: :asset,
@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
       }
 
       %{changes: %{payload: %{errors: errors}}} =
-        TransferErrors.from_account_to_event_map_payload(event_map, account_changeset)
+        TransferErrors.from_account_to_command_map_payload(command_map, account_changeset)
 
       assert Keyword.has_key?(errors, :allowed_negative)
       assert Keyword.has_key?(errors, :normal_balance)
@@ -70,7 +70,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
           address: "account:main"
         })
 
-      event_map = %AccountCommandMap{
+      command_map = %AccountCommandMap{
         payload: %AccountData{
           name: "Valid Name",
           type: :asset,
@@ -80,13 +80,13 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
       }
 
       %{changes: %{payload: %{errors: errors}}} =
-        TransferErrors.from_account_to_event_map_payload(event_map, account_changeset)
+        TransferErrors.from_account_to_command_map_payload(command_map, account_changeset)
 
       assert errors == []
     end
   end
 
-  describe "from_event_to_event_map/2" do
+  describe "from_event_to_command_map/2" do
     test "transfers errors from event changeset to event map" do
       expected_errors = [
         action: {"invalid in this context", [value: ""]},
@@ -98,12 +98,12 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
       event_changeset = Command.changeset(%Command{}, %{})
 
       %{data: %AccountCommandMap{}, errors: errors} =
-        TransferErrors.from_event_to_event_map(%AccountCommandMap{}, event_changeset)
+        TransferErrors.from_event_to_command_map(%AccountCommandMap{}, event_changeset)
 
       assert Keyword.equal?(errors, expected_errors)
 
       %{data: %TransactionCommandMap{}, errors: errors} =
-        TransferErrors.from_event_to_event_map(%TransactionCommandMap{}, event_changeset)
+        TransferErrors.from_event_to_command_map(%TransactionCommandMap{}, event_changeset)
 
       assert Keyword.equal?(
                errors,
@@ -118,16 +118,16 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
     # Add tests for this function
   end
 
-  describe "from_transaction_to_event_map_payload/2" do
+  describe "from_transaction_to_command_map_payload/2" do
     test "transfers errors from transaction changeset to event map" do
       transaction_changeset =
         Ecto.Changeset.change(%Transaction{}, %{})
         |> Ecto.Changeset.add_error(:status, "some error message")
 
-      event_map = %TransactionCommandMap{payload: %TransactionData{}}
+      command_map = %TransactionCommandMap{payload: %TransactionData{}}
 
       %{changes: %{payload: %{errors: errors}}} =
-        TransferErrors.from_transaction_to_event_map_payload(event_map, transaction_changeset)
+        TransferErrors.from_transaction_to_command_map_payload(command_map, transaction_changeset)
 
       assert Keyword.has_key?(errors, :status)
       assert Keyword.get(errors, :status) == {"some error message", []}

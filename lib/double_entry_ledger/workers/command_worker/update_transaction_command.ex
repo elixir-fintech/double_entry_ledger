@@ -54,7 +54,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
   ## Parameters
 
-    - `event_map`: The event being processed.
+    - `command_map`: The event being processed.
     - `error`: The error encountered during transaction map conversion.
     - `repo`: The Ecto repository.
 
@@ -62,7 +62,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
     - An `Ecto.Multi` that updates the event with error information.
   """
-  defdelegate handle_transaction_map_error(event_map, error, repo),
+  defdelegate handle_transaction_map_error(command_map, error, repo),
     to: Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_transaction_map_error
 
@@ -74,14 +74,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
   ## Parameters
 
-    - `event_map`: The event being processed.
+    - `command_map`: The event being processed.
     - `repo`: The Ecto repository.
 
   ## Returns
 
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
-  defdelegate handle_occ_final_timeout(event_map, repo),
+  defdelegate handle_occ_final_timeout(command_map, repo),
     to: Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_occ_final_timeout
 
@@ -113,7 +113,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
   """
   @spec process(Command.t(), Ecto.Repo.t()) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
-  def process(%Command{event_map: %{action: :update_transaction}} = original_event, repo \\ Repo) do
+  def process(%Command{command_map: %{action: :update_transaction}} = original_event, repo \\ Repo) do
     process_with_retry(original_event, repo)
     |> default_response_handler(original_event)
   end
@@ -178,12 +178,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
     - The updated `Ecto.Multi` with an `:event_success` or `:event_failure` step.
   """
-  def handle_build_transaction(multi, %{id: eid, event_map: em, instance_id: iid} = event, _repo) do
+  def handle_build_transaction(multi, %{id: eid, command_map: em, instance_id: iid} = event, _repo) do
     multi
     |> Multi.merge(fn
       %{transaction: %{id: tid}} ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
-          JournalEvent.build_create(%{event_map: em, instance_id: iid})
+          JournalEvent.build_create(%{command_map: em, instance_id: iid})
         end)
         |> Multi.update(:event_success, fn _ ->
           build_mark_as_processed(event)
