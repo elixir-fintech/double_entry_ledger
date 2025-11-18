@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   ## Usage Examples
 
-  Building a changeset from an EventMap:
+  Building a changeset from an CommandMap:
 
       event_changeset = CommandStoreHelper.build_create(event_map)
 

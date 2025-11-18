@@ -104,7 +104,7 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.EventStore,
           DoubleEntryLedger.EventStoreHelper,
           DoubleEntryLedger.Event,
-          DoubleEntryLedger.Event.EventMap,
+          DoubleEntryLedger.Event.CommandMap,
           DoubleEntryLedger.Event.EntryData,
           DoubleEntryLedger.Event.TransactionData,
           DoubleEntryLedger.Event.ErrorMap

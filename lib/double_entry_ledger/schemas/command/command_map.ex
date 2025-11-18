@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Command.EventMap do
+defmodule DoubleEntryLedger.Command.CommandMap do
   @moduledoc """
     This is an Ecto.ParameterizedType
   """

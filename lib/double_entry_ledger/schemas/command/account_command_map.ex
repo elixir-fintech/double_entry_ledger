@@ -1,9 +1,9 @@
 defmodule DoubleEntryLedger.Command.AccountCommandMap do
   @moduledoc """
-  EventMap implementation for account-related operations in the Double Entry Ledger system.
+  CommandMap implementation for account-related operations in the Double Entry Ledger system.
 
   This module provides validation and structure for account creation events. It extends
-  the base EventMap functionality with account-specific payload validation using the
+  the base CommandMap functionality with account-specific payload validation using the
   `AccountData` schema.
 
   ## Purpose
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   ## Validation
 
   The module validates:
-  * All base EventMap fields (action, instance_id, source, source_idempk)
+  * All base CommandMap fields (action, instance_id, source, source_idempk)
   * Action must be `:create_account`
   * Payload must conform to `AccountData` schema requirements
   * Required payload fields based on account type
@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
 
   The module provides compile-time type checking through:
 
-      @type t :: EventMap.t(AccountData.t())
+      @type t :: CommandMap.t(AccountData.t())
 
   This ensures that the payload is always of type `AccountData.t()`.
   """
@@ -103,7 +103,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   @typedoc """
   Type definition for AccountCommandMap struct.
 
-  Represents an EventMap specifically for account operations with an `AccountData`
+  Represents an CommandMap specifically for account operations with an `AccountData`
   payload. This provides type safety and clear documentation for functions that
   work with account events.
 
@@ -147,7 +147,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
 
   This is the primary entry point for creating account events. It performs
   full validation including payload validation and returns either a valid
-  EventMap struct or validation errors.
+  CommandMap struct or validation errors.
 
   ## Parameters
 
@@ -211,7 +211,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   Creates a changeset for AccountCommandMap validation.
 
   This function handles action-specific validation logic. It validates the base
-  EventMap fields and then applies account-specific payload validation based
+  CommandMap fields and then applies account-specific payload validation based
   on the action type.
 
   ## Parameters

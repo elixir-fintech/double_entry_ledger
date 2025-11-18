@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.JournalEvent do
     JournalEventTransactionLink
   }
 
-  alias DoubleEntryLedger.Command.EventMap
+  alias DoubleEntryLedger.Command.CommandMap
 
   alias __MODULE__, as: JournalEvent
 
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.JournalEvent do
   @derive {Jason.Encoder, only: [:id, :event_map]}
 
   schema "journal_events" do
-    field(:event_map, EventMap, skip_default_validation: true)
+    field(:event_map, CommandMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_one(:journal_event_command_link, JournalEventCommandLink)

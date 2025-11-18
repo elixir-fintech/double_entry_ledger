@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ### Direct processing of event maps
   ```
-  External System → EventMap → CommandWorker → Specialized Handler → Transaction/Account
+  External System → CommandMap → CommandWorker → Specialized Handler → Transaction/Account
                                     ↓
                                   Command → CommandQueueItem → Final State
                                                 ↓

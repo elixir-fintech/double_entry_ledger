@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Command do
     CommandQueueItem
   }
 
-  alias DoubleEntryLedger.Command.EventMap
+  alias DoubleEntryLedger.Command.CommandMap
   import DoubleEntryLedger.Command.Helper, only: [action_to_mod: 1]
 
   alias __MODULE__, as: Command
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Command do
   @derive {Jason.Encoder, only: [:id, :event_map, :command_queue_item]}
 
   schema "commands" do
-    field(:event_map, EventMap, skip_default_validation: true)
+    field(:event_map, CommandMap, skip_default_validation: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_one(:journal_event_command_link, JournalEventCommandLink)

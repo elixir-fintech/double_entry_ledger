@@ -15,16 +15,16 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   ## Architecture
 
-  This module extends the base `DoubleEntryLedger.Command.EventMap` behavior by:
+  This module extends the base `DoubleEntryLedger.Command.CommandMap` behavior by:
 
-  * Using the EventMap macro to inject common fields and functionality
+  * Using the CommandMap macro to inject common fields and functionality
   * Implementing the `payload_to_map/1` callback for TransactionData serialization
   * Providing action-specific validation through custom changeset logic
   * Supporting both create and update transaction operations
 
   ## Structure
 
-  TransactionCommandMap extends the base EventMap functionality with transaction-specific payload handling.
+  TransactionCommandMap extends the base CommandMap functionality with transaction-specific payload handling.
   It contains the following fields:
 
   * `action`: The type of action to perform (`:create_transaction` or `:update_transaction`)
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   * `create/1`: Creates and validates a TransactionCommandMap from a map of attributes
   * `changeset/2`: Builds a changeset for validating TransactionCommandMap data with action-specific logic
-  * `payload_to_map/1`: Converts TransactionData payload to a plain map (EventMap callback)
+  * `payload_to_map/1`: Converts TransactionData payload to a plain map (CommandMap callback)
   * `to_map/1`: Converts a TransactionCommandMap struct to a plain map representation (inherited)
   * `log_trace/1,2`: Builds a map of trace metadata for logging from a TransactionCommandMap (inherited)
 
@@ -134,14 +134,14 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   @typedoc """
   Represents a TransactionCommandMap structure for transaction creation or updates.
 
-  This type extends the parameterized EventMap type with TransactionData as the payload type,
+  This type extends the parameterized CommandMap type with TransactionData as the payload type,
   providing type safety and clear documentation for transaction-specific event operations.
 
   ## Type Specification
 
-  This is equivalent to `DoubleEntryLedger.Command.EventMap.t(TransactionData.t())` and includes:
+  This is equivalent to `DoubleEntryLedger.Command.CommandMap.t(TransactionData.t())` and includes:
 
-  ## Inherited Fields (from EventMap)
+  ## Inherited Fields (from CommandMap)
 
   * `action`: The operation type (`:create_transaction` or `:update_transaction`)
   * `instance_address`: UUID of the ledger instance this event belongs to
@@ -212,7 +212,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   ## Parameters
 
-  * `attrs`: A map containing the event data with both common EventMap fields and transaction payload
+  * `attrs`: A map containing the event data with both common CommandMap fields and transaction payload
 
   ## Returns
 
@@ -223,7 +223,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   The function applies comprehensive validation including:
 
-  1. Common EventMap field validation (action, instance_address, source, etc.)
+  1. Common CommandMap field validation (action, instance_address, source, etc.)
   2. Action-specific requirements (update_idempk for updates)
   3. TransactionData payload validation appropriate to the action type
   4. Cross-field validation and business rule enforcement
@@ -284,12 +284,12 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   The function uses action-aware validation:
 
   ### Create Transaction Validation
-  * Applies base EventMap validation (action, instance_address, source, source_idempk required)
+  * Applies base CommandMap validation (action, instance_address, source, source_idempk required)
   * Validates payload using `TransactionData.changeset/2` (requires complete transaction data)
   * Does not require `update_idempk`
 
   ### Update Transaction Validation
-  * Applies update EventMap validation (includes all base validation plus requires `update_idempk`)
+  * Applies update CommandMap validation (includes all base validation plus requires `update_idempk`)
   * Validates payload using `TransactionData.update_event_changeset/2` (allows partial data)
   * Enforces update-specific business rules
 
