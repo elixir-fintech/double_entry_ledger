@@ -222,14 +222,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
           build_revert_to_pending(event, exception.message)
         end)
 
-      %{
-        get_create_transaction_event_error: %{reason: :create_event_failed} = exception,
-        new_command: event
-      } ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
-          build_schedule_update_retry(event, exception)
-        end)
-
       %{get_create_transaction_event_error: exception, new_command: event} ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_mark_as_dead_letter(event, exception.message)
