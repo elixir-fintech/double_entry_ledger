@@ -107,10 +107,10 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
 
       assert {:error, :transaction, %Ecto.StaleEntryError{message: _}, %{}} =
                Multi.new()
-               |> Multi.run(:create_event_trx, fn _repo, _changes -> {:ok, trx} end)
+               |> Multi.run(:create_command_trx, fn _repo, _changes -> {:ok, trx} end)
                |> TransactionStoreHelper.build_update(
                  :transaction,
-                 :create_event_trx,
+                 :create_command_trx,
                  %{status: :posted},
                  DoubleEntryLedger.MockRepo
                )

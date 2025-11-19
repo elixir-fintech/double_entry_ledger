@@ -119,7 +119,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
       create_account_event ->
         raise UpdateCommandError,
-          create_event: create_account_event,
+          create_command: create_account_event,
           update_command: event
     end
   end

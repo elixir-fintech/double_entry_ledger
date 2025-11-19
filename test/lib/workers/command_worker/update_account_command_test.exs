@@ -27,9 +27,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
           payload: account_data_attrs(%{name: "Old Name"})
         })
 
-      {:ok, %{command_map: %{payload: payload}} = create_event} = CommandStore.create(attrs)
+      {:ok, %{command_map: %{payload: payload}} = create_command} = CommandStore.create(attrs)
 
-      CreateAccountCommand.process(create_event)
+      CreateAccountCommand.process(create_command)
 
       update_attrs =
         account_event_attrs(%{

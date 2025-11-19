@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   The Multi must include specific named steps depending on the input type:
 
-    * `:create_event` (required for TransactionCommandMap) - Must return the created Command struct when processing the TransactionCommandMap
+    * `:create_command` (required for TransactionCommandMap) - Must return the created Command struct when processing the TransactionCommandMap
     * `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
     * `:event` (required) - Must return the saved Command struct when processing the Command
 

@@ -158,7 +158,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
       %{event: %{command_map: %{source: s, source_idempk: s_id}} = pending_event} =
         new_create_transaction_event(ctx, :pending)
 
-      {:error, failed_create_event} =
+      {:error, failed_create_command} =
         DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
           pending_event,
           "some reason",
@@ -172,7 +172,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
 
       [error | _] = eqm.errors
 
-      assert failed_create_event.command_queue_item.status == :failed
+      assert failed_create_command.command_queue_item.status == :failed
 
       assert error.message ==
                "create Command (id: #{pending_event.id}, status: failed) not yet processed for Update Command (id: #{event.id})"

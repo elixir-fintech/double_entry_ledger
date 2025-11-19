@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
 
   doctest CreateTransactionCommand
 
-  describe "process_create_event/2" do
+  describe "process_create_command/2" do
     setup [:create_instance, :create_accounts]
 
     test "successful fro posted transaction", ctx do

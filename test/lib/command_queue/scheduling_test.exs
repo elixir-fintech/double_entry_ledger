@@ -156,7 +156,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       %{event: %{command_map: %{source: s, source_idempk: s_id}} = pending_event} =
         new_create_transaction_event(ctx, :pending)
 
-      {:error, failed_create_event} =
+      {:error, failed_create_command} =
         DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
           pending_event,
           "some reason",
@@ -167,7 +167,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       test_message = "Test error"
 
       error = %UpdateCommandError{
-        create_event: failed_create_event,
+        create_command: failed_create_command,
         update_command: event,
         message: test_message,
         reason: :create_command_not_processed

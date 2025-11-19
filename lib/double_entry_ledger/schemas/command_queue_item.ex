@@ -143,14 +143,14 @@ defmodule DoubleEntryLedger.CommandQueueItem do
   def schedule_update_retry_changeset(
         command_queue_item,
         %UpdateCommandError{
-          create_event: create_event,
+          create_command: create_command,
           message: message
         },
         retry_delay
       ) do
     now = DateTime.utc_now()
 
-    %{command_queue_item: %{next_retry_after: ce_next_retry_after}} = create_event
+    %{command_queue_item: %{next_retry_after: ce_next_retry_after}} = create_command
 
     next_retry_after =
       DateTime.add(ce_next_retry_after || now, retry_delay, :second)

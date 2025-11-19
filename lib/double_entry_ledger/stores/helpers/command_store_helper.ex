@@ -144,12 +144,12 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
       %{command: create_command} when not is_nil(create_command) ->
         raise UpdateCommandError,
-          create_event: create_command,
+          create_command: create_command,
           update_command: command
 
       _ ->
         raise UpdateCommandError,
-          create_event: nil,
+          create_command: nil,
           update_command: command
     end
   end
