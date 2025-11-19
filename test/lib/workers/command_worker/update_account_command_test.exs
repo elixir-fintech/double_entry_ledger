@@ -40,19 +40,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
           payload: %AccountData{name: "New Name"}
         })
 
-      {:ok, update_event} = CommandStore.create(update_attrs)
+      {:ok, update_command} = CommandStore.create(update_attrs)
 
       assert {:ok, %Account{} = account, %Command{command_queue_item: eqi} = e} =
-               UpdateAccountCommand.process(update_event)
+               UpdateAccountCommand.process(update_command)
 
-      assert e.id == update_event.id
+      assert e.id == update_command.id
       assert eqi.status == :processed
       assert account.address == "account:1"
       assert account.name == "New Name"
     end
 
     test "moves to dead_letter when create account event does not exist", %{instance: instance} do
-      {:ok, update_event} =
+      {:ok, update_command} =
         CommandStore.create(
           account_event_attrs(%{
             action: :update_account,
@@ -64,9 +64,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
         )
 
       assert {:error, %Command{command_queue_item: eqi} = e} =
-               UpdateAccountCommand.process(update_event)
+               UpdateAccountCommand.process(update_command)
 
-      assert e.id == update_event.id
+      assert e.id == update_command.id
       assert eqi.status == :dead_letter
     end
 
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
           })
         )
 
-      {:ok, update_event} =
+      {:ok, update_command} =
         CommandStore.create(
           account_event_attrs(%{
             action: :update_account,
@@ -93,9 +93,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
         )
 
       assert {:error, %Command{command_queue_item: eqi} = e} =
-               UpdateAccountCommand.process(update_event)
+               UpdateAccountCommand.process(update_command)
 
-      assert e.id == update_event.id
+      assert e.id == update_command.id
       assert eqi.status == :dead_letter
     end
 
@@ -111,7 +111,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
       from(eqi in CommandQueueItem, where: eqi.id == ^event_qi.id)
       |> Repo.update_all(set: [status: :dead_letter])
 
-      {:ok, update_event} =
+      {:ok, update_command} =
         CommandStore.create(
           account_event_attrs(%{
             action: :update_account,
@@ -123,9 +123,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
         )
 
       assert {:error, %Command{command_queue_item: eqi} = e} =
-               UpdateAccountCommand.process(update_event)
+               UpdateAccountCommand.process(update_command)
 
-      assert e.id == update_event.id
+      assert e.id == update_command.id
       assert eqi.status == :dead_letter
     end
   end

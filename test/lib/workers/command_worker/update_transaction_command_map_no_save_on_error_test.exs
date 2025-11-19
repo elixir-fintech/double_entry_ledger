@@ -27,10 +27,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
       {:ok, pending_transaction, _} =
         CreateTransactionCommand.process(pending_event)
 
-      update_event = update_transaction_command_map(ctx, pending_event, :posted)
+      update_command = update_transaction_command_map(ctx, pending_event, :posted)
 
       {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        UpdateTransactionCommandMapNoSaveOnError.process(update_event)
+        UpdateTransactionCommandMapNoSaveOnError.process(update_command)
 
       assert evq.status == :processed
 
@@ -46,11 +46,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
       # successfully create event
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
       CreateTransactionCommand.process(pending_event)
-      update_event = update_transaction_command_map(ctx, pending_event, :posted)
-      UpdateTransactionCommandMapNoSaveOnError.process(update_event)
+      update_command = update_transaction_command_map(ctx, pending_event, :posted)
+      UpdateTransactionCommandMapNoSaveOnError.process(update_command)
 
-      # process same update_event again which should fail
-      {:error, changeset} = UpdateTransactionCommandMapNoSaveOnError.process(update_event)
+      # process same update_command again which should fail
+      {:error, changeset} = UpdateTransactionCommandMapNoSaveOnError.process(update_command)
       assert %Changeset{data: %TransactionCommandMapSchema{}} = changeset
       assert Keyword.has_key?(changeset.errors, :key_hash)
     end
@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
           end
         )
 
-      # process same update_event again which should fail
+      # process same update_command again which should fail
       {:error, changeset} =
         UpdateTransactionCommandMapNoSaveOnError.process(updated_command_map)
 
@@ -161,7 +161,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
     test "update event for command_map, when create event not yet processed", ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
-      update_event = update_transaction_command_map(ctx, pending_event, :posted)
+      update_command = update_transaction_command_map(ctx, pending_event, :posted)
 
       assert {:error,
               %Changeset{
@@ -171,7 +171,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
                   action: {"invalid in this context", [value: ""]}
                 ]
               }} =
-               UpdateTransactionCommandMapNoSaveOnError.process(update_event)
+               UpdateTransactionCommandMapNoSaveOnError.process(update_command)
     end
 
     test "update event is pending for command_map, when create event failed", ctx do
@@ -184,7 +184,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
         |> Ecto.Changeset.put_assoc(:command_queue_item, %{id: eqm1.id, status: :failed})
         |> Repo.update!()
 
-      update_event = update_transaction_command_map(ctx, failed_event, :posted)
+      update_command = update_transaction_command_map(ctx, failed_event, :posted)
 
       assert {:error,
               %Changeset{
@@ -194,7 +194,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
                   action: {"invalid in this context", [value: ""]}
                 ]
               }} =
-               UpdateTransactionCommandMapNoSaveOnError.process(update_event)
+               UpdateTransactionCommandMapNoSaveOnError.process(update_command)
     end
 
     test "update event is dead_letter for command_map, when create event failed", ctx do
@@ -206,7 +206,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
       failed_event = Repo.preload(pending_event, :command_queue_item)
 
-      update_event = update_transaction_command_map(ctx, failed_event, :posted)
+      update_command = update_transaction_command_map(ctx, failed_event, :posted)
 
       assert {:error,
               %Changeset{
@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
                   action: {"invalid in this context", [value: ""]}
                 ]
               }} =
-               UpdateTransactionCommandMapNoSaveOnError.process(update_event)
+               UpdateTransactionCommandMapNoSaveOnError.process(update_command)
     end
   end
 
@@ -229,7 +229,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
     test "with last retry that fails", ctx do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
       CreateTransactionCommand.process(pending_event)
-      update_event = update_transaction_command_map(ctx, pending_event, :posted)
+      update_command = update_transaction_command_map(ctx, pending_event, :posted)
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, 5, fn changeset ->
@@ -244,7 +244,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
       assert {:error,
               %Changeset{data: %TransactionCommandMapSchema{}, errors: [occ_timeout: _, action: _]}} =
                UpdateTransactionCommandMapNoSaveOnError.process(
-                 update_event,
+                 update_command,
                  DoubleEntryLedger.MockRepo
                )
     end

@@ -24,9 +24,9 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
       multi =
         Ecto.Multi.new()
-        |> CommandStoreHelper.build_get_create_transaction_command_transaction(:transaction, update_event)
+        |> CommandStoreHelper.build_get_create_transaction_command_transaction(:transaction, update_command)
         |> Ecto.Multi.update(:event, fn %{transaction: transaction} ->
-          CommandStoreHelper.build_mark_as_processed(update_event, transaction.id)
+          CommandStoreHelper.build_mark_as_processed(update_command, transaction.id)
         end)
 
   ## Implementation Notes
@@ -120,7 +120,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
       create_account_event ->
         raise UpdateCommandError,
           create_event: create_account_event,
-          update_event: event
+          update_command: event
     end
   end
 

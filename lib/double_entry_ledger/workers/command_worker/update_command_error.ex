@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
   This exception is typically raised in the CommandWorker when processing an update event:
 
       iex> raise UpdateCommandError,
-      ...>   update_event: update_event,
+      ...>   update_command: update_command,
       ...>   create_event: create_event
       ** (UpdateCommandError) Create event (id: ...) not yet processed for Update Command (id: ...)
 
@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
 
     * `:message` — Human-readable error message
     * `:create_event` — The create event struct (may be `nil`)
-    * `:update_event` — The update event struct
+    * `:update_command` — The update event struct
     * `:reason` — Atom describing the error reason
 
   ## Example
@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
       end
   """
 
-  defexception [:message, :create_event, :update_event, :reason]
+  defexception [:message, :create_event, :update_command, :reason]
 
   alias DoubleEntryLedger.Command
   alias __MODULE__, as: UpdateCommandError
@@ -51,42 +51,42 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
   @type t :: %__MODULE__{
           message: String.t(),
           create_event: Command.t() | nil,
-          update_event: Command.t(),
+          update_command: Command.t(),
           reason: atom()
         }
 
   @impl true
   def exception(opts) do
-    update_event = Keyword.get(opts, :update_event)
+    update_command = Keyword.get(opts, :update_command)
     create_event = Keyword.get(opts, :create_event)
 
     case create_event do
       %{command_queue_item: %{status: :pending}} ->
-        pending_error(create_event, update_event)
+        pending_error(create_event, update_command)
 
       %{command_queue_item: %{status: :processing}} ->
-        pending_error(create_event, update_event)
+        pending_error(create_event, update_command)
 
       %{command_queue_item: %{status: :occ_timeout}} ->
-        pending_error(create_event, update_event)
+        pending_error(create_event, update_command)
 
       %{command_queue_item: %{status: :failed}} ->
-        pending_error(create_event, update_event)
+        pending_error(create_event, update_command)
 
       %{command_queue_item: %{status: :dead_letter}} ->
         %UpdateCommandError{
           message:
-            "create Command (id: #{create_event.id}) in dead_letter for Update Command (id: #{update_event.id})",
+            "create Command (id: #{create_event.id}) in dead_letter for Update Command (id: #{update_command.id})",
           create_event: create_event,
-          update_event: update_event,
+          update_command: update_command,
           reason: :create_command_in_dead_letter
         }
 
       nil ->
         %UpdateCommandError{
-          message: "create Command not found for Update Command (id: #{update_event.id})",
+          message: "create Command not found for Update Command (id: #{update_command.id})",
           create_event: nil,
-          update_event: update_event,
+          update_command: update_command,
           reason: :create_command_not_found
         }
     end
@@ -94,13 +94,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
 
   defp pending_error(
          %{command_queue_item: %{status: status}} = create_event,
-         update_event
+         update_command
        ) do
     %UpdateCommandError{
       message:
-        "create Command (id: #{create_event.id}, status: #{status}) not yet processed for Update Command (id: #{update_event.id})",
+        "create Command (id: #{create_event.id}, status: #{status}) not yet processed for Update Command (id: #{update_command.id})",
       create_event: create_event,
-      update_event: update_event,
+      update_command: update_command,
       reason: :create_command_not_processed
     }
   end

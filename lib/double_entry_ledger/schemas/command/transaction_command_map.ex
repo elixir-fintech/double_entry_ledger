@@ -290,7 +290,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   ### Update Transaction Validation
   * Applies update CommandMap validation (includes all base validation plus requires `update_idempk`)
-  * Validates payload using `TransactionData.update_event_changeset/2` (allows partial data)
+  * Validates payload using `TransactionData.update_command_changeset/2` (allows partial data)
   * Enforces update-specific business rules
 
   ## Implementation Details
@@ -342,7 +342,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
     case fetch_action(attrs) do
       :update_transaction ->
         update_changeset(command_map, attrs)
-        |> cast_embed(:payload, with: &TransactionData.update_event_changeset/2, required: true)
+        |> cast_embed(:payload, with: &TransactionData.update_command_changeset/2, required: true)
 
       :create_transaction ->
         base_changeset(command_map, attrs)

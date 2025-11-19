@@ -168,7 +168,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       error = %UpdateCommandError{
         create_event: failed_create_event,
-        update_event: event,
+        update_command: event,
         message: test_message,
         reason: :create_command_not_processed
       }

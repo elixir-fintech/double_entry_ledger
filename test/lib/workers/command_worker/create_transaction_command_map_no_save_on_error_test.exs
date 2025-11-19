@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
           end
         )
 
-      # process same update_event again which should fail
+      # process same update_command again which should fail
       {:error, changeset} =
         CreateTransactionCommandMapNoSaveOnError.process(updated_command_map)
 

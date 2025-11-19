@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.Command.TransactionData do
 
   Updating a transaction's status to posted:
 
-      updated_changeset = TransactionData.update_event_changeset(existing_transaction, %{status: :posted})
+      updated_changeset = TransactionData.update_command_changeset(existing_transaction, %{status: :posted})
 
   Converting to a plain map:
 
@@ -149,17 +149,17 @@ defmodule DoubleEntryLedger.Command.TransactionData do
 
       iex> alias DoubleEntryLedger.Command.TransactionData
       iex> # Posting without entries is allowed
-      iex> changeset = TransactionData.update_event_changeset(%TransactionData{}, %{status: :posted})
+      iex> changeset = TransactionData.update_command_changeset(%TransactionData{}, %{status: :posted})
       iex> changeset.valid?
       true
 
       iex> # Archiving is allowed
-      iex> changeset = TransactionData.update_event_changeset(%TransactionData{}, %{status: :archived})
+      iex> changeset = TransactionData.update_command_changeset(%TransactionData{}, %{status: :archived})
       iex> changeset.valid?
       true
   """
-  @spec update_event_changeset(t() | %{}, map()) :: Ecto.Changeset.t()
-  def update_event_changeset(transaction_data, attrs) do
+  @spec update_command_changeset(t() | %{}, map()) :: Ecto.Changeset.t()
+  def update_command_changeset(transaction_data, attrs) do
     # Extract status and entries from attrs regardless of key type.
     status = Map.get(attrs, "status") || Map.get(attrs, :status)
     entries = Map.get(attrs, "entries") || Map.get(attrs, :entries)

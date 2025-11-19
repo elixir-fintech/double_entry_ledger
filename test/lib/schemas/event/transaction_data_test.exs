@@ -96,7 +96,7 @@ defmodule DoubleEntryLedger.Command.TransactionDataTest do
     end
   end
 
-  describe "update_event_changeset/2" do
+  describe "update_command_changeset/2" do
     test "not valid for invalid status" do
       attrs = %{
         status: "invalid",
@@ -113,7 +113,7 @@ defmodule DoubleEntryLedger.Command.TransactionDataTest do
         entries: [%{}]
       }
 
-      TransactionData.update_event_changeset(%TransactionData{}, attrs)
+      TransactionData.update_command_changeset(%TransactionData{}, attrs)
       |> get_embed(:entries, :changeset)
       |> Enum.map(&assert &1.valid? == false)
       |> then(&assert length(&1) == 1)
@@ -139,7 +139,7 @@ defmodule DoubleEntryLedger.Command.TransactionDataTest do
         status: :posted
       }
 
-      assert TransactionData.update_event_changeset(%TransactionData{}, attrs).valid?
+      assert TransactionData.update_command_changeset(%TransactionData{}, attrs).valid?
     end
 
     test "valid for update to :posted with entries" do
@@ -148,7 +148,7 @@ defmodule DoubleEntryLedger.Command.TransactionDataTest do
         entries: create_2_entries()
       }
 
-      assert TransactionData.update_event_changeset(%TransactionData{}, attrs).valid?
+      assert TransactionData.update_command_changeset(%TransactionData{}, attrs).valid?
     end
 
     test "valid for simple update to :archived" do
@@ -158,7 +158,7 @@ defmodule DoubleEntryLedger.Command.TransactionDataTest do
       }
 
       %{valid?: true, changes: changes} =
-        TransactionData.update_event_changeset(%TransactionData{}, attrs)
+        TransactionData.update_command_changeset(%TransactionData{}, attrs)
 
       assert ^changes = %{status: :archived}
     end
