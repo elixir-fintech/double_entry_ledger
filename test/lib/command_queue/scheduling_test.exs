@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.CommandStore
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
 
   describe "claim_command_for_processing/2" do
     setup [:create_instance, :create_accounts]
@@ -166,7 +166,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, event} = new_update_transaction_event(s, s_id, instance.address, :posted)
       test_message = "Test error"
 
-      error = %UpdateEventError{
+      error = %UpdateCommandError{
         create_event: failed_create_event,
         update_event: event,
         message: test_message,

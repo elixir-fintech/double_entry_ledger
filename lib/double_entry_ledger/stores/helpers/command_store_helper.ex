@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   alias Ecto.Changeset
   alias Ecto.Multi
   alias DoubleEntryLedger.{Repo, Command, Transaction, Account, Entry, PendingTransactionLookup}
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
 
   @doc """
   Builds an Command changeset from a TransactionCommandMap or AccountCommandMap.
@@ -131,7 +131,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   ## Returns
 
   * `{:ok, {Transaction.t(), Command.t()}}` - The transaction and create event if found and processed
-  * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
+  * Raises `UpdateCommandError` if the create event doesn't exist or isn't processed
 
   """
   @spec get_create_transaction_command_transaction(Command.t()) ::
@@ -143,12 +143,12 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
         {:ok, {transaction, create_command}}
 
       %{command: create_command} when not is_nil(create_command) ->
-        raise UpdateEventError,
+        raise UpdateCommandError,
           create_event: create_command,
           update_event: command
 
       _ ->
-        raise UpdateEventError,
+        raise UpdateCommandError,
           create_event: nil,
           update_event: command
     end
@@ -187,7 +187,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
         {:ok, {transaction, _}} = get_create_transaction_command_transaction(event)
         {:ok, transaction}
       rescue
-        e in UpdateEventError ->
+        e in UpdateCommandError ->
           {:ok, {:error, e}}
       end
     end)

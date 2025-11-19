@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
 
   use DoubleEntryLedger.BaseSchema
   import Ecto.Changeset
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   alias DoubleEntryLedger.Command.ErrorMap
   alias DoubleEntryLedger.Command
   import DoubleEntryLedger.Command.ErrorMap, only: [build_error: 1]
@@ -137,12 +137,12 @@ defmodule DoubleEntryLedger.CommandQueueItem do
 
   @spec schedule_update_retry_changeset(
           CommandQueueItem.t(),
-          UpdateEventError.t(),
+          UpdateCommandError.t(),
           non_neg_integer()
         ) :: Ecto.Changeset.t()
   def schedule_update_retry_changeset(
         command_queue_item,
-        %UpdateEventError{
+        %UpdateCommandError{
           create_event: create_event,
           message: message
         },

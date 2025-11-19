@@ -119,7 +119,7 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.EventWorker.UpdateTransactionCommandMap,
           DoubleEntryLedger.EventWorker.UpdateTransactionCommandMapNoSaveOnError,
           DoubleEntryLedger.EventWorker.EventTransformer,
-          DoubleEntryLedger.EventWorker.AddUpdateEventError,
+          DoubleEntryLedger.EventWorker.UpdateCommandError,
           DoubleEntryLedger.EventWorker.ResponseHandler
         ],
         EventQueue: [

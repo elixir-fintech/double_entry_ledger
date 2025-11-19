@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
+defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
   @moduledoc """
   Custom exception for handling errors when update events can't be processed due to issues
   with their corresponding create events.
@@ -12,10 +12,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
 
   This exception is typically raised in the CommandWorker when processing an update event:
 
-      iex> raise UpdateEventError,
+      iex> raise UpdateCommandError,
       ...>   update_event: update_event,
       ...>   create_event: create_event
-      ** (UpdateEventError) Create event (id: ...) not yet processed for Update Command (id: ...)
+      ** (UpdateCommandError) Create event (id: ...) not yet processed for Update Command (id: ...)
 
   ## Reasons
 
@@ -35,9 +35,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
   ## Example
 
       try do
-        # ...code that may raise UpdateEventError...
+        # ...code that may raise UpdateCommandError...
       rescue
-        e in UpdateEventError ->
+        e in UpdateCommandError ->
           IO.inspect(e.reason)
           IO.inspect(e.message)
       end
@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
   defexception [:message, :create_event, :update_event, :reason]
 
   alias DoubleEntryLedger.Command
-  alias __MODULE__, as: UpdateEventError
+  alias __MODULE__, as: UpdateCommandError
 
   @type t :: %__MODULE__{
           message: String.t(),
@@ -74,7 +74,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
         pending_error(create_event, update_event)
 
       %{command_queue_item: %{status: :dead_letter}} ->
-        %UpdateEventError{
+        %UpdateCommandError{
           message:
             "create Command (id: #{create_event.id}) in dead_letter for Update Command (id: #{update_event.id})",
           create_event: create_event,
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
         }
 
       nil ->
-        %UpdateEventError{
+        %UpdateCommandError{
           message: "create Command not found for Update Command (id: #{update_event.id})",
           create_event: nil,
           update_event: update_event,
@@ -96,7 +96,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateEventError do
          %{command_queue_item: %{status: status}} = create_event,
          update_event
        ) do
-    %UpdateEventError{
+    %UpdateCommandError{
       message:
         "create Command (id: #{create_event.id}, status: #{status}) not yet processed for Update Command (id: #{update_event.id})",
       create_event: create_event,

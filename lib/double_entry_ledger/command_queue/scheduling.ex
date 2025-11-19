@@ -16,7 +16,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   * Jitter to prevent thundering herd problems during retries
   """
 
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
 
   alias DoubleEntryLedger.{
@@ -218,12 +218,12 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   ## Parameters
     - `command` - The update command that needs to be retried
-    - `error` - An UpdateEventError struct containing the create command and error details
+    - `error` - An UpdateCommandError struct containing the create command and error details
 
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the command
   """
-  @spec build_schedule_update_retry(Command.t(), UpdateEventError.t()) :: Changeset.t()
+  @spec build_schedule_update_retry(Command.t(), UpdateCommandError.t()) :: Changeset.t()
   def build_schedule_update_retry(%{command_queue_item: command_queue_item} = command, error) do
     event_queue_item_changeset =
       command_queue_item

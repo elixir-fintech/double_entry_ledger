@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import DoubleEntryLedger.CommandQueue.Scheduling
 
   import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
@@ -146,7 +146,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
       event
     )
     |> Multi.merge(fn
-      %{get_create_event_transaction: {:error, %UpdateEventError{} = exception}} ->
+      %{get_create_event_transaction: {:error, %UpdateCommandError{} = exception}} ->
         Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
 
       %{get_create_event_transaction: create_transaction} ->

@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   import Ecto.Query, only: [from: 2, subquery: 1, union: 2]
 
   alias DoubleEntryLedger.{Repo, Command, JournalEvent, Account, Entry}
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
 
   @doc """
   Retrieves an event by its action and source identifiers with preloaded associations.
@@ -98,7 +98,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   ## Returns
 
   * `{:ok, {Account.t(), Command.t()}}` - The account and create event if found and processed
-  * Raises `UpdateEventError` if the create event doesn't exist or isn't processed
+  * Raises `UpdateCommandError` if the create event doesn't exist or isn't processed
 
   """
   @spec get_create_account_event_account(Command.t()) ::
@@ -118,7 +118,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
         {:ok, {account, create_account_event}}
 
       create_account_event ->
-        raise UpdateEventError,
+        raise UpdateCommandError,
           create_event: create_account_event,
           update_event: event
     end

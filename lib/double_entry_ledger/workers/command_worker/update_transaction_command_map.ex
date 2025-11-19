@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   alias Ecto.Multi
 
   @impl true
@@ -160,7 +160,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
       :new_command
     )
     |> Multi.merge(fn
-      %{get_create_transaction_command_transaction: {:error, %UpdateEventError{} = exception}} ->
+      %{get_create_transaction_command_transaction: {:error, %UpdateCommandError{} = exception}} ->
         Multi.put(Multi.new(), :get_create_transaction_event_error, exception)
 
       %{get_create_transaction_command_transaction: create_transaction} ->
