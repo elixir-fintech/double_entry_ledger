@@ -1,16 +1,16 @@
 defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   @moduledoc """
-  This module is responsible for scheduling events in the event queue.
+  Provides scheduling helpers for commands in the command queue.
 
-  It provides a comprehensive set of functions for managing event lifecycle through the queue:
+  It exposes functions that manage the full lifecycle of a command in the queue:
 
-  * Scheduling and retrying failed events with exponential backoff
-  * Managing transitions between different event states (pending, processing, failed, dead letter)
-  * Handling special cases like updates waiting for create events
+  * Scheduling and retrying failed commands with exponential backoff
+  * Managing transitions between different command states (pending, processing, failed, dead letter)
+  * Handling special cases like updates waiting for create commands
   * Adding errors and tracking retry attempts
 
   The scheduling system uses configurable parameters:
-  * Maximum number of retries before an event is sent to dead letter
+  * Maximum number of retries before a command is sent to dead letter
   * Base delay for first retry attempt
   * Maximum delay cap to prevent excessive wait times
   * Jitter to prevent thundering herd problems during retries
@@ -36,16 +36,16 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   @processable_states [:pending, :occ_timeout, :failed]
 
   @doc """
-  Sets the next retry time for a failed event using exponential backoff.
+  Sets the next retry time for a failed command using exponential backoff.
 
   ## Parameters
-    - `event` - The event that failed and needs retry scheduling
+    - `command` - The command that failed and needs retry scheduling
     - `error` - The error message or reason for failure
-    - `status` - The status to set for the event (defaults to `:failed`)
+    - `status` - The status to set for the command (defaults to `:failed`)
 
   ## Returns
-    - `{:error, updated_event}` - The event with updated retry information
-    - `{:error, changeset}` - Error updating the event
+    - `{:error, updated_command}` - The command with updated retry information
+    - `{:error, changeset}` - Error updating the command
   """
   @spec schedule_retry_with_reason(
           Command.t(),
@@ -54,10 +54,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
           Ecto.Repo.t()
         ) ::
           {:error, Command.t()} | {:error, Changeset.t()}
-  def schedule_retry_with_reason(event, reason, status, repo \\ Repo) do
-    case build_schedule_retry_with_reason(event, reason, status) |> repo.update() do
-      {:ok, event} ->
-        {:error, event}
+  def schedule_retry_with_reason(command, reason, status, repo \\ Repo) do
+    case build_schedule_retry_with_reason(command, reason, status) |> repo.update() do
+      {:ok, command} ->
+        {:error, command}
 
       {:error, changeset} ->
         {:error, changeset}
@@ -66,10 +66,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   @spec mark_as_dead_letter(Command.t(), String.t(), Ecto.Repo.t()) ::
           {:error, Command.t()} | {:error, Changeset.t()}
-  def mark_as_dead_letter(event, error, repo \\ Repo) do
-    case build_mark_as_dead_letter(event, error) |> repo.update() do
-      {:ok, event} ->
-        {:error, event}
+  def mark_as_dead_letter(command, error, repo \\ Repo) do
+    case build_mark_as_dead_letter(command, error) |> repo.update() do
+      {:ok, command} ->
+        {:error, command}
 
       {:error, changeset} ->
         {:error, changeset}
@@ -77,21 +77,21 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   end
 
   @doc """
-  Claims an event for processing by marking it as being processed by a specific processor.
+  Claims a command for processing by marking it as being processed by a specific processor.
 
   This function implements optimistic concurrency control to ensure that only one processor
-  can claim an event at a time. It only allows claiming events with status :pending or :occ_timeout.
+  can claim a command at a time. It only allows claiming commands with status :pending or :occ_timeout.
 
   ## Parameters
-    - `id`: The UUID of the event to claim
-    - `processor_id`: A string identifier for the processor claiming the event (defaults to "manual")
+    - `id`: The UUID of the command to claim
+    - `processor_id`: A string identifier for the processor claiming the command (defaults to "manual")
     - `repo`: The Ecto repository to use (defaults to Repo)
 
   ## Returns
-    - `{:ok, event}`: If the event was successfully claimed
-    - `{:error, :event_not_found}`: If no event with the given ID exists
-    - `{:error, :event_already_claimed}`: If the event was claimed by another processor
-    - `{:error, :event_not_claimable}`: If the event is not in a claimable state (not pending or occ_timeout)
+    - `{:ok, command}`: If the command was successfully claimed
+    - `{:error, :event_not_found}`: If no command with the given ID exists
+    - `{:error, :event_already_claimed}`: If the command was claimed by another processor
+    - `{:error, :event_not_claimable}`: If the command is not in a claimable state (not pending or occ_timeout)
   """
   @spec claim_event_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
           {:ok, Command.t()} | {:error, atom()}
@@ -100,9 +100,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       nil ->
         {:error, :event_not_found}
 
-      %{command_queue_item: %{status: state} = eqi} = event when state in @processable_states ->
+      %{command_queue_item: %{status: state} = eqi} = command when state in @processable_states ->
         try do
-          Command.processing_start_changeset(event, processor_id, retry_count_by_status(eqi))
+          Command.processing_start_changeset(command, processor_id, retry_count_by_status(eqi))
           |> repo.update()
         rescue
           Ecto.StaleEntryError ->
@@ -110,78 +110,76 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         end
 
       _ ->
-        {:error, :event_not_claimable}
+      {:error, :event_not_claimable}
     end
   end
 
   @doc """
-  Builds a changeset to mark an event as processed.
+  Builds a changeset to mark a command as processed.
 
-  This function updates the event's status to `:processed` and sets the associated
-  transaction ID and timestamps.
+  This function updates the queue item's status to `:processed` and records completion metadata.
 
   ## Parameters
-    - `event` - The Command struct to update
-    - `transaction_id` - The UUID of the associated transaction
+    - `command` - The Command struct to update
 
   ## Returns
-    - `Ecto.Changeset.t()` - The changeset for marking the event as processed
+    - `Ecto.Changeset.t()` - The changeset for marking the command as processed
   """
   @spec build_mark_as_processed(Command.t()) :: Changeset.t(Command.t())
-  def build_mark_as_processed(%{command_queue_item: command_queue_item} = event) do
+  def build_mark_as_processed(%{command_queue_item: command_queue_item} = command) do
     event_queue_changeset =
       command_queue_item
       |> CommandQueueItem.processing_complete_changeset()
 
-    event
+    command
     |> change(%{})
     |> put_assoc(:command_queue_item, event_queue_changeset)
   end
 
   @doc """
-  Builds a changeset to revert an event to pending state.
+  Builds a changeset to revert a command to the pending state.
 
-  Adds the provided error message to the event's errors list and
+  Adds the provided error message to the queue item's errors list and
   changes the status to `:pending` to allow it to be reprocessed.
 
   ## Parameters
-    - `event` - The event to revert to pending state
-    - `error` - The error message to add to the event's errors
+    - `command` - The command to revert to pending state
+    - `error` - The error message to add to the command's errors
 
   ## Returns
-    - `Ecto.Changeset.t()` - The changeset for updating the event
+    - `Ecto.Changeset.t()` - The changeset for updating the command
   """
   @spec build_revert_to_pending(Command.t(), any()) :: Changeset.t()
-  def build_revert_to_pending(%{command_queue_item: command_queue_item} = event, error) do
+  def build_revert_to_pending(%{command_queue_item: command_queue_item} = command, error) do
     event_queue_changeset =
       command_queue_item
       |> CommandQueueItem.revert_to_pending_changeset(error)
 
-    event
+    command
     |> change(%{})
     |> put_assoc(:command_queue_item, event_queue_changeset)
   end
 
   @doc """
-  Builds a changeset to schedule a retry for a failed event.
+  Builds a changeset to schedule a retry for a failed command.
 
   Handles both normal retries and terminal failures (dead letter):
   - If the retry count exceeds the configured maximum, marks as dead letter
   - Otherwise, calculates the next retry time using exponential backoff
-  - Sets the appropriate event status, clears processor reference, and adds the error
+  - Sets the appropriate command status, clears processor reference, and adds the error
 
   ## Parameters
-    - `event` - The event that needs to be retried
-    - `error` - The error message to add to the event's errors
+    - `command` - The command that needs to be retried
+    - `error` - The error message to add to the command's errors
     - `status` - The status to set (usually :failed)
 
   ## Returns
-    - `Ecto.Changeset.t()` - The changeset for updating the event
+    - `Ecto.Changeset.t()` - The changeset for updating the command
   """
   @spec build_schedule_retry_with_reason(Command.t(), String.t() | nil, CommandQueueItem.state()) ::
           Changeset.t()
   def build_schedule_retry_with_reason(
-        %{command_queue_item: command_queue_item} = event,
+        %{command_queue_item: command_queue_item} = command,
         error,
         status
       ) do
@@ -190,7 +188,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     if retry_count >= @max_retries do
       # Max retries exceeded, mark as dead letter
       build_mark_as_dead_letter(
-        event,
+        command,
         "Max retry count (#{@max_retries}) exceeded: #{error || status}"
       )
     else
@@ -205,28 +203,28 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
           retry_delay
         )
 
-      event
+      command
       |> change(%{})
       |> put_assoc(:command_queue_item, event_queue_item_changeset)
     end
   end
 
   @doc """
-  Builds a changeset to schedule the retry of an update event that depends
-  on a failed create event.
+  Builds a changeset to schedule the retry of an update command that depends
+  on a failed create command.
 
-  Ensures that update events don't retry before their prerequisite create events
-  by scheduling them after the create event's next retry time.
+  Ensures that update commands don't retry before their prerequisite create commands
+  by scheduling them after the create command's next retry time.
 
   ## Parameters
-    - `event` - The update event that needs to be retried
-    - `error` - An UpdateEventError struct containing the create event and error details
+    - `command` - The update command that needs to be retried
+    - `error` - An UpdateEventError struct containing the create command and error details
 
   ## Returns
-    - `Ecto.Changeset.t()` - The changeset for updating the event
+    - `Ecto.Changeset.t()` - The changeset for updating the command
   """
   @spec build_schedule_update_retry(Command.t(), UpdateEventError.t()) :: Changeset.t()
-  def build_schedule_update_retry(%{command_queue_item: command_queue_item} = event, error) do
+  def build_schedule_update_retry(%{command_queue_item: command_queue_item} = command, error) do
     event_queue_item_changeset =
       command_queue_item
       |> CommandQueueItem.schedule_update_retry_changeset(
@@ -234,32 +232,32 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         calculate_retry_delay(command_queue_item.retry_count)
       )
 
-    event
+    command
     |> change(%{})
     |> put_assoc(:command_queue_item, event_queue_item_changeset)
   end
 
   @doc """
-  Builds a changeset to mark an event as permanently failed (dead letter).
+  Builds a changeset to mark a command as permanently failed (dead letter).
 
-  This is used when an event has failed terminally and should not be retried.
-  Adds the provided error message to the event's errors and sets the status
+  This is used when a command has failed terminally and should not be retried.
+  Adds the provided error message to the command's errors and sets the status
   to `:dead_letter`.
 
   ## Parameters
-    - `event` - The event to mark as dead letter
-    - `error` - The error message explaining why the event is being marked as dead letter
+    - `command` - The command to mark as dead letter
+    - `error` - The error message explaining why the command is being marked as dead letter
 
   ## Returns
-    - `Ecto.Changeset.t()` - The changeset for updating the event
+    - `Ecto.Changeset.t()` - The changeset for updating the command
   """
   @spec build_mark_as_dead_letter(Command.t(), String.t()) :: Changeset.t()
-  def build_mark_as_dead_letter(%{command_queue_item: command_queue_item} = event, error) do
+  def build_mark_as_dead_letter(%{command_queue_item: command_queue_item} = command, error) do
     event_queue_changeset =
       command_queue_item
       |> CommandQueueItem.dead_letter_changeset(error)
 
-    event
+    command
     |> change(%{})
     |> put_assoc(:command_queue_item, event_queue_changeset)
   end

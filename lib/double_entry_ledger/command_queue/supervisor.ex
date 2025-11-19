@@ -1,12 +1,12 @@
 defmodule DoubleEntryLedger.CommandQueue.Supervisor do
   @moduledoc """
-  Supervises the event queue system components.
+  Supervises the command queue system components.
 
   This supervisor is responsible for starting and monitoring the following child processes:
 
-    * `Registry` - A unique-keyed process registry for event queue instances.
-    * `DynamicSupervisor` - Supervises dynamically started event queue instances.
-    * `DoubleEntryLedger.CommandQueue.InstanceMonitor` - Monitors and manages the lifecycle of event queue instances.
+    * `Registry` - A unique-keyed process registry for command queue instances.
+    * `DynamicSupervisor` - Supervises dynamically started command queue processors.
+    * `DoubleEntryLedger.CommandQueue.InstanceMonitor` - Monitors and manages the lifecycle of command queue instances.
 
   The supervisor uses the `:one_for_one` strategy, so if a child process terminates,
   only that process is restarted.
@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.CommandQueue.Supervisor do
   use Supervisor
 
   @doc """
-  Starts the EventQueue supervisor.
+  Starts the command queue supervisor.
 
   ## Parameters
 

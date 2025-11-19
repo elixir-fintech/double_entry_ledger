@@ -1,17 +1,17 @@
 defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   @moduledoc """
-  Monitors event queue instances for pending events and ensures processors are started as needed.
+  Monitors the command queue for pending commands and ensures processors are started as needed.
 
   ## Overview
 
   The `InstanceMonitor` is a GenServer responsible for periodically scanning the database
-  for event queue instances that have events requiring processing. For each such instance,
-  it ensures that an `InstanceProcessor` is running to handle the events.
+  for instances that have commands requiring processing. For each such instance,
+  it ensures that an `InstanceProcessor` is running to handle those commands.
 
   ## Responsibilities
 
-    * Periodically poll the database for instances with pending, failed, or timed-out events.
-    * For each instance with processable events, ensure an `InstanceProcessor` is started.
+    * Periodically poll the database for instances with pending, failed, or timed-out commands.
+    * For each instance with processable commands, ensure an `InstanceProcessor` is started.
     * Avoid starting duplicate processors for the same instance by checking the Registry.
     * Use application configuration for poll interval (`:poll_interval` in `:event_queue` config).
 
@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
 
   ## Process Supervision
 
-  This module is intended to be supervised as part of the event queue supervision tree.
+  This module is intended to be supervised as part of the command queue supervision tree.
   """
   use GenServer
   require Logger
@@ -72,17 +72,17 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   # Private functions
 
   defp monitor_instances do
-    # Find instances with processable events
-    instances_with_events = find_instances_with_events()
+    # Find instances with processable commands
+    instances_with_commands = find_instances_with_commands()
 
     # Start processors for each instance
-    Enum.each(instances_with_events, &ensure_processor/1)
+    Enum.each(instances_with_commands, &ensure_processor/1)
   end
 
-  defp find_instances_with_events do
+  defp find_instances_with_commands do
     now = DateTime.utc_now()
 
-    # Find distinct instance IDs with pending events
+    # Find distinct instance IDs with pending commands
     from(c in Command,
       join: cqi in CommandQueueItem,
       prefix: ^@schema_prefix,

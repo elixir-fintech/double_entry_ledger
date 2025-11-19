@@ -1,16 +1,16 @@
 defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   @moduledoc """
-  Handles processing of events for a specific event queue instance.
+  Handles processing of commands for a specific instance.
 
   The `InstanceProcessor` is responsible for fetching, processing, and updating the status
-  of events belonging to a single event queue instance. It is started dynamically by the
-  `InstanceMonitor` when there are events to process for a given instance.
+  of commands belonging to a single instance. It is started dynamically by the
+  `InstanceMonitor` when there are queued commands to process.
 
   ## Responsibilities
 
-    * Fetch pending, failed, or timed-out events for the assigned instance.
-    * Process each event and update its status in the database.
-    * Handle retries and error cases according to event queue logic.
+    * Fetch pending, failed, or timed-out commands for the assigned instance.
+    * Process each command and update its status in the database.
+    * Handle retries and error cases according to command queue logic.
     * Ensure only one processor runs per instance at a time (enforced via Registry).
 
   This module is typically supervised under the `InstanceSupervisor` as a dynamic child.
@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   ## Parameters
     - `opts` - Keyword list of options where:
-      - `:instance_id` - Required UUID of the instance to process events for
+      - `:instance_id` - Required UUID of the instance to process commands for
 
   ## Returns
     - `{:ok, pid}` - Successfully started the processor
@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   @impl true
   def init(%{instance_id: instance_id}) do
-    Logger.info("Starting event processor for instance #{instance_id}")
+    Logger.info("Starting command processor for instance #{instance_id}")
     # Schedule immediate processing
     send(self(), :process_next)
     {:ok, %{instance_id: instance_id, processing: false}}
@@ -74,24 +74,24 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   @impl true
   def handle_info(:process_next, %{instance_id: instance_id} = state) do
-    case find_next_event(instance_id) do
+    case find_next_command(instance_id) do
       nil ->
-        # No more events to process, terminate
-        Logger.info("No more events to process for instance #{instance_id}, shutting down")
+        # No more commands to process, terminate
+        Logger.info("No more commands to process for instance #{instance_id}, shutting down")
         {:stop, :normal, state}
 
-      event ->
-        # Start processing the event
+      command ->
+        # Start processing the command
         new_state = %{state | processing: true}
 
-        # Process event in a separate task to not block the GenServer
-        Logger.info("Processing event #{event.id} for instance #{instance_id}")
+        # Process command in a separate task to not block the GenServer
+        Logger.info("Processing command #{command.id} for instance #{instance_id}")
 
         parent = self()
 
         Task.start(fn ->
-          process_result = CommandWorker.process_event_with_id(event.id, processor_name())
-          send(parent, {:processing_complete, event.id, process_result})
+          process_result = CommandWorker.process_event_with_id(command.id, processor_name())
+          send(parent, {:processing_complete, command.id, process_result})
         end)
 
         {:noreply, new_state}
@@ -99,26 +99,26 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   @impl true
-  def handle_info({:processing_complete, event_id, result}, state) do
+  def handle_info({:processing_complete, command_id, result}, state) do
     case result do
       {:ok, _, _} ->
-        Logger.info("Successfully processed event #{event_id}")
+        Logger.info("Successfully processed command #{command_id}")
 
       {:error, reason} ->
-        Logger.warning("Failed to process event #{event_id}: #{inspect(reason)}")
-        # Note: the error is already recorded in the event by CommandWorker.process_event_with_id
+        Logger.warning("Failed to process command #{command_id}: #{inspect(reason)}")
+        # Note: the error is already recorded in the command by CommandWorker.process_event_with_id
     end
 
-    # Command processing completed, check for more events
+    # Command processing completed, check for more commands
     new_state = %{state | processing: false}
     send(self(), :process_next)
     {:noreply, new_state}
   end
 
-  defp find_next_event(instance_id) do
+  defp find_next_command(instance_id) do
     now = DateTime.utc_now()
 
-    # Find an event for this instance that's ready to be processed
+    # Find a command for this instance that's ready to be processed
     from(e in Command,
       join: eqi in assoc(e, :command_queue_item),
       prefix: ^@schema_prefix,
