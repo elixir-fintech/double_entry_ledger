@@ -170,7 +170,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         create_event: failed_create_event,
         update_event: event,
         message: test_message,
-        reason: :create_event_not_processed
+        reason: :create_command_not_processed
       }
 
       %{changes: %{command_queue_item: command_queue_item}} =

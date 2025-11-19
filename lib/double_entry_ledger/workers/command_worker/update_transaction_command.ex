@@ -197,7 +197,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
         end)
 
       %{
-        get_create_transaction_event_error: %{reason: :create_event_not_processed} = exception
+        get_create_transaction_event_error: %{reason: :create_command_not_processed} = exception
       } ->
         Multi.update(Multi.new(), :event_failure, fn _ ->
           build_revert_to_pending(event, exception.message)

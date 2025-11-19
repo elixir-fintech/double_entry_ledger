@@ -21,9 +21,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
 
   The exception struct includes a `:reason` field, which can be one of:
 
-    * `:create_event_not_processed` — The create event exists but is not yet processed (pending, processing, occ_timeout, or failed)
-    * `:create_event_in_dead_letter` — The create event is in the dead letter state
-    * `:create_event_not_found` — The create event could not be found
+    * `:create_command_not_processed` — The create event exists but is not yet processed (pending, processing, occ_timeout, or failed)
+    * `:create_command_in_dead_letter` — The create event is in the dead letter state
+    * `:create_command_not_found` — The create event could not be found
 
   ## Fields
 
@@ -79,7 +79,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
             "create Command (id: #{create_event.id}) in dead_letter for Update Command (id: #{update_event.id})",
           create_event: create_event,
           update_event: update_event,
-          reason: :create_event_in_dead_letter
+          reason: :create_command_in_dead_letter
         }
 
       nil ->
@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
           message: "create Command not found for Update Command (id: #{update_event.id})",
           create_event: nil,
           update_event: update_event,
-          reason: :create_event_not_found
+          reason: :create_command_not_found
         }
     end
   end
@@ -101,7 +101,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
         "create Command (id: #{create_event.id}, status: #{status}) not yet processed for Update Command (id: #{update_event.id})",
       create_event: create_event,
       update_event: update_event,
-      reason: :create_event_not_processed
+      reason: :create_command_not_processed
     }
   end
 end
