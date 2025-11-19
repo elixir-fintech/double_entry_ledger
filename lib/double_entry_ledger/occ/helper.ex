@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
   * **Retry Management**: Calculate and apply appropriate backoff delays
   * **Error Tracking**: Update error maps with retry information and messages
   * **Configuration**: Access OCC-related configuration settings like max retries
-  * **Timing Utilities**: Calculate next retry times for event scheduling
+  * **Timing Utilities**: Calculate next retry times for command scheduling
 
   ## Configuration
 
@@ -53,7 +53,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
   alias Ecto.Changeset
   import Ecto.Changeset, only: [put_assoc: 3, change: 2]
 
-  defdelegate create_error_map(event), to: DoubleEntryLedger.Command.ErrorMap
+  defdelegate create_error_map(command), to: DoubleEntryLedger.Command.ErrorMap
 
   @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
   @retry_interval Application.compile_env(:double_entry_ledger, :retry_interval, 200)
@@ -159,30 +159,30 @@ defmodule DoubleEntryLedger.Occ.Helper do
   end
 
   @doc """
-  Creates a changeset to mark an event as timed out due to OCC conflicts.
+  Creates a changeset to mark a command as timed out due to OCC conflicts.
 
-  This function prepares a changeset that updates an event to the `:occ_timeout` status,
+  This function prepares a changeset that updates a command to the `:occ_timeout` status,
   recording the error information from the error map and updating the retry count.
 
   ## Parameters
 
-    - `event` (`Command.t()`): The event to update
+    - `command` (`Command.t()`): The command to update
     - `%{errors: errors, retries: retries}`: An error map containing:
       - `errors`: List of error messages accumulated during retry attempts
       - `retries`: Number of retry attempts made
 
   ## Returns
 
-    - `Ecto.Changeset.t()`: A changeset ready to update the event with timeout information
+    - `Ecto.Changeset.t()`: A changeset ready to update the command with timeout information
 
   """
   @spec occ_timeout_changeset(Command.t(), ErrorMap.t()) ::
           Changeset.t()
   def occ_timeout_changeset(
-        %{command_queue_item: command_queue_item} = event,
+        %{command_queue_item: command_queue_item} = command,
         error_map
       ) do
-    event
+    command
     |> change(%{})
     |> put_assoc(
       :command_queue_item,
@@ -190,8 +190,8 @@ defmodule DoubleEntryLedger.Occ.Helper do
     )
   end
 
-  def occ_timeout_changeset(event, error_map) do
-    event
+  def occ_timeout_changeset(command, error_map) do
+    command
     |> change(%{})
     |> put_assoc(
       :command_queue_item,

@@ -65,7 +65,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
   Records the retry count and error information in the Command record.
 
   ## Parameters
-    - `event` - The Command struct to update
+    - `command` - The Command struct to update
     - `error_map` - Contains retry count and error details
     - `repo` - Ecto.Repo to use for the update
 
@@ -111,7 +111,7 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
   an error tuple with the appropriate error code.
 
   ## Parameters
-    - `event` - The Command that has reached maximum retries
+    - `command` - The Command that has reached maximum retries
     - `error_map` - Contains retry count and accumulated errors
     - `repo` - Ecto.Repo to use for the update
 

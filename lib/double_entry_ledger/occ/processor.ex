@@ -1,7 +1,7 @@
 defmodule DoubleEntryLedger.Occ.Processor do
   @moduledoc """
   Behavior and default implementation for Optimistic Concurrency Control (OCC)
-  in event processing.
+  in command processing.
 
   This module provides:
 
@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
       - `handle_transaction_map_error/3`
       - `handle_occ_final_timeout/2`
     * A `process_with_retry/2` implementation that:
-      - Converts event data to a transaction map
+      - Converts command data to a transaction map
       - Builds an Ecto.Multi via `build_multi/3`
       - Retries on `Ecto.StaleEntryError` with exponential backoff
       - Calls `handle_occ_final_timeout/2` when retries are exhausted
@@ -19,33 +19,33 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   ## Usage
 
-      defmodule MyEventProcessor do
+      defmodule MyCommandProcessor do
         use DoubleEntryLedger.Occ.Processor
 
         @impl true
-        def build_transaction(event, tx_map, repo) do
+        def build_transaction(command, tx_map, repo) do
           Ecto.Multi.new()
           |> Ecto.Multi.insert(:transaction, Transaction.changeset(%Transaction{}, tx_map))
         end
 
         @impl true
-        def handle_build_transaction(multi, event, _repo), do: multi
+        def handle_build_transaction(multi, command, _repo), do: multi
 
         @impl true
-        def handle_transaction_map_error(event, error, _repo) do
+        def handle_transaction_map_error(command, error, _repo) do
           Ecto.Multi.new()
           |> Ecto.Multi.update(
             :event_failure,
-            Command.changeset(event, %{status: :failed, errors: [inspect(error)]})
+            Command.changeset(command, %{status: :failed, errors: [inspect(error)]})
           )
         end
 
         @impl true
-        def handle_occ_final_timeout(event, _repo) do
+        def handle_occ_final_timeout(command, _repo) do
           Ecto.Multi.new()
           |> Ecto.Multi.update(
             :event_dead_letter,
-            Command.changeset(event, %{status: :dead_letter})
+            Command.changeset(command, %{status: :dead_letter})
           )
         end
       end
@@ -59,11 +59,11 @@ defmodule DoubleEntryLedger.Occ.Processor do
   alias DoubleEntryLedger.Occ.Occable
 
   @doc """
-  Builds an Ecto.Multi transaction for processing an event.
+  Builds an Ecto.Multi transaction for processing a command.
 
   This callback must be implemented by modules using the OccProcessor behavior.
   It defines how to construct the database transaction operations needed to process
-  the event and its associated transaction data.
+  the command and its associated transaction data.
 
   ## Required Transaction Steps
 
@@ -75,8 +75,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   ## Parameters
 
-    - `occable_item`: An Command struct or TransactionCommandMap containing the event details to process
-    - `transaction_map`: A map of transaction data derived from the event
+    - `occable_item`: A Command struct or TransactionCommandMap containing the command details to process
+    - `transaction_map`: A map of transaction data derived from the command map
     - `repo`: The Ecto repository to use for database operations
 
   ## Returns
@@ -105,7 +105,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
   ## Parameters
 
     - `multi`: The Ecto.Multi built by `build_transaction/3`
-    - `occable_item`: The event or event map being processed
+    - `occable_item`: The command or command map being processed
     - `repo`: The Ecto repository
 
   ## Returns
@@ -115,19 +115,19 @@ defmodule DoubleEntryLedger.Occ.Processor do
   @callback handle_build_transaction(Ecto.Multi.t(), Occable.t(), Ecto.Repo.t()) :: Ecto.Multi.t()
 
   @doc """
-  Handles errors that occur when converting event data to a transaction map.
+  Handles errors that occur when converting command data to a transaction map.
 
-  This callback should return an Ecto.Multi that updates the event to reflect the error.
+  This callback should return an Ecto.Multi that updates the Command to reflect the error.
 
   ## Parameters
 
-    - `occable_item`: The event or event map being processed
+    - `occable_item`: The command or command map being processed
     - `error`: The error encountered during transaction map conversion
     - `repo`: The Ecto repository
 
   ## Returns
 
-    - An `Ecto.Multi` that updates the event with error information
+    - An `Ecto.Multi` that updates the command with error information
   """
   @callback handle_transaction_map_error(
               Occable.t(),
@@ -138,16 +138,16 @@ defmodule DoubleEntryLedger.Occ.Processor do
   @doc """
   Handles the case when OCC retries are exhausted.
 
-  This callback should return an Ecto.Multi that marks the event as permanently failed.
+  This callback should return an Ecto.Multi that marks the command as permanently failed.
 
   ## Parameters
 
-    - `occable_item`: The event or event map being processed
+    - `occable_item`: The command or command map being processed
     - `repo`: The Ecto repository
 
   ## Returns
 
-    - An `Ecto.Multi` that updates the event as dead letter or timed out
+    - An `Ecto.Multi` that updates the command as dead letter or timed out
   """
   @callback handle_occ_final_timeout(
               Occable.t(),
@@ -155,7 +155,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
             ) :: Ecto.Multi.t()
 
   @doc """
-  Process the event with retry mechanisms.
+  Process the command with retry mechanisms.
 
   This callback has a default implementation through the __using__ macro.
   """
@@ -188,14 +188,14 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       @impl true
       @doc """
-      Processes an event with OCC retry logic.
+      Processes a command with OCC retry logic.
 
-      Converts event data to a transaction map, builds an Ecto.Multi, and
+      Converts command data to a transaction map, builds an Ecto.Multi, and
       retries on `Ecto.StaleEntryError` up to the configured maximum.
 
       ## Parameters
 
-        - `occable_item`: The event or event map to process
+        - `occable_item`: The command or command map to process
         - `repo`: The Ecto repository (defaults to `Repo`)
 
       ## Returns
@@ -222,12 +222,12 @@ defmodule DoubleEntryLedger.Occ.Processor do
       end
 
       @impl true
-      def build_transaction(_event, _transaction_map, _instance_id, _repo) do
+      def build_transaction(_command, _transaction_map, _instance_id, _repo) do
         raise "build_transaction/3 not implemented"
       end
 
       @impl true
-      def handle_build_transaction(_multi, _event_or_map, _repo) do
+      def handle_build_transaction(_multi, _command_or_map, _repo) do
         raise "handle_build_transaction/3 not implemented"
       end
 

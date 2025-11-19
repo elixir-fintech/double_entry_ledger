@@ -17,18 +17,23 @@ DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engi
 ## System Overview
 
 ### Instances & Accounts
+
 `DoubleEntryLedger.Stores.InstanceStore` (`lib/double_entry_ledger/stores/instance_store.ex`) defines isolation boundaries. Each instance owns its own configuration, accounts, and transactions. `DoubleEntryLedger.Stores.AccountStore` validates account type, currency, addressing format, and maintains embedded `posted`, `pending`, and `available` balance structs. Helpers in `DoubleEntryLedger.Types` and `DoubleEntryLedger.Utils.Currency` encapsulate allowed values.
 
 ### Commands, Journal Events & Transactions
+
 External requests enter through `DoubleEntryLedger.Apis.CommandApi` (`lib/double_entry_ledger/apis/command_api.ex`). Requests are normalized into `TransactionCommandMap` or `AccountCommandMap` structs, hashed for idempotency, and saved as immutable `Command` records (`lib/double_entry_ledger/schemas/command.ex`). Successful processing creates `JournalEvent` records plus `Transaction` + `Entry` rows, and finally typed links (`journal_event_*_links`). Query stores such as `DoubleEntryLedger.Stores.TransactionStore` and `DoubleEntryLedger.Stores.JournalEventStore` expose read models by instance, account, or transaction.
 
 ### Queues, Workers & OCC
+
 The command queue (`lib/double_entry_ledger/command_queue`) polls for pending commands via `InstanceMonitor`, spins up `InstanceProcessor` processes per instance, and uses `CommandQueue.Scheduling` to claim, retry, or dead-letter work. The transaction related workers under `lib/double_entry_ledger/workers/command_worker` implement `DoubleEntryLedger.Occ.Processor`, translating event maps into `Ecto.Multi` workflows that retry on `Ecto.StaleEntryError`. When the command finishes, `DoubleEntryLedger.Workers.Oban.JournalEventLinks` runs via Oban to build any missing journal links.
 
 ### Balances & Audit Trails
+
 Each transaction updates `Account` projections plus immutable `BalanceHistoryEntry` snapshots, enabling temporal queries and reconciliation. Instances can be validated with `InstanceStore.validate_account_balances/1`, ensuring posted and pending debits/credits remain equal. Journal events plus `JournalEventTransactionLink`/`JournalEventAccountLink` tables provide traceability from the original request to the final projection.
 
 ### Idempotency & Isolation
+
 Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside the configurable `schema_prefix` (`double_entry_ledger` by default), so migrations never clash with your application schema.
 
 ## Requirements
@@ -142,7 +147,7 @@ alias DoubleEntryLedger.Apis.CommandApi
 event = %{
   "instance_address" => instance.address,
   "action" => "create_transaction",
-  "source" => "backoffice",
+  "source" => "back-office",
   "source_idempk" => "initial-capital-1",
   "payload" => %{
     status: :posted,
