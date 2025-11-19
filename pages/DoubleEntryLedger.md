@@ -10,9 +10,7 @@ This document explains how the double entry ledger in this codebase works, focus
 - How the system uses debit and credit internally
 - How you interact with the ledger using signed amounts (not explicit debits/credits)
 - How the system translates signed amounts into debits and credits
-- **How to set up an instance, accounts, and process events synchronously**
-
----
+- How to set up an instance, accounts, and process events synchronously
 
 ## Core Principles of Double Entry Accounting
 
@@ -24,8 +22,6 @@ This document explains how the double entry ledger in this codebase works, focus
   - **Equity** (e.g., owner's capital)
   - **Revenue** (e.g., sales)
   - **Expense** (e.g., rent, salaries)
-
----
 
 ## Account Types and Introducing Value
 
@@ -45,8 +41,6 @@ In accounting terms, this means:
 - Debit Cash $1000
 - Credit Owner's Equity $1000
 
----
-
 ## Internal Handling: Debit and Credit
 
 Internally, the ledger uses **debit** and **credit** entries, based on the account’s normal balance:
@@ -60,8 +54,6 @@ When you submit a signed amount, the system:
 - Ensures the sum of all debits and credits is equal (per currency)
 - Rejects any transaction that does not balance
 
----
-
 ## How to Use Signed Amounts
 
 When creating an event, **do not think in terms of debit or credit**.  
@@ -71,8 +63,6 @@ Instead, think about whether you want to **add to** or **subtract from** the acc
 - **Negative amount:** You want to decrease the account’s balance.
 
 **The system will translate your intent into the correct debit or credit entry based on the account type.**
-
----
 
 ## Examples
 
@@ -110,14 +100,10 @@ Suppose you receive $1000 in cash, of which $800 is revenue and $200 is tax paya
 
 Ledger Translation: **Debits = Credits = $1000 (Balanced)**
 
----
-
 ## Multi-Account Transactions
 
 Events can involve more than two accounts, as long as the sum of all debits equals the sum of all credits (per currency).  
 You only need to specify whether you are adding or subtracting value from each account; the system will handle the rest.
-
----
 
 ## Setting Up and Using the Ledger (Synchronous Example)
 
@@ -126,61 +112,70 @@ Below is a step-by-step guide to set up an instance, create accounts, and proces
 ### 1. Create a Ledger Instance
 
 ```elixir
-{:ok, instance} = DoubleEntryLedger.InstanceStore.create(%{
-  name: "Main Ledger",
-  description: "Ledger for ACME Corp"
+alias DoubleEntryLedger.Stores.InstanceStore
+
+{:ok, instance} = InstanceStore.create(%{
+  address: "main:ledger:owner:1",
+  name: "Main Ledger"
 })
 ```
 
 ### 2. Create Accounts
 
 ```elixir
-{:ok, cash} = DoubleEntryLedger.AccountStore.create(%{
-  name: "Cash",
-  instance_id: instance.id,
-  currency: :USD,
-  type: :asset
-})
+alias DoubleEntryLedger.Stores.AccountStore
 
-{:ok, savings} = DoubleEntryLedger.AccountStore.create(%{
-  name: "Savings",
-  instance_id: instance.id,
-  currency: :USD,
-  type: :asset
-})
+{:ok, cash} = AccountStore.create(
+  instance.address,
+  %{
+    address: "asset:cash:usd",
+    name: "Cash",
+    currency: :USD,
+    type: :asset
+  }
+)
 
-{:ok, equity} = DoubleEntryLedger.AccountStore.create(%{
-  name: "Owner's Equity",
-  instance_id: instance.id,
-  currency: :USD,
-  type: :equity
-})
+{:ok, savings} = AccountStore.create(
+  instance.address,
+  %{
+    address: "asset:savings:usd",
+    name: "Savings",
+    currency: :USD,
+    type: :asset
+  }
+)
+
+{:ok, equity} = AccountStore.create(
+  instance.address,
+  %{
+    address: "equity:owner:usd",
+    name: "Owner's Equity",
+    currency: :USD,
+    type: :equity
+  }
+)
 ```
 
-### 3. Create and Process an Event Synchronously
+### 3. Create and Process a Command Synchronously
 
-You can process an event synchronously by calling the event store directly:
+You can process an event synchronously by calling the Transaction store directly:
 
 ```elixir
-event_params = %{
-  instance_id: instance.id,
-  source: "manual",
-  source_idempk: "idempotent-id-1",
-  source_data: %{
-    description: "Initial capital injection"
-  }
-  action: :create,
-  transaction_data: %{
-    status: :posted,
-    entries: [
-      %{account_id: cash.id, amount: 1000_00, currency: :USD},
-      %{account_id: equity.id, amount: 1000_00, currency: :USD}
-    ]
-  }
+alias DoubleEntryLedger.Stores.TransactionStore
+
+params = %{
+  status: :posted,
+  entries: [
+    %{account_address: cash.address, amount: 1000_00, currency: :USD},
+    %{account_address: equity.address, amount: 1000_00, currency: :USD}
+  ]
 }
 
-{:ok, transaction, event} =
-  DoubleEntryLedger.EventStore.process_from_event_params(event_params)
+{:ok, transaction} =TransactionStore(
+  instance.address,
+  params,
+  "idempotent-id-1"
+)
 ```
 
 - Both amounts are positive, indicating you want to add value to both accounts.
@@ -189,35 +184,31 @@ event_params = %{
 ### 4. Query Account Balances
 
 ```elixir
-{:ok, cash_balance} = DoubleEntryLedger.AccountStore.get_balance_history(cash.id)
-{:ok, equity_balance} = DoubleEntryLedger.AccountStore.get_balance_history(equity.id)
+alias DoubleEntryLedger.Stores.AccountStore
+
+{:ok, cash_balance} = AccountStore.get_balance_history(cash.id)
+{:ok, equity_balance} = AccountStore.get_balance_history(equity.id)
 ```
 
 ### 5. Move Value Between Accounts
 
 ```elixir
-event_params = %{
-  instance_id: instance.id,
-  action: :create,
-  source: "manual",
-  source_idempk: "idempotent-id-2",
-  source_data: %{
-    description: "Move funds from Cash to Savings"
-  }
-  transaction_data: %{
-    status: :posted,
-    entries: [
-      %{account_id: cash.id, amount: -500_00, currency: :USD},
-      %{account_id: savings.id, amount: 500_00, currency: :USD}
-    ]
-  }
+alias DoubleEntryLedger.Stores.TransactionStore
+
+params = %{
+  status: :posted,
+  entries: [
+    %{account_address: cash.address, amount: -500_00, currency: :USD},
+    %{account_address: savings.address, amount: 500_00, currency: :USD}
+  ]
 }
 
-{:ok, transaction, event} =
-  DoubleEntryLedger.EventStore.process_from_event_params(event_params)
+{:ok, transaction} =TransactionStore(
+  instance.address,
+  params,
+  "idempotent-id-2"
+)
 ```
-
----
 
 ## Summary
 
@@ -228,6 +219,6 @@ event_params = %{
 - **All events must balance:** The sum of all debits and credits (per currency) must be equal.
 - **Account types matter:** To introduce or remove value, use accounts of different types.
 - **The ledger enforces integrity:** Any unbalanced event is rejected.
-- **You can process events synchronously by calling the event store directly.**
+- **You can process events synchronously.**
 
 This approach keeps your API simple and intuitive, while the underlying ledger ensures strict double entry accounting rules are always followed.

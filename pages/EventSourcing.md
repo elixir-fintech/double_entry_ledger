@@ -1,35 +1,34 @@
-
 # Event Sourcing in DoubleEntryLedger
 
 ## Overview
 
-DoubleEntryLedger uses an event-sourced architecture where the `Event` record is stored immutably. Each event represents a business action (such as a transaction creation or update) and, once written, is never changed or deleted. This provides a permanent, auditable log of all business activity.
+Commands are the write-ahead log of DoubleEntryLedger. Each call to `DoubleEntryLedger.Apis.CommandApi` creates an immutable `Command` record containing:
 
-## Event Processing and Replay
+- The original request payload (`command_map`)
+- Idempotency keys (`source`, `source_idempk`, optional `update_idempk`)
+- A `CommandQueueItem` that tracks processing attempts and outcomes
 
-- Each event has an associated `EventQueueItem` entry, which tracks the processing status (`:pending`, `:processing`, `:processed`, `:failed`, `:occ_timeout`, `:dead_letter`).
-- The event itself is immutable, but the `EventQueueItem` can be updated as the event is processed or retried.
-- Replay is enabled by filtering for events with `status == :processed` and using the `updated_at` timestamp from the `EventQueueItem` to determine the chronological order in which events were successfully applied.
-- If you need to rerun an account or the entire ledger, you can select all processed events ordered by their completion timestamp and reapply them from the beginning.
+Commands are never updated; only the queue item changes as work progresses. When a worker finishes successfully it emits a `JournalEvent` plus the necessary projections (transactions, entries, balance history, updated accounts) and links them together for auditing. JournalEvents are immutable and act as the event source for the ledger. Commands on the other hand could potentially be removed once they are processed.
 
-## Account Balance Projections
+## Processing and replay
 
-- **Current State**: Account balances are maintained in the `Account` schema with embedded `Balance` structs for both `posted` (finalized) and `pending` (holds/authorizations) amounts, plus a calculated `available` balance.
-- **Balance History**: The `BalanceHistoryEntry` schema creates immutable snapshots of account balances at each point in time when they change, providing a complete historical trail.
-- **Projection Updates**: As each event is processed, the account balances are updated and a new `BalanceHistoryEntry` is created to capture the state change.
-- **Audit Trail**: The balance history entries are append-only and linked to both the account and the specific entry that caused the change, enabling precise auditing and reconciliation.
+- **Statuses:** `CommandQueueItem` drives the lifecycle (`:pending`, `:processing`, `:processed`, `:failed`, `:occ_timeout`, `:dead_letter`). Each transition records timestamps, processor IDs, retry counts, and error payloads.
+- **Replay order:** For most read scenarios it is easiest to replay `JournalEvent` records (ordered by `inserted_at`) because they capture the canonical “business fact” for both account and transaction commands.
+- **Idempotency:** `DoubleEntryLedger.Command.IdempotencyKey` hashes `(instance_id, source, source_idempk, update_idempk)` to guarantee that duplicate requests are not processed again. `PendingTransactionLookup` ties updates to the transaction created by the original pending command.
+
+## Account balance projections
+
+- **Account state:** The `Account` schema stores embedded `Balance` structs for `posted` and `pending` values plus an `available` integer that reflects the correct sign based on the account’s normal balance.
+- **Balance history:** `BalanceHistoryEntry` rows are appended for every entry mutation so you can audit how each command changed an account’s posted or pending amounts. Each history row links to the originating `Entry`, which links back to the `Transaction`, `JournalEvent`, and `Command`.
+- **Consistency checks:** `InstanceStore.validate_account_balances/1` recalculates sums across accounts, ensuring debits and credits match per currency for both posted and pending projections.
 
 ## Benefits
 
-- **Auditability**: Every business action is recorded as an immutable event, providing a complete audit trail.
-- **Reproducibility**: The entire system state can be rebuilt at any time by replaying all processed events in order.
-- **Resilience**: If a bug or data corruption occurs, you can restore a consistent state by replaying the event log.
-- **Transparency**: The event log and projections provide a clear, chronological record of all actions and their effects.
+- **Auditability:** Immutable commands, journal events, and balance history entries make it trivial to trace any change back to the originating API call.
+- **Rebuildability:** Replay journal events to reconstruct accounts, transactions, and balances if you need to recover from a bug or rebuild analytics projections.
+- **Resilience:** Command queue retries isolate transient failures while keeping the authoritative log append-only.
+- **Transparency:** `JournalEventTransactionLink` and `JournalEventAccountLink` tables capture every relationship so you can answer “which command touched this transaction/account?” instantly.
 
-## Summary
+## Immutability considerations
 
-DoubleEntryLedger's event-sourced design ensures that all business actions are permanently recorded as immutable events. The system maintains account balance projections through the `Account` schema with embedded `Balance` structs and preserves complete historical changes via `BalanceHistoryEntry` records. The `EventQueueItem` status tracking enables safe retries and full replay capabilities by timestamp ordering. This architecture guarantees auditability, recoverability, and transparency for all accounting operations.
-
-## Immutability Enforcement (TODO)
-
-Currently immutability is not enforced on the database level. On the application level an `Event` can't be changed or deleted and all `Balance` updates to an `Account` are driven by events, including the adding of `BalanceHistoryEntry`. The best way to enforce immutability in Postgres would be through the implementation of Row Level Security which enables fine grained control over actions per table.
+Application logic enforces immutability today: commands and journal events are only appended, balance history is append-only, and updates to `Account` or `Transaction` rows can only happen through the command workers. PostgreSQL row-level security or restricted grants can make this enforcement stricter if your deployment shares a database with other applications.

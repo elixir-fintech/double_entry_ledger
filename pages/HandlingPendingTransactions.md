@@ -1,313 +1,156 @@
 # Handling Pending Transactions
 
-The Double Entry Ledger supports robust handling of **pending** transactions, allowing you to create holds, authorizations, or transactions that are not immediately finalized. Pending transactions can later be posted (finalized) or archived (canceled), supporting workflows such as payment authorizations, delayed settlements, or reservation systems.
+DoubleEntryLedger models holds, authorizations, and delayed settlements through the `:pending` transaction state. Pending transactions are first-class: they reserve balance immediately, can be updated while pending, and must eventually be posted (finalized) or archived (canceled). This guide explains how to create, update, and monitor pending commands using the public APIs.
 
-This guide explains how to work with pending transactions in both synchronous and asynchronous scenarios, and how state transitions (`:pending` → `:posted` or `:archived`) are managed.
+## Transaction states
 
----
+Transactions (`DoubleEntryLedger.Transaction`) have three valid states:
 
-## Transaction States
+- `:pending` – drafts/holds/authorizations. Entries affect the account’s pending balance and can be edited or canceled.
+- `:posted` – finalized. Entries affect the posted balance and cannot be changed.
+- `:archived` – canceled or expired pending transactions. They no longer affect pending balances and cannot be revived.
 
-A transaction in the ledger can be in one of the following states:
+Only pending transactions can transition to another state. Posted or archived rows are immutable.
 
-- `:pending` — The transaction is a draft, hold, or authorization. It can be modified, posted, or archived.
-- `:posted` — The transaction is finalized and cannot be changed.
-- `:archived` — The transaction is canceled or superseded and cannot be changed.
+## Creating a pending transaction synchronously
 
----
-
-## Creating a Pending Transaction (Synchronous)
-
-You can create a pending transaction synchronously by submitting an event with `status: :pending` and processing it immediately.  
-**Always include `source` and a unique `source_idempk` for idempotency.**
+Use `DoubleEntryLedger.Apis.CommandApi.process_from_params/2` with `status: :pending`. Provide string keys (matching the JSON API) plus signed amounts.
 
 ```elixir
-event_params = %{
-  instance_id: instance.id,
-  source: "checkout",
-  source_idempk: "order-123",
-  source_data: %{description: "Hold funds for order"},
-  action: :create,
-  transaction_data: %{
+alias DoubleEntryLedger.Apis.CommandApi
+
+command = %{
+  "instance_address" => instance.address,
+  "action" => "create_transaction",
+  "source" => "checkout",
+  "source_idempk" => "order-123",
+  "payload" => %{
     status: :pending,
     entries: [
-      %{account_id: cash.id, amount: 1000_00, currency: :USD},
-      %{account_id: liability.id, amount: 1000_00, currency: :USD}
+      %{"account_address" => cash.address, "amount" => -100_00, "currency" => :USD},
+      %{"account_address" => liability.address, "amount" => -100_00, "currency" => :USD}
     ]
   }
 }
 
-{:ok, transaction, event} =
-  DoubleEntryLedger.EventStore.process_from_event_params(event_params)
-
-IO.inspect(transaction.status) # :pending
+{:ok, transaction, processed_command} = CommandApi.process_from_params(command)
+transaction.status
+# => :pending
+processed_command.command_queue_item.status
+# => :processed
 ```
 
----
+The transaction is persisted immediately, pending balances are updated, and a `PendingTransactionLookup` row links the `source/source_idempk` tuple to the new transaction so future updates can find it quickly.
 
-## Creating a Pending Transaction (Asynchronous)
+## Queueing a pending transaction for asynchronous processing
 
-To create a pending transaction asynchronously, submit the event to the event queue. The event will be processed in the background:
+Call `CommandApi.create_from_params/1` with the same payload to enqueue the work instead of waiting synchronously:
 
 ```elixir
-event_params = %{
-  instance_id: instance.id,
-  source: "checkout",
-  source_idempk: "order-123",
-  source_data: %{description: "Hold funds for order"},
-  action: :create,
-  transaction_data: %{
-    status: :pending,
-    entries: [
-      %{account_id: cash.id, amount: 1000_00, currency: :USD},
-      %{account_id: liability.id, amount: 1000_00, currency: :USD}
-    ]
-  }
-}
-
-{:ok, event} = DoubleEntryLedger.EventStore.create(event_params)
-# The event will be processed asynchronously by the event queue.
+{:ok, queued_command} = CommandApi.create_from_params(event)
+queued_command.command_queue_item.status
+# => :pending
 ```
 
-You can later check the event and transaction status:
+Background processors (InstanceMonitor → InstanceProcessor) will pick up the command, mark it as `:processing`, persist the transaction, and finally set the queue item to `:processed`. Inspect progress with `DoubleEntryLedger.Stores.CommandStore.get_by_id/1`.
+
+## Updating a pending transaction
+
+Updates must reference the same `source` and `source_idempk` as the original pending command and supply a unique `update_idempk` per update. `PendingTransactionLookup` enforces that the original transaction is still pending before allowing the update.
+
+### Posting (finalizing) the hold
 
 ```elixir
-event = DoubleEntryLedger.EventStore.get_by_id(event.id)
-[transaction| _] = event.transactions
-IO.inspect(transaction.status) # :pending (until posted or archived)
+CommandApi.process_from_params(%{
+  "instance_address" => instance.address,
+  "action" => "update_transaction",
+  "source" => "checkout",
+  "source_idempk" => "order-123",      # tie back to the original hold
+  "update_idempk" => "order-123-post", # unique per update
+  "payload" => %{status: :posted}
+})
 ```
 
----
+The worker loads the transaction referenced by `PendingTransactionLookup`, transitions it from `:pending` to `:posted`, and writes a new `JournalEvent`.
 
-## Updating a Pending Transaction (Post or Archive)
-
-To update a pending transaction (for example, to post or archive it), submit an **update event**.  
-**Important:**  
-
-- The update event must include the same `source` and `source_idempk` as the original event.
-- The update event must have a unique `update_idempk` (unique per update for the original event).
-- The original transaction must still be in the `:pending` state.
-
-### Example: Posting (Finalizing) a Pending Transaction
+### Archiving (canceling) the hold
 
 ```elixir
-update_event_params = %{
-  instance_id: instance.id,
-  source: "checkout",
-  source_idempk: "order-123",      # must match the original event
-  update_idempk: "order-123-post", # unique for this update
-  source_data: %{description: "Finalize order"},
-  action: :update,
-  transaction_data: %{
-    status: :posted
-  }
-}
-
-# Synchronous processing:
-{:ok, transaction, event} =
-  DoubleEntryLedger.EventStore.process_from_event_params(update_event_params)
-
-IO.inspect(transaction.status) # :posted
-
-# Or, for async processing:
-{:ok, event} = DoubleEntryLedger.EventStore.create(update_event_params)
+CommandApi.process_from_params(%{
+  "instance_address" => instance.address,
+  "action" => "update_transaction",
+  "source" => "checkout",
+  "source_idempk" => "order-123",
+  "update_idempk" => "order-123-void",
+  "payload" => %{status: :archived}
+})
 ```
 
-### Example: Archiving (Canceling) a Pending Transaction
+Only pending transactions can be archived. If the create command is still processing or previously failed, the update worker will revert the update command to `:pending` or schedule a retry until the create completes successfully.
+
+### Editing entries while still pending
+
+Pending updates may also include `entries` with the same account addresses/currencies as the original transaction. The ledger enforces:
+
+- Entry count and ordering must match the original pending transaction.
+- Account addresses and currencies are immutable.
+- Signed amounts may change as long as the transaction remains balanced per currency.
+
+## Impact on account balances
+
+- **Posted (`account.posted`)** – sums entries for posted transactions.
+- **Pending (`account.pending`)** – sums entries for pending transactions.
+- **Available (`account.available`)** – derived from the posted and pending balances respecting the account’s normal balance and will always be equal or lower to the posted balance. For an account with debit normal balance, a pending credit will lower the available balance as this is an expectation of a payout from the account. A pending debit on the other hand will not affect the balance, as this is an expectation of a potential inflow that is not guaranteed until the transaction is posted.
+
+Inspect balances via `DoubleEntryLedger.Stores.AccountStore.get_by_address/2` or any other account lookup.
 
 ```elixir
-archive_event_params = %{
-  instance_id: instance.id,
-  source: "checkout",
-  source_idempk: "order-123",         # must match the original event
-  update_idempk: "order-123-archive", # unique for this update
-  source_data: %{description: "Cancel order"},
-  action: :update,
-  transaction_data: %{
-    status: :archived
-  }
-}
+alias DoubleEntryLedger.Stores.AccountStore
 
-# Synchronous processing:
-{:ok, transaction, event} =
-  DoubleEntryLedger.EventStore.process_from_event_params(archive_event_params)
-
-IO.inspect(transaction.status) # :archived
-
-# Or, for async processing:
-{:ok, event} = DoubleEntryLedger.EventStore.create(archive_event_params)
+account = AccountStore.get_by_address(instance.address, cash.address)
+account.posted.amount
+account.pending.amount
+account.available
 ```
 
----
+Balance history (`DoubleEntryLedger.BalanceHistoryEntry`) records every mutation and links back to the originating entry and command for auditing.
 
-## State Transition Rules
+## Example workflow
 
-- Only transactions in the `:pending` state can be posted or archived.
-- Once a transaction is `:posted` or `:archived`, it cannot be changed.
-- All transitions are validated by the ledger and will fail if not allowed.
-- Update events must reference the original event by `source` and `source_idempk`, and provide a unique `update_idempk`.
-- Any update event for a :posted or :archived transaction will not be processed.
+1. **Create a hold**
 
----
+   ```elixir
+   {:ok, hold, _command} = CommandApi.process_from_params(event)
+   ```
 
-## Impact of Pending Transactions on Available Account Balance
+2. **Modify the pending amount** (optional)
 
-Pending transactions play a crucial role in determining the **available balance** of an account, especially in scenarios where funds are reserved but not yet finalized (e.g., payment authorizations, holds, or reservations).
+   ```elixir
+   CommandApi.process_from_params(%{
+     "instance_address" => instance.address,
+     "action" => "update_transaction",
+     "source" => "checkout",
+     "source_idempk" => "order-123",
+     "update_idempk" => "order-123-adjust",
+     "payload" => %{
+       status: :pending,
+       entries: [
+         %{"account_address" => cash.address, "amount" => -120_00, "currency" => :USD},
+         %{"account_address" => liability.address, "amount" => -120_00, "currency" => :USD}
+       ]
+     }
+   })
+   ```
 
-### How Pending Transactions Affect Balances
+3. **Post or archive when the business flow completes** (examples above).
 
-- **Posted Balance:** The sum of all amounts from transactions in the `:posted` state. This is the "official" ledger balance and is stored in the `posted` embedded struct on the account.
-- **Pending Balance:** The sum of all amounts from transactions in the `:pending` state. This represents funds that are reserved or on hold and is stored in the `pending` embedded struct on the account.
-- **Available Balance:** The calculated balance that accounts for both posted and pending transactions. This is stored in the `available` field on the account struct and is automatically updated by the ledger.
-
-  For credit accounts, the available balance is calculated as: `available = posted.amount - pending.debit`
-  For debit accounts, the available balance is calculated as: `available = posted.amount - pending.credit`
-
-  The exact calculation may depend on the account's normal balance and configuration, but the ledger ensures that the `available` field reflects the correct value.
-
-### Example: Pending Transaction Subtracting Money
-
-Suppose your account has a posted balance of $1,000.  
-You create a pending transaction to reserve $200 for a payment:
-
-```elixir
-event_params = %{
-  instance_id: instance.id,
-  source: "checkout",
-  source_idempk: "order-456",
-  source_data: %{description: "Hold funds for payment"},
-  action: :create,
-  transaction_data: %{
-    status: :pending,
-    entries: [
-      %{account_id: cash.id, amount: -200_00, currency: :USD},
-      %{account_id: liability.id, amount: -200_00, currency: :USD}
-    ]
-  }
-}
-
-{:ok, event} = DoubleEntryLedger.EventStore.create(event_params)
-```
-
-- The `cash` account now has a pending transaction subtracting $200.
-- The **available balance** for `cash` is now $800, even though the posted balance is still $1,000.
-- If the transaction is later posted, the posted balance will decrease by $200 and the pending balance will be cleared.
-- If the transaction is archived, the pending hold is released and the available balance returns to $1,000.
-
-### Querying Balances
-
-You can retrieve the account struct and inspect its balance fields:
-
-```elixir
-account = DoubleEntryLedger.AccountStore.get_by_id(cash.id)
-IO.inspect(account.posted)    # The posted (finalized) balance struct
-IO.inspect(account.pending)   # The sum of all pending transactions (pending balance struct)
-IO.inspect(account.available) # The available balance as an integer
-```
-
-- `account.posted.amount` gives the posted balance.
-- `account.pending.amount` gives the pending balance.
-- `account.available` gives the available balance, which is automatically calculated and updated by the ledger.
-
-> **Note:**  
-> Pending transactions that subtract money (negative amounts) immediately reduce the available balance, even before they are posted. This is essential for scenarios like card authorizations, hotel reservations, or any workflow where funds must be reserved before final settlement.
-
-### Why This Matters
-
-- **Prevents overspending:** Pending transactions ensure that reserved funds are not double-spent.
-- **Accurate reporting:** Users and systems can see both posted and available balances, reflecting real-world constraints.
-- **Consistency:** The ledger enforces that only available funds can be used for new transactions, taking into account all pending holds.
-
----
-
-## Example Workflow
-
-1. **Create a pending transaction (hold):**
-
-    ```elixir
-    {:ok, event} = DoubleEntryLedger.EventStore.create(%{
-        instance_id: instance.id,
-        source: "checkout",
-        source_idempk: "order-123",
-        source_data: %{description: "Hold funds for order"},
-        action: :create,
-        transaction_data: %{
-        status: :pending,
-        entries: [
-            %{account_id: cash.id, amount: 1000_00, currency: :USD},
-            %{account_id: liability.id, amount: 1000_00, currency: :USD}
-        ]
-        }
-    })
-    ```
-
-2. **Update the pending transaction's entries (e.g., change the amount):**
-
-    ```elixir
-    {:ok, event} = DoubleEntryLedger.EventStore.create(%{
-        instance_id: instance.id,
-        source: "checkout",
-        source_idempk: "order-123",            # must match the original event
-        update_idempk: "order-123-update-1",   # unique for this update
-        source_data: %{description: "Update order amount"},
-        action: :update,
-        transaction_data: %{
-        # status is still :pending
-        entries: [
-            %{account_id: cash.id, amount: 1200_00, currency: :USD},
-            %{account_id: liability.id, amount: 1200_00, currency: :USD}
-        ]
-        }
-    })
-    ```
-
-    > **Note:**  
-    > When updating the entries of a pending transaction:
-    >
-    > - The number of entries must remain the same as in the original transaction.
-    > - The entries must reference the same accounts as the original transaction (account IDs and currencies must match).
-    > - All other double entry ledger rules still apply: the transaction must remain balanced, and only transactions in the `:pending` state can be updated.
-
-3. **Post (finalize) the transaction:**
-
-    ```elixir
-    {:ok, event} = DoubleEntryLedger.EventStore.create(%{
-        instance_id: instance.id,
-        source: "checkout",
-        source_idempk: "order-123",
-        update_idempk: "order-123-post",
-        source_data: %{description: "Finalize order"},
-        action: :update,
-        transaction_data: %{status: :posted}
-    })
-    ```
-
-4. **Or archive (cancel) the transaction:**
-
-    ```elixir
-    {:ok, event} = DoubleEntryLedger.EventStore.create(%{
-        instance_id: instance.id,
-        source: "checkout",
-        source_idempk: "order-123",
-        update_idempk: "order-123-archive",
-        source_data: %{description: "Cancel order"},
-        action: :update,
-        transaction_data: %{status: :archived}
-    })
-    ```
-
----
+Throughout the workflow you can inspect the command status via `CommandStore`, the live transaction via `DoubleEntryLedger.Stores.TransactionStore.get_by_id/1`, or the journal via `DoubleEntryLedger.Stores.JournalEventStore`.
 
 ## Notes
 
-- The `update_idempk` field must be unique for each update event and must be used together with the original `source` and `source_idempk`.
-- All transitions and validations are handled by the ledger, ensuring data integrity and auditability.
-- Both synchronous and asynchronous flows are supported; use the one that fits your application's needs.
+- Always include `source`, `source_idempk`, and (for updates) `update_idempk`. These keys provide idempotency and allow `PendingTransactionLookup` to find the correct transaction.
+- Only `:pending` transactions can be updated. Attempts to update `:posted` or `:archived` transactions will be rejected.
+- If the original pending command fails, the update command is moved back to `:pending` or retried so the system never posts a non-existent transaction.
+- Both synchronous (`process_from_params/2`) and asynchronous (`create_from_params/1`) flows support pending transactions; choose based on whether the caller must wait for projection results.
 
----
-
-For more details, see:
-
-- [DoubleEntryLedger.Event](DoubleEntryLedger.Event.html)
-- [DoubleEntryLedger.Transaction](DoubleEntryLedger.Transaction.html)
-- [DoubleEntryLedger.EventStore](DoubleEntryLedger.EventStore.html)
+Use these patterns to model card authorizations, hotel holds, or any other business flow where money must be reserved before final settlement.
