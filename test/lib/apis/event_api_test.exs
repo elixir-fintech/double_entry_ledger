@@ -7,6 +7,7 @@ defmodule DoubleEntryLedger.Apis.EventApiTest do
   alias DoubleEntryLedger.Repo
   alias DoubleEntryLedger.Stores.{AccountStore, InstanceStore}
   alias DoubleEntryLedger.Apis.CommandApi
+  alias DoubleEntryLedger.Command.AccountCommandMap
 
   doctest CommandApi
 end

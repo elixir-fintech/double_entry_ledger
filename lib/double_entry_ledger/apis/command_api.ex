@@ -1,12 +1,15 @@
 defmodule DoubleEntryLedger.Apis.CommandApi do
   @moduledoc """
+  Public boundary for submitting ledger commands.
 
-  The event_params should be as follows (Elixir does not allow string keys in the typespec
-  so the generic type `%{required(String.t()) => term()}` is used)
+  All requests are regular Elixir maps (typically with string keys coming from JSON) that
+  describe which action to run, which instance to target, and the payload for either account
+  or transaction work. The common wire format looks like:
+
   ```
   %{
-    "action" => String.t(),
     "instance_address" => String.t(),
+    "action" => "create_transaction" | "update_transaction" | "create_account" | "update_account",
     "source" => String.t(),
     "source_idempk" => String.t(),
     "update_idempk" => String.t() | nil,
@@ -14,6 +17,9 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     "payload" => map()
   }
   ```
+
+  Use `create_from_params/1` to enqueue commands for asynchronous processing or
+  `process_from_params/2` to run the full worker pipeline synchronously.
   """
   use DoubleEntryLedger.Logger
 
@@ -27,26 +33,28 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   @account_actions actions(:account) |> Enum.map(&Atom.to_string/1)
   @transaction_actions actions(:transaction) |> Enum.map(&Atom.to_string/1)
 
-  @type event_params() :: %{required(String.t()) => term()}
+  @type command_params() :: %{required(String.t()) => term()}
 
   @type on_error() :: :retry | :fail
 
   @doc """
-  Adds the event to the EventQueue with status `:pending` to be processed asynchronously. Enforce
-  idempotency using the
+  Creates an immutable `Command` from external params and queues it for background processing.
+
+  This function validates the payload using the appropriate `AccountCommandMap` or
+  `TransactionCommandMap`, resolves the instance, and persists a `Command` with an attached
+  `CommandQueueItem` in the `:pending` state. `InstanceMonitor` will later claim and process
+  the command; callers only need to inspect the returned struct to track progress.
 
   ## Parameters
-    - `event_params`: Map containing event parameters including action and payload data
+    - `command_params`: Map containing string keys for `"instance_address"`, `"action"`,
+      idempotency keys, and the `"payload"`.
 
   ## Returns
-    - `{:ok, event}`: If a transaction event was successfully processed
-    - `{:error, changeset}`: If validation failed
-    - `{:error, reason}`: If processing failed for other reasons
+    - `{:ok, command}`: On success with the queued command (status `:pending`)
+    - `{:error, changeset}`: When the payload could not be cast into a command map
+    - `{:error, :instance_not_found | :action_not_supported}`: When the instance or action is invalid
 
   ## Examples
-    iex> alias DoubleEntryLedger.Repo
-    iex> alias DoubleEntryLedger.Stores.InstanceStore
-    iex> alias DoubleEntryLedger.Apis.CommandApi
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
     iex> {:ok, event} = CommandApi.create_from_params(%{
@@ -58,7 +66,6 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     ...> })
     iex> event.command_queue_item.status
     :pending
-    iex> alias DoubleEntryLedger.Command.AccountCommandMap
     iex> {:error, %Ecto.Changeset{data: %AccountCommandMap{}}= changeset} = CommandApi.create_from_params(%{
     ...>   "instance_address" => instance.address,
     ...>   "action" => "create_account",
@@ -69,27 +76,25 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     iex> changeset.valid?
     false
 
-    iex> alias DoubleEntryLedger.Apis.CommandApi
     iex> CommandApi.create_from_params(%{"action" => "unsupported"})
     iex> {:error, :action_not_supported}
-
   """
-  @spec create_from_params(event_params()) ::
+  @spec create_from_params(command_params()) ::
           {:ok, Command.t()}
           | {:error,
              Ecto.Changeset.t(AccountCommandMap.t() | TransactionCommandMap.t())
              | :instance_not_found
              | :action_not_supported}
-  def create_from_params(%{"action" => action} = event_params) when action in @account_actions do
-    case AccountCommandMap.create(event_params) do
+  def create_from_params(%{"action" => action} = command_params) when action in @account_actions do
+    case AccountCommandMap.create(command_params) do
       {:ok, command_map} -> CommandStore.create(command_map)
       error -> error
     end
   end
 
-  def create_from_params(%{"action" => action} = event_params)
+  def create_from_params(%{"action" => action} = command_params)
       when action in @transaction_actions do
-    case TransactionCommandMap.create(event_params) do
+    case TransactionCommandMap.create(command_params) do
       {:ok, command_map} -> CommandStore.create(command_map)
       error -> error
     end
@@ -100,31 +105,24 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   end
 
   @doc """
-  Processes an event from provided parameters, handling the entire workflow.
-  This only works for parameters that translate into a `TransactionCommandMap`.
+  Validates the params and runs the command worker immediately.
 
-  This function creates a TransactionCommandMap from the parameters, then processes it through
-  the CommandWorker to create both an event record in the CommandStore and creates the necessary projections.
-
-  If the processing fails, it will return an error tuple with details about the failure.
-  The event is saved to the EventQueue and then retried later.
-
-  ## Supported Actions
-
-  ### Transaction Actions
-  - `"create_transaction"` - Creates new double-entry transactions with balanced entries
-  - `"update_transaction"` - Updates existing pending transactions
+  Transaction actions (`"create_transaction"` / `"update_transaction"`) support retries;
+  pass `[on_error: :fail]` to surface validation errors without storing the command when you
+  want the caller to handle failures directly. Account actions run through the same worker
+  stack but currently skip retries and only support the no-save-on-error path.
 
   ## Parameters
-    - `event_params`: Map containing event parameters including action and payload data
+    - `command_params`: Map describing the action, instance, idempotency keys, and payload.
+    - `opts`: Keyword list (currently `on_error: :retry | :fail` for transaction commands).
 
   ## Returns
-    - `{:ok, transaction, event}`: If a transaction event was successfully processed
-    - `{:error, event}`: If the event processing failed
-    - `{:error, changeset}`: If validation failed
-    - `{:error, reason}`: If processing failed for other reasons
+    - `{:ok, transaction | account, command}` on success with the created/updated projection.
+    - `{:error, command}` when the worker persisted an error state (queued for retry).
+    - `{:error, changeset}` when payload validation fails.
+    - `{:error, reason}` for other failures (e.g., `:action_not_supported`).
 
-  ### Examples
+  ## Examples
 
     iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
     iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
@@ -160,19 +158,18 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     ...>   }
     ...> }, [on_error: :fail])
 
-    iex> alias DoubleEntryLedger.Apis.CommandApi
     iex> CommandApi.process_from_params(%{"action" => "unsupported"})
     iex> {:error, :action_not_supported}
   """
-  @spec process_from_params(event_params(), on_error: on_error()) ::
+  @spec process_from_params(command_params(), on_error: on_error()) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
-  def process_from_params(event_params, opts \\ [])
+  def process_from_params(command_params, opts \\ [])
 
-  def process_from_params(%{"action" => action} = event_params, opts)
+  def process_from_params(%{"action" => action} = command_params, opts)
       when action in @transaction_actions do
     on_error = Keyword.get(opts, :on_error, :retry)
 
-    case TransactionCommandMap.create(event_params) do
+    case TransactionCommandMap.create(command_params) do
       {:ok, command_map} ->
         case on_error do
           :fail -> CommandWorker.process_new_event_no_save_on_error(command_map)
@@ -180,20 +177,20 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
         end
 
       {:error, command_map_changeset} ->
-        warn("Invalid transaction event params", event_params, command_map_changeset)
+        warn("Invalid transaction command params", command_params, command_map_changeset)
         {:error, command_map_changeset}
     end
   end
 
   # currently the Account related actions do not implement retries
-  def process_from_params(%{"action" => action} = event_params, _opts)
+  def process_from_params(%{"action" => action} = command_params, _opts)
       when action in @account_actions do
-    case AccountCommandMap.create(event_params) do
+    case AccountCommandMap.create(command_params) do
       {:ok, command_map} ->
         CommandWorker.process_new_event_no_save_on_error(command_map)
 
       {:error, command_map_changeset} ->
-        warn("Invalid account event params", event_params, command_map_changeset)
+        warn("Invalid account command params", command_params, command_map_changeset)
         {:error, command_map_changeset}
     end
   end
