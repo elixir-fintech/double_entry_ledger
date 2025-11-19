@@ -172,8 +172,8 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     case TransactionCommandMap.create(command_params) do
       {:ok, command_map} ->
         case on_error do
-          :fail -> CommandWorker.process_new_event_no_save_on_error(command_map)
-          _ -> CommandWorker.process_new_event(command_map)
+          :fail -> CommandWorker.process_new_command_no_save_on_error(command_map)
+          _ -> CommandWorker.process_new_command(command_map)
         end
 
       {:error, command_map_changeset} ->
@@ -187,7 +187,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
       when action in @account_actions do
     case AccountCommandMap.create(command_params) do
       {:ok, command_map} ->
-        CommandWorker.process_new_event_no_save_on_error(command_map)
+        CommandWorker.process_new_command_no_save_on_error(command_map)
 
       {:error, command_map_changeset} ->
         warn("Invalid account command params", command_params, command_map_changeset)

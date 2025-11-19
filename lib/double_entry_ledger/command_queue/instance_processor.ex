@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         parent = self()
 
         Task.start(fn ->
-          process_result = CommandWorker.process_event_with_id(command.id, processor_name())
+          process_result = CommandWorker.process_command_with_id(command.id, processor_name())
           send(parent, {:processing_complete, command.id, process_result})
         end)
 
@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
       {:error, reason} ->
         Logger.warning("Failed to process command #{command_id}: #{inspect(reason)}")
-        # Note: the error is already recorded in the command by CommandWorker.process_event_with_id
+        # Note: the error is already recorded in the command by CommandWorker.process_command_with_id
     end
 
     # Command processing completed, check for more commands

@@ -11,9 +11,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   The CommandWorker supports multiple processing approaches:
 
-  1. **New Command Maps** (`process_new_event/1`) - Direct processing of event maps from external systems. Command is saved for retry later if it fails.
-  2. **No-Save-On-Error** (`process_new_event_no_save_on_error/1`) - Processing as above without saving the Command.
-  3. **Stored Events** (`process_event_with_id/2`) - Processing events already in the database using atomic claiming
+  1. **New Command Maps** (`process_new_command/1`) - Direct processing of event maps from external systems. Command is saved for retry later if it fails.
+  2. **No-Save-On-Error** (`process_new_command_no_save_on_error/1`) - Processing as above without saving the Command.
+  3. **Stored Events** (`process_command_with_id/2`) - Processing events already in the database using atomic claiming
 
   ## Supported Command Types and Actions
 
@@ -100,14 +100,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
         }
       }
 
-      {:ok, transaction, event} = CommandWorker.process_new_event(command_map)
+      {:ok, transaction, event} = CommandWorker.process_new_command(command_map)
       # event.command_queue_item.status == :processed
 
       # Process an existing event by ID
-      {:ok, transaction, event} = CommandWorker.process_event_with_id(event_uuid)
+      {:ok, transaction, event} = CommandWorker.process_command_with_id(event_uuid)
 
       # Process without saving errors to CommandQueueItem
-      {:ok, transaction, event} = CommandWorker.process_new_event_no_save_on_error(command_map)
+      {:ok, transaction, event} = CommandWorker.process_new_command_no_save_on_error(command_map)
 
   ## Architecture Notes
 
@@ -270,13 +270,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>     ]
       ...>   }
       ...> }
-      iex> {:ok, transaction, event} = CommandWorker.process_new_event(command_map)
+      iex> {:ok, transaction, event} = CommandWorker.process_new_command(command_map)
       iex> { transaction.status, event.command_queue_item.status }
       {:pending, :processed}
 
       # Unsupported action
       iex> invalid_map = %TransactionCommandMap{action: :delete_transaction}
-      iex> CommandWorker.process_new_event(invalid_map)
+      iex> CommandWorker.process_new_command(invalid_map)
       {:error, :action_not_supported}
 
   ## Error Scenarios
@@ -293,17 +293,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       # System error
       {:error, "Database connection timeout"}
   """
-  @spec process_new_event(TransactionCommandMap.t()) ::
+  @spec process_new_command(TransactionCommandMap.t()) ::
           success_tuple() | error_tuple()
-  def process_new_event(%TransactionCommandMap{action: :create_transaction} = command_map) do
+  def process_new_command(%TransactionCommandMap{action: :create_transaction} = command_map) do
     CreateTransactionCommandMap.process(command_map)
   end
 
-  def process_new_event(%TransactionCommandMap{action: :update_transaction} = command_map) do
+  def process_new_command(%TransactionCommandMap{action: :update_transaction} = command_map) do
     UpdateTransactionCommandMap.process(command_map)
   end
 
-  def process_new_event(_command_map), do: {:error, :action_not_supported}
+  def process_new_command(_command_map), do: {:error, :action_not_supported}
 
   @doc """
   Processes an event map without persisting processing errors to the CommandQueueItem.
@@ -359,7 +359,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>        %{account_address: cash_account.address, amount: 100, currency: :USD}
       ...>      ]
       ...>   }}
-      iex> {:ok, _transaction, event} = CommandWorker.process_new_event_no_save_on_error(valid_event)
+      iex> {:ok, _transaction, event} = CommandWorker.process_new_command_no_save_on_error(valid_event)
       iex> event.command_queue_item.status
       :processed
 
@@ -377,7 +377,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>     currency: "USD"
       ...>   }
       ...> }
-      iex> {:ok, account, event} = CommandWorker.process_new_event_no_save_on_error(command_map)
+      iex> {:ok, account, event} = CommandWorker.process_new_command_no_save_on_error(command_map)
       iex> account.name
       "Petty Cash"
       iex> event.command_queue_item.status
@@ -385,45 +385,45 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
       iex> # Unsupported action
       iex> unsupported = %TransactionCommandMap{action: :invalid_action}
-      iex> CommandWorker.process_new_event_no_save_on_error(unsupported)
+      iex> CommandWorker.process_new_command_no_save_on_error(unsupported)
       {:error, :action_not_supported}
 
   ## Use Cases
 
       # Validate before committing to standard processing
-      case CommandWorker.process_new_event_no_save_on_error(command_map) do
+      case CommandWorker.process_new_command_no_save_on_error(command_map) do
         {:ok, _, _} ->
           # Safe to process normally
-          CommandWorker.process_new_event(command_map)
+          CommandWorker.process_new_command(command_map)
         {:error, changeset} ->
           # Handle validation errors without CommandQueueItem pollution
           {:error, format_validation_errors(changeset)}
       end
   """
-  @spec process_new_event_no_save_on_error(em) ::
+  @spec process_new_command_no_save_on_error(em) ::
           success_tuple() | {:error, Changeset.t(em) | String.t()}
         when em: TransactionCommandMap.t() | AccountCommandMap.t()
-  def process_new_event_no_save_on_error(
+  def process_new_command_no_save_on_error(
         %TransactionCommandMap{action: :create_transaction} = command_map
       ) do
     CreateTransactionCommandMapNoSaveOnError.process(command_map)
   end
 
-  def process_new_event_no_save_on_error(
+  def process_new_command_no_save_on_error(
         %TransactionCommandMap{action: :update_transaction} = command_map
       ) do
     UpdateTransactionCommandMapNoSaveOnError.process(command_map)
   end
 
-  def process_new_event_no_save_on_error(%AccountCommandMap{action: :create_account} = command_map) do
+  def process_new_command_no_save_on_error(%AccountCommandMap{action: :create_account} = command_map) do
     CreateAccountCommandMapNoSaveOnError.process(command_map)
   end
 
-  def process_new_event_no_save_on_error(%AccountCommandMap{action: :update_account} = command_map) do
+  def process_new_command_no_save_on_error(%AccountCommandMap{action: :update_account} = command_map) do
     UpdateAccountCommandMapNoSaveOnError.process(command_map)
   end
 
-  def process_new_event_no_save_on_error(_command_map), do: {:error, :action_not_supported}
+  def process_new_command_no_save_on_error(_command_map), do: {:error, :action_not_supported}
 
   @doc """
   Retrieves and processes an existing event by its UUID using atomic CommandQueueItem claiming.
@@ -476,28 +476,28 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ## Examples
 
       # Process a pending event
-      {:ok, transaction, event} = CommandWorker.process_event_with_id("550e8400-e29b-41d4-a716-446655440000")
+      {:ok, transaction, event} = CommandWorker.process_command_with_id("550e8400-e29b-41d4-a716-446655440000")
       event.command_queue_item.status
       :processed
       event.command_queue_item.processor_id
       "manual"
 
       # Attempt to process non-existent event
-      CommandWorker.process_event_with_id("00000000-0000-0000-0000-000000000000")
+      CommandWorker.process_command_with_id("00000000-0000-0000-0000-000000000000")
       {:error, :event_not_found}
 
       # Process with custom processor ID
-      {:ok, _, event} = CommandWorker.process_event_with_id(event_uuid, "background_job_1")
+      {:ok, _, event} = CommandWorker.process_command_with_id(event_uuid, "background_job_1")
       event.command_queue_item.processor_id
       "background_job_1"
 
       # Command already being processed
-      Task.async(fn -> CommandWorker.process_event_with_id(uuid, "proc_1") end)
-      CommandWorker.process_event_with_id(uuid, "proc_2")
+      Task.async(fn -> CommandWorker.process_command_with_id(uuid, "proc_1") end)
+      CommandWorker.process_command_with_id(uuid, "proc_2")
       {:error, :event_already_claimed}
 
       # Retry a failed event
-      {:ok, _, event} = CommandWorker.process_event_with_id(failed_event_uuid)
+      {:ok, _, event} = CommandWorker.process_command_with_id(failed_event_uuid)
       event.command_queue_item.status
       :processed
       event.command_queue_item.retry_count
@@ -518,12 +518,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - Generate processing performance metrics from CommandQueueItem timestamps
   - Monitor error patterns through the `errors` array
   """
-  @spec process_event_with_id(Ecto.UUID.t(), String.t()) ::
+  @spec process_command_with_id(Ecto.UUID.t(), String.t()) ::
           success_tuple() | error_tuple()
-  def process_event_with_id(uuid, processor_id \\ "manual") do
+  def process_command_with_id(uuid, processor_id \\ "manual") do
     case claim_event_for_processing(uuid, processor_id) do
       {:ok, event} ->
-        process_event(event)
+        process_command(event)
 
       {:error, error} ->
         {:error, error}
@@ -531,8 +531,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   # Private function - processes a claimed event based on its action type
-  @spec process_event(Command.t()) :: success_tuple() | error_tuple()
-  defp process_event(
+  @spec process_command(Command.t()) :: success_tuple() | error_tuple()
+  defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{action: :create_transaction}
@@ -541,7 +541,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     CreateTransactionCommand.process(event)
   end
 
-  defp process_event(
+  defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{"action" => "create_transaction"}
@@ -550,7 +550,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     CreateTransactionCommand.process(event)
   end
 
-  defp process_event(
+  defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{action: :update_transaction}
@@ -559,7 +559,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     UpdateTransactionCommand.process(event)
   end
 
-  defp process_event(
+  defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{"action" => "update_transaction"}
@@ -568,7 +568,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     UpdateTransactionCommand.process(event)
   end
 
-  defp process_event(
+  defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{action: :create_account}
@@ -578,7 +578,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     CreateAccountCommand.process(event)
   end
 
-  defp process_event(
+  defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{action: :update_account}
@@ -588,9 +588,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     UpdateAccountCommand.process(event)
   end
 
-  defp process_event(%Command{command_queue_item: %{status: :processing}}) do
+  defp process_command(%Command{command_queue_item: %{status: :processing}}) do
     {:error, :action_not_supported}
   end
 
-  defp process_event(%Command{} = _event), do: {:error, :event_not_in_processing_state}
+  defp process_command(%Command{} = _event), do: {:error, :event_not_in_processing_state}
 end

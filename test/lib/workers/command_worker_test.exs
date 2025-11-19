@@ -16,14 +16,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
   doctest CommandWorker
 
-  describe "process_event_with_id/1" do
+  describe "process_command_with_id/1" do
     setup [:create_instance, :create_accounts]
 
     test "process create event successfully", ctx do
       %{event: event} = new_create_transaction_event(ctx)
 
       {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        CommandWorker.process_event_with_id(event.id)
+        CommandWorker.process_command_with_id(event.id)
 
       assert evq.status == :processed
 
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
       %{event: pending_event} = new_create_transaction_event(ctx, :pending)
 
       {:ok, pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
-        CommandWorker.process_event_with_id(pending_event.id)
+        CommandWorker.process_command_with_id(pending_event.id)
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
@@ -52,7 +52,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
         ])
 
       {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        CommandWorker.process_event_with_id(event.id)
+        CommandWorker.process_command_with_id(event.id)
 
       assert evq.status == :processed
 
@@ -68,10 +68,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
     test "don't process events with status [:processed, :dead_letter]", ctx do
       %{event: event} = new_create_transaction_event(ctx)
-      CommandWorker.process_event_with_id(event.id)
+      CommandWorker.process_command_with_id(event.id)
 
       assert {:error, :event_not_claimable} =
-               CommandWorker.process_event_with_id(event.id)
+               CommandWorker.process_command_with_id(event.id)
 
       event
       |> Ecto.Changeset.change()
@@ -82,7 +82,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
       |> Repo.update!()
 
       assert {:error, :event_not_claimable} =
-               CommandWorker.process_event_with_id(event.id)
+               CommandWorker.process_command_with_id(event.id)
     end
   end
 
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
         |> TransactionCommandMap.create()
 
       {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        CommandWorker.process_new_event(command_map)
+        CommandWorker.process_new_command(command_map)
 
       assert evq.status == :processed
 

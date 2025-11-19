@@ -114,7 +114,7 @@ defmodule DoubleEntryLedger.LoadTesting do
         instance_address: instance.address
       })
 
-    CommandWorker.process_new_event(command_map)
+    CommandWorker.process_new_command(command_map)
   end
 
   # create as many source debit accounts as concurrent transactions to minimize contention
