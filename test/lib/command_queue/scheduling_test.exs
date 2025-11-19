@@ -14,12 +14,12 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateEventError
 
-  describe "claim_event_for_processing/2" do
+  describe "claim_command_for_processing/2" do
     setup [:create_instance, :create_accounts]
 
     test "returns error when event not found" do
       assert {:error, :event_not_found} =
-               Scheduling.claim_event_for_processing(Ecto.UUID.generate(), "manual")
+               Scheduling.claim_command_for_processing(Ecto.UUID.generate(), "manual")
     end
 
     test "returns error when event not claimable", %{instance: instance} do
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         |> Repo.update!()
 
       assert {:error, :event_not_claimable} =
-               Scheduling.claim_event_for_processing(event.id, "manual")
+               Scheduling.claim_command_for_processing(event.id, "manual")
     end
 
     test "claims an event for processing", %{instance: instance} do
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         CommandStore.create(transaction_event_attrs(instance_address: instance.address))
 
       assert {:ok, %Command{command_queue_item: eqm} = claimed_event} =
-               Scheduling.claim_event_for_processing(event.id, "manual")
+               Scheduling.claim_command_for_processing(event.id, "manual")
 
       assert eqm.status == :processing
       assert eqm.command_id == claimed_event.id
@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       end)
 
       assert {:error, :event_already_claimed} =
-               Scheduling.claim_event_for_processing(
+               Scheduling.claim_command_for_processing(
                  event.id,
                  "manual",
                  DoubleEntryLedger.MockRepo
@@ -117,7 +117,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, pending_event} =
         CommandStore.create(transaction_event_attrs(instance_address: instance.address))
 
-      {:ok, event} = Scheduling.claim_event_for_processing(pending_event.id, "manual")
+      {:ok, event} = Scheduling.claim_command_for_processing(pending_event.id, "manual")
       error = "Test error"
 
       %{changes: %{command_queue_item: command_queue_item}} =

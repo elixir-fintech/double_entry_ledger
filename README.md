@@ -217,7 +217,7 @@ Use `InstanceStore.validate_account_balances(instance.address)` to assert the le
 ## Background Processing
 
 - `DoubleEntryLedger.CommandQueue.InstanceMonitor` polls for commands in `:pending`, `:occ_timeout`, or `:failed` status and ensures each instance has an `InstanceProcessor`.
-- `InstanceProcessor` claims work via `CommandQueue.Scheduling.claim_event_for_processing/2`, runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`.
+- `InstanceProcessor` claims work via `CommandQueue.Scheduling.claim_command_for_processing/2`, runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`.
 - OCC is handled inside the workers (see `lib/double_entry_ledger/occ`). Retries are scheduled with exponential backoff until `max_retries` is reached, after which commands are marked as `:dead_letter`.
 - Errors and retry metadata live on the `command_queue_item`, so you can inspect processing attempts via `CommandStore` or SQL views.
 - Oban handles fan-out tasks (currently the journal-event linking job) via `DoubleEntryLedger.Workers.Oban.JournalEventLinks`. Configure the queue size to match your workload.

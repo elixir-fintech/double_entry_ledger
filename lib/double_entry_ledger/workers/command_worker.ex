@@ -141,7 +141,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     UpdateTransactionCommandMapNoSaveOnError
   }
 
-  import DoubleEntryLedger.CommandQueue.Scheduling, only: [claim_event_for_processing: 2]
+  import DoubleEntryLedger.CommandQueue.Scheduling, only: [claim_command_for_processing: 2]
 
   @typedoc """
   Success result from event processing operations.
@@ -521,7 +521,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   @spec process_command_with_id(Ecto.UUID.t(), String.t()) ::
           success_tuple() | error_tuple()
   def process_command_with_id(uuid, processor_id \\ "manual") do
-    case claim_event_for_processing(uuid, processor_id) do
+    case claim_command_for_processing(uuid, processor_id) do
       {:ok, event} ->
         process_command(event)
 

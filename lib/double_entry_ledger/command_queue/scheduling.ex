@@ -93,9 +93,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `{:error, :event_already_claimed}`: If the command was claimed by another processor
     - `{:error, :event_not_claimable}`: If the command is not in a claimable state (not pending or occ_timeout)
   """
-  @spec claim_event_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
+  @spec claim_command_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
           {:ok, Command.t()} | {:error, atom()}
-  def claim_event_for_processing(id, processor_id, repo \\ Repo) do
+  def claim_command_for_processing(id, processor_id, repo \\ Repo) do
     case CommandStore.get_by_id(id) do
       nil ->
         {:error, :event_not_found}

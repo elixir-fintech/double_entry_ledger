@@ -143,7 +143,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
 
       {:ok, event} = new_update_transaction_event(s, s_id, inst.address, :posted)
 
-      {:ok, processing_event} = Scheduling.claim_event_for_processing(event.id, "manual")
+      {:ok, processing_event} = Scheduling.claim_command_for_processing(event.id, "manual")
 
       {:error, %{command_queue_item: eqm}} = UpdateTransactionCommand.process(processing_event)
       assert eqm.status == :pending
