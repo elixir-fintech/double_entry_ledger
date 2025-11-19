@@ -60,15 +60,15 @@ When you need the resulting transaction or account, wait until the `CommandQueue
 
 ## Configuration knobs
 
-Tuning happens under the `:event_queue` config namespace (kept for backwards compatibility):
+Tuning happens under the `:command_queue` config namespace (kept for backwards compatibility):
 
 ```elixir
-config :double_entry_ledger, :event_queue,
+config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
-  processor_name: "event_queue"
+  processor_name: "command_queue"
 ```
 
 - `poll_interval` – how often `InstanceMonitor` looks for pending work.
@@ -89,7 +89,7 @@ Oban configuration lives separately in `config :double_entry_ledger, Oban, ...` 
 - Queue commands via `CommandApi.create_from_params/1`; each command is immutable and idempotent.
 - `CommandQueueItem` tracks the background lifecycle; workers process commands per instance with OCC and retries.
 - Monitor queue state through `CommandStore` and read projections through the existing stores once the queue item reaches `:processed`.
-- Tune throughput and retry behaviour via the `:event_queue` config and Oban settings.
+- Tune throughput and retry behaviour via the `:command_queue` config and Oban settings.
 
 For more details, explore:
 

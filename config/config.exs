@@ -12,7 +12,7 @@ config :double_entry_ledger,
   idempotency_secret: "lskfdjsdkfjsdkj"
 
 # Event queue configuration
-config :double_entry_ledger, :event_queue,
+config :double_entry_ledger, :command_queue,
   # Poll for new events every 5 seconds
   poll_interval: 5_000,
   # Maximum number of retry attempts
@@ -22,7 +22,7 @@ config :double_entry_ledger, :event_queue,
   # Maximum delay in seconds (1 hour)
   max_retry_delay: 3600,
   # Name prefix for processors
-  processor_name: "event_queue"
+  processor_name: "command_queue"
 
 config :double_entry_ledger, Oban,
   engine: Oban.Engines.Basic,

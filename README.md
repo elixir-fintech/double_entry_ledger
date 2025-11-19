@@ -76,12 +76,12 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
-config :double_entry_ledger, :event_queue,
+config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
-  processor_name: "event_queue"
+  processor_name: "command_queue"
 
 config :double_entry_ledger, Oban,
   repo: DoubleEntryLedger.Repo,

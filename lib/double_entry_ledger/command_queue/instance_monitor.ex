@@ -13,13 +13,13 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
     * Periodically poll the database for instances with pending, failed, or timed-out commands.
     * For each instance with processable commands, ensure an `InstanceProcessor` is started.
     * Avoid starting duplicate processors for the same instance by checking the Registry.
-    * Use application configuration for poll interval (`:poll_interval` in `:event_queue` config).
+    * Use application configuration for poll interval (`:poll_interval` in `:command_queue` config).
 
   ## Configuration
 
   The poll interval can be set in your application config:
 
-      config :double_entry_ledger, :event_queue, poll_interval: 5_000
+      config :double_entry_ledger, :command_queue, poll_interval: 5_000
 
   The default poll interval is 5,000 milliseconds (5 seconds) if not specified.
 
@@ -54,7 +54,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   @impl true
   @doc false
   def init(_) do
-    config = Application.get_env(:double_entry_ledger, :event_queue, [])
+    config = Application.get_env(:double_entry_ledger, :command_queue, [])
     poll_interval = Keyword.get(config, :poll_interval, 5_000)
 
     schedule_poll(poll_interval)

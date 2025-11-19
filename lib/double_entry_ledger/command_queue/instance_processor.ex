@@ -134,8 +134,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   defp processor_name do
     prefix =
-      Application.get_env(:double_entry_ledger, :event_queue, [])[:processor_name] ||
-        "event_queue"
+      Application.get_env(:double_entry_ledger, :command_queue, [])[:processor_name] ||
+        "command_queue"
 
     "#{prefix}_#{node()}_#{System.unique_integer([:positive])}"
   end

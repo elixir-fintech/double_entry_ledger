@@ -24,12 +24,12 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitorTest do
 
   test "poll interval is set from config or defaults" do
     # Override config for this test
-    Application.put_env(:double_entry_ledger, :event_queue, poll_interval: 1234)
+    Application.put_env(:double_entry_ledger, :command_queue, poll_interval: 1234)
     {:ok, pid} = start_supervised(InstanceMonitor)
     state = :sys.get_state(pid)
     assert state.poll_interval == 1234
 
     # Clean up
-    Application.delete_env(:double_entry_ledger, :event_queue)
+    Application.delete_env(:double_entry_ledger, :command_queue)
   end
 end

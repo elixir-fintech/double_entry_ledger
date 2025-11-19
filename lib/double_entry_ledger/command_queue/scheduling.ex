@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.CommandQueueItem
   alias Ecto.Changeset
 
-  @config Application.compile_env(:double_entry_ledger, :event_queue, [])
+  @config Application.compile_env(:double_entry_ledger, :command_queue, [])
   @max_retries Keyword.get(@config, :max_retries, 5)
   @base_delay Keyword.get(@config, :base_retry_delay, 30)
   @max_delay Keyword.get(@config, :max_retry_delay, 3600)
