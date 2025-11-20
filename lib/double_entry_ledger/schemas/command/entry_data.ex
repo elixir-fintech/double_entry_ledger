@@ -20,7 +20,7 @@ defmodule DoubleEntryLedger.Command.EntryData do
   ## Usage
 
   EntryData structs are typically embedded within TransactionData as part of the
-  event processing flow:
+  command processing flow:
 
       entry_data = %EntryData{
         account_address: "cash:user:123",

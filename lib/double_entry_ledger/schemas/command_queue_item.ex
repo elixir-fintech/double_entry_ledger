@@ -1,7 +1,7 @@
 defmodule DoubleEntryLedger.CommandQueueItem do
   @moduledoc """
-  Schema for the event queue table, used for worker-based queue management.
-  This schema is used to track events that need to be processed by workers.
+  Schema for the command queue table, used for worker-based queue management.
+  This schema tracks commands that need to be processed by workers.
   """
 
   use DoubleEntryLedger.BaseSchema

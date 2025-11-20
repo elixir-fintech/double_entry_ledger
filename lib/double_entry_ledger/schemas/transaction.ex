@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Transaction do
 
   Usage Details:
   Transactions should not be created directly. Instead, use the `DoubleEntryLedger.Stores.CommandStore` module
-  to create events that will generate transactions. The `CommandWorker` will handle the processing of these events
+  to create commands that will generate transactions. The `CommandWorker` will handle the processing of these commands
   and the creation of transactions in the ledger.
   """
 

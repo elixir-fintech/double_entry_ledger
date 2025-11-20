@@ -1,10 +1,10 @@
 defmodule DoubleEntryLedger.Command do
   @moduledoc """
-  Defines and manages events in the Double Entry Ledger system.
+  Defines and manages commands in the Double Entry Ledger system.
 
-  This module provides the Command schema, which represents a request to create or update a
-  transaction in the ledger. Events serve as an audit trail and queue mechanism for transaction
-  processing, allowing for asynchronous handling, retries, and idempotency.
+  The Command schema represents a request to create or update ledger data. Commands drive the
+  asynchronous processing pipeline (queueing, retries, idempotency) and link to journal events
+  once they have been processed.
   """
 
   use DoubleEntryLedger.BaseSchema
@@ -24,15 +24,15 @@ defmodule DoubleEntryLedger.Command do
   alias __MODULE__, as: Command
 
   @typedoc """
-  Represents an event in the Double Entry Ledger system.
+  Represents a command in the Double Entry Ledger system.
 
-  An event encapsulates a request to create or update a transaction, along with
-  metadata about the processing state, source, and queue management information.
+  A command encapsulates a request to create or update a transaction, along with metadata about
+  the processing state, source, and queue management information.
 
   ## Fields
 
   * `id`: UUID primary key
-  * `command_map`: map containing the event payload
+  * `command_map`: map containing the command payload
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
   * `inserted_at`: Creation timestamp
@@ -69,15 +69,15 @@ defmodule DoubleEntryLedger.Command do
   end
 
   @doc """
-  Creates a changeset for validating and creating/updating an Command.
+  Creates a changeset for validating and creating/updating a Command.
 
-  This function builds an Ecto changeset for an event with appropriate validations
-  and handling based on the action type and transaction data provided.
+  This function builds an Ecto changeset for a command with appropriate validations and handling
+  based on the action type and transaction data provided.
 
   ## Parameters
 
-  * `event` - The Command struct to create a changeset for
-  * `attrs` - Map of attributes to apply to the event
+  * `command` - The Command struct to create a changeset for
+  * `attrs` - Map of attributes to apply to the command
 
   ## Returns
 
@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.Command do
 
   ## Examples
 
-      # Create event changeset
+      # Create command changeset
       iex> command_map = %{
       ...>   action: :create_transaction,
       ...>   source: "api",
@@ -119,21 +119,21 @@ defmodule DoubleEntryLedger.Command do
       false
   """
   @spec changeset(Command.t(), map()) :: Ecto.Changeset.t()
-  def changeset(event, attrs) do
-    event
+  def changeset(command, attrs) do
+    command
     |> base_changeset(attrs)
   end
 
   @doc """
-  Creates a changeset for marking an event as being processed.
+  Creates a changeset for marking a command as being processed.
 
-  This function prepares a changeset that updates an event to the :processing state,
-  assigns a processor, and updates processing metadata such as start time and retry count.
+  This function prepares a changeset that updates a command to the :processing state, assigns a
+  processor, and updates processing metadata such as start time and retry count.
 
   ## Parameters
 
-  * `event` - The Command struct to update
-  * `processor_id` - String identifier for the processor handling the event
+  * `command` - The Command struct to update
+  * `processor_id` - String identifier for the processor handling the command
 
   ## Returns
 
@@ -153,24 +153,24 @@ defmodule DoubleEntryLedger.Command do
   @spec processing_start_changeset(Command.t(), String.t(), non_neg_integer()) ::
           Ecto.Changeset.t()
   def processing_start_changeset(
-        %{command_queue_item: command_queue_item} = event,
+        %{command_queue_item: command_queue_item} = command,
         processor_id,
         retry_count
       ) do
-    event_queue_changeset =
+    queue_changeset =
       command_queue_item
       |> CommandQueueItem.processing_start_changeset(processor_id, retry_count)
 
-    event
+    command
     |> change(%{})
-    |> put_assoc(:command_queue_item, event_queue_changeset)
+    |> put_assoc(:command_queue_item, queue_changeset)
   end
 
   @spec base_changeset(Command.t() | Ecto.Changeset.t(Command.t()), map()) :: Ecto.Changeset.t()
-  defp base_changeset(event, attrs) do
+  defp base_changeset(command, attrs) do
     attrs = Map.put_new(attrs, :command_queue_item, %{})
 
-    event
+    command
     |> cast(attrs, [
       :instance_id,
       :command_map

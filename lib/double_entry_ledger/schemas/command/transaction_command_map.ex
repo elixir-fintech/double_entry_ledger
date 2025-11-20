@@ -1,17 +1,17 @@
 defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   @moduledoc """
-  Defines the TransactionCommandMap schema for representing transaction event data in the Double Entry Ledger system.
+  Defines the TransactionCommandMap schema for representing transaction command data in the Double Entry Ledger system.
 
   This module provides an embedded schema and related functions for creating and validating
-  transaction event maps, which serve as the primary data structure for transaction creation and updates.
+  transaction command maps, which serve as the primary data structure for transaction creation and updates.
   TransactionCommandMap represents the pre-persistence state of a TransactionCommand, containing all necessary data
   to either create a new transaction or update an existing one.
 
   ## Purpose
 
-  TransactionCommandMap acts as a validation and structuring layer for transaction-related events
-  before they are processed into persistent database records. It ensures data integrity and
-  provides a consistent interface for transaction operations across the system.
+  TransactionCommandMap acts as a validation and structuring layer for transaction-related commands
+  before they are processed into persistent database records. It ensures data integrity and provides
+  a consistent interface for transaction operations across the system.
 
   ## Architecture
 
@@ -28,8 +28,8 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   It contains the following fields:
 
   * `action`: The type of action to perform (`:create_transaction` or `:update_transaction`)
-  * `instance_address`:  unique address of the instance this event belongs to
-  * `source`: Identifier of the external system generating the event
+  * `instance_address`:  unique address of the instance this command belongs to
+  * `source`: Identifier of the external system generating the command
   * `source_data`: Optional map containing additional metadata from the source system
   * `source_idempk`: Primary identifier from the source system (used for idempotency)
   * `update_idempk`: Unique identifier for update operations, enabling multiple distinct updates
@@ -74,8 +74,8 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   ## Workflow Integration
 
-  TransactionCommandMaps are typically created from external input data, validated, and then processed
-  by the CommandWorker system to create or update transactions in the ledger.
+  TransactionCommandMaps are typically created from external input data, validated, and then processed by the
+  CommandWorker system to create or update transactions in the ledger.
 
   ## Examples
 
@@ -135,7 +135,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   Represents a TransactionCommandMap structure for transaction creation or updates.
 
   This type extends the parameterized CommandMap type with TransactionData as the payload type,
-  providing type safety and clear documentation for transaction-specific event operations.
+  providing type safety and clear documentation for transaction-specific command operations.
 
   ## Type Specification
 
@@ -144,8 +144,8 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   ## Inherited Fields (from CommandMap)
 
   * `action`: The operation type (`:create_transaction` or `:update_transaction`)
-  * `instance_address`: UUID of the ledger instance this event belongs to
-  * `source`: Identifier of the external system generating the event
+  * `instance_address`: unique address of the ledger instance this command belongs to
+  * `source`: Identifier of the external system generating the command
   * `source_data`: Optional metadata from the source system (default: `%{}`)
   * `source_idempk`: Primary identifier used for idempotency
   * `update_idempk`: Unique identifier for update operations to maintain idempotency
@@ -156,14 +156,14 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   ## Usage in Function Signatures
 
-      @spec process_transaction_event(TransactionCommandMap.t()) ::
+      @spec process_transaction_command(TransactionCommandMap.t()) ::
         {:ok, Transaction.t()} | {:error, Changeset.t()}
 
   ## Examples
 
       # Type annotation in function
-      @spec validate_event(TransactionCommandMap.t()) :: boolean()
-      def validate_event(%TransactionCommandMap{} = command_map) do
+      @spec validate_command(TransactionCommandMap.t()) :: boolean()
+      def validate_command(%TransactionCommandMap{} = command_map) do
         # Implementation
       end
   """
@@ -207,12 +207,12 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   Builds a validated TransactionCommandMap or returns a changeset with errors.
 
   This function creates a complete TransactionCommandMap from raw input data by applying
-  all necessary validations. It serves as the primary entry point for creating
-  validated transaction events from external input.
+  all necessary validations. It serves as the primary entry point for creating validated
+  transaction commands from external input.
 
   ## Parameters
 
-  * `attrs`: A map containing the event data with both common CommandMap fields and transaction payload
+  * `attrs`: A map containing the command data with both common CommandMap fields and transaction payload
 
   ## Returns
 

@@ -2,14 +2,14 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   @moduledoc """
   CommandMap implementation for account-related operations in the Double Entry Ledger system.
 
-  This module provides validation and structure for account creation events. It extends
+  This module provides validation and structure for account creation commands. It extends
   the base CommandMap functionality with account-specific payload validation using the
   `AccountData` schema.
 
   ## Purpose
 
   The AccountCommandMap is responsible for:
-  * Validating account creation event data before persistence
+  * Validating account creation command data before persistence
   * Ensuring proper structure and required fields for account operations
   * Providing type safety for account-specific payloads
   * Converting account data to serializable map format
@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
 
   ## Usage
 
-      # Create a valid account event
+      # Create a valid account command
       {:ok, command_map} = AccountCommandMap.create(%{
         action: :create_account,
         instance_id: "550e8400-e29b-41d4-a716-446655440000",
@@ -105,18 +105,18 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
 
   Represents an CommandMap specifically for account operations with an `AccountData`
   payload. This provides type safety and clear documentation for functions that
-  work with account events.
+  work with account commands.
 
   ## Usage in Function Signatures
 
-      @spec process_account_event(AccountCommandMap.t()) :: {:ok, Account.t()} | {:error, term()}
-      def process_account_event(%AccountCommandMap{} = command_map) do
+      @spec process_account_command(AccountCommandMap.t()) :: {:ok, Account.t()} | {:error, term()}
+      def process_account_command(%AccountCommandMap{} = command_map) do
         # Implementation with type-safe access to AccountData payload
       end
 
   ## Pattern Matching
 
-      def handle_event(%AccountCommandMap{action: :create_account, payload: payload}) do
+      def handle_command(%AccountCommandMap{action: :create_account, payload: payload}) do
         # payload is guaranteed to be AccountData.t()
       end
   """
@@ -145,17 +145,17 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   @doc """
   Creates and validates an AccountCommandMap from the given attributes.
 
-  This is the primary entry point for creating account events. It performs
+  This is the primary entry point for creating account commands. It performs
   full validation including payload validation and returns either a valid
   CommandMap struct or validation errors.
 
   ## Parameters
 
-  * `attrs` - Map containing the event attributes including payload data
+  * `attrs` - Map containing the command attributes including payload data
 
   ## Returns
 
-  * `{:ok, AccountCommandMap.t()}` - Successfully created and validated event map
+  * `{:ok, AccountCommandMap.t()}` - Successfully created and validated command map
   * `{:error, Ecto.Changeset.t()}` - Validation errors
 
   ## Required Attributes

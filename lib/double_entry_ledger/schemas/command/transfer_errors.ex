@@ -4,13 +4,13 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
 
   This module handles the propagation of validation errors between different schema types
   in the double entry ledger system. It ensures that when validation fails at any level
-  (accounts, transactions, events), the errors are properly mapped back to the appropriate
-  event map structure for consistent error handling and reporting.
+  (accounts, transactions, commands), the errors are properly mapped back to the appropriate
+  command map structure for consistent error handling and reporting.
 
   The main functionality includes:
-  - Transferring errors from account changesets to event maps
-  - Transferring errors from event changesets to event maps
-  - Transferring errors from transaction changesets to event maps
+  - Transferring errors from account changesets to command maps
+  - Transferring errors from command changesets to command maps
+  - Transferring errors from transaction changesets to command maps
   - Extracting and formatting error messages from changesets
   """
 
@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   @typedoc """
   Union type representing either an AccountCommandMap or TransactionCommandMap.
 
-  These are the two main event map types that can contain validation errors
+  These are the two main command map types that can contain validation errors
   that need to be transferred and properly attributed.
   """
   @type command_map :: AccountCommandMap.t() | TransactionCommandMap.t()
@@ -41,21 +41,21 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   @type payload :: AccountData.t() | TransactionData.t()
 
   @typedoc """
-  Union of event-related types used for parameterizing changeset specs when
-  transferring errors. This can be an event map or its payload type.
+  Union of command-related types used for parameterizing changeset specs when
+  transferring errors. This can be a command map or its payload type.
   """
-  @type event_related :: command_map | payload
+  @type command_related :: command_map | payload
 
   @doc """
-  Transfers validation errors from an account changeset to an event map changeset.
+  Transfers validation errors from an account changeset to a command map changeset.
 
-  When account validation fails during event processing, this function ensures
-  those errors are properly reflected in the event map structure, maintaining
+  When account validation fails during command processing, this function ensures
+  those errors are properly reflected in the command map structure, maintaining
   full error context and attribution.
 
   ## Parameters
 
-    - `command_map`: The event map that contains the account data
+    - `command_map`: The command map that contains the account data
     - `account_changeset`: Account changeset containing validation errors
 
   ## Returns
@@ -77,35 +77,35 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   end
 
   @doc """
-  Maps event validation errors to an event map changeset.
+  Maps command validation errors to a command map changeset.
 
-  When an event fails validation during creation or update, this function ensures
-  those errors are properly reflected in the event map structure, maintaining full
+  When a command fails validation during creation or update, this function ensures
+  those errors are properly reflected in the command map structure, maintaining full
   error context and attribution.
 
   ## Parameters
 
-    - `command_map`: The original event map
-    - `event_changeset`: Command changeset containing validation errors
+    - `command_map`: The original command map
+    - `command_changeset`: Command changeset containing validation errors
 
   ## Returns
 
     - `Ecto.Changeset.t()`: Command map changeset with propagated errors
   """
-  @spec from_event_to_command_map(em, Changeset.t(Command.t())) ::
+  @spec from_command_to_command_map(em, Changeset.t(Command.t())) ::
           Changeset.t(em)
         when em: command_map
-  def from_event_to_command_map(command_map, event_changeset) do
+  def from_command_to_command_map(command_map, command_changeset) do
     build_command_map_changeset(command_map)
-    |> transfer_errors_between_changesets(event_changeset, [:update_idempk, :source_idempk])
+    |> transfer_errors_between_changesets(command_changeset, [:update_idempk, :source_idempk])
     |> Map.put(:action, :insert)
   end
 
   @doc """
-  Transfers transaction validation errors to an event map payload changeset.
+  Transfers transaction validation errors to a command map payload changeset.
 
-  The returned event map changeset embeds a payload changeset that includes the
-  propagated transaction errors (e.g., status and entry-level errors).
+  The returned command map changeset embeds a payload changeset that includes the propagated
+  transaction errors (e.g., status and entry-level errors).
   """
   @spec from_transaction_to_command_map_payload(
           TransactionCommandMap.t(),
@@ -181,7 +181,7 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
           list(atom())
         ) ::
           Changeset.t(er)
-        when er: event_related
+        when er: command_related
   defp transfer_errors_between_changesets(changeset, entity_changeset, keys) do
     errors = get_all_errors_with_opts(entity_changeset)
 

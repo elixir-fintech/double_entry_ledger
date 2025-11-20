@@ -1,9 +1,9 @@
 defmodule DoubleEntryLedger.Command.ErrorMap do
   @moduledoc """
-  Provides error tracking and management for event processing in the Double Entry Ledger system.
+  Provides error tracking and management for command processing in the Double Entry Ledger system.
 
   This module defines the ErrorMap struct used to track errors, completed steps, and retry attempts
-  during event processing, particularly when handling Optimistic Concurrency Control (OCC) conflicts.
+  during command processing, particularly when handling Optimistic Concurrency Control (OCC) conflicts.
 
   ## Structure
 
@@ -17,13 +17,13 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
 
   * `build_error/1`: Creates a standardized error entry from various input types
   * `build_errors/2`: Adds a new error to an existing error list
-  * `create_error_map/1`: Initializes an ErrorMap from an Command or TransactionCommandMap
+  * `create_error_map/1`: Initializes an ErrorMap from a Command or TransactionCommandMap
 
   ## Usage Examples
 
   Creating an error map:
 
-      error_map = ErrorMap.create_error_map(event)
+      error_map = ErrorMap.create_error_map(command)
 
   Adding an error:
 
@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
   @typedoc """
   Represents a single error entry with a message and timestamp.
 
-  Contains details about an error that occurred during event processing.
+  Contains details about an error that occurred during command processing.
 
   ## Fields
 
@@ -61,7 +61,7 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
         }
 
   @typedoc """
-  The ErrorMap structure used for tracking errors during event processing.
+  The ErrorMap structure used for tracking errors during command processing.
 
   This is the main structure for tracking retry attempts, errors, and partial
   transaction results during optimistic concurrency control processing.
@@ -148,13 +148,13 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
   end
 
   @doc """
-  Initializes an ErrorMap from an Command or TransactionCommandMap.
+  Initializes an ErrorMap from a Command or TransactionCommandMap.
 
   Creates a new ErrorMap structure, preserving any existing errors from the
-  event while initializing other tracking fields.
+  command while initializing other tracking fields.
 
   ## Parameters
-    - `event`: Command or TransactionCommandMap to initialize from
+    - `command`: Command or TransactionCommandMap to initialize from
 
   ## Returns
     - A new ErrorMap struct with initialized fields
@@ -163,8 +163,8 @@ defmodule DoubleEntryLedger.Command.ErrorMap do
 
       iex> alias DoubleEntryLedger.Command.ErrorMap
       iex> alias DoubleEntryLedger.Command
-      iex> event = %Command{command_queue_item: %{errors: [%{message: "Previous error", inserted_at: ~U[2023-01-01 00:00:00Z]}]}}
-      iex> error_map = ErrorMap.create_error_map(event)
+      iex> command = %Command{command_queue_item: %{errors: [%{message: "Previous error", inserted_at: ~U[2023-01-01 00:00:00Z]}]}}
+      iex> error_map = ErrorMap.create_error_map(command)
       iex> error_map.retries
       0
       iex> length(error_map.errors)

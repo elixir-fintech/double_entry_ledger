@@ -231,7 +231,7 @@ defmodule DoubleEntryLedger.Entry do
   ## Examples
 
       # Update a pending entry to be posted
-      # An entry has to be created first using an event
+      # An entry has to be created first using a command
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Apis.CommandApi

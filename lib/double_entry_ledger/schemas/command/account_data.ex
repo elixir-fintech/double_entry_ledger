@@ -1,10 +1,9 @@
 defmodule DoubleEntryLedger.Command.AccountData do
   @moduledoc """
-  Schema for account data payload embedded in events.
+  Schema for account data payload embedded in commands.
 
-  This embedded schema captures the minimal set of attributes required to
-  describe an account at the moment an event is recorded. It is used to
-  validate and cast incoming payloads.
+  This embedded schema captures the minimal set of attributes required to describe an account at the
+  moment a command is issued. It is used to validate and cast incoming payloads.
   """
 
   use Ecto.Schema
@@ -15,7 +14,7 @@ defmodule DoubleEntryLedger.Command.AccountData do
   alias DoubleEntryLedger.Utils.Currency
 
   @typedoc """
-  Embedded account data captured with an event.
+  Embedded account data captured with a command payload.
 
   Fields:
   - currency: ISO currency code represented as an enum (from Currency.currency_atoms/0)

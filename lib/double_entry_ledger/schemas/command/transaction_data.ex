@@ -2,9 +2,9 @@ defmodule DoubleEntryLedger.Command.TransactionData do
   @moduledoc """
   Provides the TransactionData embedded schema for the Double Entry Ledger system.
 
-  This module defines a schema that represents the core transaction information within events,
-  containing both the transaction status and a collection of related entries. It serves as
-  an intermediate representation before a transaction is persisted to the database.
+  This module defines a schema that represents the core transaction information inside
+  transaction commands, containing both the transaction status and a collection of related entries.
+  It serves as an intermediate representation before a transaction is persisted to the database.
 
   ## Structure
 
@@ -68,12 +68,12 @@ defmodule DoubleEntryLedger.Command.TransactionData do
   @typedoc """
   Represents a transaction with its status and collection of entries.
 
-  This type defines the structure of transaction data used in events and includes:
+  This type defines the structure of transaction data used in command payloads and includes:
 
   * `status`: The transaction's current state (e.g., :pending, :posted, :archived)
   * `entries`: A list of EntryData structs that make up the financial entries
 
-  This type is commonly used when creating or updating transactions through the event system.
+  This type is commonly used when creating or updating transactions through the command pipeline.
   """
   @type t :: %TransactionData{
           status: Transaction.state() | nil,
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.Command.TransactionData do
   end
 
   @doc """
-  Creates a changeset specifically for update events, with conditional validation.
+  Creates a changeset specifically for transaction update commands, with conditional validation.
 
   This function applies different validation rules based on the transaction status
   being updated. When posting or archiving a transaction, less strict validation is applied.

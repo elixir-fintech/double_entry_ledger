@@ -31,7 +31,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
 
   import DoubleEntryLedger.Command.TransferErrors,
     only: [
-      from_event_to_command_map: 2,
+      from_command_to_command_map: 2,
       from_account_to_command_map_payload: 2
     ]
 
@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
       {:error, :new_command, changeset, _changes} ->
         warn("Command changeset failed", command_map, changeset)
 
-        {:error, from_event_to_command_map(command_map, changeset)}
+        {:error, from_command_to_command_map(command_map, changeset)}
 
       {:error, :account, changeset, _changes} ->
         warn("Account changeset failed", command_map, changeset)

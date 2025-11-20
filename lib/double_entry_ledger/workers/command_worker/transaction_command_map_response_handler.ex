@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
 
   import DoubleEntryLedger.Command.TransferErrors,
     only: [
-      from_event_to_command_map: 2,
+      from_command_to_command_map: 2,
       from_transaction_to_command_map_payload: 2,
       from_idempotency_key_to_command_map: 2
     ]
@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
       {:error, :new_command, %Changeset{data: %Command{}} = event_changeset, _steps_so_far} ->
         warn("Command changeset failed", command_map, event_changeset)
 
-        {:error, from_event_to_command_map(command_map, event_changeset)}
+        {:error, from_command_to_command_map(command_map, event_changeset)}
 
       {:error, :transaction, %Changeset{data: %Transaction{}} = trx_changeset, _steps_so_far} ->
         warn("Transaction changeset failed", command_map, trx_changeset)

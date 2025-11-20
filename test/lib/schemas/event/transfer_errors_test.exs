@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
     end
   end
 
-  describe "from_event_to_command_map/2" do
+  describe "from_command_to_command_map/2" do
     test "transfers errors from event changeset to event map" do
       expected_errors = [
         action: {"invalid in this context", [value: ""]},
@@ -98,12 +98,12 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
       event_changeset = Command.changeset(%Command{}, %{})
 
       %{data: %AccountCommandMap{}, errors: errors} =
-        TransferErrors.from_event_to_command_map(%AccountCommandMap{}, event_changeset)
+        TransferErrors.from_command_to_command_map(%AccountCommandMap{}, event_changeset)
 
       assert Keyword.equal?(errors, expected_errors)
 
       %{data: %TransactionCommandMap{}, errors: errors} =
-        TransferErrors.from_event_to_command_map(%TransactionCommandMap{}, event_changeset)
+        TransferErrors.from_command_to_command_map(%TransactionCommandMap{}, event_changeset)
 
       assert Keyword.equal?(
                errors,
