@@ -1,4 +1,11 @@
 defprotocol DoubleEntryLedger.Utils.Traceable do
+  @moduledoc """
+  Builds structured metadata maps for logging and tracing ledger operations.
+
+  Implementations focus on command-centric structs (commands and command maps) while accepting
+  related domain entities or errors to enrich the metadata. Keys are prefixed with `event_*`
+  for backward compatibility with existing log consumers, but values describe command activity.
+  """
   @spec metadata(t()) :: map()
   def metadata(schema)
 
@@ -13,14 +20,14 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command do
   alias DoubleEntryLedger.{Command, Account, Transaction}
   import DoubleEntryLedger.Utils.Changeset
 
-  def metadata(%{command_queue_item: command_queue_item, command_map: command_map} = event) do
+  def metadata(%{command_queue_item: command_queue_item, command_map: command_map} = command) do
     %{
-      event_id: event.id,
+      command_id: command.id,
       instance_address: Map.get(command_map, :instance_address),
-      event_status: command_queue_item.status,
-      event_action: Map.get(command_map, :action),
-      event_source: Map.get(command_map, :source),
-      event_trace_id:
+      status: command_queue_item.status,
+      action: Map.get(command_map, :action),
+      source: Map.get(command_map, :source),
+      trace_id:
         [
           Map.get(command_map, :source),
           Map.get(command_map, :source_idempk),
@@ -77,9 +84,9 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Accoun
     %{
       is_command_map: true,
       instance_address: Map.get(command_map, :instance_address),
-      event_action: Map.get(command_map, :action),
-      event_source: Map.get(command_map, :source),
-      event_trace_id:
+      action: Map.get(command_map, :action),
+      source: Map.get(command_map, :source),
+      trace_id:
         [
           Map.get(command_map, :source),
           Map.get(command_map, :source_idempk),
@@ -115,9 +122,9 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Transa
     %{
       is_command_map: true,
       instance_address: Map.get(command_map, :instance_address),
-      event_action: Map.get(command_map, :action),
-      event_source: Map.get(command_map, :source),
-      event_trace_id:
+      action: Map.get(command_map, :action),
+      source: Map.get(command_map, :source),
+      trace_id:
         [
           Map.get(command_map, :source),
           Map.get(command_map, :source_idempk),
@@ -153,9 +160,9 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: Map do
       is_map: true,
       instance_address:
         Map.get(command_map, :instance_address) || Map.get(command_map, "instance_address"),
-      event_action: Map.get(command_map, :action) || Map.get(command_map, "action"),
-      event_source: Map.get(command_map, :source) || Map.get(command_map, "source"),
-      event_trace_id:
+      action: Map.get(command_map, :action) || Map.get(command_map, "action"),
+      source: Map.get(command_map, :source) || Map.get(command_map, "source"),
+      trace_id:
         [
           Map.get(command_map, :source) || Map.get(command_map, "source"),
           Map.get(command_map, :source_idempk) || Map.get(command_map, "source_idempk"),
