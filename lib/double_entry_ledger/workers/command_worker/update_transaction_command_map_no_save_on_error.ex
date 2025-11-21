@@ -1,26 +1,26 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoSaveOnError do
   @moduledoc """
-  Processes `TransactionCommandMap` structures for atomic update of events and their associated transactions in the Double Entry Ledger system, without saving on error.
+  Processes `TransactionCommandMap` structures for atomic update of commands and their associated transactions in the Double Entry Ledger system, without saving on error.
 
-  Implements the Optimistic Concurrency Control (OCC) pattern to ensure safe concurrent processing of update events, providing robust error handling, retry logic, and transactional guarantees. This module ensures that update operations are performed atomically and consistently, and that all error and retry scenarios are handled transparently. Unlike the standard update event map processor, this variant does not persist changes on error, but instead returns changesets with error details for client handling.
+  Implements the Optimistic Concurrency Control (OCC) pattern to ensure safe concurrent processing of update commands, providing robust error handling, retry logic, and transactional guarantees. This module ensures that update operations are performed atomically and consistently, and that all error and retry scenarios are handled transparently. Unlike the standard update command map processor, this variant does not persist changes on error, but instead returns changesets with error details for client handling.
 
   ## Features
 
-    * Transaction Processing: Handles update of transactions based on the event map's action.
-    * Atomic Operations: Ensures all event and transaction changes are performed in a single database transaction.
-    * Error Handling: Maps validation and dependency errors to the appropriate changeset or event state, but does not persist on error.
+    * Transaction Processing: Handles update of transactions based on the command map's action.
+    * Atomic Operations: Ensures all command and transaction changes are performed in a single database transaction.
+    * Error Handling: Maps validation and dependency errors to the appropriate changeset or command state, but does not persist on error.
     * Retry Logic: Retries OCC conflicts and schedules retries for dependency errors.
     * OCC Integration: Integrates with the OCC processor behavior for safe, idempotent event processing.
 
   ## Main Functions
 
-    * `process/2` — Entry point for processing update event maps with error handling and OCC.
+    * `process/2` — Entry point for processing update command maps with error handling and OCC.
     * `build_transaction/3` — Constructs Ecto.Multi operations for update actions.
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
     * `handle_transaction_map_error/3` — Returns a changeset with error details, does not persist.
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion, does not persist.
 
-  This module ensures that update events are processed exactly once, even in high-concurrency environments, and that all error and retry scenarios are handled transparently and returned to the caller for further handling.
+  This module ensures that update commands are processed exactly once, even in high-concurrency environments, and that all error and retry scenarios are handled transparently and returned to the caller for further handling.
   """
 
   use DoubleEntryLedger.Occ.Processor
@@ -50,18 +50,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
     as: :build_transaction
 
   @doc """
-  Processes an `TransactionCommandMap` by creating both an event record and its associated transaction atomically, without saving on error.
+  Processes a `TransactionCommandMap` by creating both a command record and its associated transaction atomically, without saving on error.
 
-  This function is designed for synchronous use, ensuring that both the event and the transaction are created or updated in one atomic operation. It handles both `:create_transaction` and `:update` action types, with appropriate transaction building logic for each case. The entire operation uses Optimistic Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively. If an error occurs, a changeset with error details is returned instead of persisting the error state.
+  This function is designed for synchronous use, ensuring that both the command and the transaction are created or updated in one atomic operation. It handles both `:create_transaction` and `:update` action types, with appropriate transaction building logic for each case. The entire operation uses Optimistic Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively. If an error occurs, a changeset with error details is returned instead of persisting the error state.
 
   ## Parameters
 
-    - `command_map`: An `TransactionCommandMap` struct containing all event and transaction data.
+    - `command_map`: A `TransactionCommandMap` struct containing all command and transaction data.
     - `repo`: The repository to use for database operations (defaults to `Repo`).
 
   ## Returns
 
-    - `{:ok, transaction, event}` on success, where both the transaction and event are created/updated successfully.
+    - `{:ok, transaction, command}` on success, where both the transaction and command are created/updated successfully.
     - `{:error, changeset}` if validation or dependency errors occur (not persisted).
     - `{:error, reason}` for other errors, with a string describing the error and the failing step.
   """

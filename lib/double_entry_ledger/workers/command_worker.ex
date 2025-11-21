@@ -1,19 +1,19 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker do
   @moduledoc """
-  Main event processing orchestrator for the Double Entry Ledger system.
+  Main command processing orchestrator for the Double Entry Ledger system.
 
-  This module serves as the primary interface for processing accounting events that create
+  This module serves as the primary interface for processing accounting commands that create
   and update double-entry ledger transactions and accounts. It coordinates between different
-  processing strategies and delegates to specialized handler modules based on event types
+  processing strategies and delegates to specialized handler modules based on command types
   and actions.
 
   ## Processing Strategies
 
   The CommandWorker supports multiple processing approaches:
 
-  1. **New Command Maps** (`process_new_command/1`) - Direct processing of event maps from external systems. Command is saved for retry later if it fails.
-  2. **No-Save-On-Error** (`process_new_command_no_save_on_error/1`) - Processing as above without saving the Command.
-  3. **Stored Events** (`process_command_with_id/2`) - Processing events already in the database using atomic claiming
+  1. **New Command Maps** (`process_new_command/1`) - Direct processing of command maps from external systems. Command is saved for retry later if it fails.
+  2. **No-Save-On-Error** (`process_new_command_no_save_on_error/1`) -Events Processing as above without saving the Command when processing fails.
+  3. **Stored Commands** (`process_command_with_id/2`) - Processing commands already in the database using atomic claiming
 
   ## Supported Command Types and Actions
 
@@ -27,7 +27,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Command Processing Flow
 
-  ### Direct processing of event maps
+  ### Direct processing of command maps
   ```
   External System → CommandMap → CommandWorker → Specialized Handler → Transaction/Account
                                     ↓
@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
                                             Retryable State
   ```
 
-  ### Stored event
+  ### Stored command
   ```
   EventQueue → Command → CommandWorker → Specialized Handler → Transaction/Account
                           ↓
@@ -47,7 +47,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## CommandQueueItem State Management
 
-  Events are tracked through `CommandQueueItem` records that maintain processing state:
+  Commands are tracked through `CommandQueueItem` records that maintain processing state:
 
   ### Status Lifecycle
   - **`:pending`** → **`:processing`** → **`:processed`** (success path)
@@ -68,16 +68,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - **Standard Processing**: Errors update CommandQueueItem status and error details for retry logic
   - **No-Save-On-Error**: Validation errors return changesets without Command and CommandQueueItem persistence
   - **Command Claiming**: Uses optimistic locking on CommandQueueItem to prevent concurrent processing
-  - **Retry Logic**: Failed events can be automatically retried based on CommandQueueItem configuration
+  - **Retry Logic**: Failed commands can be automatically retried based on CommandQueueItem configuration
 
   ## Handler Modules
 
   The CommandWorker delegates to specialized handlers in the `DoubleEntryLedger.Workers.CommandWorker` namespace:
 
-  - `CreateTransactionCommandMap` - New transaction creation from event maps
-  - `UpdateTransactionCommandMap` - Transaction updates from event maps
-  - `CreateTransactionCommand` - Transaction creation from stored events
-  - `UpdateTransactionCommand` - Transaction updates from stored events
+  - `CreateTransactionCommandMap` - New transaction creation from command maps
+  - `UpdateTransactionCommandMap` - Transaction updates from command maps
+  - `CreateTransactionCommand` - Transaction creation from stored commands
+  - `UpdateTransactionCommand` - Transaction updates from stored commands
   - `CreateTransactionCommandMapNoSaveOnError` - Transaction creation without error persistence
   - `UpdateTransactionCommandMapNoSaveOnError` - Transaction updates without error persistence
   - `CreateAccountCommandMapNoSaveOnError` - Account creation without error persistence
@@ -85,7 +85,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Examples
 
-      # Process a new transaction event
+      # Process a new transaction command
       command_map = %TransactionCommandMap{
         action: :create_transaction,
         instance_id: instance_id,
@@ -103,7 +103,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       {:ok, transaction, event} = CommandWorker.process_new_command(command_map)
       # event.command_queue_item.status == :processed
 
-      # Process an existing event by ID
+      # Process an existing command by ID
       {:ok, transaction, event} = CommandWorker.process_command_with_id(event_uuid)
 
       # Process without saving errors to CommandQueueItem
@@ -112,7 +112,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ## Architecture Notes
 
   - All processing maintains ACID properties through database transactions
-  - Events are claimed atomically via CommandQueueItem to prevent duplicate processing
+  - Commands are claimed atomically via CommandQueueItem to prevent duplicate processing
   - Double-entry rules are enforced: debits must equal credits
   - Processing is idempotent based on source identifiers
   - Retry logic and error tracking handled through CommandQueueItem state management
@@ -144,7 +144,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   import DoubleEntryLedger.CommandQueue.Scheduling, only: [claim_command_for_processing: 2]
 
   @typedoc """
-  Success result from event processing operations.
+  Success result from command processing operations.
 
   Contains the created or updated domain entity (Transaction or Account) along with
   the final Command record that tracks the processing state. The associated CommandQueueItem
@@ -174,20 +174,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   @type success_tuple :: {:ok, Transaction.t() | Account.t(), Command.t()}
 
   @typedoc """
-  Error result from event processing operations.
+  Error result from command processing operations.
 
-  Represents various failure modes that can occur during event processing. The error
+  Represents various failure modes that can occur during command processing. The error
   content provides context about what went wrong and can be used for debugging,
   retry logic, or user feedback.
 
   ## Error Types
 
-  - `Command.t()` - Processing failed after the event was created/updated. The Command's
+  - `Command.t()` - Processing failed after the command was created/updated. The Command's
     CommandQueueItem will have status `:failed`, `:occ_timeout`, or `:dead_letter` based
     on the error type and retry configuration
   - `Changeset.t()` - Validation failed with detailed field-level error information
   - `String.t()` - General error with a descriptive message
-  - `atom()` - Specific error codes like `:event_not_found` or `:action_not_supported`
+  - `atom()` - Specific error codes like `:command_not_found` or `:action_not_supported`
 
   ## CommandQueueItem Error States
 

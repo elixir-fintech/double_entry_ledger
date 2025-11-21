@@ -6,22 +6,22 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
   It coordinates the creation of both the Command record (for audit trail) and the Account
   record (the actual ledger account) within a single database transaction.
 
-  Unlike standard event processors, this module does not persist error states to the database.
+  Unlike standard command processors, this module does not persist error states to the database.
   Instead, it returns validation errors as changesets for client handling, making it suitable
   for scenarios where error persistence should be managed externally.
 
   ## Processing Flow
 
-  1. **Command Creation**: Creates an Command record from the AccountCommandMap for audit purposes
+  1. **Command Creation**: Creates a Command record from the AccountCommandMap for audit purposes
   2. **Account Creation**: Creates the Account record using the payload data
-  3. **Command Completion**: Marks the event as processed upon successful account creation
-  4. **Linking**: Creates a link between the event and the created account for traceability
+  3. **Command Completion**: Marks the command as processed upon successful account creation
+  4. **Linking**: Creates a link between the command and the created account for traceability
 
   ## Error Handling
 
   The module provides detailed error handling and logging:
   - Command validation errors are mapped back to AccountCommandMap changesets
-  - Account validation errors are propagated to the event map payload
+  - Account validation errors are propagated to the command map payload
   - All processing steps are logged with appropriate trace information
   - Database transaction ensures atomicity (all-or-nothing)
   - Errors are returned as changesets rather than persisted to the database
@@ -30,8 +30,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
 
   - **Transactional Safety**: Uses Ecto.Multi for atomic operations
   - **Error Propagation**: Maps validation errors back to appropriate changeset structures
-  - **Audit Trail**: Creates event records for all account creation attempts
-  - **Traceability**: Links events to created accounts for audit purposes
+  - **Audit Trail**: Creates command records for all account creation attempts
+  - **Traceability**: Links commands to created accounts for audit purposes
   - **No Error Persistence**: Returns error changesets without database persistence
 
   ## Supported Actions
@@ -56,9 +56,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
   @doc """
   Processes an AccountCommandMap to create a new account in the ledger system.
 
-  This function orchestrates the creation of both an Command record (for audit trail)
+  This function orchestrates the creation of both a Command record (for audit trail)
   and an Account record within a single database transaction. Upon successful completion,
-  the event is marked as processed and linked to the created account.
+  the command is marked as processed and linked to the created account.
 
   ## Parameters
 
@@ -67,9 +67,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
 
   ## Returns
 
-    - `{:ok, account, event}` - Success tuple containing the created Account and Command
+    - `{:ok, account, command}` - Success tuple containing the created Account and Command
     - `{:error, changeset}` - AccountCommandMap changeset with validation errors when
-      event or account creation fails
+      command or account creation fails
     - `{:error, message}` - String error message for unexpected failures
 
   ## Transaction Steps
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
 
   ## Error Mapping
 
-  - Command validation errors → AccountCommandMap changeset with event-level errors
+  - Command validation errors → AccountCommandMap changeset with command-level errors
   - Account validation errors → AccountCommandMap changeset with payload-level errors
   - Other failures → String error message with details
 

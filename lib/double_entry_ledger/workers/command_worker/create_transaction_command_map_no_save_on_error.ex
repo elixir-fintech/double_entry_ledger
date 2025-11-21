@@ -1,8 +1,8 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnError do
   @moduledoc """
-  Processes event maps for creating transactions, returning changesets on error instead of raising or saving invalid data.
+  Processes command maps for creating transactions, returning changesets on error instead of raising or saving invalid data.
 
-  This module is used for event ingestion where errors (such as invalid entry data, duplicate source keys, or OCC timeouts) should not result in partial saves or exceptions, but instead return a changeset with error details. It leverages OCC (optimistic concurrency control) and changeset validation to ensure only valid, unique, and fully processed events are persisted.
+  This module is used for command ingestion where errors (such as invalid entry data, duplicate source keys, or OCC timeouts) should not result in partial saves or exceptions, but instead return a changeset with error details. It leverages OCC (optimistic concurrency control) and changeset validation to ensure only valid, unique, and fully processed commands are persisted.
 
   ## Error Handling
   - Returns a changeset with errors for invalid input, duplicate keys, OCC timeouts, or account mismatches.
@@ -36,12 +36,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
     as: :handle_build_transaction
 
   @doc """
-  Processes an event map for transaction creation, returning a changeset on error.
+  Processes a command map for transaction creation, returning a changeset on error.
 
-  This function attempts to process the event map using OCC and entry validation. If the event is invalid (e.g., invalid entry data, duplicate source key, OCC timeout, or account mismatch), it returns an Ecto.Changeset with error details attached to the `:input_command_map` or other relevant fields. No partial data is saved on error.
+  This function attempts to process the command map using OCC and entry validation. If the command is invalid (e.g., invalid entry data, duplicate source key, OCC timeout, or account mismatch), it returns an Ecto.Changeset with error details attached to the `:input_command_map` or other relevant fields. No partial data is saved on error.
 
   ## Returns
-  - `{:ok, transaction, event}` on success
+  - `{:ok, transaction, command}` on success
   - `{:error, changeset}` if validation or OCC fails (see changeset errors for details)
   - `{:error, string}` for unexpected errors
   """

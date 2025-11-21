@@ -1,35 +1,35 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError do
   @moduledoc """
-  Custom exception for handling errors when update events can't be processed due to issues
-  with their corresponding create events.
+  Custom exception for handling errors when update commands can't be processed due to issues
+  with their corresponding create commands.
 
-  This exception is raised when attempting to process an update event but the original create_command
-  is either not found, pending, or failed. In the double-entry ledger system, update events
+  This exception is raised when attempting to process an update command but the original create_command
+  is either not found, pending, or failed. In the double-entry ledger system, update commands
   modify existing entities, so they can only be processed after their create_commands have
   been successfully processed.
 
   ## Usage
 
-  This exception is typically raised in the CommandWorker when processing an update event:
+  This exception is typically raised in the CommandWorker when processing an update command:
 
       iex> raise UpdateCommandError,
       ...>   update_command: update_command,
       ...>   create_command: create_command
-      ** (UpdateCommandError) Create event (id: ...) not yet processed for Update Command (id: ...)
+      ** (UpdateCommandError) Create command (id: ...) not yet processed for Update Command (id: ...)
 
   ## Reasons
 
   The exception struct includes a `:reason` field, which can be one of:
 
-    * `:create_command_not_processed` — The create event exists but is not yet processed (pending, processing, occ_timeout, or failed)
-    * `:create_command_in_dead_letter` — The create event is in the dead letter state
-    * `:create_command_not_found` — The create event could not be found
+    * `:create_command_not_processed` — The create command exists but is not yet processed (pending, processing, occ_timeout, or failed)
+    * `:create_command_in_dead_letter` — The create command is in the dead letter state
+    * `:create_command_not_found` — The create command could not be found
 
   ## Fields
 
     * `:message` — Human-readable error message
-    * `:create_command` — The create event struct (may be `nil`)
-    * `:update_command` — The update event struct
+    * `:create_command` — The create command struct (may be `nil`)
+    * `:update_command` — The update command struct
     * `:reason` — Atom describing the error reason
 
   ## Example
