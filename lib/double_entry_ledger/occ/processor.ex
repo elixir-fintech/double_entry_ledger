@@ -83,12 +83,6 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
     - An `Ecto.Multi` struct containing all the operations to execute atomically
 
-  ## Implementation Examples
-
-  See implementations in:
-    * `DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand.build_transaction/3`
-    * `DoubleEntryLedger.Workers.CommandWorker.UpdateEvent.build_transaction/3`
-    * `DoubleEntryLedger.Workers.CommandWorker.ProcessTransactionCommandMap.build_transaction/3`
   """
   @callback build_transaction(
               Occable.t(),

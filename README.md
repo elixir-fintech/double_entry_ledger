@@ -171,7 +171,7 @@ async_event = Map.put(event, "source_idempk", "initial-capital-async")
 # InstanceMonitor will claim it, process it, and update the command_queue_item status.
 ```
 
-Inspect queued work with `DoubleEntryLedger.Stores.CommandStore.list_all_for_instance/2` or check `command.command_queue_item.status`.
+Inspect queued work with `DoubleEntryLedger.Stores.CommandStore.list_all_for_instance_id/3` or check `command.command_queue_item.status`.
 
 ### Reserve funds with pending transactions
 
