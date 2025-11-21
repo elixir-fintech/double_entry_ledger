@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
 
   This module provides utilities for creating and updating Account records, focusing on
   building proper Ecto changesets from AccountData structures. It serves as a bridge
-  between the event processing system and the Account schema operations.
+  between the command processing system and the Account schema operations.
 
   ## Key Functionality
 
@@ -16,8 +16,8 @@ defmodule DoubleEntryLedger.Stores.AccountStoreHelper do
   ## Integration
 
   This module is primarily used by CommandWorker modules when processing account-related
-  events, providing a consistent interface for account changeset operations. It integrates
-  directly with the Account schema's validation rules and the event sourcing system.
+  commands, providing a consistent interface for account changeset operations. It integrates
+  directly with the Account schema's validation rules and the command pipeline.
 
   ## Error Handling
 

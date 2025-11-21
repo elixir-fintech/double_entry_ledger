@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   * **Account Management**: Create, retrieve, update, and delete accounts with full validation
   * **Account Queries**: Find accounts by instance, type, address, and ID combinations
   * **Balance History**: Access the historical record of account balance changes with pagination
-  * **Command Sourcing**: Create and update account operations are tracked through the event sourcing system
+  * **Command Sourcing**: Create and update account operations are tracked through the command pipeline
 
   ## Data Integrity
 
@@ -49,9 +49,9 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   * Success: `{:ok, result}`
   * Error: `{:error, reason}` where reason can be an atom, string, or Ecto.Changeset
 
-  The module integrates with the ledger's event sourcing system to ensure account integrity
+  The module integrates with the ledger's command pipeline to ensure account integrity
   and enforce business rules for the double-entry accounting system. All create and update
-  operations generate corresponding events for complete auditability.
+  operations generate corresponding commands for complete auditability.
 
   ## Error Handling
 
@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   @doc """
   Retrieves an account by its ID.
 
-  Loads the account with its associated events for complete context. Returns nil
+  Loads the account with its associated journal events for complete context. Returns nil
   if the account doesn't exist.
 
   ## Parameters
@@ -108,11 +108,11 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   ## Returns
 
-    - `Account.t() | nil`: The account struct with preloaded events, or `nil` if not found.
+    - `Account.t() | nil`: The account struct with preloaded journal events, or `nil` if not found.
 
   ## Preloaded Associations
 
-    - `:events` - All events associated with this account for audit trail access
+    - `:journal_events` - All journal events associated with this account for audit trail access
 
   ## Examples
 
@@ -134,7 +134,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   Instance address is required to ensure uniqueness of account addresses across
   different instances in a multi-tenant system. Returns the account with preloaded
-  events for complete context.
+  journal events for complete context.
 
   ## Parameters
 
@@ -143,11 +143,11 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   ## Returns
 
-    - `Account.t() | nil`: The account struct with preloaded events, or `nil` if not found.
+    - `Account.t() | nil`: The account struct with preloaded journal events, or `nil` if not found.
 
   ## Preloaded Associations
 
-    - `:events` - All events associated with this account
+    - `:journal_events` - All journal events associated with this account
 
   ## Examples
 
@@ -168,7 +168,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   @doc """
   Creates a new account with the given attributes.
 
-  Creates an account through the event sourcing system, ensuring proper audit trail
+  Creates an account through the command pipeline, ensuring proper audit trail
   and validation. The account is associated with the specified instance and must
   have a unique address within that instance.
 

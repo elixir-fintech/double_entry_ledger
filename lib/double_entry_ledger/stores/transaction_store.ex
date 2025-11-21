@@ -23,10 +23,6 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
       transactions = DoubleEntryLedger.Stores.TransactionStore.list_all_for_instance_and_account(instance.id, account.id)
 
-  ## Implementation Notes
-
-  There are no create/update functions, as there is no audit trail for these operations. Instead use an event to create or update a transaction.
-  It uses optimistic concurrency control to handle concurrent modifications to related accounts.
   """
   import Ecto.Query
 
@@ -63,8 +59,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
         }
 
   @doc """
-  Creates a new transaction with the given attributes. If the creation fails, the event is saved
-  to the event queue and retried later.
+  Creates a new transaction with the given attributes. If the creation fails, the command is saved
+  to the command queue and retried later.
 
   ## Parameters
 
@@ -79,8 +75,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
     - `opts` (Keyword.t(), optional): A string indicating the source of the creation request.
       - `:source` Defaults to `"TransactionStore.create/3"
       - `:on_error`
-        - :retry (default) The event will be saved in the EventQueue for retry after a processing error.
-        - :fail if you want to handle errors manually without saving the event to the CommandQueue.
+        - :retry (default) The command will be saved in the CommandQueue for retry after a processing error.
+        - :fail if you want to handle errors manually without saving the command to the CommandQueue.
   ## Returns
 
     - `{:ok, transaction}`: On successful creation, returns the created transaction.
@@ -133,8 +129,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
   end
 
   @doc """
-  Updates a transaction with the given attributes. If the update fails, the event is saved
-  to the event queue and retried later.
+  Updates a transaction with the given attributes. If the update fails, the command is saved
+  to the command queue and retried later.
 
   ## Parameters
 
@@ -148,8 +144,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
         - `:currency` (Currency.currency_atom()): The currency for the entry.
     - `update_idempk` (String.t()): A unique identifier to ensure idempotency of the update request.
     - `opts` (Keyword.t(), optional): A string indicating the source of the creation request.
-      - `:update_source` Defaults to `"TransactionStore.update/4", use if the source of the change is different from the initial source when creating the event
-      - `:retry_on_error` defaults to true. If true, event will be saved in the EventQueue for retry after a processing error. Otherwise Command is not stored at all.
+      - `:update_source` Defaults to `"TransactionStore.update/4", use if the source of the change is different from the initial source when creating the command
+      - `:retry_on_error` defaults to true. If true, command will be saved in the CommandQueue for retry after a processing error. Otherwise Command is not stored at all.
 
   ## Returns
 

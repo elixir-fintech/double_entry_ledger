@@ -1,26 +1,26 @@
 defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   @moduledoc """
-  Helper functions for event processing in the Double Entry Ledger system.
+  Helper functions for command processing in the Double Entry Ledger system.
 
-  This module provides reusable utilities for working with events, focusing on common
-  operations like building changesets, retrieving related events and transactions, and
+  This module provides reusable utilities for working with commands, focusing on common
+  operations like building changesets, retrieving related commands and transactions, and
   creating multi operations for use in Ecto transactions.
 
   ## Key Functionality
 
   * **Changeset Building**: Create Command changesets from TransactionCommandMaps or AccountCommandMaps
-  * **Command Relationships**: Look up related events by source identifiers
-  * **Transaction Linking**: Find transactions and accounts associated with events
+  * **Command Relationships**: Look up related commands by source identifiers
+  * **Transaction Linking**: Find transactions and accounts associated with commands
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
-  * **Status Management**: Create changesets to update event status and error information
+  * **Status Management**: Create changesets to update command status and error information
 
   ## Usage Examples
 
-  Building a changeset from an CommandMap:
+  Building a changeset from a CommandMap:
 
       event_changeset = CommandStoreHelper.build_create(command_map)
 
-  Adding a step to get a create event's transaction:
+  Adding a step to get a create command's transaction:
 
       multi =
         Ecto.Multi.new()
@@ -46,11 +46,11 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   Builds an Command changeset from a TransactionCommandMap or AccountCommandMap.
 
   Creates a new Command changeset suitable for database insertion, converting the
-  provided event map structure into the appropriate Command attributes.
+  provided command map structure into the appropriate Command attributes.
 
   ## Parameters
 
-  * `command_map` - Either a TransactionCommandMap or AccountCommandMap struct containing event data
+  * `command_map` - Either a TransactionCommandMap or AccountCommandMap struct containing command data
 
   ## Returns
 
@@ -73,33 +73,33 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   end
 
   @doc """
-  Retrieves an event by its action and source identifiers with preloaded associations.
+  Retrieves a command by its action and source identifiers with preloaded associations.
 
-  This function looks up an event using i
+  This function looks up a command using its action,
       command_map
       |> TransactionCommandMap.to_map()
       |> Map.put(:instance_id, instance_id)
       |> Mts action, source system identifier,
-  source-specific identifier, and instance ID. The returned event includes preloaded
-  associations for command_queue_item, account, and transactions with their entries.
+  source-specific identifier, and instance ID. The returned command includes preloaded
+  associations for command_queue_item, account, and transaction with its entries.
 
   ## Parameters
 
-    - `action`: The event action atom (e.g., `:create_transaction`, `:create_account`)
+    - `action`: The command action atom (e.g., `:create_transaction`, `:create_account`)
     - `source`: The source system identifier (e.g., "accounting_system", "api")
     - `source_idempk`: The source-specific identifier (e.g., "invoice_123", "tx_456")
     - `instance_id`: The instance UUID that groups related events
 
   ## Returns
 
-    - `Command.t() | nil`: The found event with preloaded associations, or nil if not found
+    - `Command.t() | nil`: The found command with preloaded associations, or nil if not found
 
   ## Preloaded Associations
 
-  The returned event includes:
+  The returned command includes:
   - `:command_queue_item` - Processing status and retry information
   - `:account` - Associated account (for account-related events)
-  - `transactions: [entries: :account]` - Transactions with their entries and accounts
+  - `transaction: [entries: :account]` - Transaction with its entries and accounts
 
   """
   @spec get_command_by(atom(), String.t(), String.t(), Ecto.UUID.t()) ::
@@ -118,20 +118,20 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   end
 
   @doc """
-  Gets the transaction associated with a create transaction event.
+  Gets the transaction associated with a create-transaction command.
 
-  This function finds the original create transaction event corresponding to an update event
+  This function finds the original create transaction command corresponding to an update command
   and returns its associated transaction. Used primarily when processing update events
   to locate the original transaction to modify.
 
   ## Parameters
 
-  * `event` - An Command struct containing source, source_idempk, and instance_id
+  * `update_command` - A Command struct containing source, source_idempk, and instance_id
 
   ## Returns
 
-  * `{:ok, {Transaction.t(), Command.t()}}` - The transaction and create event if found and processed
-  * Raises `UpdateCommandError` if the create event doesn't exist or isn't processed
+  * `{:ok, {Transaction.t(), Command.t()}}` - The transaction and create command if found and processed
+  * Raises `UpdateCommandError` if the create command doesn't exist or isn't processed
 
   """
   @spec get_create_transaction_command_transaction(Command.t()) ::
@@ -155,17 +155,17 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   end
 
   @doc """
-  Builds an Ecto.Multi step to get a create transaction event's transaction.
+  Builds an Ecto.Multi step to get a create-transaction command's transaction.
 
   This function adds a step to an Ecto.Multi that retrieves the transaction associated with
-  the create event corresponding to an update event. Handles error cases by wrapping
+  the create command corresponding to an update command. Handles error cases by wrapping
   exceptions in the result tuple.
 
   ## Parameters
 
   * `multi` - The Ecto.Multi instance to add the step to
   * `step` - The atom representing the step name in the Multi
-  * `event_or_step` - Either an Command struct or the name of a previous step in the Multi
+  * `command_or_step` - Either a Command struct or the name of a previous step in the Multi
 
   ## Returns
 

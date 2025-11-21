@@ -1,24 +1,24 @@
 defmodule DoubleEntryLedger.Stores.CommandStore do
   @moduledoc """
-  Provides functions for managing events in the double-entry ledger system.
+  Provides functions for managing commands in the double-entry ledger system.
 
-  This module serves as the primary interface for all event-related operations, including
-  creating, retrieving, processing, and querying events. It manages the complete lifecycle
-  of events from creation through processing to completion or failure.
+  This module serves as the primary interface for all command-related operations, including
+  creating, retrieving, processing, and querying commands. It manages the complete lifecycle
+  of commands from creation through processing to completion or failure.
 
   ## Key Functionality
 
-    * **Command Management**: Create, retrieve, and track events.
-    * **Command Processing**: Claim events for processing, mark events as processed or failed.
-    * **Command Queries**: Find events by instance, transaction ID, account ID, or other criteria.
-    * **Error Handling**: Track and manage errors that occur during event processing.
+    * **Command Management**: Create, retrieve, and track commands.
+    * **Command Processing**: Claim commands for processing, mark commands as processed or failed.
+    * **Command Queries**: Find commands by instance, transaction ID, account ID, or other criteria.
+    * **Error Handling**: Track and manage errors that occur during command processing.
 
   ## Usage Examples
 
-  ### Creating and processing a new event
-  Events can be created and processed immediately or queued for asynchronous processing.
-  If the event is processed immediately, it will create the associated transaction
-  and update the event status. If the event processing fails, it will be queued and retried.
+  ### Creating and processing a new command
+  Commands can be created and processed immediately or queued for asynchronous processing.
+  If the command is processed immediately, it will create the associated transaction
+  and update the command status. If processing fails, it will be queued and retried.
 
       event_params = %{
         "instance_id" => instance.id,
@@ -34,35 +34,35 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
         }
       }
 
-      # create and process the event immediately
+      # create and process the command immediately
       {:ok, transaction, event} = DoubleEntryLedger.Apis.CommandApi.process_from_params(event_params)
 
-      # create event for asynchronous processing later
+      # create command for asynchronous processing later
       {:ok, event} = DoubleEntryLedger.Stores.CommandStore.create(event_params)
 
-  ### Retrieving events for an instance
+  ### Retrieving commands for an instance
 
       events = DoubleEntryLedger.Stores.CommandStore.list_all_for_instance(instance.id)
 
-  ### Retrieving events for a transaction
+  ### Retrieving commands for a transaction
 
       events = DoubleEntryLedger.Stores.CommandStore.list_all_for_transaction(transaction.id)
 
-  ### Retrieving events for an account
+  ### Retrieving commands for an account
 
       events = DoubleEntryLedger.Stores.CommandStore.list_all_for_account(account.id)
 
-  ### Process event without saving it in the CommandStore on error
-  If you want more control over error handling, you can process an event without saving it
-  in the CommandStore on error. This allows you to handle the event processing logic
-  without automatically persisting the event, which can be useful for debugging or custom error handling.
+  ### Process command without saving it in the CommandStore on error
+  If you want more control over error handling, you can process a command without saving it
+  in the CommandStore on error. This allows you to handle the command processing logic
+  without automatically persisting the command, which can be useful for debugging or custom error handling.
 
       {:ok, transaction, event} = DoubleEntryLedger.Apis.CommandApi.process_from_params(event_params, [on_error: :fail])
 
   ## Implementation Notes
 
-  - The module implements optimistic concurrency control for event claiming and processing,
-    ensuring that events are processed exactly once even in high-concurrency environments.
+  - The module implements optimistic concurrency control for command claiming and processing,
+    ensuring that commands are processed exactly once even in high-concurrency environments.
   - All queries are paginated and ordered by insertion time descending for efficient retrieval.
   - Error handling is explicit, with clear return values for all failure modes.
   """
@@ -76,16 +76,16 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @doc """
-  Retrieves an event by its unique ID.
+  Retrieves a command by its unique ID.
 
-  Returns the event if found, or nil if no event exists with the given ID.
+  Returns the command if found, or nil if no command exists with the given ID.
 
   ## Parameters
-    - `id`: The UUID of the event to retrieve
+    - `id`: The UUID of the command to retrieve
 
   ## Returns
-    - `Command.t()`: The found event
-    - `nil`: If no event with the given ID exists
+    - `Command.t()`: The found command
+    - `nil`: If no command with the given ID exists
   """
   @spec get_by_id(Ecto.UUID.t()) :: Command.t() | nil
   def get_by_id(id) do
@@ -107,13 +107,13 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   end
 
   @doc """
-  Creates a new event in the database.
+  Creates a new command in the database.
 
   ## Parameters
-    - `attrs`: Map of attributes for creating the event
+    - `attrs`: Map of attributes for creating the command
 
   ## Returns
-    - `{:ok, event}`: If the event was successfully created
+    - `{:ok, command}`: If the command was successfully created
     - `{:error, changeset}`: If validation failed
 
   ## Examples
