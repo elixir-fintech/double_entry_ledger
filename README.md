@@ -47,12 +47,10 @@ Every command requires a `source` and `source_idempk` (plus `update_idempk` for 
 
 ### 1. Add the dependency
 
-DoubleEntryLedger is not published on Hex yet, so point Mix at the GitHub repository:
-
 ```elixir
 def deps do
   [
-    {:double_entry_ledger, git: "https://github.com/csommerauer/double_entry_ledger.git", branch: "main"}
+    {:double_entry_ledger, "~> 0.1.0"}
   ]
 end
 ```

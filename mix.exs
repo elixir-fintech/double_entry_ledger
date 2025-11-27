@@ -7,8 +7,6 @@ defmodule DoubleEntryLedger.MixProject do
       version: "0.1.0",
       description: """
         DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engine for Elixir and PostgreSQL.
-        It provides typed accounts, signed amount APIs, pending/posting flows, an optimistic-concurrency command queue,
-        and a fully auditable journal so you can embed reliable ledgering without rebuilding the fundamentals.
       """,
       elixir: "~> 1.15",
       package: [
