@@ -117,22 +117,22 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Examples
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :posted,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> length(JournalEventStore.list_all_for_instance_id(instance.id))
-    3
-    iex> # test pagination
-    iex> length(JournalEventStore.list_all_for_instance_id(instance.id, 2, 2))
-    1
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> create_attrs = %{
+      ...>   status: :posted,
+      ...>   entries: [
+      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>   ]}
+      iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> length(JournalEventStore.list_all_for_instance_id(instance.id))
+      3
+      iex> # test pagination
+      iex> length(JournalEventStore.list_all_for_instance_id(instance.id, 2, 2))
+      1
 
   """
   @spec list_all_for_instance_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
@@ -158,12 +158,14 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `Command.t() | nil`: The create account event if found and processed
 
   ### Examples
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, %{id: id}} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> event = JournalEventStore.get_create_account_event(id)
-    iex> event.account.id
-    id
+
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, %{id: id}} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> event = JournalEventStore.get_create_account_event(id)
+      iex> event.account.id
+      id
+
   """
   @spec get_create_account_event(Ecto.UUID.t()) :: Command.t()
   def get_create_account_event(account_id) do
@@ -185,27 +187,27 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Examples
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :posted,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_id(asset_account.id)
-    iex> length(events)
-    2
-    iex> acc_event.command_map.action
-    :create_account
-    iex> trx_event.command_map.action
-    :create_transaction
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> create_attrs = %{
+      ...>   status: :posted,
+      ...>   entries: [
+      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>   ]}
+      iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_id(asset_account.id)
+      iex> length(events)
+      2
+      iex> acc_event.command_map.action
+      :create_account
+      iex> trx_event.command_map.action
+      :create_transaction
 
-    iex> JournalEventStore.list_all_for_account_id(Ecto.UUID.generate())
-    []
+      iex> JournalEventStore.list_all_for_account_id(Ecto.UUID.generate())
+      []
 
   """
   @spec list_all_for_account_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
@@ -229,30 +231,30 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Examples
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :posted,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_address(instance.address, liability_account.address)
-    iex> length(events)
-    2
-    iex> acc_event.command_map.action
-    :create_account
-    iex> trx_event.command_map.action
-    :create_transaction
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> create_attrs = %{
+      ...>   status: :posted,
+      ...>   entries: [
+      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>   ]}
+      iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_address(instance.address, liability_account.address)
+      iex> length(events)
+      2
+      iex> acc_event.command_map.action
+      :create_account
+      iex> trx_event.command_map.action
+      :create_transaction
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> JournalEventStore.list_all_for_account_address(instance.address, "nonexistent")
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> JournalEventStore.list_all_for_account_address(instance.address, "nonexistent")
 
-    iex> JournalEventStore.list_all_for_account_address("nonexistent", "nonexistent")
-    []
+      iex> JournalEventStore.list_all_for_account_address("nonexistent", "nonexistent")
+      []
 
   """
   @spec list_all_for_account_address(String.t(), String.t()) :: list(Command.t())
@@ -274,21 +276,21 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Examples
 
-    iex> alias DoubleEntryLedger.Stores.{JournalEventStore, AccountStore, InstanceStore, TransactionStore}
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :pending,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
-    iex> length(JournalEventStore.list_all_for_transaction_id(id))
-    2
+      iex> alias DoubleEntryLedger.Stores.{JournalEventStore, AccountStore, InstanceStore, TransactionStore}
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> create_attrs = %{
+      ...>   status: :pending,
+      ...>   entries: [
+      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>   ]}
+      iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
+      iex> length(JournalEventStore.list_all_for_transaction_id(id))
+      2
   """
   @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Command.t())
   def list_all_for_transaction_id(transaction_id) do
@@ -309,21 +311,21 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   ## Examples
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :pending,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> event = JournalEventStore.get_create_transaction_journal_event(id)
-    iex> %{id: trx_id} = event.transaction
-    iex> trx_id
-    id
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> create_attrs = %{
+      ...>   status: :pending,
+      ...>   entries: [
+      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>   ]}
+      iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> event = JournalEventStore.get_create_transaction_journal_event(id)
+      iex> %{id: trx_id} = event.transaction
+      iex> trx_id
+      id
 
   """
   @spec get_create_transaction_journal_event(Ecto.UUID.t()) :: Command.t()

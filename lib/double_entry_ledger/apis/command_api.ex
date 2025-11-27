@@ -55,29 +55,31 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     - `{:error, :instance_not_found | :action_not_supported}`: When the instance or action is invalid
 
   ## Examples
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
-    iex> {:ok, event} = CommandApi.create_from_params(%{
-    ...>   "instance_address" => instance.address,
-    ...>   "action" => "create_account",
-    ...>   "source" => "frontend",
-    ...>   "source_idempk" => "unique_id_123",
-    ...>   "payload" => account_data
-    ...> })
-    iex> event.command_queue_item.status
-    :pending
-    iex> {:error, %Ecto.Changeset{data: %AccountCommandMap{}}= changeset} = CommandApi.create_from_params(%{
-    ...>   "instance_address" => instance.address,
-    ...>   "action" => "create_account",
-    ...>   "source" => "frontend",
-    ...>   "source_idempk" => "unique_id_124",
-    ...>   "payload" => %{}
-    ...> })
-    iex> changeset.valid?
-    false
 
-    iex> CommandApi.create_from_params(%{"action" => "unsupported"})
-    iex> {:error, :action_not_supported}
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD, instance_address: instance.address}
+      iex> {:ok, event} = CommandApi.create_from_params(%{
+      ...>   "instance_address" => instance.address,
+      ...>   "action" => "create_account",
+      ...>   "source" => "frontend",
+      ...>   "source_idempk" => "unique_id_123",
+      ...>   "payload" => account_data
+      ...> })
+      iex> event.command_queue_item.status
+      :pending
+      iex> {:error, %Ecto.Changeset{data: %AccountCommandMap{}}= changeset} = CommandApi.create_from_params(%{
+      ...>   "instance_address" => instance.address,
+      ...>   "action" => "create_account",
+      ...>   "source" => "frontend",
+      ...>   "source_idempk" => "unique_id_124",
+      ...>   "payload" => %{}
+      ...> })
+      iex> changeset.valid?
+      false
+
+      iex> CommandApi.create_from_params(%{"action" => "unsupported"})
+      iex> {:error, :action_not_supported}
+
   """
   @spec create_from_params(command_params()) ::
           {:ok, Command.t()}
@@ -113,10 +115,12 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   stack but currently skip retries and only support the no-save-on-error path.
 
   ## Parameters
+
     - `command_params`: Map describing the action, instance, idempotency keys, and payload.
     - `opts`: Keyword list (currently `on_error: :retry | :fail` for transaction commands).
 
   ## Returns
+
     - `{:ok, transaction | account, command}` on success with the created/updated projection.
     - `{:error, command}` when the worker persisted an error state (queued for retry).
     - `{:error, changeset}` when payload validation fails.
@@ -124,42 +128,43 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
 
   ## Examples
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> {:ok, transaction, event} = CommandApi.process_from_params(%{
-    ...>   "instance_address" => instance.address,
-    ...>   "action" => "create_transaction",
-    ...>   "source" => "frontend",
-    ...>   "source_idempk" => "unique_id_123",
-    ...>   "payload" => %{
-    ...>     status: :posted,
-    ...>     entries: [
-    ...>       %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>       %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>     ]
-    ...>   }
-    ...> })
-    iex> trx =  (event |> Repo.preload(:transaction)).transaction
-    iex> trx.id == transaction.id
-    true
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> {:ok, transaction, event} = CommandApi.process_from_params(%{
+      ...>   "instance_address" => instance.address,
+      ...>   "action" => "create_transaction",
+      ...>   "source" => "frontend",
+      ...>   "source_idempk" => "unique_id_123",
+      ...>   "payload" => %{
+      ...>     status: :posted,
+      ...>     entries: [
+      ...>       %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>       %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>     ]
+      ...>   }
+      ...> })
+      iex> trx =  (event |> Repo.preload(:transaction)).transaction
+      iex> trx.id == transaction.id
+      true
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> {:ok, _account, _event} = CommandApi.process_from_params(%{
-    ...>   "instance_address" => instance.address,
-    ...>   "action" => "create_account",
-    ...>   "source" => "frontend",
-    ...>   "source_idempk" => "unique_id_123",
-    ...>   "payload" => %{
-    ...>     type: :asset,
-    ...>     address: "asset:owner:1",
-    ...>     currency: :EUR
-    ...>   }
-    ...> }, [on_error: :fail])
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> {:ok, _account, _event} = CommandApi.process_from_params(%{
+      ...>   "instance_address" => instance.address,
+      ...>   "action" => "create_account",
+      ...>   "source" => "frontend",
+      ...>   "source_idempk" => "unique_id_123",
+      ...>   "payload" => %{
+      ...>     type: :asset,
+      ...>     address: "asset:owner:1",
+      ...>     currency: :EUR
+      ...>   }
+      ...> }, [on_error: :fail])
 
-    iex> CommandApi.process_from_params(%{"action" => "unsupported"})
-    iex> {:error, :action_not_supported}
+      iex> CommandApi.process_from_params(%{"action" => "unsupported"})
+      iex> {:error, :action_not_supported}
+
   """
   @spec process_from_params(command_params(), on_error: on_error()) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()

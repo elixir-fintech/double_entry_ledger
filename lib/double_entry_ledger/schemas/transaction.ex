@@ -289,7 +289,7 @@ defmodule DoubleEntryLedger.Transaction do
 
   @spec debit_equals_credit_per_currency([Entry.t()]) :: boolean()
   defp debit_equals_credit_per_currency(entries) do
-    Enum.group_by(entries, &DoubleEntryLedger.Schemas.Entryable.currency(&1))
+    Enum.group_by(entries, &DoubleEntryLedger.Entryable.currency(&1))
     |> Enum.map(fn {_currency, entries} -> debit_sum(entries) == credit_sum(entries) end)
     |> Enum.all?(& &1)
   end
@@ -302,13 +302,13 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   @spec account_ids([Entry.t() | Ecto.Changeset.t()]) :: [Ecto.UUID.t()]
-  defp account_ids(entries), do: Enum.map(entries, &DoubleEntryLedger.Schemas.Entryable.uuid(&1))
+  defp account_ids(entries), do: Enum.map(entries, &DoubleEntryLedger.Entryable.uuid(&1))
 
   @spec debit_sum([Entry.t() | Ecto.Changeset.t()]) :: integer()
   defp debit_sum(entries),
-    do: Enum.reduce(entries, 0, &DoubleEntryLedger.Schemas.Entryable.debit_sum(&1, &2))
+    do: Enum.reduce(entries, 0, &DoubleEntryLedger.Entryable.debit_sum(&1, &2))
 
   @spec credit_sum([Entry.t() | Ecto.Changeset.t()]) :: integer()
   defp credit_sum(entries),
-    do: Enum.reduce(entries, 0, &DoubleEntryLedger.Schemas.Entryable.credit_sum(&1, &2))
+    do: Enum.reduce(entries, 0, &DoubleEntryLedger.Entryable.credit_sum(&1, &2))
 end

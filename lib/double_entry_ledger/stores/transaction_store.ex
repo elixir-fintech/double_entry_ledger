@@ -73,7 +73,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
         - `:currency` (Currency.currency_atom()): The currency for the entry.
     - `idempotent_id` (String.t()): A unique identifier to ensure idempotency of the creation request.
     - `opts` (Keyword.t(), optional): A string indicating the source of the creation request.
-      - `:source` Defaults to `"TransactionStore.create/3"
+      - `:source` Defaults to "transaction_store-create".
       - `:on_error`
         - :retry (default) The command will be saved in the CommandQueue for retry after a processing error.
         - :fail if you want to handle errors manually without saving the command to the CommandQueue.
@@ -144,8 +144,10 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
         - `:currency` (Currency.currency_atom()): The currency for the entry.
     - `update_idempk` (String.t()): A unique identifier to ensure idempotency of the update request.
     - `opts` (Keyword.t(), optional): A string indicating the source of the creation request.
-      - `:update_source` Defaults to `"TransactionStore.update/4", use if the source of the change is different from the initial source when creating the command
-      - `:retry_on_error` defaults to true. If true, command will be saved in the CommandQueue for retry after a processing error. Otherwise Command is not stored at all.
+      - `:update_source` Defaults to "transaction_store-update". Use if the source of the change is different from the initial source when creating the command.
+      - `:on_error`
+        - :retry (default) The command will be saved in the CommandQueue for retry after a processing error.
+        - :fail if you want to handle errors manually without saving the command to the CommandQueue.
 
   ## Returns
 

@@ -118,24 +118,24 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
   ## Examples
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> transaction_map = %TransactionCommandMap{
-    ...>   instance_address: instance.address,
-    ...>   action: :create_transaction,
-    ...>   source: "from-somewhere",
-    ...>   source_idempk: "unique_1234",
-    ...>   payload: %{
-    ...>     status: :pending,
-    ...>     entries: [
-    ...>       %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>       %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>     ]}}
-    iex>   {:ok, command} = CommandStore.create(transaction_map)
-    iex>  command.command_queue_item.status
-    :pending
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> transaction_map = %TransactionCommandMap{
+      ...>   instance_address: instance.address,
+      ...>   action: :create_transaction,
+      ...>   source: "from-somewhere",
+      ...>   source_idempk: "unique_1234",
+      ...>   payload: %{
+      ...>     status: :pending,
+      ...>     entries: [
+      ...>       %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>       %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>     ]}}
+      iex>   {:ok, command} = CommandStore.create(transaction_map)
+      iex>  command.command_queue_item.status
+      :pending
   """
   @spec create(TransactionCommandMap.t() | AccountCommandMap.t()) ::
           {:ok, Command.t()} | {:error, Ecto.Changeset.t(Command.t()) | :instance_not_found}
@@ -200,22 +200,22 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
   ## Examples
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :posted,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> length(CommandStore.list_all_for_instance_id(instance.id))
-    3
-    iex> # test pagination
-    iex> length(CommandStore.list_all_for_instance_id(instance.id, 2, 2))
-    1
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> create_attrs = %{
+      ...>   status: :posted,
+      ...>   entries: [
+      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>   ]}
+      iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> length(CommandStore.list_all_for_instance_id(instance.id))
+      3
+      iex> # test pagination
+      iex> length(CommandStore.list_all_for_instance_id(instance.id, 2, 2))
+      1
 
   """
   @spec list_all_for_instance_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
@@ -242,20 +242,20 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
   ## Examples
 
-    iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-    iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-    iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-    iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-    iex> create_attrs = %{
-    ...>   status: :pending,
-    ...>   entries: [
-    ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-    ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-    ...>   ]}
-    iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-    iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
-    iex> length(CommandStore.list_all_for_transaction_id(id))
-    2
+      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
+      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
+      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
+      iex> create_attrs = %{
+      ...>   status: :pending,
+      ...>   entries: [
+      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
+      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
+      ...>   ]}
+      iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
+      iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
+      iex> length(CommandStore.list_all_for_transaction_id(id))
+      2
   """
   @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Command.t())
   def list_all_for_transaction_id(transaction_id) do

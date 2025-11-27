@@ -1,4 +1,4 @@
-defprotocol DoubleEntryLedger.Schemas.Entryable do
+defprotocol DoubleEntryLedger.Entryable do
   @moduledoc """
   Protocol defining helper functions for working with entry data in the Double Entry Ledger system.
 
@@ -27,7 +27,7 @@ defprotocol DoubleEntryLedger.Schemas.Entryable do
 
   ```elixir
   defmodule DoubleEntryLedger.TransactionValidator do
-    alias DoubleEntryLedger.Schemas.Entryable
+    alias DoubleEntryLedger.Entryable
 
     # Works with both Entry structs and changesets
     def balance_entries?(entries) do
@@ -54,7 +54,7 @@ defprotocol DoubleEntryLedger.Schemas.Entryable do
 
       # Using with Entry struct
       iex> alias DoubleEntryLedger.Entry
-      iex> alias DoubleEntryLedger.Schemas.Entryable
+      iex> alias DoubleEntryLedger.Entryable
       iex> debit_entry = %Entry{type: :debit, value: %{amount: 500, currency: :USD}}
       iex> Entryable.debit_sum(debit_entry, 100)
       600
@@ -64,7 +64,7 @@ defprotocol DoubleEntryLedger.Schemas.Entryable do
 
       # Using with Changeset
       iex> alias DoubleEntryLedger.Entry
-      iex> alias DoubleEntryLedger.Schemas.Entryable
+      iex> alias DoubleEntryLedger.Entryable
       iex> alias Ecto.Changeset
       iex> changeset = Changeset.change(%Entry{}, %{type: :debit, value: %{amount: 500, currency: :USD}})
       iex> Entryable.debit_sum(changeset, 100)
@@ -82,7 +82,7 @@ defprotocol DoubleEntryLedger.Schemas.Entryable do
 
       # Using with Entry struct
       iex> alias DoubleEntryLedger.Entry
-      iex> alias DoubleEntryLedger.Schemas.Entryable
+      iex> alias DoubleEntryLedger.Entryable
       iex> credit_entry = %Entry{type: :credit, value: %{amount: 500, currency: :USD}}
       iex> Entryable.credit_sum(credit_entry, 100)
       600
@@ -92,7 +92,7 @@ defprotocol DoubleEntryLedger.Schemas.Entryable do
 
       # Using with Changeset
       iex> alias DoubleEntryLedger.Entry
-      iex> alias DoubleEntryLedger.Schemas.Entryable
+      iex> alias DoubleEntryLedger.Entryable
       iex> alias Ecto.Changeset
       iex> changeset = Changeset.change(%Entry{}, %{type: :credit, value: %{amount: 500, currency: :USD}})
       iex> Entryable.credit_sum(changeset, 100)
@@ -108,14 +108,14 @@ defprotocol DoubleEntryLedger.Schemas.Entryable do
 
       # Using with Entry struct
       iex> alias DoubleEntryLedger.Entry
-      iex> alias DoubleEntryLedger.Schemas.Entryable
+      iex> alias DoubleEntryLedger.Entryable
       iex> entry = %Entry{account_id: "550e8400-e29b-41d4-a716-446655440000"}
       iex> Entryable.uuid(entry)
       "550e8400-e29b-41d4-a716-446655440000"
 
       # Using with Changeset
       iex> alias DoubleEntryLedger.Entry
-      iex> alias DoubleEntryLedger.Schemas.Entryable
+      iex> alias DoubleEntryLedger.Entryable
       iex> alias Ecto.Changeset
       iex> changeset = Changeset.change(%Entry{}, %{account_id: "550e8400-e29b-41d4-a716-446655440000"})
       iex> Entryable.uuid(changeset)
@@ -131,14 +131,14 @@ defprotocol DoubleEntryLedger.Schemas.Entryable do
 
       # Using with Entry struct
       iex> alias DoubleEntryLedger.Entry
-      iex> alias DoubleEntryLedger.Schemas.Entryable
+      iex> alias DoubleEntryLedger.Entryable
       iex> entry = %Entry{value: %{amount: 500, currency: :USD}}
       iex> Entryable.currency(entry)
       :USD
 
       # Using with Changeset
       iex> alias DoubleEntryLedger.Entry
-      iex> alias DoubleEntryLedger.Schemas.Entryable
+      iex> alias DoubleEntryLedger.Entryable
       iex> alias Ecto.Changeset
       iex> changeset = Changeset.change(%Entry{}, %{value: %{amount: 500, currency: :USD}})
       iex> Entryable.currency(changeset)
@@ -148,9 +148,9 @@ defprotocol DoubleEntryLedger.Schemas.Entryable do
   def currency(entry)
 end
 
-defimpl DoubleEntryLedger.Schemas.Entryable, for: Ecto.Changeset do
+defimpl DoubleEntryLedger.Entryable, for: Ecto.Changeset do
   @moduledoc """
-  Implementation of `DoubleEntryLedger.Schemas.Entryable` protocol for `Ecto.Changeset`.
+  Implementation of `DoubleEntryLedger.Entryable` protocol for `Ecto.Changeset`.
 
   This implementation enables protocol functions to work with entries that are still
   being validated or constructed via Ecto changesets. It extracts relevant data from
@@ -186,9 +186,9 @@ defimpl DoubleEntryLedger.Schemas.Entryable, for: Ecto.Changeset do
   def currency(%{changes: %{value: v}}), do: v.currency
 end
 
-defimpl DoubleEntryLedger.Schemas.Entryable, for: DoubleEntryLedger.Entry do
+defimpl DoubleEntryLedger.Entryable, for: DoubleEntryLedger.Entry do
   @moduledoc """
-  Implementation of `DoubleEntryLedger.Schemas.Entryable` protocol for `Entry` structs.
+  Implementation of `DoubleEntryLedger.Entryable` protocol for `Entry` structs.
 
   This implementation works with fully persisted and loaded Entry structs from the database.
   It provides direct access to entry fields like type, account_id and value fields.

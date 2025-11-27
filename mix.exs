@@ -4,8 +4,18 @@ defmodule DoubleEntryLedger.MixProject do
   def project do
     [
       app: :double_entry_ledger,
-      version: "0.2.0",
+      version: "0.1.0",
+      description: """
+        DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engine for Elixir and PostgreSQL.
+        It provides typed accounts, signed amount APIs, pending/posting flows, an optimistic-concurrency command queue,
+        and a fully auditable journal so you can embed reliable ledgering without rebuilding the fundamentals.
+      """,
       elixir: "~> 1.15",
+      package: [
+        licenses: ["MIT"],
+        links: %{"GitHub" => "https://github.com/elixir-fintech/double_entry_ledger"}
+      ],
+      source_url: "https://github.com/elixir-fintech/double_entry_ledger",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -69,6 +79,9 @@ defmodule DoubleEntryLedger.MixProject do
       .sidebar-header, .sidebar {
         width: 400px !important;
       }
+      .sidebar {
+        --sidebarFontSize: 14px;
+      }
     </style>
     """
   end
@@ -86,52 +99,90 @@ defmodule DoubleEntryLedger.MixProject do
       ],
       groups_for_modules: [
         Instance: [
-          DoubleEntryLedger.InstanceStore,
-          DoubleEntryLedger.Instance
+          DoubleEntryLedger.Instance,
+          DoubleEntryLedger.Stores.InstanceStore,
+          DoubleEntryLedger.Stores.InstanceStoreHelper
         ],
         Account: [
-          DoubleEntryLedger.AccountStore,
           DoubleEntryLedger.Account,
           DoubleEntryLedger.Balance,
-          DoubleEntryLedger.BalanceHistoryEntry
+          DoubleEntryLedger.BalanceHistoryEntry,
+          DoubleEntryLedger.Stores.AccountStore,
+          DoubleEntryLedger.Stores.AccountStoreHelper
         ],
         Transaction: [
-          DoubleEntryLedger.TransactionStore,
+          DoubleEntryLedger.Entry,
+          DoubleEntryLedger.Entryable,
           DoubleEntryLedger.Transaction,
-          DoubleEntryLedger.Entry
+          DoubleEntryLedger.PendingTransactionLookup,
+          DoubleEntryLedger.Stores.TransactionStore,
+          DoubleEntryLedger.Stores.TransactionStoreHelper,
         ],
-        Event: [
-          DoubleEntryLedger.EventStore,
-          DoubleEntryLedger.EventStoreHelper,
-          DoubleEntryLedger.Event,
-          DoubleEntryLedger.Event.CommandMap,
-          DoubleEntryLedger.Event.EntryData,
-          DoubleEntryLedger.Event.TransactionData,
-          DoubleEntryLedger.Event.ErrorMap
+        JournalEvent: [
+          DoubleEntryLedger.JournalEvent,
+          DoubleEntryLedger.JournalEventAccountLink,
+          DoubleEntryLedger.JournalEventCommandLink,
+          DoubleEntryLedger.JournalEventTransactionLink,
+          DoubleEntryLedger.Stores.JournalEventStore,
+          DoubleEntryLedger.Stores.JournalEventStoreHelper
         ],
-        EventWorker: [
-          DoubleEntryLedger.EventWorker,
-          DoubleEntryLedger.EventWorker.ProcessEvent,
-          DoubleEntryLedger.EventWorker.CreateTransactionCommand,
-          DoubleEntryLedger.EventWorker.CreateTransactionCommandMap,
-          DoubleEntryLedger.EventWorker.CreateTransactionCommandMapNoSaveOnError,
-          DoubleEntryLedger.EventWorker.UpdateTransactionCommand,
-          DoubleEntryLedger.EventWorker.UpdateTransactionCommandMap,
-          DoubleEntryLedger.EventWorker.UpdateTransactionCommandMapNoSaveOnError,
-          DoubleEntryLedger.EventWorker.EventTransformer,
-          DoubleEntryLedger.EventWorker.UpdateCommandError,
-          DoubleEntryLedger.EventWorker.ResponseHandler
+        Command: [
+          DoubleEntryLedger.Command,
+          DoubleEntryLedger.Command.CommandMap,
+          DoubleEntryLedger.Command.EntryData,
+          DoubleEntryLedger.Command.TransactionData,
+          DoubleEntryLedger.Command.TransactionCommandMap,
+          DoubleEntryLedger.Command.AccountData,
+          DoubleEntryLedger.Command.AccountCommandMap,
+          DoubleEntryLedger.Command.ErrorMap,
+          DoubleEntryLedger.Command.Helper,
+          DoubleEntryLedger.Command.IdempotencyKey,
+          DoubleEntryLedger.Command.TransferErrors,
+          DoubleEntryLedger.Stores.CommandStore,
+          DoubleEntryLedger.Stores.CommandStoreHelper,
         ],
-        EventQueue: [
-          DoubleEntryLedger.EventQueue.Supervisor,
-          DoubleEntryLedger.EventQueue.Scheduling,
-          DoubleEntryLedger.EventQueue.InstanceProcessor,
-          DoubleEntryLedger.EventQueue.InstanceMonitor
+        CommandApi: [
+          DoubleEntryLedger.Apis.CommandApi
         ],
-        "Protocols, Types, Constants and Currency": [
+        CommandWorker: [
+          DoubleEntryLedger.Workers.CommandWorker,
+          DoubleEntryLedger.Workers.CommandWorker.ProcessCommand,
+          DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand,
+          DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap,
+          DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnError,
+          DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand,
+          DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap,
+          DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoSaveOnError,
+          DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer,
+          DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
+          DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
+          DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand,
+          DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveOnError,
+          DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand,
+          DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveOnError,
+          DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler,
+          DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler,
+          DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
+        ],
+        CommandQueue: [
+          DoubleEntryLedger.CommandQueueItem,
+          DoubleEntryLedger.CommandQueue.Supervisor,
+          DoubleEntryLedger.CommandQueue.Scheduling,
+          DoubleEntryLedger.CommandQueue.InstanceProcessor,
+          DoubleEntryLedger.CommandQueue.InstanceMonitor
+        ],
+        Oban: [
+          DoubleEntryLedger.Workers.Oban.JournalEventLinks
+        ],
+        "Types, Utils and Logger": [
           DoubleEntryLedger.EntryHelper,
           DoubleEntryLedger.Types,
-          DoubleEntryLedger.Currency
+          DoubleEntryLedger.Utils.Changeset,
+          DoubleEntryLedger.Utils.Currency,
+          DoubleEntryLedger.Utils.Map,
+          DoubleEntryLedger.Utils.Pagination,
+          DoubleEntryLedger.Utils.Traceable,
+          DoubleEntryLedger.Logger
         ],
         "Optimistic Concurrency Control": [
           DoubleEntryLedger.Occ.Processor,
