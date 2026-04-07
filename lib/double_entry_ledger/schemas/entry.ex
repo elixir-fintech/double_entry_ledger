@@ -280,6 +280,8 @@ defmodule DoubleEntryLedger.Entry do
     end
   end
 
+  defp put_account_assoc(%{valid?: false} = changeset, _transition), do: changeset
+
   defp put_account_assoc(changeset, transition) do
     account = get_assoc(changeset, :account, :struct)
 
@@ -291,6 +293,8 @@ defmodule DoubleEntryLedger.Entry do
   end
 
   @spec put_balance_history_entry_assoc(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp put_balance_history_entry_assoc(%{valid?: false} = changeset), do: changeset
+
   defp put_balance_history_entry_assoc(changeset) do
     account_changeset = get_assoc(changeset, :account, :changeset)
     balance_history_entries = get_assoc(changeset, :balance_history_entries, :struct)
@@ -309,16 +313,21 @@ defmodule DoubleEntryLedger.Entry do
   @spec validate_same_account_currency(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp validate_same_account_currency(changeset) do
     account = get_assoc(changeset, :account, :struct)
-    currency = get_field(changeset, :value).currency
 
-    if account.currency != currency do
-      add_error(
-        changeset,
-        :currency,
-        "account (#{account.currency}) must be equal to entry (#{currency})"
-      )
-    else
+    if is_nil(account) do
       changeset
+    else
+      currency = get_field(changeset, :value).currency
+
+      if account.currency != currency do
+        add_error(
+          changeset,
+          :currency,
+          "account (#{account.currency}) must be equal to entry (#{currency})"
+        )
+      else
+        changeset
+      end
     end
   end
 
