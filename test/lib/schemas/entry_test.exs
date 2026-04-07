@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.EntryTest do
   describe "changeset/3 with non-existent account" do
     setup [:create_instance]
 
-    test "returns changeset error instead of crashing", %{instance: inst} do
+    test "returns changeset error instead of crashing", _ctx do
       attrs = %{
         type: :debit,
         value: Money.new(100, :EUR),
