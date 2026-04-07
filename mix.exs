@@ -24,7 +24,8 @@ defmodule DoubleEntryLedger.MixProject do
         # flags: [:overspecs]
       ],
       docs: docs(),
-      consolidate_protocols: if(Mix.env() == :test, do: false, else: true)
+      consolidate_protocols: if(Mix.env() == :test, do: false, else: true),
+      test_ignore_filters: [~r/test\/performance/]
     ]
   end
 
@@ -47,12 +48,19 @@ defmodule DoubleEntryLedger.MixProject do
       {:logger_json, "~> 7.0"},
       {:jason, "~> 1.4"},
       {:oban, "~> 2.19"},
+
+      # dev and test deps
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:mox, "~> 1.0", only: [:test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:tidewave, "~> 0.4", only: :dev},
-      {:bandit, "~> 1.0", only: :dev}
+      {:bandit, "~> 1.0", only: :dev},
+
+      # security
+      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false, warn_if_outdated: true},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]
@@ -67,7 +75,8 @@ defmodule DoubleEntryLedger.MixProject do
     [
       test: ["ecto.create --quiet", "ecto.migrate", "test"],
       tidewave:
-        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4000) end)'"
+        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4020) end)'",
+      sec: ["sobelow", "deps.audit"]
     ]
   end
 
@@ -114,7 +123,7 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Transaction,
           DoubleEntryLedger.PendingTransactionLookup,
           DoubleEntryLedger.Stores.TransactionStore,
-          DoubleEntryLedger.Stores.TransactionStoreHelper,
+          DoubleEntryLedger.Stores.TransactionStoreHelper
         ],
         JournalEvent: [
           DoubleEntryLedger.JournalEvent,
@@ -137,7 +146,7 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Command.IdempotencyKey,
           DoubleEntryLedger.Command.TransferErrors,
           DoubleEntryLedger.Stores.CommandStore,
-          DoubleEntryLedger.Stores.CommandStoreHelper,
+          DoubleEntryLedger.Stores.CommandStoreHelper
         ],
         CommandApi: [
           DoubleEntryLedger.Apis.CommandApi
