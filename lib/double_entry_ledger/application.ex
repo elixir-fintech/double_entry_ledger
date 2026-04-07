@@ -5,12 +5,14 @@ defmodule DoubleEntryLedger.Application do
 
   use Application
 
+  @start_command_queue Application.compile_env(:double_entry_ledger, :start_command_queue, true)
+
   @impl true
   def start(_type, _args) do
     children =
       [
         DoubleEntryLedger.Repo,
-        if(Mix.env() != :test, do: {DoubleEntryLedger.CommandQueue.Supervisor, []}),
+        if(@start_command_queue, do: {DoubleEntryLedger.CommandQueue.Supervisor, []}),
         {Oban, Application.fetch_env!(:double_entry_ledger, Oban)}
       ]
       |> Enum.reject(&is_nil/1)
