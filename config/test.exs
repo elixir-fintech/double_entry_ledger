@@ -17,7 +17,6 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
 config :double_entry_ledger, Oban, testing: :inline
 
 config :logger,
-  backends: [:console],
   level: :info
 
 config :logger, :console,
