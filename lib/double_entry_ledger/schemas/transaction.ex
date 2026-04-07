@@ -32,15 +32,12 @@ defmodule DoubleEntryLedger.Transaction do
   """
 
   use DoubleEntryLedger.BaseSchema
-  import Ecto.Query, only: [from: 2]
 
   alias DoubleEntryLedger.{
-    Account,
     Entry,
     JournalEvent,
     JournalEventTransactionLink,
     Instance,
-    Repo,
     Types
   }
 
@@ -228,9 +225,7 @@ defmodule DoubleEntryLedger.Transaction do
   @spec validate_accounts(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp validate_accounts(changeset) do
     entries = get_assoc(changeset, :entries, :struct) || []
-
-    ledger_ids =
-      Repo.all(from(a in Account, where: a.id in ^account_ids(entries), select: a.instance_id))
+    ledger_ids = Enum.map(entries, &entry_instance_id/1)
 
     cond do
       ledger_ids == [] ->
@@ -243,6 +238,9 @@ defmodule DoubleEntryLedger.Transaction do
         add_errors_to_entries(changeset, :account_id, "accounts must be on same ledger")
     end
   end
+
+  defp entry_instance_id(%Ecto.Changeset{} = cs), do: get_assoc(cs, :account, :struct).instance_id
+  defp entry_instance_id(%{account: account}), do: account.instance_id
 
   @spec map_ids_to_entries(Ecto.Changeset.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
   defp map_ids_to_entries(
@@ -299,9 +297,6 @@ defmodule DoubleEntryLedger.Transaction do
     |> Enum.map(&add_error(&1, field, error))
     |> then(&put_assoc(changeset, :entries, &1))
   end
-
-  @spec account_ids([Entry.t() | Ecto.Changeset.t()]) :: [Ecto.UUID.t()]
-  defp account_ids(entries), do: Enum.map(entries, &DoubleEntryLedger.Entryable.uuid(&1))
 
   @spec debit_sum([Entry.t() | Ecto.Changeset.t()]) :: integer()
   defp debit_sum(entries),
