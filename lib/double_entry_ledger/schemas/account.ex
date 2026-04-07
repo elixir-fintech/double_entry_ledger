@@ -288,13 +288,15 @@ defmodule DoubleEntryLedger.Account do
       ...>  ]}})
       iex> {:error, changeset} = Account.delete_changeset(account1)
       ...> |> Repo.delete()
-      iex> [entries: {"are still associated with this entry", _}] = changeset.errors
+      iex> changeset.valid?
+      false
   """
   @spec delete_changeset(Account.t()) :: Changeset.t()
   def delete_changeset(account) do
     account
     |> change()
     |> no_assoc_constraint(:entries)
+    |> no_assoc_constraint(:balance_history_entries)
   end
 
   @doc """
