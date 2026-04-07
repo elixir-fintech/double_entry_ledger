@@ -153,37 +153,43 @@ defimpl DoubleEntryLedger.Entryable, for: Ecto.Changeset do
   Implementation of `DoubleEntryLedger.Entryable` protocol for `Ecto.Changeset`.
 
   This implementation enables protocol functions to work with entries that are still
-  being validated or constructed via Ecto changesets. It extracts relevant data from
-  the changeset's changes map to provide the same interface as persisted entries.
+  being validated or constructed via Ecto changesets. It uses `Ecto.Changeset.get_field/2`
+  to read from both `changes` and `data`, so it works for both new and update changesets.
   """
+
+  import Ecto.Changeset, only: [get_field: 2]
 
   @doc """
   Returns the sum of debit entries for an `Ecto.Changeset`.
   """
   @spec debit_sum(Ecto.Changeset.t(), integer()) :: integer()
-  def debit_sum(%{changes: %{type: t, value: v}}, acc) do
-    if t == :debit, do: acc + v.amount, else: acc
+  def debit_sum(changeset, acc) do
+    if get_field(changeset, :type) == :debit,
+      do: acc + get_field(changeset, :value).amount,
+      else: acc
   end
 
   @doc """
   Returns the sum of credit entries for an `Ecto.Changeset`.
   """
   @spec credit_sum(Ecto.Changeset.t(), integer()) :: integer()
-  def credit_sum(%{changes: %{type: t, value: v}}, acc) do
-    if t == :credit, do: acc + v.amount, else: acc
+  def credit_sum(changeset, acc) do
+    if get_field(changeset, :type) == :credit,
+      do: acc + get_field(changeset, :value).amount,
+      else: acc
   end
 
   @doc """
   Retrieves the UUID from the `Ecto.Changeset`.
   """
   @spec uuid(Ecto.Changeset.t()) :: String.t()
-  def uuid(%{changes: %{account_id: id}}), do: id
+  def uuid(changeset), do: get_field(changeset, :account_id)
 
   @doc """
   Retrieves the currency from the `Ecto.Changeset`.
   """
   @spec currency(Ecto.Changeset.t()) :: atom()
-  def currency(%{changes: %{value: v}}), do: v.currency
+  def currency(changeset), do: get_field(changeset, :value).currency
 end
 
 defimpl DoubleEntryLedger.Entryable, for: DoubleEntryLedger.Entry do
