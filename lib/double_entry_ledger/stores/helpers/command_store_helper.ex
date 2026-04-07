@@ -69,7 +69,10 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
 
   def build_create(%AccountCommandMap{} = command_map, instance_id) do
     %Command{}
-    |> Command.changeset(%{instance_id: instance_id, command_map: AccountCommandMap.to_map(command_map)})
+    |> Command.changeset(%{
+      instance_id: instance_id,
+      command_map: AccountCommandMap.to_map(command_map)
+    })
   end
 
   @doc """

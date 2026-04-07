@@ -242,7 +242,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
       end)
 
       assert {:error,
-              %Changeset{data: %TransactionCommandMapSchema{}, errors: [occ_timeout: _, action: _]}} =
+              %Changeset{
+                data: %TransactionCommandMapSchema{},
+                errors: [occ_timeout: _, action: _]
+              }} =
                UpdateTransactionCommandMapNoSaveOnError.process(
                  update_command,
                  DoubleEntryLedger.MockRepo

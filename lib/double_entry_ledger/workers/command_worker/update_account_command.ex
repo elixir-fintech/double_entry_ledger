@@ -50,7 +50,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
           Ecto.Multi.t(),
           Command.t()
         ) :: Ecto.Multi.t()
-  defp handle_build_update_account(multi, %Command{command_map: command_map, instance_id: id} = event) do
+  defp handle_build_update_account(
+         multi,
+         %Command{command_map: command_map, instance_id: id} = event
+       ) do
     Multi.merge(multi, fn
       %{account: %{id: aid}} ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->

@@ -199,7 +199,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
   def handle_build_transaction(multi, _command_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_command: %{id: eid, command_map: em, instance_id: iid} = event} ->
+      %{
+        transaction: %{id: tid},
+        new_command: %{id: eid, command_map: em, instance_id: iid} = event
+      } ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{command_map: em, instance_id: iid})
         end)

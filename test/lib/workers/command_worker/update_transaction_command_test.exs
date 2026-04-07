@@ -13,7 +13,12 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
 
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Command.TransactionData
-  alias DoubleEntryLedger.Workers.CommandWorker.{UpdateTransactionCommand, CreateTransactionCommand}
+
+  alias DoubleEntryLedger.Workers.CommandWorker.{
+    UpdateTransactionCommand,
+    CreateTransactionCommand
+  }
+
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.CommandStore
 

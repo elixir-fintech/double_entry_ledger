@@ -79,7 +79,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
 
         {:error, from_idempotency_key_to_command_map(command_map, changeset)}
 
-      {:error, :input_command_map_error, %Changeset{data: %TransactionCommandMap{}} = changeset, _} ->
+      {:error, :input_command_map_error, %Changeset{data: %TransactionCommandMap{}} = changeset,
+       _} ->
         error("Input event map error", command_map, changeset)
 
         {:error, changeset}

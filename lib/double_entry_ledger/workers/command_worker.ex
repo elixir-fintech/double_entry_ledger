@@ -415,11 +415,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     UpdateTransactionCommandMapNoSaveOnError.process(command_map)
   end
 
-  def process_new_command_no_save_on_error(%AccountCommandMap{action: :create_account} = command_map) do
+  def process_new_command_no_save_on_error(
+        %AccountCommandMap{action: :create_account} = command_map
+      ) do
     CreateAccountCommandMapNoSaveOnError.process(command_map)
   end
 
-  def process_new_command_no_save_on_error(%AccountCommandMap{action: :update_account} = command_map) do
+  def process_new_command_no_save_on_error(
+        %AccountCommandMap{action: :update_account} = command_map
+      ) do
     UpdateAccountCommandMapNoSaveOnError.process(command_map)
   end
 

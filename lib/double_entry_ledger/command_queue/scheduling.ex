@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         end
 
       _ ->
-      {:error, :event_not_claimable}
+        {:error, :event_not_claimable}
     end
   end
 
