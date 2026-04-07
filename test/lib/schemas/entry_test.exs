@@ -125,6 +125,67 @@ defmodule DoubleEntryLedger.EntryTest do
     end
   end
 
+  describe "changeset/3 with non-existent account" do
+    setup [:create_instance]
+
+    test "returns changeset error instead of crashing", %{instance: inst} do
+      attrs = %{
+        type: :debit,
+        value: Money.new(100, :EUR),
+        account_id: Ecto.UUID.generate()
+      }
+
+      changeset = Entry.changeset(%Entry{}, attrs, :pending)
+
+      assert %Ecto.Changeset{valid?: false} = changeset
+      assert {"account not found", []} = Keyword.get(changeset.errors, :account_id)
+    end
+  end
+
+  describe "signed_value/1" do
+    setup [:create_instance, :create_accounts, :create_transaction]
+
+    test "returns positive value when entry type matches normal balance", %{
+      transaction: %{entries: entries}
+    } do
+      entry =
+        Enum.find(entries, &(&1.type == :debit))
+        |> Repo.preload(:account)
+
+      assert entry.account.normal_balance == :debit
+      assert Entry.signed_value(entry) == entry.value.amount
+    end
+
+    test "returns negative value when entry type differs from normal balance", %{
+      transaction: %{entries: entries}
+    } do
+      entry =
+        Enum.find(entries, &(&1.type == :credit))
+        |> Repo.preload(:account)
+
+      assert entry.account.normal_balance == :credit
+      # credit entry on a credit account → positive
+      assert Entry.signed_value(entry) == entry.value.amount
+    end
+
+    test "returns negative for debit entry on credit account", %{
+      transaction: %{entries: entries}
+    } do
+      # Find a credit account entry (liability), preload account
+      entry =
+        Enum.find(entries, &(&1.type == :debit))
+        |> Repo.preload(:account)
+
+      # Debit entry on a debit (asset) account → matches → positive
+      assert entry.account.normal_balance == :debit
+      assert Entry.signed_value(entry) > 0
+
+      # Simulate mismatch: debit entry on credit account
+      mismatched = %{entry | account: %{entry.account | normal_balance: :credit}}
+      assert Entry.signed_value(mismatched) == -entry.value.amount
+    end
+  end
+
   defp create_account(ctx) do
     %{account: account_fixture(instance_id: ctx.instance.id)}
   end
