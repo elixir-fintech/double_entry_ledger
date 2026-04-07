@@ -113,7 +113,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
   """
   @spec process(Command.t(), Ecto.Repo.t()) ::
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
-  def process(%Command{command_map: %{action: :update_transaction}} = original_event, repo \\ Repo) do
+  def process(
+        %Command{command_map: %{action: :update_transaction}} = original_event,
+        repo \\ Repo
+      ) do
     process_with_retry(original_event, repo)
     |> default_response_handler(original_event)
   end
@@ -178,7 +181,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
     - The updated `Ecto.Multi` with an `:event_success` or `:event_failure` step.
   """
-  def handle_build_transaction(multi, %{id: eid, command_map: em, instance_id: iid} = event, _repo) do
+  def handle_build_transaction(
+        multi,
+        %{id: eid, command_map: em, instance_id: iid} = event,
+        _repo
+      ) do
     multi
     |> Multi.merge(fn
       %{transaction: %{id: tid}} ->

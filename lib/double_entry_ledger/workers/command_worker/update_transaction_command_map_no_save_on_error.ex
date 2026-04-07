@@ -70,7 +70,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
           | {:error, Changeset.t(TransactionCommandMap.t()) | String.t()}
   def process(%{action: :update_transaction} = command_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(command_map, repo) do
-      {:error, :occ_timeout, %Changeset{data: %TransactionCommandMap{}} = changeset, _steps_so_far} ->
+      {:error, :occ_timeout, %Changeset{data: %TransactionCommandMap{}} = changeset,
+       _steps_so_far} ->
         warn("OCC timeout reached", command_map, changeset)
 
         {:error, changeset}
@@ -113,7 +114,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   def handle_build_transaction(multi, command_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_command: %{id: eid, command_map: em, instance_id: iid} = event} ->
+      %{
+        transaction: %{id: tid},
+        new_command: %{id: eid, command_map: em, instance_id: iid} = event
+      } ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{command_map: em, instance_id: iid})
         end)

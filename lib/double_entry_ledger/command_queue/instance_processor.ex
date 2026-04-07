@@ -106,6 +106,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
       {:error, reason} ->
         Logger.warning("Failed to process command #{command_id}: #{inspect(reason)}")
+
         # Note: the error is already recorded in the command by CommandWorker.process_command_with_id
     end
 

@@ -39,7 +39,10 @@ defmodule DoubleEntryLedger.Command.CommandMap do
   @spec dump(AccountCommandMap.t() | TransactionCommandMap.t() | nil, any(), any()) ::
           {:ok, map()} | :error
   def dump(%AccountCommandMap{} = struct, _, _), do: {:ok, AccountCommandMap.to_map(struct)}
-  def dump(%TransactionCommandMap{} = struct, _, _), do: {:ok, TransactionCommandMap.to_map(struct)}
+
+  def dump(%TransactionCommandMap{} = struct, _, _),
+    do: {:ok, TransactionCommandMap.to_map(struct)}
+
   def dump(nil, _, _), do: nil
   def dump(_, _, _), do: :error
 

@@ -25,5 +25,6 @@ double_entry_ledger-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
-# elixir language server folder
+# elixir language server folders
 .elixir_ls/
+.expert/

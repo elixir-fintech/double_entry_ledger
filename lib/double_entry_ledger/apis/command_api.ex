@@ -87,7 +87,8 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
              Ecto.Changeset.t(AccountCommandMap.t() | TransactionCommandMap.t())
              | :instance_not_found
              | :action_not_supported}
-  def create_from_params(%{"action" => action} = command_params) when action in @account_actions do
+  def create_from_params(%{"action" => action} = command_params)
+      when action in @account_actions do
     case AccountCommandMap.create(command_params) do
       {:ok, command_map} -> CommandStore.create(command_map)
       error -> error

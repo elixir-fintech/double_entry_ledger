@@ -50,7 +50,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
           | {:errors, Changeset.t(TransactionCommandMap.t()) | String.t()}
   def process(%{action: :create_transaction} = command_map, repo \\ Repo) do
     case process_with_retry_no_save_on_error(command_map, repo) do
-      {:error, :occ_timeout, %Changeset{data: %TransactionCommandMap{}} = changeset, _steps_so_far} ->
+      {:error, :occ_timeout, %Changeset{data: %TransactionCommandMap{}} = changeset,
+       _steps_so_far} ->
         warn("OCC timeout reached", command_map, changeset)
 
         {:error, changeset}

@@ -41,7 +41,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
     test "pending transaction also creates a pending transaction lookup", ctx do
       command_map = create_transaction_command_map(ctx, :pending)
 
-      {:ok, %{id: trx_id}, %{id: id}} = CreateTransactionCommandMapNoSaveOnError.process(command_map)
+      {:ok, %{id: trx_id}, %{id: id}} =
+        CreateTransactionCommandMapNoSaveOnError.process(command_map)
 
       assert %{command_id: ^id, transaction_id: ^trx_id} =
                Repo.get_by(PendingTransactionLookup, command_id: id)
@@ -155,7 +156,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
       end)
 
       assert {:error,
-              %Changeset{data: %TransactionCommandMapSchema{}, errors: [occ_timeout: _, action: _]}} =
+              %Changeset{
+                data: %TransactionCommandMapSchema{},
+                errors: [occ_timeout: _, action: _]
+              }} =
                CreateTransactionCommandMapNoSaveOnError.process(
                  create_transaction_command_map(ctx),
                  DoubleEntryLedger.MockRepo
