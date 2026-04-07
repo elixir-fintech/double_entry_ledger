@@ -143,11 +143,10 @@ defmodule DoubleEntryLedger.Entry do
   def changeset(entry, %{account_id: id} = attrs, transition)
       when transition in @transaction_states do
     entry
-    |> Repo.preload([:account, :balance_history_entries], force: true)
     |> cast(attrs, @required_attrs ++ @optional_attrs)
     |> validate_required(@required_attrs)
     |> validate_inclusion(:type, @debit_and_credit)
-    |> put_assoc(:account, Repo.get!(Account, id))
+    |> put_account(id)
     |> validate_same_account_currency()
     |> put_account_assoc(transition)
     |> put_balance_history_entry_assoc()
@@ -246,7 +245,7 @@ defmodule DoubleEntryLedger.Entry do
       ...>      %{"account_address" => account1.address, "amount" => 100, "currency" => :EUR},
       ...>      %{"account_address" => account2.address, "amount" => 100, "currency" => :EUR},
       ...>  ]}})
-      iex> [entry | _]= Repo.all(Entry)
+      iex> [entry | _]= Repo.all(Entry) |> Repo.preload([:account, :balance_history_entries])
       iex> attrs = %{value: %{amount: 120, currency: :EUR}}
       iex> changeset = Entry.update_changeset(entry, attrs, :pending_to_posted)
       iex> changeset.valid?
@@ -255,7 +254,6 @@ defmodule DoubleEntryLedger.Entry do
   @spec update_changeset(Entry.t(), map(), Types.trx_types()) :: Ecto.Changeset.t()
   def update_changeset(entry, attrs, transition) do
     entry
-    |> Repo.preload([:transaction, :account, :balance_history_entries], force: true)
     |> cast(attrs, [:value])
     |> validate_required([:value])
     |> validate_same_account_currency()
@@ -264,14 +262,21 @@ defmodule DoubleEntryLedger.Entry do
     |> put_balance_history_entry_assoc()
   end
 
-  @spec signed_value(Entry.t()) :: integer()
-  def signed_value(entry) do
-    entry = Repo.preload(entry, :account)
+  @doc """
+  Returns the signed value of an entry based on the account's normal balance.
 
-    if entry.account.normal_balance != entry.type do
-      -entry.value.amount
-    else
-      entry.value.amount
+  If the entry type matches the account's normal balance, the value is positive.
+  Otherwise, it is negative. The entry must have its `:account` association preloaded.
+  """
+  @spec signed_value(Entry.t()) :: integer()
+  def signed_value(%{account: %Account{normal_balance: nb}, type: type, value: %{amount: amount}}) do
+    if nb != type, do: -amount, else: amount
+  end
+
+  defp put_account(changeset, id) do
+    case Repo.get(Account, id) do
+      nil -> add_error(changeset, :account_id, "account not found")
+      account -> put_assoc(changeset, :account, account)
     end
   end
 
