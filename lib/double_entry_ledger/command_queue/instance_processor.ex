@@ -20,6 +20,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   alias DoubleEntryLedger.{Repo, Command}
   alias DoubleEntryLedger.Workers.CommandWorker
+  alias DoubleEntryLedger.CommandQueue.Scheduling
+  alias DoubleEntryLedger.Stores.CommandStore
   import Ecto.Query
 
   @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)
@@ -63,7 +65,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     Logger.info("Starting command processor for instance #{instance_id}")
     # Schedule immediate processing
     send(self(), :process_next)
-    {:ok, %{instance_id: instance_id, processing: false}}
+    {:ok, %{instance_id: instance_id, processing: false, current_command_id: nil, task_ref: nil}}
   end
 
   @impl true
@@ -82,24 +84,27 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
       command ->
         # Start processing the command
-        new_state = %{state | processing: true}
-
         # Process command in a separate task to not block the GenServer
         Logger.info("Processing command #{command.id} for instance #{instance_id}")
 
         parent = self()
 
-        Task.start(fn ->
-          process_result = CommandWorker.process_command_with_id(command.id, processor_name())
-          send(parent, {:processing_complete, command.id, process_result})
-        end)
+        {:ok, pid} =
+          Task.start(fn ->
+            process_result = CommandWorker.process_command_with_id(command.id, processor_name())
+            send(parent, {:processing_complete, command.id, process_result})
+          end)
 
-        {:noreply, new_state}
+        ref = Process.monitor(pid)
+
+        {:noreply, %{state | processing: true, current_command_id: command.id, task_ref: ref}}
     end
   end
 
   @impl true
-  def handle_info({:processing_complete, command_id, result}, state) do
+  def handle_info({:processing_complete, command_id, result}, %{task_ref: ref} = state) do
+    if ref, do: Process.demonitor(ref, [:flush])
+
     case result do
       {:ok, _, _} ->
         Logger.info("Successfully processed command #{command_id}")
@@ -111,9 +116,44 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end
 
     # Command processing completed, check for more commands
-    new_state = %{state | processing: false}
     send(self(), :process_next)
-    {:noreply, new_state}
+    {:noreply, %{state | processing: false, current_command_id: nil, task_ref: nil}}
+  end
+
+  @impl true
+  def handle_info(
+        {:DOWN, ref, :process, _pid, reason},
+        %{task_ref: ref, current_command_id: command_id, instance_id: instance_id} = state
+      ) do
+    Logger.error(
+      "Command task crashed for command #{command_id} on instance #{instance_id}: #{inspect(reason)}"
+    )
+
+    schedule_retry_for_crashed_command(command_id, reason)
+
+    send(self(), :process_next)
+    {:noreply, %{state | processing: false, current_command_id: nil, task_ref: nil}}
+  end
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
+    # :DOWN from an unrelated or already-handled process, ignore
+    {:noreply, state}
+  end
+
+  defp schedule_retry_for_crashed_command(command_id, reason) do
+    case CommandStore.get_by_id(command_id) do
+      nil ->
+        Logger.error("Could not find command #{command_id} to schedule retry after crash")
+
+      command ->
+        Scheduling.build_schedule_retry_with_reason(
+          command,
+          "Task crashed: #{inspect(reason)}",
+          :failed
+        )
+        |> Repo.update()
+    end
   end
 
   defp find_next_command(instance_id) do
