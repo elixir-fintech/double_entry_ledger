@@ -8,6 +8,7 @@ config :double_entry_ledger,
   max_retries: 5,
   retry_interval: 200,
   schema_prefix: "double_entry_ledger",
+  start_command_queue: true,
   # set this for test and development
   idempotency_secret: "lskfdjsdkfjsdkj"
 
