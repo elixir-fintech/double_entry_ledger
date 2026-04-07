@@ -126,7 +126,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   """
   @spec get_by_id(Ecto.UUID.t()) :: Account.t() | nil
   def get_by_id(id) do
-    Repo.get(Account, id, preload: [:events])
+    Repo.get(Account, id)
   end
 
   @doc """

@@ -482,7 +482,7 @@ defmodule DoubleEntryLedger.Account do
        ) do
     pending = fetch_field!(changeset, :pending)
     %{amount: amount} = fetch_field!(changeset, :posted)
-    available = amount - Map.fetch!(pending, opposite_direction(nb))
+    available = amount - Map.get(pending, opposite_direction(nb), 0)
 
     case !allowed_negative && available < 0 do
       true -> add_error(changeset, :available, "amount can't be negative")
