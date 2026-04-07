@@ -155,7 +155,6 @@ defmodule DoubleEntryLedger.Transaction do
   @spec transaction_changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
   defp transaction_changeset(transaction, attrs) do
     transaction
-    |> Repo.preload([:instance, entries: :account], force: true)
     |> cast(attrs, @required_attrs)
     |> validate_required(@required_attrs)
     |> validate_inclusion(:status, @states)

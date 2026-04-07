@@ -347,7 +347,7 @@ defmodule DoubleEntryLedger.TransactionTest do
     test "archived to pending or posted", ctx do
       %{transaction: %{id: id}} = create_pending_transaction(ctx)
       from(t in Transaction, where: t.id == ^id) |> Repo.update_all(set: [status: :archived])
-      trx = TransactionStore.get_by_id(id)
+      trx = TransactionStore.get_by_id(id, [entries: :account])
 
       assert %Ecto.Changeset{
                errors: [
