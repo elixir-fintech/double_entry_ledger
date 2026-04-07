@@ -81,6 +81,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
           is_struct(transaction_or_step, Transaction) -> transaction_or_step
           is_atom(transaction_or_step) -> Map.fetch!(changes, transaction_or_step)
         end
+        |> Repo.preload([entries: :account], force: true)
 
       transition = update_transition(transaction, attrs)
 
