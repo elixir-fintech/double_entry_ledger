@@ -117,6 +117,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - Processing is idempotent based on source identifiers
   - Retry logic and error tracking handled through CommandQueueItem state management
   """
+  @behaviour DoubleEntryLedger.Workers.CommandWorkerBehaviour
+
   alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveOnError
   alias Ecto.Changeset
 
@@ -522,6 +524,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - Generate processing performance metrics from CommandQueueItem timestamps
   - Monitor error patterns through the `errors` array
   """
+  @impl DoubleEntryLedger.Workers.CommandWorkerBehaviour
   @spec process_command_with_id(Ecto.UUID.t(), String.t()) ::
           success_tuple() | error_tuple()
   def process_command_with_id(uuid, processor_id \\ "manual") do
