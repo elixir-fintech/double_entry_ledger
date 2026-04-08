@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Command.AccountData do
   - context: Arbitrary metadata map for additional context
   - normal_balance: Either :debit or :credit (from Types.credit_and_debit/0)
   - type: Account category/type (from Types.account_types/0)
-  - allowed_negative: Whether the account is allowed to have a negative balance
+  - negative_limit: Maximum allowed negative balance (0 means no negative allowed)
   """
   @type t :: %AccountData{
           currency: Currency.currency_atom() | nil,
@@ -34,7 +34,7 @@ defmodule DoubleEntryLedger.Command.AccountData do
           context: map() | nil,
           normal_balance: Types.credit_and_debit() | nil,
           type: Types.account_type() | nil,
-          allowed_negative: boolean() | nil
+          negative_limit: non_neg_integer() | nil
         }
 
   @derive {Jason.Encoder,
@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.Command.AccountData do
              :context,
              :normal_balance,
              :type,
-             :allowed_negative
+             :negative_limit
            ]}
 
   @currency_atoms Currency.currency_atoms()
@@ -62,13 +62,13 @@ defmodule DoubleEntryLedger.Command.AccountData do
     field(:context, :map)
     field(:normal_balance, Ecto.Enum, values: @credit_and_debit)
     field(:type, Ecto.Enum, values: @account_types)
-    field(:allowed_negative, :boolean)
+    field(:negative_limit, :integer)
   end
 
   @doc """
   Builds an Ecto.Changeset for AccountData.
 
-  Casts: [:currency, :address, :name, :description, :context, :normal_balance, :type, :allowed_negative]
+  Casts: [:currency, :address, :name, :description, :context, :normal_balance, :type, :negative_limit]
   Validates required: [:currency, address, :type]
 
   ## Examples
@@ -104,7 +104,7 @@ defmodule DoubleEntryLedger.Command.AccountData do
       :context,
       :normal_balance,
       :type,
-      :allowed_negative
+      :negative_limit
     ])
     |> validate_required([:currency, :address, :type])
     |> validate_format(:address, Account.address_regex())
@@ -180,7 +180,7 @@ defmodule DoubleEntryLedger.Command.AccountData do
   Converts an AccountData struct into a plain map with the same fields unless they are nil.
 
   The resulting map may include these keys:
-  :currency, :name, :description, :context, :normal_balance, :type, :allowed_negative
+  :currency, :name, :description, :context, :normal_balance, :type, :negative_limit
 
   ## Examples
 
@@ -208,7 +208,7 @@ defmodule DoubleEntryLedger.Command.AccountData do
       context: Map.get(account_data, :context),
       normal_balance: Map.get(account_data, :normal_balance),
       type: Map.get(account_data, :type),
-      allowed_negative: Map.get(account_data, :allowed_negative)
+      negative_limit: Map.get(account_data, :negative_limit)
     }
     |> Map.reject(fn {_k, v} -> is_nil(v) end)
   end

@@ -55,7 +55,11 @@ defmodule DoubleEntryLedger.DebitAccountTest do
 
     test "first credit entry", %{instance: inst} do
       account =
-        account_fixture(normal_balance: :debit, instance_id: inst.id, allowed_negative: true)
+        account_fixture(
+          normal_balance: :debit,
+          instance_id: inst.id,
+          negative_limit: 2_147_483_647
+        )
 
       entry = %Entry{account_id: account.id, type: :credit, value: Money.new(200, :EUR)}
 
@@ -142,7 +146,11 @@ defmodule DoubleEntryLedger.DebitAccountTest do
 
     test "first credit entry", %{instance: inst} do
       account =
-        account_fixture(normal_balance: :debit, instance_id: inst.id, allowed_negative: true)
+        account_fixture(
+          normal_balance: :debit,
+          instance_id: inst.id,
+          negative_limit: 2_147_483_647
+        )
 
       entry = %Entry{account_id: account.id, type: :credit, value: Money.new(200, :EUR)}
 

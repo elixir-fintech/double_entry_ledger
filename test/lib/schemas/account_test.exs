@@ -208,7 +208,8 @@ defmodule DoubleEntryLedger.AccountTest do
     end
 
     test "credit entry", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :debit, allowed_negative: true)
+      account =
+        account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 2_147_483_647)
 
       entry = %Entry{
         account_id: account.id,
@@ -252,7 +253,8 @@ defmodule DoubleEntryLedger.AccountTest do
     end
 
     test "credit entry", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :debit, allowed_negative: true)
+      account =
+        account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 2_147_483_647)
 
       entry = %Entry{
         account_id: account.id,
@@ -272,11 +274,11 @@ defmodule DoubleEntryLedger.AccountTest do
     end
   end
 
-  describe "update balances debit account allowed_negative: false" do
+  describe "update balances debit account negative_limit: 0" do
     setup [:create_instance]
 
     test "credit entry trx: posted", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :debit, allowed_negative: false)
+      account = account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 0)
 
       entry = %Entry{
         account_id: account.id,
@@ -291,7 +293,7 @@ defmodule DoubleEntryLedger.AccountTest do
     end
 
     test "credit entry trx: pending", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :debit, allowed_negative: false)
+      account = account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 0)
 
       entry = %Entry{
         account_id: account.id,
@@ -331,7 +333,8 @@ defmodule DoubleEntryLedger.AccountTest do
     end
 
     test "debit entry", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :credit, allowed_negative: true)
+      account =
+        account_fixture(instance_id: id, normal_balance: :credit, negative_limit: 2_147_483_647)
 
       entry = %Entry{
         account_id: account.id,
@@ -355,7 +358,8 @@ defmodule DoubleEntryLedger.AccountTest do
     setup [:create_instance]
 
     test "debit entry", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :credit, allowed_negative: true)
+      account =
+        account_fixture(instance_id: id, normal_balance: :credit, negative_limit: 2_147_483_647)
 
       entry = %Entry{
         account_id: account.id,
@@ -395,11 +399,11 @@ defmodule DoubleEntryLedger.AccountTest do
     end
   end
 
-  describe "update balances credit account allowed_negative: false" do
+  describe "update balances credit account negative_limit: 0" do
     setup [:create_instance]
 
     test "credit entry trx: posted", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :credit, allowed_negative: false)
+      account = account_fixture(instance_id: id, normal_balance: :credit, negative_limit: 0)
 
       entry = %Entry{
         account_id: account.id,
@@ -414,7 +418,7 @@ defmodule DoubleEntryLedger.AccountTest do
     end
 
     test "credit entry trx: pending", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :credit, allowed_negative: false)
+      account = account_fixture(instance_id: id, normal_balance: :credit, negative_limit: 0)
 
       entry = %Entry{
         account_id: account.id,
@@ -482,7 +486,7 @@ defmodule DoubleEntryLedger.AccountTest do
     setup [:create_instance]
 
     test "throws stale update error when updates run concurrently", %{instance: %{id: id}} do
-      account = account_fixture(instance_id: id, normal_balance: :debit, allowed_negative: false)
+      account = account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 0)
 
       entry1 = %Entry{
         account_id: account.id,
@@ -506,7 +510,7 @@ defmodule DoubleEntryLedger.AccountTest do
     test "throws Ecto.Multi.failure() with stale_error_field: in a Multi scenario", %{
       instance: %{id: id}
     } do
-      account = account_fixture(instance_id: id, normal_balance: :debit, allowed_negative: false)
+      account = account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 0)
 
       entry1 = %Entry{
         account_id: account.id,
@@ -544,6 +548,79 @@ defmodule DoubleEntryLedger.AccountTest do
                )
 
       assert {"is stale", [stale: true]} = errors[:lock_version]
+    end
+  end
+
+  describe "update_available/1 with negative_limit" do
+    setup [:create_instance]
+
+    test "negative_limit 0 rejects negative available", %{instance: inst} do
+      account = account_fixture(instance_id: inst.id, negative_limit: 0, normal_balance: :debit)
+
+      entry = %Entry{
+        account_id: account.id,
+        value: %Money{amount: 100, currency: :EUR},
+        type: :credit
+      }
+
+      changeset = Account.update_balances(account, %{entry: entry, trx: :posted})
+
+      assert %Ecto.Changeset{
+               valid?: false,
+               errors: [available: {"amount can't be negative", []}]
+             } = changeset
+    end
+
+    test "negative_limit allows available down to negative limit", %{instance: inst} do
+      account =
+        account_fixture(instance_id: inst.id, negative_limit: 200, normal_balance: :debit)
+
+      entry = %Entry{
+        account_id: account.id,
+        value: %Money{amount: 100, currency: :EUR},
+        type: :credit
+      }
+
+      changeset = Account.update_balances(account, %{entry: entry, trx: :posted})
+
+      assert %Ecto.Changeset{valid?: true} = changeset
+      assert Ecto.Changeset.get_change(changeset, :available) == -100
+    end
+
+    test "negative_limit rejects when available exceeds limit", %{instance: inst} do
+      account =
+        account_fixture(instance_id: inst.id, negative_limit: 50, normal_balance: :debit)
+
+      entry = %Entry{
+        account_id: account.id,
+        value: %Money{amount: 100, currency: :EUR},
+        type: :credit
+      }
+
+      changeset = Account.update_balances(account, %{entry: entry, trx: :posted})
+
+      assert %Ecto.Changeset{
+               valid?: false,
+               errors: [
+                 available: {"amount can't be below negative limit of -50", []}
+               ]
+             } = changeset
+    end
+
+    test "available reflects true balance, not clamped to 0", %{instance: inst} do
+      account =
+        account_fixture(instance_id: inst.id, negative_limit: 500, normal_balance: :debit)
+
+      entry = %Entry{
+        account_id: account.id,
+        value: %Money{amount: 100, currency: :EUR},
+        type: :credit
+      }
+
+      changeset = Account.update_balances(account, %{entry: entry, trx: :posted})
+
+      assert %Ecto.Changeset{valid?: true} = changeset
+      assert Ecto.Changeset.get_change(changeset, :available) == -100
     end
   end
 end

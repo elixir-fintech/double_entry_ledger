@@ -58,13 +58,13 @@ defmodule DoubleEntryLedger.AccountFixtures do
           instance_id: instance.id,
           normal_balance: :debit,
           type: :asset,
-          allowed_negative: false
+          negative_limit: 0
         ),
         account_fixture(
           instance_id: instance.id,
           normal_balance: :credit,
           type: :liability,
-          allowed_negative: false
+          negative_limit: 0
         )
       ]
     }
