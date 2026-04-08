@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{command_map: command_map, instance_id: id})
         end)
-        |> Multi.update(:event_success, build_mark_as_processed(event))
+        |> Multi.update(:command_success, build_mark_as_processed(event))
         |> Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: event.id,
@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
       _ ->
         Multi.update(
           Multi.new(),
-          :event_failure,
+          :command_failure,
           build_mark_as_dead_letter(event, "Account does not exist")
         )
     end)

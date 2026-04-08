@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
   alias DoubleEntryLedger.Command.TransactionCommandMap
   use DoubleEntryLedger.RepoCase
 
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
@@ -19,77 +19,77 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
   describe "process_command_with_id/1" do
     setup [:create_instance, :create_accounts]
 
-    test "process create event successfully", ctx do
-      %{event: event} = new_create_transaction_event(ctx)
+    test "process create command successfully", ctx do
+      %{command: pending_command} = new_create_transaction_command(ctx)
 
-      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        CommandWorker.process_command_with_id(event.id)
+      {:ok, transaction, %{command_queue_item: cqi} = processed_command} =
+        CommandWorker.process_command_with_id(pending_command.id)
 
-      assert evq.status == :processed
+      assert cqi.status == :processed
 
-      %{transaction: processed_transaction} = CommandStore.get_by_id(processed_event.id)
+      %{transaction: processed_transaction} = CommandStore.get_by_id(processed_command.id)
 
       assert return_available_balances(ctx) == [100, 100]
       assert processed_transaction.id == transaction.id
-      assert evq.processing_completed_at != nil
+      assert cqi.processing_completed_at != nil
       assert transaction.status == :posted
     end
 
-    test "update event for changing entries and to :posted",
+    test "update command for changing entries and to :posted",
          %{instance: inst, accounts: [a1, a2 | _]} = ctx do
-      %{event: pending_event} = new_create_transaction_event(ctx, :pending)
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
 
       {:ok, pending_transaction, %{command_map: %{source: s, source_idempk: s_id}}} =
-        CommandWorker.process_command_with_id(pending_event.id)
+        CommandWorker.process_command_with_id(pending_command.id)
 
       assert return_available_balances(ctx) == [0, 0]
       assert return_pending_balances(ctx) == [100, 100]
 
-      {:ok, event} =
-        new_update_transaction_event(s, s_id, inst.address, :posted, [
+      {:ok, command} =
+        new_update_transaction_command(s, s_id, inst.address, :posted, [
           %{account_address: a1.address, amount: 50, currency: "EUR"},
           %{account_address: a2.address, amount: 50, currency: "EUR"}
         ])
 
-      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
-        CommandWorker.process_command_with_id(event.id)
+      {:ok, transaction, %{command_queue_item: cqi} = processed_command} =
+        CommandWorker.process_command_with_id(command.id)
 
-      assert evq.status == :processed
+      assert cqi.status == :processed
 
-      %{transaction: processed_transaction} = CommandStore.get_by_id(processed_event.id)
+      %{transaction: processed_transaction} = CommandStore.get_by_id(processed_command.id)
 
       assert processed_transaction.id == pending_transaction.id
       assert transaction.id == pending_transaction.id
-      assert evq.processing_completed_at != nil
+      assert cqi.processing_completed_at != nil
       assert return_available_balances(ctx) == [50, 50]
       assert return_pending_balances(ctx) == [0, 0]
       assert transaction.status == :posted
     end
 
-    test "don't process events with status [:processed, :dead_letter]", ctx do
-      %{event: event} = new_create_transaction_event(ctx)
-      CommandWorker.process_command_with_id(event.id)
+    test "don't process commands with status [:processed, :dead_letter]", ctx do
+      %{command: command} = new_create_transaction_command(ctx)
+      CommandWorker.process_command_with_id(command.id)
 
-      assert {:error, :event_not_claimable} =
-               CommandWorker.process_command_with_id(event.id)
+      assert {:error, :command_not_claimable} =
+               CommandWorker.process_command_with_id(command.id)
 
-      event
+      command
       |> Ecto.Changeset.change()
       |> Ecto.Changeset.put_assoc(
         :command_queue_item,
-        %{id: event.command_queue_item.id, status: :dead_letter}
+        %{id: command.command_queue_item.id, status: :dead_letter}
       )
       |> Repo.update!()
 
-      assert {:error, :event_not_claimable} =
-               CommandWorker.process_command_with_id(event.id)
+      assert {:error, :command_not_claimable} =
+               CommandWorker.process_command_with_id(command.id)
     end
   end
 
   describe "process_command_map/1" do
     setup [:create_instance, :create_accounts]
 
-    test "create event for command_map, which must also create the event", %{
+    test "create command for command_map, which must also create the command", %{
       instance: inst,
       accounts: [a1, a2, _, _]
     } do
@@ -111,15 +111,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
         }
         |> TransactionCommandMap.create()
 
-      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: cqi} = processed_command} =
         CommandWorker.process_new_command(command_map)
 
-      assert evq.status == :processed
+      assert cqi.status == :processed
 
-      %{transaction: processed_transaction} = Repo.preload(processed_event, :transaction)
+      %{transaction: processed_transaction} = Repo.preload(processed_command, :transaction)
 
       assert processed_transaction.id == transaction.id
-      assert evq.processing_completed_at != nil
+      assert cqi.processing_completed_at != nil
       assert transaction.status == :pending
     end
   end

@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
   describe "process/1" do
     setup [:create_instance, :create_account]
 
-    test "successfully processes a valid account event map", %{
+    test "successfully processes a valid account command map", %{
       instance: instance,
       account: account
     } do
@@ -29,9 +29,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
         }
       }
 
-      {:ok, account, event} = UpdateAccountCommandMapNoSaveOnError.process(command_map)
+      {:ok, account, command} = UpdateAccountCommandMapNoSaveOnError.process(command_map)
       assert account.description == "Updated Description"
-      assert event.command_queue_item.status == :processed
+      assert command.command_queue_item.status == :processed
     end
   end
 
@@ -49,9 +49,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
       }
     }
 
-    {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(command_map)
+    {:ok, account, command} = CreateAccountCommandMapNoSaveOnError.process(command_map)
 
     Map.put(ctx, :account, account)
-    |> Map.put(:event, event)
+    |> Map.put(:command, command)
   end
 end

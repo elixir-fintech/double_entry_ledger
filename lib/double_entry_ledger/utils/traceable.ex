@@ -40,17 +40,17 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command do
   end
 
   @spec metadata(Command.t(), Transaction.t() | Account.t() | any()) :: map()
-  def metadata(event, %Transaction{} = transaction) do
+  def metadata(command, %Transaction{} = transaction) do
     Map.put(
-      metadata(event),
+      metadata(command),
       :transaction_id,
       transaction.id
     )
   end
 
-  def metadata(event, %Account{} = account) do
+  def metadata(command, %Account{} = account) do
     Map.merge(
-      metadata(event),
+      metadata(command),
       %{
         account_id: account.id,
         account_address: account.address
@@ -58,17 +58,17 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command do
     )
   end
 
-  def metadata(event, error) do
+  def metadata(command, error) do
     Map.put(
-      metadata(event),
+      metadata(command),
       :error,
       inspect(error)
     )
   end
 
-  def changeset_metadata(event, %Ecto.Changeset{} = changeset) do
+  def changeset_metadata(command, %Ecto.Changeset{} = changeset) do
     Map.put(
-      metadata(event),
+      metadata(command),
       :changeset_errors,
       all_errors(changeset)
     )

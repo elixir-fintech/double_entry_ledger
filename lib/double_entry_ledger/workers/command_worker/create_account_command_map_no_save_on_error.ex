@@ -137,11 +137,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
     |> Multi.insert(:account, fn %{instance: id} ->
       AccountStoreHelper.build_create(payload, id)
     end)
-    |> Multi.update(:event_success, fn %{new_command: event} ->
+    |> Multi.update(:command_success, fn %{new_command: event} ->
       build_mark_as_processed(event)
     end)
     |> Oban.insert(:create_account_link, fn %{
-                                              event_success: event,
+                                              command_success: event,
                                               account: account,
                                               journal_event: journal_event
                                             } ->

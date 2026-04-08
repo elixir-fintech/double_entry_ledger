@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
   alias DoubleEntryLedger.Command.AccountData
 
   import DoubleEntryLedger.InstanceFixtures
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.Command.AccountDataFixtures
 
   doctest UpdateAccountCommand
@@ -20,9 +20,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
   describe "process/1" do
     setup [:create_instance]
 
-    test "successfully processes a valid update account event", %{instance: instance} do
+    test "successfully processes a valid update account command", %{instance: instance} do
       attrs =
-        account_event_attrs(%{
+        account_command_attrs(%{
           instance_address: instance.address,
           payload: account_data_attrs(%{name: "Old Name"})
         })
@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
       CreateAccountCommand.process(create_command)
 
       update_attrs =
-        account_event_attrs(%{
+        account_command_attrs(%{
           action: :update_account,
           instance_address: instance.address,
           account_address: payload.address,
@@ -51,10 +51,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
       assert account.name == "New Name"
     end
 
-    test "moves to dead_letter when create account event does not exist", %{instance: instance} do
+    test "moves to dead_letter when create account command does not exist", %{instance: instance} do
       {:ok, update_command} =
         CommandStore.create(
-          account_event_attrs(%{
+          account_command_attrs(%{
             action: :update_account,
             instance_address: instance.address,
             account_address: "non:existent",
@@ -70,12 +70,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
       assert eqi.status == :dead_letter
     end
 
-    test "goes to dead letter when create account event is not yet processed", %{
+    test "goes to dead letter when create account command is not yet processed", %{
       instance: instance
     } do
       {:ok, %{command_map: %{payload: payload}}} =
         CommandStore.create(
-          account_event_attrs(%{
+          account_command_attrs(%{
             instance_address: instance.address,
             payload: account_data_attrs(%{name: "Old Name"})
           })
@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
 
       {:ok, update_command} =
         CommandStore.create(
-          account_event_attrs(%{
+          account_command_attrs(%{
             action: :update_account,
             instance_address: instance.address,
             account_address: payload.address,
@@ -99,21 +99,21 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
       assert eqi.status == :dead_letter
     end
 
-    test "moves to dead letter when create event is in dead letter", %{instance: instance} do
-      {:ok, %{command_map: %{payload: create_payload}, command_queue_item: event_qi}} =
+    test "moves to dead letter when create command is in dead letter", %{instance: instance} do
+      {:ok, %{command_map: %{payload: create_payload}, command_queue_item: command_qi}} =
         CommandStore.create(
-          account_event_attrs(%{
+          account_command_attrs(%{
             instance_address: instance.address,
             payload: %AccountData{address: "sss", type: :asset, currency: :EUR}
           })
         )
 
-      from(eqi in CommandQueueItem, where: eqi.id == ^event_qi.id)
+      from(eqi in CommandQueueItem, where: eqi.id == ^command_qi.id)
       |> Repo.update_all(set: [status: :dead_letter])
 
       {:ok, update_command} =
         CommandStore.create(
-          account_event_attrs(%{
+          account_command_attrs(%{
             action: :update_account,
             instance_address: instance.address,
             account_address: create_payload.address,

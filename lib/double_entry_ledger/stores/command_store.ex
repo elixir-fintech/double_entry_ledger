@@ -164,8 +164,8 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
            PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
          end)
          |> Repo.transaction() do
-      {:ok, %{command: event}} ->
-        {:ok, event}
+      {:ok, %{command: command}} ->
+        {:ok, command}
 
       {:error, :pending_transaction_lookup, _, _} ->
         {:error, :pending_transaction_idempotency_violation}
@@ -178,12 +178,12 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   def create(%{instance_address: address} = attrs) do
     case Multi.new()
          |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
-         |> Multi.insert(:event, fn %{instance: id} ->
+         |> Multi.insert(:command, fn %{instance: id} ->
            build_create(attrs, id)
          end)
          |> Repo.transaction() do
-      {:ok, %{event: event}} -> {:ok, event}
-      {:error, :event, changeset, _changes} -> {:error, changeset}
+      {:ok, %{command: command}} -> {:ok, command}
+      {:error, :command, changeset, _changes} -> {:error, changeset}
     end
   end
 

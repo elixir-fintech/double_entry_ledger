@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTest do
   @moduledoc """
-  This module tests the CreateTransactionCommandMap module, which processes event maps for atomic creation and update of events and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
+  This module tests the CreateTransactionCommandMap module, which processes command maps for atomic creation and update of commands and their associated transactions. It ensures correct OCC handling, error mapping, and transactional guarantees.
   """
   use ExUnit.Case
   import Mox
@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTes
   alias DoubleEntryLedger.Command.{TransactionCommandMap, TransactionData, EntryData}
   use DoubleEntryLedger.RepoCase
 
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
@@ -22,18 +22,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTes
   describe "process_map/1" do
     setup [:create_instance, :create_accounts]
 
-    test "create event for command_map, which must also create the event", ctx do
+    test "create command for command_map, which must also create the command", ctx do
       command_map = create_transaction_command_map(ctx)
 
-      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: cqi} = processed_command} =
         CreateTransactionCommandMap.process(command_map)
 
-      assert evq.status == :processed
+      assert cqi.status == :processed
 
-      %{transaction: processed_transaction} = Repo.preload(processed_event, :transaction)
+      %{transaction: processed_transaction} = Repo.preload(processed_command, :transaction)
 
       assert processed_transaction.id == transaction.id
-      assert evq.processing_completed_at != nil
+      assert cqi.processing_completed_at != nil
       assert transaction.status == :pending
     end
 
@@ -54,7 +54,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTes
     end
 
     test "return TransactionCommandMap changeset for duplicate source_idempk", ctx do
-      # successfully create event
+      # successfully create command
       command_map = create_transaction_command_map(ctx)
       CreateTransactionCommandMap.process(command_map)
 
@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTes
     end
 
     test "return TransactionCommandMap changeset for other errors", ctx do
-      # successfully create event
+      # successfully create command
       command_map = create_transaction_command_map(ctx, :pending)
 
       updated_command_map =
@@ -88,7 +88,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTes
       accounts: [a | _]
     } do
       command_map =
-        transaction_event_attrs(
+        transaction_command_attrs(
           instance_address: inst.address,
           payload: %TransactionData{
             status: :posted,

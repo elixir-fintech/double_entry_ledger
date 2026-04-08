@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
       {:error, :create_transaction_event_error,
        %Changeset{data: %TransactionCommandMap{}} = changeset, _steps_so_far} ->
-        error("Update event error", command_map, changeset)
+        error("Update command error", command_map, changeset)
 
         {:error, changeset}
 
@@ -109,7 +109,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
   ## Returns
 
-    - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step, or a changeset with error details.
+    - The updated `Ecto.Multi` with either an `:command_success` or `:command_failure` step, or a changeset with error details.
   """
   def handle_build_transaction(multi, command_map, _repo) do
     multi
@@ -121,7 +121,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{command_map: em, instance_id: iid})
         end)
-        |> Multi.update(:event_success, fn _ ->
+        |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
         end)
         |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->

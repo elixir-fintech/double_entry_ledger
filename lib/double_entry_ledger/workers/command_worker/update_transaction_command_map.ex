@@ -106,7 +106,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
   def process(%{action: :update_transaction} = command_map, repo \\ Repo) do
     case process_with_retry(command_map, repo) do
-      {:ok, %{event_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
+      {:ok, %{command_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
         warn("#{last_error.message}", event)
         {:error, event}
 
@@ -194,7 +194,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
 
   ## Returns
 
-    - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step.
+    - The updated `Ecto.Multi` with either an `:command_success` or `:command_failure` step.
   """
   def handle_build_transaction(multi, _command_map, _repo) do
     multi
@@ -206,7 +206,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{command_map: em, instance_id: iid})
         end)
-        |> Multi.update(:event_success, fn _ ->
+        |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
         end)
         |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
@@ -221,12 +221,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
         get_create_transaction_event_error: %{reason: :create_command_not_processed} = exception,
         new_command: event
       } ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
+        Multi.update(Multi.new(), :command_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
         end)
 
       %{get_create_transaction_event_error: exception, new_command: event} ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
+        Multi.update(Multi.new(), :command_failure, fn _ ->
           build_mark_as_dead_letter(event, exception.message)
         end)
     end)

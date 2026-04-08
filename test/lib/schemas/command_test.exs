@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.EventTest do
   @moduledoc """
-  Tests for the event
+  Tests for the command
   """
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.EventTest do
       assert %Changeset{valid?: true} = Command.changeset(%Command{}, attrs)
     end
 
-    test "idempotency is not enforced at event creation" do
+    test "idempotency is not enforced at command creation" do
       %{instance: inst} = create_instance()
 
       attrs = %{
@@ -49,9 +49,9 @@ defmodule DoubleEntryLedger.EventTest do
       }
 
       changeset = Command.changeset(%Command{}, %{instance_id: inst.id, command_map: attrs})
-      assert {:ok, event} = Repo.insert(changeset)
-      assert {:ok, event2} = Repo.insert(changeset)
-      assert event.id != event2.id
+      assert {:ok, command} = Repo.insert(changeset)
+      assert {:ok, command2} = Repo.insert(changeset)
+      assert command.id != command2.id
     end
   end
 
@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.EventTest do
                Command.changeset(%Command{}, attrs)
     end
 
-    test "idempotency is not enforced when creating events" do
+    test "idempotency is not enforced when creating commands" do
       %{instance: inst} = create_instance()
 
       attrs = %{
@@ -90,9 +90,9 @@ defmodule DoubleEntryLedger.EventTest do
       }
 
       changeset = Command.changeset(%Command{}, %{instance_id: inst.id, command_map: attrs})
-      assert {:ok, event} = Repo.insert(changeset)
-      assert {:ok, event2} = Repo.insert(changeset)
-      assert event.id != event2.id
+      assert {:ok, command} = Repo.insert(changeset)
+      assert {:ok, command2} = Repo.insert(changeset)
+      assert command.id != command2.id
     end
   end
 end

@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
 
       iex> account = %Account{}
       iex> event = %Command{command_queue_item: %{status: :processed}, command_map: %{}}
-      iex> response = {:ok, %{account: account, event_success: event}}
+      iex> response = {:ok, %{account: account, command_success: event}}
       iex> {:ok, ^account, ^event} = AccountCommandMapResponseHandler.default_response_handler(response, %AccountCommandMap{})
 
       iex> changeset = %Ecto.Changeset{}
@@ -92,14 +92,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
       iex> {:error, %Ecto.Changeset{} = _changeset} = AccountCommandMapResponseHandler.default_response_handler(response, command_map)
   """
   @spec default_response_handler(
-          {:ok, %{account: Account.t(), event_success: Command.t()}}
+          {:ok, %{account: Account.t(), command_success: Command.t()}}
           | {:error, :atom, any(), map()},
           AccountCommandMap.t()
         ) ::
           response()
   def default_response_handler(response, %AccountCommandMap{} = command_map) do
     case response do
-      {:ok, %{account: account, event_success: event}} ->
+      {:ok, %{account: account, command_success: event}} ->
         info("Processed successfully", event, account)
 
         {:ok, account, event}

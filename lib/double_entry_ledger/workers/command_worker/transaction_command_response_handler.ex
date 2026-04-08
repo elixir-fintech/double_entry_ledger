@@ -61,12 +61,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
           CommandWorker.success_tuple() | {:error, Command.t() | Changeset.t()}
   def default_response_handler(response, %Command{} = original_event) do
     case response do
-      {:ok, %{event_success: event, transaction: transaction}} ->
+      {:ok, %{command_success: event, transaction: transaction}} ->
         info("Processed successfully", event, transaction)
 
         {:ok, transaction, event}
 
-      {:ok, %{event_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
+      {:ok, %{command_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
         warn("#{last_error.message}", event)
 
         {:error, event}
@@ -99,7 +99,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
   """
   @spec handle_transaction_map_error(Command.t(), any(), Ecto.Repo.t()) :: Multi.t()
   def handle_transaction_map_error(event, error, _repo) do
-    Multi.update(Multi.new(), :event_failure, fn _ ->
+    Multi.update(Multi.new(), :command_failure, fn _ ->
       build_mark_as_dead_letter(event, error)
     end)
   end
@@ -120,7 +120,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
   """
   @spec handle_occ_final_timeout(Occable.t(), Ecto.Repo.t()) :: Multi.t()
   def handle_occ_final_timeout(occable_item, _repo) do
-    Multi.update(Multi.new(), :event_failure, fn _ ->
+    Multi.update(Multi.new(), :command_failure, fn _ ->
       build_schedule_retry_with_reason(
         occable_item,
         nil,

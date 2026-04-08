@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
   doctest TransferErrors
 
   describe "from_account_to_command_map_payload/2" do
-    test "transfers errors from account changeset to event map" do
+    test "transfers errors from account changeset to command map" do
       account_changeset = Account.changeset(%Account{}, %{})
 
       command_map = %AccountCommandMap{payload: %AccountData{}}
@@ -87,7 +87,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
   end
 
   describe "from_command_to_command_map/2" do
-    test "transfers errors from event changeset to event map" do
+    test "transfers errors from command changeset to command map" do
       expected_errors = [
         action: {"invalid in this context", [value: ""]},
         action: {"can't be blank", [validation: :required]},
@@ -95,15 +95,15 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
         source: {"can't be blank", [validation: :required]}
       ]
 
-      event_changeset = Command.changeset(%Command{}, %{})
+      command_changeset = Command.changeset(%Command{}, %{})
 
       %{data: %AccountCommandMap{}, errors: errors} =
-        TransferErrors.from_command_to_command_map(%AccountCommandMap{}, event_changeset)
+        TransferErrors.from_command_to_command_map(%AccountCommandMap{}, command_changeset)
 
       assert Keyword.equal?(errors, expected_errors)
 
       %{data: %TransactionCommandMap{}, errors: errors} =
-        TransferErrors.from_command_to_command_map(%TransactionCommandMap{}, event_changeset)
+        TransferErrors.from_command_to_command_map(%TransactionCommandMap{}, command_changeset)
 
       assert Keyword.equal?(
                errors,
@@ -119,7 +119,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
   end
 
   describe "from_transaction_to_command_map_payload/2" do
-    test "transfers errors from transaction changeset to event map" do
+    test "transfers errors from transaction changeset to command map" do
       transaction_changeset =
         Ecto.Changeset.change(%Transaction{}, %{})
         |> Ecto.Changeset.add_error(:status, "some error message")

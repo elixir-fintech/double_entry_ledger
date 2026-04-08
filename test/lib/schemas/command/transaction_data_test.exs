@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Command.TransactionDataTest do
   @moduledoc """
-  Tests for the event payload
+  Tests for the command payload
   """
   use ExUnit.Case
   import DoubleEntryLedger.Command.TransactionDataFixtures

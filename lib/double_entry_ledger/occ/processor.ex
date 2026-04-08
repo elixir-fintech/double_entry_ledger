@@ -35,7 +35,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
         def handle_transaction_map_error(command, error, _repo) do
           Ecto.Multi.new()
           |> Ecto.Multi.update(
-            :event_failure,
+            :command_failure,
             Command.changeset(command, %{status: :failed, errors: [inspect(error)]})
           )
         end
@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
         def handle_occ_final_timeout(command, _repo) do
           Ecto.Multi.new()
           |> Ecto.Multi.update(
-            :event_dead_letter,
+            :command_dead_letter,
             Command.changeset(command, %{status: :dead_letter})
           )
         end
@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
     * `:create_command` (required for TransactionCommandMap) - Must return the created Command struct when processing the TransactionCommandMap
     * `:transaction` (required) - Must return the saved Transaction struct and it must handle the Ecto.StaleEntryError and return it as the error for the Multi.failure()
-    * `:event` (required) - Must return the saved Command struct when processing the Command
+    * `:command` (required) - Must return the saved Command struct when processing the Command
 
   ## Parameters
 
@@ -154,12 +154,12 @@ defmodule DoubleEntryLedger.Occ.Processor do
   This callback has a default implementation through the __using__ macro.
   """
   @callback process_with_retry(Occable.t(), Ecto.Repo.t()) ::
-              {:ok, %{transaction: Transaction.t(), event_success: Command.t()}}
-              | {:ok, %{event_failure: Command.t()}}
+              {:ok, %{transaction: Transaction.t(), command_success: Command.t()}}
+              | {:ok, %{command_failure: Command.t()}}
               | Ecto.Multi.failure()
 
   @callback process_with_retry_no_save_on_error(Occable.t(), Ecto.Repo.t()) ::
-              {:ok, %{transaction: Transaction.t(), event_success: Command.t()}}
+              {:ok, %{transaction: Transaction.t(), command_success: Command.t()}}
               | Ecto.Multi.failure()
 
   # --- Use Macro for Default Implementations ---
@@ -194,8 +194,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       ## Returns
 
-        - `{:ok, %{transaction: Transaction.t(), event_success: Command.t()}}` on success
-        - `{:ok, %{event_failure: Command.t()}}` on failure
+        - `{:ok, %{transaction: Transaction.t(), command_success: Command.t()}}` on success
+        - `{:ok, %{command_failure: Command.t()}}` on failure
         - `Ecto.Multi.failure()` on unrecoverable error
       """
       def process_with_retry(
@@ -282,13 +282,13 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       ## Returns
 
-        - `{:ok, %{transaction: Transaction.t(), event_success: Command.t()}}`
-        - `{:ok, %{event_failure: Command.t()}}`
+        - `{:ok, %{transaction: Transaction.t(), command_success: Command.t()}}`
+        - `{:ok, %{command_failure: Command.t()}}`
         - `Ecto.Multi.failure()`
       """
       @spec retry(module(), Occable.t(), ErrorMap.t(), non_neg_integer(), Ecto.Repo.t()) ::
-              {:ok, %{transaction: Transaction.t(), event_success: Command.t()}}
-              | {:ok, %{event_failure: Command.t()}}
+              {:ok, %{transaction: Transaction.t(), command_success: Command.t()}}
+              | {:ok, %{command_failure: Command.t()}}
               | Ecto.Multi.failure()
       def retry(module, occable_item, error_map, attempts, repo)
           when attempts > 0 do

@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
   use DoubleEntryLedger.RepoCase, async: false
   import Mox
 
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
 
@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     start_supervised!({Registry, keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry})
 
     {:ok, command} =
-      CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+      CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
     %{command: command}
   end

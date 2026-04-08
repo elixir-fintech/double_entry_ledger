@@ -463,9 +463,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ## Returns
 
   - `success_tuple()` - Command was claimed and processed successfully, CommandQueueItem status `:processed`
-  - `{:error, :event_not_found}` - No event exists with the provided UUID
-  - `{:error, :event_already_claimed}` - Another processor is already working on this event (CommandQueueItem status `:processing`)
-  - `{:error, :event_not_claimable}` - Command is in a non-processable state (e.g., already `:processed`)
+  - `{:error, :command_not_found}` - No command exists with the provided UUID
+  - `{:error, :command_already_claimed}` - Another processor is already working on this command (CommandQueueItem status `:processing`)
+  - `{:error, :command_not_claimable}` - Command is in a non-processable state (e.g., already `:processed`)
   - `error_tuple()` - Processing failed after successful claim, CommandQueueItem updated to appropriate error state
 
   ## CommandQueueItem States and Claimability
@@ -481,32 +481,32 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Examples
 
-      # Process a pending event
-      {:ok, transaction, event} = CommandWorker.process_command_with_id("550e8400-e29b-41d4-a716-446655440000")
-      event.command_queue_item.status
+      # Process a pending command
+      {:ok, transaction, command} = CommandWorker.process_command_with_id("550e8400-e29b-41d4-a716-446655440000")
+      command.command_queue_item.status
       :processed
-      event.command_queue_item.processor_id
+      command.command_queue_item.processor_id
       "manual"
 
-      # Attempt to process non-existent event
+      # Attempt to process non-existent command
       CommandWorker.process_command_with_id("00000000-0000-0000-0000-000000000000")
-      {:error, :event_not_found}
+      {:error, :command_not_found}
 
       # Process with custom processor ID
-      {:ok, _, event} = CommandWorker.process_command_with_id(event_uuid, "background_job_1")
-      event.command_queue_item.processor_id
+      {:ok, _, command} = CommandWorker.process_command_with_id(command_uuid, "background_job_1")
+      command.command_queue_item.processor_id
       "background_job_1"
 
       # Command already being processed
       Task.async(fn -> CommandWorker.process_command_with_id(uuid, "proc_1") end)
       CommandWorker.process_command_with_id(uuid, "proc_2")
-      {:error, :event_already_claimed}
+      {:error, :command_already_claimed}
 
-      # Retry a failed event
-      {:ok, _, event} = CommandWorker.process_command_with_id(failed_event_uuid)
-      event.command_queue_item.status
+      # Retry a failed command
+      {:ok, _, command} = CommandWorker.process_command_with_id(failed_command_uuid)
+      command.command_queue_item.status
       :processed
-      event.command_queue_item.retry_count
+      command.command_queue_item.retry_count
       2
 
   ## Concurrency Safety
@@ -529,75 +529,73 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
           success_tuple() | error_tuple()
   def process_command_with_id(uuid, processor_id \\ "manual") do
     case claim_command_for_processing(uuid, processor_id) do
-      {:ok, event} ->
-        process_command(event)
+      {:ok, command} ->
+        process_command(command)
 
       {:error, error} ->
         {:error, error}
     end
   end
 
-  # Private function - processes a claimed event based on its action type
+  # Private function - processes a claimed command based on its action type
   @spec process_command(Command.t()) :: success_tuple() | error_tuple()
   defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{action: :create_transaction}
-         } = event
+         } = command
        ) do
-    CreateTransactionCommand.process(event)
+    CreateTransactionCommand.process(command)
   end
 
   defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{"action" => "create_transaction"}
-         } = event
+         } = command
        ) do
-    CreateTransactionCommand.process(event)
+    CreateTransactionCommand.process(command)
   end
 
   defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{action: :update_transaction}
-         } = event
+         } = command
        ) do
-    UpdateTransactionCommand.process(event)
+    UpdateTransactionCommand.process(command)
   end
 
   defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{"action" => "update_transaction"}
-         } = event
+         } = command
        ) do
-    UpdateTransactionCommand.process(event)
+    UpdateTransactionCommand.process(command)
   end
 
   defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{action: :create_account}
-         } =
-           event
+         } = command
        ) do
-    CreateAccountCommand.process(event)
+    CreateAccountCommand.process(command)
   end
 
   defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
            command_map: %{action: :update_account}
-         } =
-           event
+         } = command
        ) do
-    UpdateAccountCommand.process(event)
+    UpdateAccountCommand.process(command)
   end
 
   defp process_command(%Command{command_queue_item: %{status: :processing}}) do
     {:error, :action_not_supported}
   end
 
-  defp process_command(%Command{} = _event), do: {:error, :event_not_in_processing_state}
+  defp process_command(%Command{} = _command), do: {:error, :command_not_in_processing_state}
 end

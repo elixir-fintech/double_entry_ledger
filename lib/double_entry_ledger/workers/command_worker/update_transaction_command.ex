@@ -179,7 +179,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
   ## Returns
 
-    - The updated `Ecto.Multi` with an `:event_success` or `:event_failure` step.
+    - The updated `Ecto.Multi` with an `:command_success` or `:command_failure` step.
   """
   def handle_build_transaction(
         multi,
@@ -192,7 +192,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
         Multi.insert(Multi.new(), :journal_event, fn _ ->
           JournalEvent.build_create(%{command_map: em, instance_id: iid})
         end)
-        |> Multi.update(:event_success, fn _ ->
+        |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
         end)
         |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
@@ -206,12 +206,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
       %{
         get_create_transaction_event_error: %{reason: :create_command_not_processed} = exception
       } ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
+        Multi.update(Multi.new(), :command_failure, fn _ ->
           build_revert_to_pending(event, exception.message)
         end)
 
       %{get_create_transaction_event_error: exception} ->
-        Multi.update(Multi.new(), :event_failure, fn _ ->
+        Multi.update(Multi.new(), :command_failure, fn _ ->
           build_mark_as_dead_letter(event, exception.message)
         end)
     end)

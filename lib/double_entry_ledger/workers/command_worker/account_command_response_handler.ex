@@ -56,19 +56,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler 
   Handles responses from account event processing operations.
   """
   @spec default_response_handler(
-          {:ok, %{account: Account.t(), event_success: Command.t()}}
+          {:ok, %{account: Account.t(), command_success: Command.t()}}
           | {:error, :atom, any(), map()},
           Command.t()
         ) ::
           response()
   def default_response_handler(response, %Command{} = event) do
     case response do
-      {:ok, %{account: account, event_success: event}} ->
+      {:ok, %{account: account, command_success: event}} ->
         info("Processed successfully", event, account)
 
         {:ok, account, event}
 
-      {:ok, %{event_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
+      {:ok, %{command_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
         warn(last_error.message, event)
 
         {:error, event}

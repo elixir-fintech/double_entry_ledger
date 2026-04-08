@@ -36,9 +36,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
       :journal_event,
       JournalEvent.build_create(%{command_map: command_map, instance_id: instance_id})
     )
-    |> Multi.update(:event_success, build_mark_as_processed(event))
+    |> Multi.update(:command_success, build_mark_as_processed(event))
     |> Oban.insert(:create_account_link, fn %{
-                                              event_success: event,
+                                              command_success: event,
                                               account: account,
                                               journal_event: journal_event
                                             } ->
