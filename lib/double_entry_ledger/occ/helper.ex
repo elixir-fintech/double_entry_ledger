@@ -55,9 +55,6 @@ defmodule DoubleEntryLedger.Occ.Helper do
 
   defdelegate create_error_map(command), to: DoubleEntryLedger.Command.ErrorMap
 
-  @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
-  @retry_interval Application.compile_env(:double_entry_ledger, :retry_interval, 200)
-
   @doc """
   Pauses execution for a calculated delay based on the number of attempts.
 
@@ -93,8 +90,8 @@ defmodule DoubleEntryLedger.Occ.Helper do
   """
   @spec delay(integer()) :: number()
   def delay(attempts) do
-    exponent = @max_retries - attempts
-    trunc(@retry_interval * :math.pow(2, exponent))
+    exponent = max_retries() - attempts
+    trunc(retry_interval() * :math.pow(2, exponent))
   end
 
   @doc """
@@ -107,7 +104,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
       5
   """
   @spec max_retries() :: integer()
-  def max_retries(), do: @max_retries
+  def max_retries, do: Application.get_env(:double_entry_ledger, :max_retries, 5)
 
   @doc """
   Returns the retry interval in milliseconds.
@@ -119,7 +116,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
       10
   """
   @spec retry_interval() :: integer()
-  def retry_interval(), do: @retry_interval
+  def retry_interval, do: Application.get_env(:double_entry_ledger, :retry_interval, 200)
 
   @doc """
   Updates the given `ErrorMap` with a new error message, incrementing the retry count
@@ -229,7 +226,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
   end
 
   def occ_error_message(_attempts) do
-    "OCC conflict: Max number of #{@max_retries} retries reached"
+    "OCC conflict: Max number of #{max_retries()} retries reached"
   end
 
   @spec build_occ_timeout_changeset(CommandQueueItem.t(), ErrorMap.t()) ::
