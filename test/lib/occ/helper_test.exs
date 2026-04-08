@@ -11,13 +11,26 @@ defmodule DoubleEntryLedger.Occ.HelperTest do
 
   @max_retries Application.compile_env(:double_entry_ledger, :max_retries, 5)
 
+  @retry_interval Application.compile_env(:double_entry_ledger, :retry_interval, 200)
+
   describe "delay/1" do
-    test "returns delay" do
-      assert 20 = OccRetry.delay(@max_retries - 1)
+    test "first attempt has base retry interval" do
+      assert @retry_interval = OccRetry.delay(@max_retries)
     end
 
-    test "delay gets bigger with each attempt" do
-      assert 30 = OccRetry.delay(@max_retries - 2)
+    test "delay doubles with each successive retry" do
+      delays = Enum.map(@max_retries..1//-1, &OccRetry.delay/1)
+
+      Enum.chunk_every(delays, 2, 1, :discard)
+      |> Enum.each(fn [earlier, later] ->
+        assert later == earlier * 2
+      end)
+    end
+
+    test "last attempt has highest delay" do
+      first_delay = OccRetry.delay(@max_retries)
+      last_delay = OccRetry.delay(1)
+      assert last_delay > first_delay
     end
   end
 

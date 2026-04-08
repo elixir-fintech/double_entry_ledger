@@ -42,8 +42,8 @@ defmodule DoubleEntryLedger.Occ.Helper do
 
   ## Implementation Notes
 
-  This module uses a linear backoff strategy where retry intervals increase based on
-  remaining attempts, helping to reduce contention over time while maintaining
+  This module uses an exponential backoff strategy where retry intervals double with
+  each successive attempt, helping to reduce contention over time while maintaining
   responsiveness for quick resolutions.
   """
 
@@ -77,23 +77,24 @@ defmodule DoubleEntryLedger.Occ.Helper do
   end
 
   @doc """
-  Calculates the delay duration based on the number of attempts.
+  Calculates the delay duration based on the number of attempts using exponential backoff.
   Can be configured via the `:retry_interval` application environment.
-  The delay increases with each attempt.
+  The delay doubles with each successive retry.
 
   ## Parameters
 
-    - `attempts`: The current attempt number.
+    - `attempts`: The current attempt number (counts down from max_retries).
 
   ## Examples
       iex> DoubleEntryLedger.Occ.Helper.delay(4)
       20
       iex> DoubleEntryLedger.Occ.Helper.delay(2)
-      40
+      80
   """
   @spec delay(integer()) :: number()
   def delay(attempts) do
-    (@max_retries - attempts + 1) * @retry_interval
+    exponent = @max_retries - attempts
+    trunc(@retry_interval * :math.pow(2, exponent))
   end
 
   @doc """
@@ -217,7 +218,7 @@ defmodule DoubleEntryLedger.Occ.Helper do
   ## Examples
 
       iex> DoubleEntryLedger.Occ.Helper.occ_error_message(3)
-      "OCC conflict detected, retrying after 30 ms... 2 attempts left"
+      "OCC conflict detected, retrying after 40 ms... 2 attempts left"
 
       iex> DoubleEntryLedger.Occ.Helper.occ_error_message(1)
       "OCC conflict: Max number of 5 retries reached"
