@@ -41,8 +41,9 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   """
   def start_link(opts) do
     instance_id = Keyword.fetch!(opts, :instance_id)
+    worker = Keyword.get(opts, :worker, CommandWorker)
     name = via_tuple(instance_id)
-    GenServer.start_link(__MODULE__, %{instance_id: instance_id}, name: name)
+    GenServer.start_link(__MODULE__, %{instance_id: instance_id, worker: worker}, name: name)
   end
 
   @doc """
@@ -61,11 +62,19 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # Server Callbacks
 
   @impl true
-  def init(%{instance_id: instance_id}) do
+  def init(%{instance_id: instance_id, worker: worker}) do
     Logger.info("Starting command processor for instance #{instance_id}")
     # Schedule immediate processing
     send(self(), :process_next)
-    {:ok, %{instance_id: instance_id, processing: false, current_command_id: nil, task_ref: nil}}
+
+    {:ok,
+     %{
+       instance_id: instance_id,
+       worker: worker,
+       processing: false,
+       current_command_id: nil,
+       task_ref: nil
+     }}
   end
 
   @impl true
@@ -75,7 +84,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   @impl true
-  def handle_info(:process_next, %{instance_id: instance_id} = state) do
+  def handle_info(:process_next, %{instance_id: instance_id, worker: worker} = state) do
     case find_next_command(instance_id) do
       nil ->
         # No more commands to process, terminate
@@ -91,7 +100,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
         {:ok, pid} =
           Task.start(fn ->
-            process_result = CommandWorker.process_command_with_id(command.id, processor_name())
+            process_result = worker.process_command_with_id(command.id, processor_name())
             send(parent, {:processing_complete, command.id, process_result})
           end)
 

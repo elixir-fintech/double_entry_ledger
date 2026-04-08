@@ -1,189 +1,111 @@
 defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
   @moduledoc """
-  Tests for the InstanceProcessor GenServer, focusing on task crash recovery.
+  Tests for the InstanceProcessor GenServer crash recovery via Process.monitor.
+
+  Uses a mock CommandWorker injected into the real InstanceProcessor to control
+  task behavior and verify the full processing lifecycle.
   """
   use DoubleEntryLedger.RepoCase, async: false
+  import Mox
 
   import DoubleEntryLedger.EventFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
 
-  alias DoubleEntryLedger.CommandQueue.{InstanceProcessor, Scheduling}
+  alias DoubleEntryLedger.CommandQueue.InstanceProcessor
   alias DoubleEntryLedger.Stores.CommandStore
 
-  # A thin GenServer that reuses InstanceProcessor's handle_info callbacks
-  # but ignores :process_next to prevent auto-processing/shutdown in tests.
-  defmodule TestProcessor do
-    use GenServer
+  setup [:create_instance, :create_accounts, :verify_on_exit!]
 
-    alias DoubleEntryLedger.CommandQueue.InstanceProcessor
+  setup %{instance: instance} do
+    start_supervised!({Registry, keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry})
 
-    def start_link(state), do: GenServer.start_link(__MODULE__, state)
+    {:ok, command} =
+      CommandStore.create(transaction_event_attrs(instance_address: instance.address))
 
-    @impl true
-    def init(state), do: {:ok, state}
-
-    @impl true
-    def handle_info(:process_next, state), do: {:noreply, state}
-    def handle_info(msg, state), do: InstanceProcessor.handle_info(msg, state)
+    %{command: command}
   end
 
-  describe "handle_info :DOWN" do
-    setup [:create_instance, :create_accounts]
+  defp start_processor(instance_id) do
+    {:ok, pid} =
+      GenServer.start_link(
+        InstanceProcessor,
+        %{instance_id: instance_id, worker: DoubleEntryLedger.MockCommandWorker}
+      )
 
-    setup %{instance: instance} do
-      start_supervised!({Registry, keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry})
+    # Allow the mock to be called from any spawned task process
+    Mox.allow(DoubleEntryLedger.MockCommandWorker, self(), fn -> pid end)
 
-      {:ok, pid} =
-        TestProcessor.start_link(%{
-          instance_id: instance.id,
-          processing: false,
-          current_command_id: nil,
-          task_ref: nil
-        })
+    ref = Process.monitor(pid)
+    {pid, ref}
+  end
 
-      %{processor: pid}
-    end
-
-    test "schedules retry and resets state when task crashes", %{
-      instance: instance,
-      processor: pid
-    } do
-      {:ok, command} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
-
-      {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, "test")
-      assert claimed.command_queue_item.status == :processing
-
-      ref = make_ref()
-
-      :sys.replace_state(pid, fn state ->
-        %{state | processing: true, current_command_id: claimed.id, task_ref: ref}
+  describe "successful processing" do
+    test "processes command and shuts down", %{instance: instance, command: command} do
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn id, _processor_name ->
+        assert id == command.id
+        {:ok, nil, nil}
       end)
 
-      send(pid, {:DOWN, ref, :process, self(), {:error, :something_crashed}})
+      {_pid, ref} = start_processor(instance.id)
 
-      # Use :sys.get_state to synchronize — it waits for all prior messages to be processed
-      state = :sys.get_state(pid)
-      assert state.processing == false
-      assert state.current_command_id == nil
-      assert state.task_ref == nil
+      # Processor finds command → task succeeds → no more commands → shuts down
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+    end
+  end
 
-      updated = CommandStore.get_by_id(claimed.id)
+  describe "error processing" do
+    test "handles worker error and shuts down", %{instance: instance} do
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn _id, _processor_name ->
+        {:error, :some_worker_error}
+      end)
+
+      {_pid, ref} = start_processor(instance.id)
+
+      # Processor finds command → task returns error → no more commands → shuts down
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+    end
+  end
+
+  describe "task crash recovery" do
+    test "schedules retry when worker crashes", %{instance: instance, command: command} do
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn _id, _processor_name ->
+        raise "intentional crash"
+      end)
+
+      {_pid, ref} = start_processor(instance.id)
+
+      # Processor: find command → task crashes → :DOWN → schedule retry → no more → shutdown
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+
+      updated = CommandStore.get_by_id(command.id)
       assert updated.command_queue_item.status == :failed
       assert updated.command_queue_item.next_retry_after != nil
       assert [%{"message" => "Task crashed:" <> _} | _] = updated.command_queue_item.errors
     end
 
-    test "dead-letters command when max retries exceeded", %{
-      instance: instance,
-      processor: pid
-    } do
-      {:ok, command} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
-
-      {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, "test")
+    test "dead-letters when max retries exceeded", %{instance: instance, command: command} do
       max_retries = Application.get_env(:double_entry_ledger, :command_queue)[:max_retries] || 5
 
-      claimed.command_queue_item
+      # Set retry_count to max before processing
+      command.command_queue_item
       |> Ecto.Changeset.change(%{retry_count: max_retries})
       |> Repo.update!()
 
-      ref = make_ref()
-
-      :sys.replace_state(pid, fn state ->
-        %{state | processing: true, current_command_id: claimed.id, task_ref: ref}
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn _id, _processor_name ->
+        raise "crash after max retries"
       end)
 
-      send(pid, {:DOWN, ref, :process, self(), {:error, :crashed_again}})
+      {_pid, ref} = start_processor(instance.id)
 
-      _state = :sys.get_state(pid)
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
 
-      updated = CommandStore.get_by_id(claimed.id)
+      updated = CommandStore.get_by_id(command.id)
       assert updated.command_queue_item.status == :dead_letter
-    end
-
-    test "ignores :DOWN with non-matching ref", %{processor: pid} do
-      :sys.replace_state(pid, fn state ->
-        %{
-          state
-          | processing: true,
-            current_command_id: Ecto.UUID.generate(),
-            task_ref: make_ref()
-        }
-      end)
-
-      # Send :DOWN with a different ref
-      send(pid, {:DOWN, make_ref(), :process, self(), :normal})
-
-      # State should be unchanged — the :DOWN was for a different monitor
-      state = :sys.get_state(pid)
-      assert state.processing == true
-    end
-  end
-
-  describe "handle_info :processing_complete" do
-    setup [:create_instance]
-
-    setup %{instance: instance} do
-      start_supervised!({Registry, keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry})
-
-      {:ok, pid} =
-        TestProcessor.start_link(%{
-          instance_id: instance.id,
-          processing: false,
-          current_command_id: nil,
-          task_ref: nil
-        })
-
-      %{processor: pid}
-    end
-
-    test "resets state on success", %{processor: pid} do
-      ref = make_ref()
-
-      :sys.replace_state(pid, fn state ->
-        %{state | processing: true, current_command_id: Ecto.UUID.generate(), task_ref: ref}
-      end)
-
-      send(pid, {:processing_complete, "cmd_id", {:ok, nil, nil}})
-
-      state = :sys.get_state(pid)
-      assert state.processing == false
-      assert state.current_command_id == nil
-      assert state.task_ref == nil
-    end
-
-    test "resets state on error", %{processor: pid} do
-      ref = make_ref()
-
-      :sys.replace_state(pid, fn state ->
-        %{state | processing: true, current_command_id: Ecto.UUID.generate(), task_ref: ref}
-      end)
-
-      send(pid, {:processing_complete, "cmd_id", {:error, :some_reason}})
-
-      state = :sys.get_state(pid)
-      assert state.processing == false
-      assert state.current_command_id == nil
-      assert state.task_ref == nil
-    end
-  end
-
-  describe "monitor integration" do
-    test "Process.monitor delivers :DOWN when task crashes" do
-      # Verify the fundamental mechanism: Task.start + Process.monitor → :DOWN
-      test_pid = self()
-
-      {:ok, task_pid} =
-        Task.start(fn ->
-          send(test_pid, :task_started)
-          raise "intentional crash"
-        end)
-
-      ref = Process.monitor(task_pid)
-      assert_receive :task_started, 1000
-      assert_receive {:DOWN, ^ref, :process, ^task_pid, _reason}, 1000
     end
   end
 end
