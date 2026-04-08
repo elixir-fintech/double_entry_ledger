@@ -7,7 +7,8 @@ DoubleEntryLedger submits work to an immutable `Command` table and processes it 
 - **Command submission:** Commands are written through `DoubleEntryLedger.Apis.CommandApi`. Each command carries a `CommandQueueItem` record with status `:pending`, `:processing`, `:processed`, `:failed`, `:occ_timeout`, or `:dead_letter`.
 - **Supervision:** `DoubleEntryLedger.CommandQueue.Supervisor` starts the scheduler stack (registry, dynamic supervisors, and workers). `InstanceMonitor` polls for instances with pending commands and ensures each has an `InstanceProcessor`.
 - **Processing:** An `InstanceProcessor` claims commands via optimistic locking (`CommandQueue.Scheduling.claim_command_for_processing/2`), invokes the appropriate worker module (create/update transaction or account), and writes the resulting `JournalEvent`, transactions, entries, balance history, and Oban link jobs.
-- **Retries:** Failures trigger exponential backoff (configurable). Workers distinguish validation failures (marked as dead letters) from transient OCC or database errors (scheduled for retry). Exhausted retries land in `:dead_letter` for manual inspection.
+- **Crash recovery:** Each worker task is monitored via `Process.monitor/1`. If the task crashes unexpectedly, the `InstanceProcessor` receives a `:DOWN` message and schedules a retry for the command automatically — no manual intervention required.
+- **Retries:** Failures trigger exponential backoff (configurable at runtime via `max_retries` and `retry_interval`). Workers distinguish validation failures (marked as dead letters) from transient OCC or database errors (scheduled for retry). Exhausted retries land in `:dead_letter` for manual inspection.
 
 ## Submitting commands asynchronously
 

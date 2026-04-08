@@ -67,6 +67,7 @@ config :double_entry_ledger,
   ecto_repos: [DoubleEntryLedger.Repo],
   schema_prefix: "double_entry_ledger",
   idempotency_secret: System.fetch_env!("LEDGER_IDEMPOTENCY_SECRET"),
+  start_command_queue: true,
   max_retries: 5,
   retry_interval: 200
 
@@ -93,7 +94,7 @@ config :double_entry_ledger, Oban,
   queues: [double_entry_ledger: 5]
 ```
 
-Set a strong `idempotency_secret` — it is used to hash incoming keys. Production systems should override the repo credentials, event queue settings, and Oban concurrency.
+Set a strong `idempotency_secret` — it is used to hash incoming keys. Set `start_command_queue: false` to disable background processing (useful in test or when embedding the ledger without the queue). `max_retries` and `retry_interval` are read at runtime, so they can be changed without recompilation. Production systems should override the repo credentials, command queue settings, and Oban concurrency.
 
 ### 3. Run the migrations
 
@@ -125,7 +126,8 @@ alias DoubleEntryLedger.Stores.{InstanceStore, AccountStore}
     address: "cash:operating",
     type: :asset,
     currency: :USD,
-    name: "Operating Cash"
+    name: "Operating Cash",
+    negative_limit: 0             # default; rejects any negative available balance
   })
 
 {:ok, equity} =
@@ -133,7 +135,8 @@ alias DoubleEntryLedger.Stores.{InstanceStore, AccountStore}
     address: "equity:capital",
     type: :equity,
     currency: :USD,
-    name: "Owners' Equity"
+    name: "Owners' Equity",
+    negative_limit: 1_000_00      # allow available to go as low as -1_000_00
   })
 ```
 
@@ -142,7 +145,7 @@ alias DoubleEntryLedger.Stores.{InstanceStore, AccountStore}
 ```elixir
 alias DoubleEntryLedger.Apis.CommandApi
 
-event = %{
+command = %{
   "instance_address" => instance.address,
   "action" => "create_transaction",
   "source" => "back-office",
@@ -156,16 +159,16 @@ event = %{
   }
 }
 
-{:ok, transaction, command} = CommandApi.process_from_params(event)
+{:ok, transaction, processed_command} = CommandApi.process_from_params(command)
 ```
 
 Provide positive amounts to add value and negative amounts to subtract it—the ledger will derive the correct debit or credit per account type and reject unbalanced transactions.
 
-### Queue an event for asynchronous processing
+### Queue a command for asynchronous processing
 
 ```elixir
-async_event = Map.put(event, "source_idempk", "initial-capital-async")
-{:ok, queued_command} = CommandApi.create_from_params(async_event)
+async_command = Map.put(command, "source_idempk", "initial-capital-async")
+{:ok, queued_command} = CommandApi.create_from_params(async_command)
 # InstanceMonitor will claim it, process it, and update the command_queue_item status.
 ```
 
@@ -220,8 +223,8 @@ Use `InstanceStore.validate_account_balances(instance.address)` to assert the le
 ## Background Processing
 
 - `DoubleEntryLedger.CommandQueue.InstanceMonitor` polls for commands in `:pending`, `:occ_timeout`, or `:failed` status and ensures each instance has an `InstanceProcessor`.
-- `InstanceProcessor` claims work via `CommandQueue.Scheduling.claim_command_for_processing/2`, runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`.
-- OCC is handled inside the workers (see `lib/double_entry_ledger/occ`). Retries are scheduled with exponential backoff until `max_retries` is reached, after which commands are marked as `:dead_letter`.
+- `InstanceProcessor` claims work via `CommandQueue.Scheduling.claim_command_for_processing/2`, runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`. Each worker task is monitored via `Process.monitor/1`; if the task crashes, the processor schedules a retry automatically.
+- OCC is handled inside the workers (see `lib/double_entry_ledger/occ`). Retries use exponential backoff until `max_retries` is reached, after which commands are marked as `:dead_letter`.
 - Errors and retry metadata live on the `command_queue_item`, so you can inspect processing attempts via `CommandStore` or SQL views.
 - Oban handles fan-out tasks (currently the journal-event linking job) via `DoubleEntryLedger.Workers.Oban.JournalEventLinks`. Configure the queue size to match your workload.
 
