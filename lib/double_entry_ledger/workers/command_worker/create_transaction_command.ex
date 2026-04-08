@@ -143,7 +143,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
 
   ## Returns
 
-    - The updated `Ecto.Multi` with an `:event_success` update step.
+    - The updated `Ecto.Multi` with an `:command_success` update step.
   """
   def handle_build_transaction(
         multi,
@@ -151,16 +151,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
         _repo
       ) do
     multi
-    |> Multi.update(:event_success, fn _ ->
+    |> Multi.update(:command_success, fn _ ->
       build_mark_as_processed(command)
     end)
-    |> Multi.insert(:journal_event, fn %{event_success: %{command_map: em, instance_id: id}} ->
+    |> Multi.insert(:journal_event, fn %{command_success: %{command_map: em, instance_id: id}} ->
       JournalEvent.build_create(%{command_map: em, instance_id: id})
     end)
     |> Multi.insert(
       :pending_transaction_lookup,
       fn %{
-           event_success: %{command_map: em, instance_id: id},
+           command_success: %{command_map: em, instance_id: id},
            transaction: %{id: tid},
            journal_event: %{id: jid}
          } ->
@@ -193,10 +193,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
 
   def handle_build_transaction(multi, %{id: cid} = command, _repo) do
     multi
-    |> Multi.update(:event_success, fn _ ->
+    |> Multi.update(:command_success, fn _ ->
       build_mark_as_processed(command)
     end)
-    |> Multi.insert(:journal_event, fn %{event_success: %{command_map: em, instance_id: id}} ->
+    |> Multi.insert(:journal_event, fn %{command_success: %{command_map: em, instance_id: id}} ->
       JournalEvent.build_create(%{command_map: em, instance_id: id})
     end)
     |> Oban.insert(

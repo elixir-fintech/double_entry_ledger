@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
 
   import Mox
 
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
@@ -23,31 +23,31 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
   describe "process/1" do
     setup [:create_instance, :create_accounts]
 
-    test "update event for command_map, which should also create the event", ctx do
-      %{event: pending_event} = new_create_transaction_event(ctx, :pending)
+    test "update command for command_map, which should also create the command", ctx do
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
 
       {:ok, pending_transaction, _} =
-        CreateTransactionCommand.process(pending_event)
+        CreateTransactionCommand.process(pending_command)
 
-      update_command = update_transaction_command_map(ctx, pending_event, :posted)
+      update_command = update_transaction_command_map(ctx, pending_command, :posted)
 
-      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: cqi} = processed_command} =
         UpdateTransactionCommandMap.process(update_command)
 
-      assert evq.status == :processed
+      assert cqi.status == :processed
 
-      %{transaction: processed_transaction} = Repo.preload(processed_event, :transaction)
+      %{transaction: processed_transaction} = Repo.preload(processed_command, :transaction)
 
       assert processed_transaction.id == transaction.id
       assert processed_transaction.id == pending_transaction.id
-      assert evq.processing_completed_at != nil
+      assert cqi.processing_completed_at != nil
       assert transaction.status == :posted
     end
 
     test "return TransactionCommandMap changeset for duplicate update_idempk", ctx do
-      # successfully create event
-      %{event: pending_event} = new_create_transaction_event(ctx, :pending)
-      update_command = update_transaction_command_map(ctx, pending_event, :posted)
+      # successfully create command
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+      update_command = update_transaction_command_map(ctx, pending_command, :posted)
       UpdateTransactionCommandMap.process(update_command)
 
       # process same update_command again which should fail
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
       assert Keyword.has_key?(changeset.errors, :key_hash)
     end
 
-    test "dead letter when create event does not exist", ctx do
+    test "dead letter when create command does not exist", ctx do
       command_map = create_transaction_command_map(ctx, :pending)
 
       update_transaction_command_map = %{
@@ -72,51 +72,51 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
       assert error.message =~ "create Command not found for Update Command (id:"
     end
 
-    test "update event for command_map, when create event not yet processed", ctx do
-      %{event: pending_event} = new_create_transaction_event(ctx, :pending)
-      update_command = update_transaction_command_map(ctx, pending_event, :posted)
+    test "update command for command_map, when create command not yet processed", ctx do
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+      update_command = update_transaction_command_map(ctx, pending_command, :posted)
 
       {:error, %{command_queue_item: eqm} = update_command} =
         UpdateTransactionCommandMap.process(update_command)
 
       assert eqm.status == :pending
-      assert update_command.id != pending_event.id
+      assert update_command.id != pending_command.id
       %{transaction: nil} = Repo.preload(update_command, :transaction)
       assert eqm.processing_completed_at == nil
       assert eqm.errors != []
     end
 
-    test "update event is pending for command_map, when create event failed", ctx do
-      %{event: %{command_queue_item: eqm1} = pending_event} =
-        new_create_transaction_event(ctx, :pending)
+    test "update command is pending for command_map, when create command failed", ctx do
+      %{command: %{command_queue_item: eqm1} = pending_command} =
+        new_create_transaction_command(ctx, :pending)
 
-      failed_event =
-        pending_event
+      failed_command =
+        pending_command
         |> Ecto.Changeset.change(%{})
         |> Ecto.Changeset.put_assoc(:command_queue_item, %{id: eqm1.id, status: :failed})
         |> Repo.update!()
 
-      update_command = update_transaction_command_map(ctx, failed_event, :posted)
+      update_command = update_transaction_command_map(ctx, failed_command, :posted)
 
       {:error, %{command_queue_item: eqm}} = UpdateTransactionCommandMap.process(update_command)
 
       assert eqm.status == :pending
     end
 
-    test "update event is dead_letter for command_map, when create event failed", ctx do
-      %{event: pending_event} = new_create_transaction_event(ctx, :pending)
+    test "update command is dead_letter for command_map, when create command failed", ctx do
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
 
-      pending_event.command_queue_item
+      pending_command.command_queue_item
       |> Ecto.Changeset.change(%{status: :dead_letter})
       |> Repo.update!()
 
-      failed_event = Repo.preload(pending_event, :command_queue_item)
+      failed_command = Repo.preload(pending_command, :command_queue_item)
 
-      update_command = update_transaction_command_map(ctx, failed_event, :posted)
+      update_command = update_transaction_command_map(ctx, failed_command, :posted)
 
-      {:error, %{command_queue_item: evq}} = UpdateTransactionCommandMap.process(update_command)
+      {:error, %{command_queue_item: cqi}} = UpdateTransactionCommandMap.process(update_command)
 
-      assert evq.status == :dead_letter
+      assert cqi.status == :dead_letter
     end
   end
 
@@ -127,9 +127,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
     setup [:create_instance, :create_accounts]
 
     test "with last retry that fails", ctx do
-      %{event: pending_event} = new_create_transaction_event(ctx, :pending)
-      CreateTransactionCommand.process(pending_event)
-      update_command = update_transaction_command_map(ctx, pending_event, :posted)
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+      CreateTransactionCommand.process(pending_command)
+      update_command = update_transaction_command_map(ctx, pending_command, :posted)
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, 5, fn changeset ->

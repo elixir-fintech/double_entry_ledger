@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
   def process(%{action: :create_transaction} = command_map, repo \\ Repo) do
     case process_with_retry(command_map, repo) do
-      {:ok, %{event_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
+      {:ok, %{command_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
         warn("#{last_error.message}", event)
         {:error, event}
 
@@ -182,13 +182,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
   ## Returns
 
-    - The updated `Ecto.Multi` with either an `:event_success` or `:event_failure` step.
+    - The updated `Ecto.Multi` with either an `:command_success` or `:command_failure` step.
   """
   def handle_build_transaction(multi, %{payload: %{status: :pending}} = command_map, _repo) do
     multi
     |> Multi.merge(fn
       %{transaction: %{id: tid}, new_command: %{id: cid} = command, journal_event: %{id: jid}} ->
-        Multi.update(Multi.new(), :event_success, fn _ ->
+        Multi.update(Multi.new(), :command_success, fn _ ->
           build_mark_as_processed(command)
         end)
         |> Multi.insert(:pending_transaction_lookup, fn _ ->
@@ -217,7 +217,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
     multi
     |> Multi.merge(fn
       %{transaction: %{id: tid}, new_command: %{id: cid} = command, journal_event: %{id: jid}} ->
-        Multi.update(Multi.new(), :event_success, fn _ ->
+        Multi.update(Multi.new(), :command_success, fn _ ->
           build_mark_as_processed(command)
         end)
         |> Oban.insert(:create_transaction_link, fn _ ->

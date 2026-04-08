@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
   """
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
   alias DoubleEntryLedger.{Command, Repo, PendingTransactionLookup}
@@ -27,17 +27,17 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
   describe "create/1" do
     setup [:create_instance, :create_accounts]
 
-    test "inserts a new event and adds an command_queue_item", %{instance: instance} do
-      assert {:ok, %Command{id: id} = event} =
-               CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+    test "inserts a new command and adds a command_queue_item", %{instance: instance} do
+      assert {:ok, %Command{id: id} = command} =
+               CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      assert %{id: evq_id, command_id: ^id, status: :pending} = event.command_queue_item
-      assert evq_id != nil
+      assert %{id: cqi_id, command_id: ^id, status: :pending} = command.command_queue_item
+      assert cqi_id != nil
     end
 
     test "creates a lookup for pending create_transactions", %{instance: instance} do
       assert {:ok, %Command{id: id, command_map: %{source: s, source_idempk: sidpk}}} =
-               CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+               CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       assert %{command_id: ^id, source: ^s, source_idempk: ^sidpk} =
                Repo.get_by(PendingTransactionLookup, command_id: id)
@@ -51,7 +51,7 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
     end
 
     test "fails for invalid instance_address" do
-      trx_map = transaction_event_attrs(instance_address: "1234", action: :create_transaction)
+      trx_map = transaction_command_attrs(instance_address: "1234", action: :create_transaction)
 
       assert {:error, %Ecto.Changeset{errors: errors}} = CommandStore.create(trx_map)
       assert Keyword.has_key?(errors, :instance_id)
@@ -60,37 +60,39 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
     test "fails when adding identical command with action: create_transaction", %{
       instance: %{address: address}
     } do
-      trx_map = transaction_event_attrs(instance_address: address, action: :create_transaction)
-      assert {:ok, %Command{} = _event} = CommandStore.create(trx_map)
+      trx_map = transaction_command_attrs(instance_address: address, action: :create_transaction)
+      assert {:ok, %Command{} = _command} = CommandStore.create(trx_map)
       assert {:error, :pending_transaction_idempotency_violation} = CommandStore.create(trx_map)
     end
   end
 
-  describe "get_event_by/4" do
+  describe "get_command_by/4" do
     setup [:create_instance, :create_accounts]
 
-    test "gets an event by source", %{instance: instance} do
-      {:ok, event} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+    test "gets a command by source", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       assert %Command{} =
-               found_event =
+               found_command =
                CommandStoreHelper.get_command_by(
                  :create_transaction,
-                 event.command_map.source,
-                 event.command_map.source_idempk,
+                 command.command_map.source,
+                 command.command_map.source_idempk,
                  instance.id
                )
 
-      assert found_event.id == event.id
+      assert found_command.id == command.id
     end
 
     test "returns processed_transaction", %{instance: instance} = ctx do
-      %{event: %{command_map: command_map} = event} = new_create_transaction_event(ctx, :pending)
-      {:ok, transaction, _} = CreateTransactionCommand.process(event)
+      %{command: %{command_map: command_map} = command} =
+        new_create_transaction_command(ctx, :pending)
+
+      {:ok, transaction, _} = CreateTransactionCommand.process(command)
 
       assert %Command{} =
-               found_event =
+               found_command =
                CommandStoreHelper.get_command_by(
                  :create_transaction,
                  command_map.source,
@@ -98,10 +100,10 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
                  instance.id
                )
 
-      assert found_event.transaction.id == transaction.id
+      assert found_command.transaction.id == transaction.id
     end
 
-    test "returns nil for non-existent event", %{instance: instance} do
+    test "returns nil for non-existent command", %{instance: instance} do
       assert nil ==
                CommandStoreHelper.get_command_by(
                  :create_transaction,

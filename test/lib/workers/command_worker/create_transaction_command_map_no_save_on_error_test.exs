@@ -1,6 +1,6 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnErrorTest do
   @moduledoc """
-  This module tests the CreateTransactionCommandMapNoSaveOnError module, which processes event maps for transaction creation without saving on error. It ensures that errors return changesets and no partial data is persisted.
+  This module tests the CreateTransactionCommandMapNoSaveOnError module, which processes command maps for transaction creation without saving on error. It ensures that errors return changesets and no partial data is persisted.
   """
   use ExUnit.Case
   import Mox
@@ -9,7 +9,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
   alias DoubleEntryLedger.Command.TransactionCommandMap, as: TransactionCommandMapSchema
   use DoubleEntryLedger.RepoCase
 
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
@@ -21,20 +21,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
   describe "process/1" do
     setup [:create_instance, :create_accounts]
 
-    test "create event for command_map, which must also create the event", ctx do
+    test "create command for command_map, which must also create the command", ctx do
       command_map = create_transaction_command_map(ctx)
 
-      {:ok, transaction, %{command_queue_item: evq} = processed_event} =
+      {:ok, transaction, %{command_queue_item: cqi} = processed_command} =
         CreateTransactionCommandMapNoSaveOnError.process(command_map)
 
-      assert evq.status == :processed
+      assert cqi.status == :processed
 
-      %{transaction: processed_transaction} = Repo.preload(processed_event, :transaction)
+      %{transaction: processed_transaction} = Repo.preload(processed_command, :transaction)
 
       assert processed_transaction.id == transaction.id
 
       assert return_pending_balances(ctx) == [100, 100]
-      assert evq.processing_completed_at != nil
+      assert cqi.processing_completed_at != nil
       assert transaction.status == :pending
     end
 
@@ -56,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
     end
 
     test "return TransactionCommandMap changeset for duplicate source_idempk", ctx do
-      # successfully create event
+      # successfully create command
       command_map = create_transaction_command_map(ctx)
       CreateTransactionCommandMapNoSaveOnError.process(command_map)
 
@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
     end
 
     test "return TransactionCommandMap changeset for other errors", ctx do
-      # successfully create event
+      # successfully create command
       command_map = create_transaction_command_map(ctx, :pending)
 
       updated_command_map =

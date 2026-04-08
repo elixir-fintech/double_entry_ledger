@@ -11,21 +11,21 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandTest do
   alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand
 
   import DoubleEntryLedger.InstanceFixtures
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
 
   doctest CreateAccountCommand
 
   describe "process/1" do
     setup [:create_instance]
 
-    test "successfully processes a valid create_account event", %{instance: instance} do
-      {:ok, event} =
-        CommandStore.create(account_event_attrs(%{instance_address: instance.address}))
+    test "successfully processes a valid create_account command", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(account_command_attrs(%{instance_address: instance.address}))
 
       assert {:ok, %Account{} = account, %Command{command_queue_item: eqi} = e} =
-               CreateAccountCommand.process(preload(event))
+               CreateAccountCommand.process(preload(command))
 
-      assert e.id == event.id
+      assert e.id == command.id
       assert eqi.status == :processed
       assert account.address == "account:1"
     end
@@ -33,20 +33,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandTest do
     test "fails when there is an account issue", %{instance: instance} do
       address = "same:address"
 
-      {:ok, event1} =
+      {:ok, command1} =
         CommandStore.create(
-          account_event_attrs(%{address: address, instance_address: instance.address})
+          account_command_attrs(%{address: address, instance_address: instance.address})
         )
 
-      {:ok, event2} =
+      {:ok, command2} =
         CommandStore.create(
-          account_event_attrs(%{address: address, instance_address: instance.address})
+          account_command_attrs(%{address: address, instance_address: instance.address})
         )
 
-      CreateAccountCommand.process(preload(event1))
+      CreateAccountCommand.process(preload(command1))
 
       assert {:error, %Command{command_queue_item: %{errors: errors} = eqi}} =
-               CreateAccountCommand.process(preload(event2))
+               CreateAccountCommand.process(preload(command2))
 
       assert eqi.status == :dead_letter
 
@@ -60,8 +60,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandTest do
                errors
     end
 
-    defp preload(event) do
-      Repo.reload(event)
+    defp preload(command) do
+      Repo.reload(command)
       |> Repo.preload(:command_queue_item)
     end
   end

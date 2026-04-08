@@ -89,16 +89,16 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   ## Returns
     - `{:ok, command}`: If the command was successfully claimed
-    - `{:error, :event_not_found}`: If no command with the given ID exists
-    - `{:error, :event_already_claimed}`: If the command was claimed by another processor
-    - `{:error, :event_not_claimable}`: If the command is not in a claimable state (not pending or occ_timeout)
+    - `{:error, :command_not_found}`: If no command with the given ID exists
+    - `{:error, :command_already_claimed}`: If the command was claimed by another processor
+    - `{:error, :command_not_claimable}`: If the command is not in a claimable state (not pending or occ_timeout)
   """
   @spec claim_command_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
           {:ok, Command.t()} | {:error, atom()}
   def claim_command_for_processing(id, processor_id, repo \\ Repo) do
     case CommandStore.get_by_id(id) do
       nil ->
-        {:error, :event_not_found}
+        {:error, :command_not_found}
 
       %{command_queue_item: %{status: state} = eqi} = command when state in @processable_states ->
         try do
@@ -106,11 +106,11 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
           |> repo.update()
         rescue
           Ecto.StaleEntryError ->
-            {:error, :event_already_claimed}
+            {:error, :command_already_claimed}
         end
 
       _ ->
-        {:error, :event_not_claimable}
+        {:error, :command_not_claimable}
     end
   end
 
@@ -127,13 +127,13 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   """
   @spec build_mark_as_processed(Command.t()) :: Changeset.t(Command.t())
   def build_mark_as_processed(%{command_queue_item: command_queue_item} = command) do
-    event_queue_changeset =
+    command_queue_changeset =
       command_queue_item
       |> CommandQueueItem.processing_complete_changeset()
 
     command
     |> change(%{})
-    |> put_assoc(:command_queue_item, event_queue_changeset)
+    |> put_assoc(:command_queue_item, command_queue_changeset)
   end
 
   @doc """
@@ -151,13 +151,13 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   """
   @spec build_revert_to_pending(Command.t(), any()) :: Changeset.t()
   def build_revert_to_pending(%{command_queue_item: command_queue_item} = command, error) do
-    event_queue_changeset =
+    command_queue_changeset =
       command_queue_item
       |> CommandQueueItem.revert_to_pending_changeset(error)
 
     command
     |> change(%{})
-    |> put_assoc(:command_queue_item, event_queue_changeset)
+    |> put_assoc(:command_queue_item, command_queue_changeset)
   end
 
   @doc """
@@ -195,7 +195,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       # Calculate next retry time with exponential backoff
       retry_delay = calculate_retry_delay(retry_count)
 
-      event_queue_item_changeset =
+      command_queue_item_changeset =
         command_queue_item
         |> CommandQueueItem.schedule_retry_changeset(
           error,
@@ -205,7 +205,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
       command
       |> change(%{})
-      |> put_assoc(:command_queue_item, event_queue_item_changeset)
+      |> put_assoc(:command_queue_item, command_queue_item_changeset)
     end
   end
 
@@ -225,7 +225,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   """
   @spec build_schedule_update_retry(Command.t(), UpdateCommandError.t()) :: Changeset.t()
   def build_schedule_update_retry(%{command_queue_item: command_queue_item} = command, error) do
-    event_queue_item_changeset =
+    command_queue_item_changeset =
       command_queue_item
       |> CommandQueueItem.schedule_update_retry_changeset(
         error,
@@ -234,7 +234,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
     command
     |> change(%{})
-    |> put_assoc(:command_queue_item, event_queue_item_changeset)
+    |> put_assoc(:command_queue_item, command_queue_item_changeset)
   end
 
   @doc """
@@ -253,13 +253,13 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   """
   @spec build_mark_as_dead_letter(Command.t(), String.t()) :: Changeset.t()
   def build_mark_as_dead_letter(%{command_queue_item: command_queue_item} = command, error) do
-    event_queue_changeset =
+    command_queue_changeset =
       command_queue_item
       |> CommandQueueItem.dead_letter_changeset(error)
 
     command
     |> change(%{})
-    |> put_assoc(:command_queue_item, event_queue_changeset)
+    |> put_assoc(:command_queue_item, command_queue_changeset)
   end
 
   # Private function to calculate retry delay

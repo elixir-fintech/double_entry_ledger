@@ -17,7 +17,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
   describe "process/1" do
     setup [:create_instance]
 
-    test "successfully processes a valid account event map", %{instance: instance} do
+    test "successfully processes a valid account command map", %{instance: instance} do
       command_map = %AccountCommandMap{
         action: :create_account,
         instance_address: instance.address,
@@ -30,14 +30,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
         }
       }
 
-      {:ok, account, event} = CreateAccountCommandMapNoSaveOnError.process(command_map)
+      {:ok, account, command} = CreateAccountCommandMapNoSaveOnError.process(command_map)
       assert account.currency == :USD
       assert account.name == "Test Account"
       assert account.type == :asset
-      assert event.command_queue_item.status == :processed
+      assert command.command_queue_item.status == :processed
     end
 
-    test "returns an error for an invalid account event map", %{instance: instance} do
+    test "returns an error for an invalid account command map", %{instance: instance} do
       command_map = %AccountCommandMap{
         action: :create_account,
         instance_address: instance.address,

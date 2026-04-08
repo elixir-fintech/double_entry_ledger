@@ -69,7 +69,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
         %TransactionCommandMap{} = command_map
       ) do
     case response do
-      {:ok, %{transaction: transaction, event_success: event}} ->
+      {:ok, %{transaction: transaction, command_success: event}} ->
         info("Processed successfully", event, transaction)
 
         {:ok, transaction, event}
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
 
       {:error, :input_command_map_error, %Changeset{data: %TransactionCommandMap{}} = changeset,
        _} ->
-        error("Input event map error", command_map, changeset)
+        error("Input command map error", command_map, changeset)
 
         {:error, changeset}
 
@@ -143,7 +143,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
   """
   @spec handle_occ_final_timeout(Occable.t(), Ecto.Repo.t()) :: Multi.t()
   def handle_occ_final_timeout(occable_item, _repo) do
-    Multi.update(Multi.new(), :event_failure, fn _ ->
+    Multi.update(Multi.new(), :command_failure, fn _ ->
       build_schedule_retry_with_reason(
         occable_item,
         nil,

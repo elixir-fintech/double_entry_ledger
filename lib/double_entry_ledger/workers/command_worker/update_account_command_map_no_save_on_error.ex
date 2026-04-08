@@ -133,7 +133,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
           :journal_event,
           JournalEvent.build_create(%{command_map: command_map, instance_id: iid})
         )
-        |> Multi.update(:event_success, build_mark_as_processed(event))
+        |> Multi.update(:command_success, build_mark_as_processed(event))
         |> Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: eid,

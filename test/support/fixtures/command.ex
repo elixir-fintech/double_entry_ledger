@@ -1,7 +1,7 @@
-defmodule DoubleEntryLedger.EventFixtures do
+defmodule DoubleEntryLedger.CommandFixtures do
   @moduledoc """
   This module defines test helpers for creating
-  event entities.
+  command entities.
   """
   alias DoubleEntryLedger.Stores.CommandStore
 
@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.EventFixtures do
   import DoubleEntryLedger.Command.TransactionDataFixtures
   import DoubleEntryLedger.Command.AccountDataFixtures
 
-  def transaction_event_attrs(attrs \\ %{}) do
+  def transaction_command_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{
       action: :create_transaction,
@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.EventFixtures do
     |> then(&struct(TransactionCommandMap, &1))
   end
 
-  def account_event_attrs(attrs \\ %{}) do
+  def account_command_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{
       action: :create_account,
@@ -37,13 +37,13 @@ defmodule DoubleEntryLedger.EventFixtures do
     |> then(&struct(AccountCommandMap, &1))
   end
 
-  def new_create_transaction_event(
+  def new_create_transaction_command(
         %{instance: inst, accounts: [a1, a2, _, _]} = ctx,
         trx_status \\ :posted
       ) do
-    {:ok, event} =
+    {:ok, command} =
       CommandStore.create(
-        transaction_event_attrs(
+        transaction_command_attrs(
           instance_address: inst.address,
           payload: %TransactionData{
             status: trx_status,
@@ -63,17 +63,17 @@ defmodule DoubleEntryLedger.EventFixtures do
         )
       )
 
-    Map.put(ctx, :event, event)
+    Map.put(ctx, :command, command)
   end
 
-  def new_update_transaction_event(
+  def new_update_transaction_command(
         source,
         source_idempk,
         instance_address,
         trx_status,
         entries \\ []
       ) do
-    transaction_event_attrs(%{
+    transaction_command_attrs(%{
       action: :update_transaction,
       source: source,
       source_idempk: source_idempk,

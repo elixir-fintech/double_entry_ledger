@@ -7,7 +7,7 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
 
   use DoubleEntryLedger.RepoCase
 
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
@@ -22,35 +22,35 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
     setup [:create_instance, :create_accounts]
 
     test "successful fro posted transaction", ctx do
-      %{event: event} = new_create_transaction_event(ctx)
+      %{command: command} = new_create_transaction_command(ctx)
 
-      {:ok, transaction, %{id: id, command_queue_item: evq} = processed_event} =
-        CreateTransactionCommand.process(event)
+      {:ok, transaction, %{id: id, command_queue_item: cqi} = processed_command} =
+        CreateTransactionCommand.process(command)
 
-      assert evq.status == :processed
+      assert cqi.status == :processed
 
       %{transaction: %{id: _trx_id} = processed_transaction} =
-        Repo.preload(processed_event, :transaction)
+        Repo.preload(processed_command, :transaction)
 
       assert processed_transaction.id == transaction.id
-      assert evq.processing_completed_at != nil
+      assert cqi.processing_completed_at != nil
       assert transaction.status == :posted
       assert is_nil(Repo.get_by(PendingTransactionLookup, command_id: id))
     end
 
     test "pending transaction also updates the pending transaction lookup", ctx do
-      %{event: event} = new_create_transaction_event(ctx, :pending)
+      %{command: command} = new_create_transaction_command(ctx, :pending)
 
-      {:ok, transaction, %{id: id, command_queue_item: evq} = processed_event} =
-        CreateTransactionCommand.process(event)
+      {:ok, transaction, %{id: id, command_queue_item: cqi} = processed_command} =
+        CreateTransactionCommand.process(command)
 
-      assert evq.status == :processed
+      assert cqi.status == :processed
 
       %{transaction: %{id: trx_id} = processed_transaction} =
-        Repo.preload(processed_event, :transaction)
+        Repo.preload(processed_command, :transaction)
 
       assert processed_transaction.id == transaction.id
-      assert evq.processing_completed_at != nil
+      assert cqi.processing_completed_at != nil
       assert transaction.status == :pending
 
       assert %{command_id: ^id, transaction_id: ^trx_id} =
@@ -61,9 +61,9 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
       instance: inst,
       accounts: [a | _]
     } do
-      {:ok, event} =
+      {:ok, command} =
         CommandStore.create(
-          transaction_event_attrs(
+          transaction_command_attrs(
             instance_address: inst.address,
             payload: %TransactionData{
               status: :posted,
@@ -75,12 +75,14 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
           )
         )
 
-      assert {:error, %Command{command_queue_item: eqm}} = CreateTransactionCommand.process(event)
+      assert {:error, %Command{command_queue_item: eqm}} =
+               CreateTransactionCommand.process(command)
+
       assert eqm.status == :dead_letter
     end
 
     test "error when saving transaction", ctx do
-      %{event: event} = new_create_transaction_event(ctx)
+      %{command: command} = new_create_transaction_command(ctx)
 
       DoubleEntryLedger.MockRepo
       |> expect(:insert, fn changeset ->
@@ -93,7 +95,7 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
       end)
 
       assert {:error, %Command{command_queue_item: eqm}} =
-               CreateTransactionCommand.process(event, DoubleEntryLedger.MockRepo)
+               CreateTransactionCommand.process(command, DoubleEntryLedger.MockRepo)
 
       assert eqm.status == :dead_letter
 
@@ -108,7 +110,7 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
     end
 
     test "occ timeout", ctx do
-      %{event: event} = new_create_transaction_event(ctx)
+      %{command: command} = new_create_transaction_command(ctx)
 
       DoubleEntryLedger.MockRepo
       |> expect(:insert, 5, fn changeset ->
@@ -120,10 +122,10 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
         # the transaction has to be handled by the Repo
       end)
 
-      {:error, %{command_queue_item: eqm} = updated_event} =
-        CreateTransactionCommand.process(event, DoubleEntryLedger.MockRepo)
+      {:error, %{command_queue_item: eqm} = updated_command} =
+        CreateTransactionCommand.process(command, DoubleEntryLedger.MockRepo)
 
-      %{transaction: nil} = Repo.preload(updated_event, :transaction)
+      %{transaction: nil} = Repo.preload(updated_command, :transaction)
       assert eqm.processing_completed_at != nil
       assert eqm.occ_retry_count == 5
       assert eqm.retry_count == 0

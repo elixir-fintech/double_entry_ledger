@@ -184,10 +184,10 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   def build_get_create_transaction_command_transaction(multi, step, command_or_step) do
     multi
     |> Multi.run(step, fn _, changes ->
-      event = get_command(command_or_step, changes)
+      command = get_command(command_or_step, changes)
 
       try do
-        {:ok, {transaction, _}} = get_create_transaction_command_transaction(event)
+        {:ok, {transaction, _}} = get_create_transaction_command_transaction(command)
         {:ok, transaction}
       rescue
         e in UpdateCommandError ->

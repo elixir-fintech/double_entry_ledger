@@ -1,12 +1,12 @@
 defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   @moduledoc """
-  Tests for the scheduling of events in the event queue.
+  Tests for the scheduling of commands in the command queue.
   """
   use ExUnit.Case, async: true
   import Mox
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
-  import DoubleEntryLedger.EventFixtures
+  import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
   alias DoubleEntryLedger.Command
@@ -17,37 +17,37 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   describe "claim_command_for_processing/2" do
     setup [:create_instance, :create_accounts]
 
-    test "returns error when event not found" do
-      assert {:error, :event_not_found} =
+    test "returns error when command not found" do
+      assert {:error, :command_not_found} =
                Scheduling.claim_command_for_processing(Ecto.UUID.generate(), "manual")
     end
 
-    test "returns error when event not claimable", %{instance: instance} do
-      {:ok, event} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+    test "returns error when command not claimable", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      event =
-        event
+      command =
+        command
         |> Ecto.Changeset.change()
         |> Ecto.Changeset.put_assoc(:command_queue_item, %{
-          id: event.command_queue_item.id,
+          id: command.command_queue_item.id,
           status: :processed
         })
         |> Repo.update!()
 
-      assert {:error, :event_not_claimable} =
-               Scheduling.claim_command_for_processing(event.id, "manual")
+      assert {:error, :command_not_claimable} =
+               Scheduling.claim_command_for_processing(command.id, "manual")
     end
 
-    test "claims an event for processing", %{instance: instance} do
-      {:ok, event} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+    test "claims a command for processing", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      assert {:ok, %Command{command_queue_item: eqm} = claimed_event} =
-               Scheduling.claim_command_for_processing(event.id, "manual")
+      assert {:ok, %Command{command_queue_item: eqm} = claimed_command} =
+               Scheduling.claim_command_for_processing(command.id, "manual")
 
       assert eqm.status == :processing
-      assert eqm.command_id == claimed_event.id
+      assert eqm.command_id == claimed_command.id
       assert eqm.processor_id == "manual"
       assert eqm.processing_started_at != nil
       assert eqm.processing_completed_at == nil
@@ -56,17 +56,17 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     end
 
     test "returns an error when stale entry error occurs", %{instance: instance} do
-      {:ok, event} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       DoubleEntryLedger.MockRepo
       |> expect(:update, fn _changeset ->
         raise Ecto.StaleEntryError, action: :update_transaction, changeset: %Ecto.Changeset{}
       end)
 
-      assert {:error, :event_already_claimed} =
+      assert {:error, :command_already_claimed} =
                Scheduling.claim_command_for_processing(
-                 event.id,
+                 command.id,
                  "manual",
                  DoubleEntryLedger.MockRepo
                )
@@ -76,12 +76,12 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   describe "build_mark_as_processed/1" do
     setup [:create_instance, :create_accounts]
 
-    test "builds changeset to mark event as processed", %{instance: instance} do
-      {:ok, event} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+    test "builds changeset to mark command as processed", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       %{changes: %{command_queue_item: command_queue_item}} =
-        Scheduling.build_mark_as_processed(event)
+        Scheduling.build_mark_as_processed(command)
 
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == :processed
@@ -93,14 +93,14 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   describe "build_mark_as_dead_letter/2" do
     setup [:create_instance, :create_accounts]
 
-    test "builds changeset to mark event as dead letter", %{instance: instance} do
-      {:ok, event} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+    test "builds changeset to mark command as dead letter", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       error = "Test error"
 
       %{changes: %{command_queue_item: command_queue_item}} =
-        Scheduling.build_mark_as_dead_letter(event, error)
+        Scheduling.build_mark_as_dead_letter(command, error)
 
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == :dead_letter
@@ -113,15 +113,15 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   describe "build_revert_to_pending/2" do
     setup [:create_instance, :create_accounts]
 
-    test "builds changeset to revert event to pending", %{instance: instance} do
-      {:ok, pending_event} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+    test "builds changeset to revert command to pending", %{instance: instance} do
+      {:ok, pending_command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      {:ok, event} = Scheduling.claim_command_for_processing(pending_event.id, "manual")
+      {:ok, command} = Scheduling.claim_command_for_processing(pending_command.id, "manual")
       error = "Test error"
 
       %{changes: %{command_queue_item: command_queue_item}} =
-        Scheduling.build_revert_to_pending(event, error)
+        Scheduling.build_revert_to_pending(command, error)
 
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == :pending
@@ -133,14 +133,14 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     setup [:create_instance, :create_accounts]
 
     test "builds changeset to schedule retry with reason", %{instance: instance} do
-      {:ok, event} =
-        CommandStore.create(transaction_event_attrs(instance_address: instance.address))
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       error = "Test error"
       reason = :failed
 
       %{changes: %{command_queue_item: command_queue_item}} =
-        Scheduling.build_schedule_retry_with_reason(event, error, reason)
+        Scheduling.build_schedule_retry_with_reason(command, error, reason)
 
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == reason
@@ -153,28 +153,28 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     setup [:create_instance, :create_accounts]
 
     test "builds changeset to schedule update_retry", %{instance: instance} = ctx do
-      %{event: %{command_map: %{source: s, source_idempk: s_id}} = pending_event} =
-        new_create_transaction_event(ctx, :pending)
+      %{command: %{command_map: %{source: s, source_idempk: s_id}} = pending_command} =
+        new_create_transaction_command(ctx, :pending)
 
       {:error, failed_create_command} =
         DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
-          pending_event,
+          pending_command,
           "some reason",
           :failed
         )
 
-      {:ok, event} = new_update_transaction_event(s, s_id, instance.address, :posted)
+      {:ok, command} = new_update_transaction_command(s, s_id, instance.address, :posted)
       test_message = "Test error"
 
       error = %UpdateCommandError{
         create_command: failed_create_command,
-        update_command: event,
+        update_command: command,
         message: test_message,
         reason: :create_command_not_processed
       }
 
       %{changes: %{command_queue_item: command_queue_item}} =
-        Scheduling.build_schedule_update_retry(event, error)
+        Scheduling.build_schedule_update_retry(command, error)
 
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == :failed
