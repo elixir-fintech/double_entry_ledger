@@ -61,4 +61,42 @@ defmodule DoubleEntryLedger.Occ.HelperTest do
       assert OccRetry.occ_error_message(attempts) == expected_message
     end
   end
+
+  describe "runtime configuration" do
+    test "max_retries respects runtime override" do
+      original = Application.get_env(:double_entry_ledger, :max_retries)
+      Application.put_env(:double_entry_ledger, :max_retries, 10)
+
+      assert OccRetry.max_retries() == 10
+
+      Application.put_env(:double_entry_ledger, :max_retries, original)
+    end
+
+    test "retry_interval respects runtime override" do
+      original = Application.get_env(:double_entry_ledger, :retry_interval)
+      Application.put_env(:double_entry_ledger, :retry_interval, 500)
+
+      assert OccRetry.retry_interval() == 500
+
+      Application.put_env(:double_entry_ledger, :retry_interval, original)
+    end
+
+    test "delay uses runtime config values" do
+      original_retries = Application.get_env(:double_entry_ledger, :max_retries)
+      original_interval = Application.get_env(:double_entry_ledger, :retry_interval)
+
+      Application.put_env(:double_entry_ledger, :max_retries, 3)
+      Application.put_env(:double_entry_ledger, :retry_interval, 100)
+
+      # With max_retries=3, attempt 3 is first: 100 * 2^0 = 100
+      assert OccRetry.delay(3) == 100
+      # attempt 2: 100 * 2^1 = 200
+      assert OccRetry.delay(2) == 200
+      # attempt 1: 100 * 2^2 = 400
+      assert OccRetry.delay(1) == 400
+
+      Application.put_env(:double_entry_ledger, :max_retries, original_retries)
+      Application.put_env(:double_entry_ledger, :retry_interval, original_interval)
+    end
+  end
 end
