@@ -10,7 +10,7 @@ This document explains how the double entry ledger in this codebase works, focus
 - How the system uses debit and credit internally
 - How you interact with the ledger using signed amounts (not explicit debits/credits)
 - How the system translates signed amounts into debits and credits
-- How to set up an instance, accounts, and process events synchronously
+- How to set up an instance, accounts, and process commands synchronously
 
 ## Core Principles of Double Entry Accounting
 
@@ -56,7 +56,7 @@ When you submit a signed amount, the system:
 
 ## How to Use Signed Amounts
 
-When creating an event, **do not think in terms of debit or credit**.  
+When creating a command, **do not think in terms of debit or credit**.  
 Instead, think about whether you want to **add to** or **subtract from** the account’s balance:
 
 - **Positive amount:** You want to increase the account’s balance.
@@ -102,12 +102,12 @@ Ledger Translation: **Debits = Credits = $1000 (Balanced)**
 
 ## Multi-Account Transactions
 
-Events can involve more than two accounts, as long as the sum of all debits equals the sum of all credits (per currency).  
+Transactions can involve more than two accounts, as long as the sum of all debits equals the sum of all credits (per currency).  
 You only need to specify whether you are adding or subtracting value from each account; the system will handle the rest.
 
 ## Setting Up and Using the Ledger (Synchronous Example)
 
-Below is a step-by-step guide to set up an instance, create accounts, and process events synchronously.
+Below is a step-by-step guide to set up an instance, create accounts, and process commands synchronously.
 
 ### 1. Create a Ledger Instance
 
@@ -158,7 +158,7 @@ alias DoubleEntryLedger.Stores.AccountStore
 
 ### 3. Create and Process a Command Synchronously
 
-You can process an event synchronously by calling the Transaction store directly:
+You can process a command synchronously by calling the Transaction store directly:
 
 ```elixir
 alias DoubleEntryLedger.Stores.TransactionStore
@@ -171,7 +171,7 @@ params = %{
   ]
 }
 
-{:ok, transaction} =TransactionStore(
+{:ok, transaction} = TransactionStore.create(
   instance.address,
   params,
   "idempotent-id-1"
@@ -203,7 +203,7 @@ params = %{
   ]
 }
 
-{:ok, transaction} =TransactionStore(
+{:ok, transaction} = TransactionStore.create(
   instance.address,
   params,
   "idempotent-id-2"
@@ -212,13 +212,13 @@ params = %{
 
 ## Summary
 
-- **When creating events, use signed amounts:**  
+- **When creating commands, use signed amounts:**  
   - Positive = add to account  
   - Negative = subtract from account
 - **Do not specify debit or credit:** The system handles this internally.
-- **All events must balance:** The sum of all debits and credits (per currency) must be equal.
+- **All transactions must balance:** The sum of all debits and credits (per currency) must be equal.
 - **Account types matter:** To introduce or remove value, use accounts of different types.
-- **The ledger enforces integrity:** Any unbalanced event is rejected.
-- **You can process events synchronously.**
+- **The ledger enforces integrity:** Any unbalanced transaction is rejected.
+- **You can process commands synchronously.**
 
 This approach keeps your API simple and intuitive, while the underlying ledger ensures strict double entry accounting rules are always followed.

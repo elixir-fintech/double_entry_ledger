@@ -100,7 +100,7 @@ Pending updates may also include `entries` with the same account addresses/curre
 
 - **Posted (`account.posted`)** – sums entries for posted transactions.
 - **Pending (`account.pending`)** – sums entries for pending transactions.
-- **Available (`account.available`)** – derived from the posted and pending balances respecting the account’s normal balance and will always be equal or lower to the posted balance. For an account with debit normal balance, a pending credit will lower the available balance as this is an expectation of a payout from the account. A pending debit on the other hand will not affect the balance, as this is an expectation of a potential inflow that is not guaranteed until the transaction is posted.
+- **Available (`account.available`)** – the real calculated balance: `posted.amount - pending opposite-side`. For an account with debit normal balance, a pending credit will lower the available balance as this is an expectation of a payout from the account. A pending debit on the other hand will not affect the balance, as this is an expectation of a potential inflow that is not guaranteed until the transaction is posted. The `available` value can be negative when the account’s `negative_limit` allows it. With `negative_limit: 0` (the default), any operation that would push `available` below zero is rejected. With `negative_limit: N`, the account can go as low as `-N`.
 
 Inspect balances via `DoubleEntryLedger.Stores.AccountStore.get_by_address/2` or any other account lookup.
 
