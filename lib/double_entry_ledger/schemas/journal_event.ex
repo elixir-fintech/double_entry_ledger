@@ -57,12 +57,11 @@ defmodule DoubleEntryLedger.JournalEvent do
   end
 
   @doc """
-  Creates a changeset for validating and creating JournalEvents.
+  Creates a changeset for validating and creating a JournalEvent.
 
   ## Parameters
 
-  * `event` - The Command struct to create a changeset for
-  * `attrs` - Map of attributes to apply to the event
+  * `attrs` - Map containing `:instance_id` and `:command_map`
 
   ## Returns
 
@@ -70,7 +69,6 @@ defmodule DoubleEntryLedger.JournalEvent do
 
   ## Examples
 
-      # Create event changeset
       iex> command_map = %{
       ...>   action: :create_transaction,
       ...>   source: "api",
@@ -81,8 +79,8 @@ defmodule DoubleEntryLedger.JournalEvent do
       ...>     %{account_address: "account2", amount: 100, currency: :USD}
       ...>   ]}
       ...> }
-      ...> attrs = %{instance_id: Ecto.UUID.generate(), command_map: command_map}
-      iex> changeset = JournalEvent.changeset(%Command{}, attrs)
+      iex> attrs = %{instance_id: Ecto.UUID.generate(), command_map: command_map}
+      iex> changeset = JournalEvent.build_create(attrs)
       iex> changeset.valid?
       true
   """
