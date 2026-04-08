@@ -551,25 +551,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   defp process_command(
          %Command{
            command_queue_item: %{status: :processing},
-           command_map: %{"action" => "create_transaction"}
-         } = command
-       ) do
-    CreateTransactionCommand.process(command)
-  end
-
-  defp process_command(
-         %Command{
-           command_queue_item: %{status: :processing},
            command_map: %{action: :update_transaction}
-         } = command
-       ) do
-    UpdateTransactionCommand.process(command)
-  end
-
-  defp process_command(
-         %Command{
-           command_queue_item: %{status: :processing},
-           command_map: %{"action" => "update_transaction"}
          } = command
        ) do
     UpdateTransactionCommand.process(command)
