@@ -216,7 +216,7 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
       :name,
       :type,
       :currency,
-      :allowed_negative,
+      :negative_limit,
       :description,
       :normal_balance,
       :context

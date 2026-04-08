@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.Account do
   * `type`: Account classification (`:asset`, `:liability`, `:equity`, `:revenue`, `:expense`)
   * `normal_balance`: Whether the account normally increases with `:debit` or `:credit` entries
   * `available`: Calculated available balance (posted minus relevant pending)
-  * `allowed_negative`: Whether the account can have a negative available balance
+  * `negative_limit`: Maximum allowed negative balance (0 means no negative allowed)
   * `context`: JSON map for additional metadata
   * `posted`: Embedded Balance struct for settled transactions
   * `pending`: Embedded Balance struct for pending transactions
@@ -92,7 +92,7 @@ defmodule DoubleEntryLedger.Account do
   * `type`: Account classification. Can't be changed after creation
   * `normal_balance`: Default balance direction. Can't be changed after creation
   * `available`: Calculated available balance
-  * `allowed_negative`: Whether negative balances are allowed
+  * `negative_limit`: Maximum allowed negative balance (0 = no negative allowed)
   * `context`: Additional metadata as a map
   * `posted`: Balance struct for posted transactions
   * `pending`: Balance struct for pending transactions
@@ -110,7 +110,7 @@ defmodule DoubleEntryLedger.Account do
           name: String.t() | nil,
           normal_balance: Types.credit_or_debit() | nil,
           type: Types.account_type() | nil,
-          allowed_negative: boolean(),
+          negative_limit: non_neg_integer() | nil,
           available: integer(),
           posted: Balance.t() | nil,
           pending: Balance.t() | nil,
@@ -128,7 +128,7 @@ defmodule DoubleEntryLedger.Account do
     field(:name, :string)
     field(:normal_balance, Ecto.Enum, values: @credit_and_debit)
     field(:type, Ecto.Enum, values: @account_types)
-    field(:allowed_negative, :boolean, default: false)
+    field(:negative_limit, :integer, default: 0)
     field(:available, :integer, default: 0)
 
     embeds_one(:posted, Balance, on_replace: :delete)
@@ -193,10 +193,11 @@ defmodule DoubleEntryLedger.Account do
       :normal_balance,
       :type,
       :context,
-      :allowed_negative,
+      :negative_limit,
       :instance_id
     ])
     |> validate_required([:address, :currency, :instance_id, :type])
+    |> validate_number(:negative_limit, greater_than_or_equal_to: 0)
     |> validate_format(:address, @address_regex, message: "is not a valid address")
     |> validate_inclusion(:type, @account_types)
     |> set_normal_balance_based_on_type()
@@ -320,7 +321,7 @@ defmodule DoubleEntryLedger.Account do
 
   * Validates that entry and account currencies match
   * Handles various transaction types with different balance update logic
-  * Enforces non-negative balance if `allowed_negative` is false
+  * Enforces balance does not go below `-negative_limit`
   * Uses optimistic locking to prevent concurrent balance modifications
 
   ## Transaction Types
@@ -478,15 +479,25 @@ defmodule DoubleEntryLedger.Account do
 
   @spec update_available(Changeset.t()) :: Changeset.t()
   defp update_available(
-         %{data: %{allowed_negative: allowed_negative, normal_balance: nb}} = changeset
+         %{data: %{negative_limit: negative_limit, normal_balance: nb}} = changeset
        ) do
     pending = fetch_field!(changeset, :pending)
     %{amount: amount} = fetch_field!(changeset, :posted)
     available = amount - Map.get(pending, opposite_direction(nb), 0)
 
-    case !allowed_negative && available < 0 do
-      true -> add_error(changeset, :available, "amount can't be negative")
-      false -> put_change(changeset, :available, max(0, available))
+    cond do
+      negative_limit == 0 && available < 0 ->
+        add_error(changeset, :available, "amount can't be negative")
+
+      negative_limit > 0 && available < -negative_limit ->
+        add_error(
+          changeset,
+          :available,
+          "amount can't be below negative limit of -#{negative_limit}"
+        )
+
+      true ->
+        put_change(changeset, :available, available)
     end
   end
 

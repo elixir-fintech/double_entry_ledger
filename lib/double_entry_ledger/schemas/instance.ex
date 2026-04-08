@@ -170,6 +170,7 @@ defmodule DoubleEntryLedger.Instance do
     |> change()
     |> no_assoc_constraint(:transactions)
     |> no_assoc_constraint(:accounts)
+    |> foreign_key_constraint(:commands, name: "commands_instance_id_fkey")
   end
 
   @doc """

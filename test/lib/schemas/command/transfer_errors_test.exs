@@ -34,13 +34,13 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
              )
     end
 
-    test "transfers errors for allowed_negative and normal_balance" do
+    test "transfers errors for negative_limit and normal_balance" do
       account_changeset =
         Account.changeset(%Account{}, %{
           name: "A",
           type: :asset,
           currency: "USD",
-          allowed_negative: "xx",
+          negative_limit: -1,
           normal_balance: "yy"
         })
 
@@ -49,7 +49,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
           name: "A",
           type: :asset,
           currency: "USD",
-          allowed_negative: "xx",
+          negative_limit: -1,
           normal_balance: "yy"
         }
       }
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
       %{changes: %{payload: %{errors: errors}}} =
         TransferErrors.from_account_to_command_map_payload(command_map, account_changeset)
 
-      assert Keyword.has_key?(errors, :allowed_negative)
+      assert Keyword.has_key?(errors, :negative_limit)
       assert Keyword.has_key?(errors, :normal_balance)
     end
 

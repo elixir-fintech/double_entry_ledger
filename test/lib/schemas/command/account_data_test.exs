@@ -90,7 +90,7 @@ defmodule DoubleEntryLedger.Command.AccountDataTest do
         context: %{"key" => "value"},
         normal_balance: :debit,
         type: :asset,
-        allowed_negative: false
+        negative_limit: 0
       }
 
       expected_map = %{
@@ -100,7 +100,7 @@ defmodule DoubleEntryLedger.Command.AccountDataTest do
         context: %{"key" => "value"},
         normal_balance: :debit,
         type: :asset,
-        allowed_negative: false
+        negative_limit: 0
       }
 
       assert AccountData.to_map(account_data) == expected_map
@@ -114,14 +114,14 @@ defmodule DoubleEntryLedger.Command.AccountDataTest do
         context: nil,
         normal_balance: nil,
         type: :liability,
-        allowed_negative: true
+        negative_limit: 100
       }
 
       expected_map = %{
         currency: :USD,
         name: "another_name",
         type: :liability,
-        allowed_negative: true
+        negative_limit: 100
       }
 
       assert AccountData.to_map(account_data) == expected_map
