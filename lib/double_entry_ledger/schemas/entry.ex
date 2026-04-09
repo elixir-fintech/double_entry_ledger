@@ -214,7 +214,7 @@ defmodule DoubleEntryLedger.Entry do
 
   ## Returns
 
-  * An Ecto.Changeset with validations, preloaded associations, and balance updates
+  * An Ecto.Changeset with validations and balance updates
 
   ## Account Updates
 
