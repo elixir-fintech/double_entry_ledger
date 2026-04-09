@@ -99,8 +99,8 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   @doc """
   Retrieves an account by its ID.
 
-  Loads the account with its associated journal events for complete context. Returns nil
-  if the account doesn't exist.
+  Returns the account struct or nil if the account doesn't exist.
+  No associations are preloaded; use `get_by_address/2` for preloaded journal events.
 
   ## Parameters
 
@@ -108,11 +108,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   ## Returns
 
-    - `Account.t() | nil`: The account struct with preloaded journal events, or `nil` if not found.
-
-  ## Preloaded Associations
-
-    - `:journal_events` - All journal events associated with this account for audit trail access
+    - `Account.t() | nil`: The account struct, or `nil` if not found.
 
   ## Examples
 

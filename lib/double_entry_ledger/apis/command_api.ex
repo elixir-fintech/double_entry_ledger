@@ -133,7 +133,7 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
       iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
       iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> {:ok, transaction, event} = CommandApi.process_from_params(%{
+      iex> {:ok, transaction, command} = CommandApi.process_from_params(%{
       ...>   "instance_address" => instance.address,
       ...>   "action" => "create_transaction",
       ...>   "source" => "frontend",
@@ -146,12 +146,12 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
       ...>     ]
       ...>   }
       ...> })
-      iex> trx =  (event |> Repo.preload(:transaction)).transaction
+      iex> trx = (command |> Repo.preload(:transaction)).transaction
       iex> trx.id == transaction.id
       true
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:ok, _account, _event} = CommandApi.process_from_params(%{
+      iex> {:ok, _account, _command} = CommandApi.process_from_params(%{
       ...>   "instance_address" => instance.address,
       ...>   "action" => "create_account",
       ...>   "source" => "frontend",

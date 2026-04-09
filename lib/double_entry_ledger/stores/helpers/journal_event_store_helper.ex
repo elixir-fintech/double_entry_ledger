@@ -1,37 +1,21 @@
 defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   @moduledoc """
-  Helper functions for event processing in the Double Entry Ledger system.
+  Helper functions for journal event queries in the Double Entry Ledger system.
 
-  This module provides reusable utilities for working with events, focusing on common
-  operations like building changesets, retrieving related events and transactions, and
-  creating multi operations for use in Ecto transactions.
+  This module provides reusable utilities for working with journal events, focusing on common
+  operations like retrieving related journal events by source identifiers, finding transactions
+  and accounts associated with journal events, and building queries for audit trail access.
 
   ## Key Functionality
 
-  * **Changeset Building**: Create Command changesets from TransactionCommandMaps or AccountCommandMaps
-  * **Command Relationships**: Look up related events by source identifiers
-  * **Transaction Linking**: Find transactions and accounts associated with events
-  * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
-  * **Status Management**: Create changesets to update event status and error information
-
-  ## Usage Examples
-
-  Building a changeset from an CommandMap:
-
-      event_changeset = CommandStoreHelper.build_create(command_map)
-
-  Adding a step to get a create event's transaction:
-
-      multi =
-        Ecto.Multi.new()
-        |> CommandStoreHelper.build_get_create_transaction_command_transaction(:transaction, update_command)
-        |> Ecto.Multi.update(:event, fn %{transaction: transaction} ->
-          CommandStoreHelper.build_mark_as_processed(update_command, transaction.id)
-        end)
+  * **Journal Event Lookup**: Find journal events by action and source identifiers
+  * **Command Relationships**: Look up related journal events for commands
+  * **Transaction Linking**: Find transactions and accounts associated with journal events
+  * **Query Building**: Compose queries for journal events by account or transaction
 
   ## Implementation Notes
 
-  This module is primarily used internally by CommandStore and CommandWorker modules to
+  This module is primarily used internally by JournalEventStore and CommandWorker modules to
   share common functionality and reduce code duplication.
   """
   import Ecto.Query, only: [from: 2, subquery: 1, union: 2]
@@ -40,33 +24,22 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
 
   @doc """
-  Retrieves an event by its action and source identifiers with preloaded associations.
+  Retrieves a journal event by its action and source identifiers with preloaded associations.
 
-  This function looks up an event using i
-      command_map
-      |> TransactionCommandMap.to_map()
-      |> Map.put(:instance_id, instance_id)
-      |> Mts action, source system identifier,
-  source-specific identifier, and instance ID. The returned event includes preloaded
-  associations for command_queue_item, account, and transactions with their entries.
+  This function looks up a journal event using its action, source system identifier,
+  source-specific identifier, and instance ID. The returned journal event includes a
+  preloaded account association.
 
   ## Parameters
 
-    - `action`: The event action atom (e.g., `:create_transaction`, `:create_account`)
+    - `action`: The command action atom (e.g., `:create_transaction`, `:create_account`)
     - `source`: The source system identifier (e.g., "accounting_system", "api")
     - `source_idempk`: The source-specific identifier (e.g., "invoice_123", "tx_456")
-    - `instance_id`: The instance UUID that groups related events
+    - `instance_id`: The instance UUID that scopes the lookup
 
   ## Returns
 
-    - `Command.t() | nil`: The found event with preloaded associations, or nil if not found
-
-  ## Preloaded Associations
-
-  The returned event includes:
-  - `:command_queue_item` - Processing status and retry information
-  - `:account` - Associated account (for account-related events)
-  - `transactions: [entries: :account]` - Transactions with their entries and accounts
+    - `JournalEvent.t() | nil`: The found journal event with preloaded account, or nil if not found
 
   """
   @spec get_event_by(atom(), String.t(), String.t(), Ecto.UUID.t()) ::
@@ -85,20 +58,20 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   end
 
   @doc """
-  Gets the account associated with a create account event.
+  Gets the account associated with a create account command's journal event.
 
-  This function finds the original create account event corresponding to an update event
-  and returns its associated account. Used primarily when processing account update events
-  to locate the original account to modify.
+  This function finds the original create account journal event corresponding to an update
+  command and returns its associated account. Used primarily when processing account update
+  commands to locate the original account to modify.
 
   ## Parameters
 
-  * `event` - An Command struct containing source, source_idempk, and instance_id
+  * `command` - A Command struct containing source, source_idempk, and instance_id
 
   ## Returns
 
-  * `{:ok, {Account.t(), Command.t()}}` - The account and create event if found and processed
-  * Raises `UpdateCommandError` if the create event doesn't exist or isn't processed
+  * `{:ok, {Account.t(), JournalEvent.t()}}` - The account and create journal event if found
+  * Raises `UpdateCommandError` if the create journal event doesn't exist or isn't processed
 
   """
   @spec get_create_account_event_account(Command.t()) ::
