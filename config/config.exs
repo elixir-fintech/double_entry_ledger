@@ -29,7 +29,7 @@ config :double_entry_ledger, Oban,
   engine: Oban.Engines.Basic,
   queues: [double_entry_ledger: 1],
   repo: DoubleEntryLedger.Repo,
-  prefix: "double_entry_ledger"
+  prefix: "public"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

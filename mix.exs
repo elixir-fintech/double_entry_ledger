@@ -200,6 +200,9 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Repo,
           DoubleEntryLedger.RepoBehaviour,
           DoubleEntryLedger.BaseSchema
+        ],
+        Migration: [
+          DoubleEntryLedger.Migration
         ]
       ],
       before_closing_head_tag: &before_closing_head_tag/1
