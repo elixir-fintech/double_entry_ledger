@@ -98,15 +98,61 @@ Set a strong `idempotency_secret` — it is used to hash incoming keys. Set `sta
 
 ### 3. Run the migrations
 
-Copy the migrations in `priv/repo/migrations` into your host application (adjust timestamps to keep ordering), create the schema if necessary, and migrate:
+#### Fresh install (recommended)
 
 ```bash
-cp -R deps/double_entry_ledger/priv/repo/migrations/*.exs priv/repo/migrations/
-mix ecto.create
+mix double_entry_ledger.install
 mix ecto.migrate
 ```
 
-The migrations create the ledger schema, instances, accounts, transactions, entries, commands, command queue items, pending transaction lookup, journal events and links, idempotency keys, and Oban jobs.
+This generates a migration file for the core ledger tables.
+
+#### Upgrading from v0.1.0
+
+If you previously copied migration files from v0.1.0, generate an upgrade
+migration instead:
+
+```bash
+mix double_entry_ledger.install --from 1
+mix ecto.migrate
+```
+
+This applies only the schema changes since v0.1.0 (FK constraint fixes and
+`negative_limit` replacing `allowed_negative`).
+
+**Oban note:** v0.1.0 included an Oban migration (`2500_add_oban_jobs_table.exs`)
+bundled with the core migrations. Your existing copied migration continues to
+work — leave it in place.
+
+#### Manual migration
+
+Create a migration and call the migration module directly:
+
+```elixir
+defmodule MyApp.Repo.Migrations.SetupDoubleEntryLedger do
+  use Ecto.Migration
+
+  def up, do: DoubleEntryLedger.Migration.up()
+  def down, do: DoubleEntryLedger.Migration.down()
+end
+```
+
+See `DoubleEntryLedger.Migration` docs for all options (`:version`, `:from`,
+`:prefix`).
+
+### 4. Set up Oban
+
+The package uses Oban for background processing but does **not** ship its own
+Oban migration — this avoids locking you to a specific Oban version. Ensure
+Oban is installed and migrated in your application
+([Oban installation guide](https://hexdocs.pm/oban/installation.html)), then
+add the `double_entry_ledger` queue to your Oban config:
+
+```elixir
+config :my_app, Oban,
+  repo: MyApp.Repo,
+  queues: [default: 10, double_entry_ledger: 5]
+```
 
 ## Quickstart
 
