@@ -75,7 +75,7 @@ defmodule DoubleEntryLedger.MixProject do
     [
       test: ["ecto.create --quiet", "ecto.migrate", "test"],
       tidewave:
-        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4020) end)'",
+        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4000) end)'",
       sec: ["sobelow", "deps.audit"]
     ]
   end
