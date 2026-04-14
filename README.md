@@ -87,14 +87,9 @@ config :double_entry_ledger, :command_queue,
   max_retry_delay: 3_600,
   processor_name: "command_queue"
 
-config :double_entry_ledger, Oban,
-  repo: DoubleEntryLedger.Repo,
-  prefix: "double_entry_ledger",
-  engine: Oban.Engines.Basic,
-  queues: [double_entry_ledger: 5]
 ```
 
-Set a strong `idempotency_secret` — it is used to hash incoming keys. Set `start_command_queue: false` to disable background processing (useful in test or when embedding the ledger without the queue). `max_retries` and `retry_interval` are read at runtime, so they can be changed without recompilation. Production systems should override the repo credentials, command queue settings, and Oban concurrency.
+Set a strong `idempotency_secret` — it is used to hash incoming keys. Set `start_command_queue: false` to disable background processing (useful in test or when embedding the ledger without the queue). `max_retries` and `retry_interval` are read at runtime, so they can be changed without recompilation. Production systems should override the repo credentials and command queue settings. For Oban configuration, see [step 4](#4-set-up-oban).
 
 ### 3. Run the migrations
 
