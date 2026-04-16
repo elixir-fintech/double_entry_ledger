@@ -50,7 +50,7 @@ Every command requires a `source` and `source_idempk` (plus `update_idempk` for 
 ```elixir
 def deps do
   [
-    {:double_entry_ledger, "~> 0.2.0"}
+    {:double_entry_ledger, "~> 0.3.0"}
   ]
 end
 ```

@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.MixProject do
   def project do
     [
       app: :double_entry_ledger,
-      version: "0.2.0",
+      version: "0.3.0",
       description: """
         DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engine for Elixir and PostgreSQL.
       """,
@@ -76,7 +76,7 @@ defmodule DoubleEntryLedger.MixProject do
     [
       test: ["ecto.create --quiet", "ecto.migrate", "test"],
       tidewave:
-        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4020) end)'",
+        "run --no-halt -e 'port = String.to_integer(System.get_env(\"PORT\", \"4000\")); Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: port) end)'",
       sec: ["sobelow", "deps.audit"]
     ]
   end
