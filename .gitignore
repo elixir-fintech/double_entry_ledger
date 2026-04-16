@@ -28,3 +28,4 @@ double_entry_ledger-*.tar
 # elixir language server folders
 .elixir_ls/
 .expert/
+.envrc
