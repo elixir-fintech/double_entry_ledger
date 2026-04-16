@@ -71,7 +71,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   import DoubleEntryLedger.Utils.Pagination
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Command, PendingTransactionLookup}
+  alias DoubleEntryLedger.{Repo, Command, PendingTransactionLookup, Telemetry}
   alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
@@ -165,6 +165,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
          end)
          |> Repo.transaction() do
       {:ok, %{command: command}} ->
+        emit_enqueue(attrs, command)
         {:ok, command}
 
       {:error, :pending_transaction_lookup, _, _} ->
@@ -182,9 +183,22 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
            build_create(attrs, id)
          end)
          |> Repo.transaction() do
-      {:ok, %{command: command}} -> {:ok, command}
-      {:error, :command, changeset, _changes} -> {:error, changeset}
+      {:ok, %{command: command}} ->
+        emit_enqueue(attrs, command)
+        {:ok, command}
+
+      {:error, :command, changeset, _changes} ->
+        {:error, changeset}
     end
+  end
+
+  defp emit_enqueue(attrs, command) do
+    Telemetry.command_enqueue(%{
+      action: attrs.action,
+      instance_id: command.instance_id,
+      source: attrs.source,
+      trace_context: command.trace_context
+    })
   end
 
   @doc """

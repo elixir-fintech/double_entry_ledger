@@ -169,7 +169,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
     quote do
       @behaviour DoubleEntryLedger.Occ.Processor
 
-      alias DoubleEntryLedger.Repo
+      alias DoubleEntryLedger.{Repo, Telemetry}
       alias Ecto.Multi
       import DoubleEntryLedger.Occ.Helper
       import DoubleEntryLedger.CommandQueue.Scheduling
@@ -296,6 +296,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
         case repo.transaction(multi) do
           {:error, :transaction, %Ecto.StaleEntryError{}, steps_so_far} ->
+            Telemetry.occ_retry(occ_retry_metadata(module, occable_item, attempts - 1))
+
             new_error_map = update_error_map(error_map, attempts, steps_so_far)
 
             if attempts > 1, do: set_delay_timer(attempts)
@@ -339,6 +341,32 @@ defmodule DoubleEntryLedger.Occ.Processor do
             module.handle_occ_final_timeout(occable_item, repo)
         end)
         |> repo.transaction()
+      end
+
+      defp occ_retry_metadata(module, %Command{} = command, attempts_remaining) do
+        %{
+          module: module,
+          attempts_remaining: attempts_remaining,
+          command_id: command.id,
+          instance_id: command.instance_id,
+          action: command.command_map.action,
+          source: command.command_map.source,
+          source_idempk: command.command_map.source_idempk,
+          trace_context: command.trace_context
+        }
+      end
+
+      defp occ_retry_metadata(module, command_map, attempts_remaining) do
+        %{
+          module: module,
+          attempts_remaining: attempts_remaining,
+          command_id: nil,
+          instance_id: nil,
+          action: command_map.action,
+          source: command_map.source,
+          source_idempk: command_map.source_idempk,
+          trace_context: command_map.trace_context
+        }
       end
 
       defoverridable build_transaction: 4,

@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
   to ensure consistency when concurrent operations are taking place.
   """
   import Ecto.Query, only: [from: 2]
-  alias DoubleEntryLedger.{Instance, Repo, Account}
+  alias DoubleEntryLedger.{Instance, Repo, Account, Telemetry}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @doc """
@@ -71,9 +71,16 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
   """
   @spec create(map()) :: {:ok, Instance.t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) do
-    %Instance{}
-    |> Instance.changeset(attrs)
-    |> Repo.insert()
+    case %Instance{}
+         |> Instance.changeset(attrs)
+         |> Repo.insert() do
+      {:ok, instance} = result ->
+        Telemetry.instance_created(%{instance_id: instance.id})
+        result
+
+      error ->
+        error
+    end
   end
 
   def list_all do

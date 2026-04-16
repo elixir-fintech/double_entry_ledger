@@ -48,6 +48,7 @@ defmodule DoubleEntryLedger.MixProject do
       {:logger_json, "~> 7.0"},
       {:jason, "~> 1.4"},
       {:oban, "~> 2.19"},
+      {:telemetry_metrics, "~> 1.0", optional: true},
 
       # dev and test deps
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -75,7 +76,7 @@ defmodule DoubleEntryLedger.MixProject do
     [
       test: ["ecto.create --quiet", "ecto.migrate", "test"],
       tidewave:
-        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4000) end)'",
+        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4020) end)'",
       sec: ["sobelow", "deps.audit"]
     ]
   end
@@ -102,6 +103,7 @@ defmodule DoubleEntryLedger.MixProject do
         "pages/AsynchronousEventProcessing.md",
         "pages/HandlingPendingTransactions.md",
         "pages/EventSourcing.md",
+        "pages/Telemetry.md",
         "LICENSE"
       ],
       groups_for_modules: [
@@ -180,6 +182,9 @@ defmodule DoubleEntryLedger.MixProject do
         ],
         Oban: [
           DoubleEntryLedger.Workers.Oban.JournalEventLinks
+        ],
+        Telemetry: [
+          DoubleEntryLedger.Telemetry
         ],
         "Types, Utils and Logger": [
           DoubleEntryLedger.EntryHelper,
