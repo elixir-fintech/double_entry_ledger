@@ -9,6 +9,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   alias DoubleEntryLedger.{Account, Balance, Instance, Repo}
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Command.TransactionCommandMap
+  alias DoubleEntryLedger.LoadTesting.TelemetryCollector
   @destination_accounts 10
   # Function to run a single transaction process
 
@@ -35,6 +36,9 @@ defmodule DoubleEntryLedger.LoadTesting do
 
     IO.puts("Running load test with #{bold(to_string(concurrency))} concurrent transaction(s)")
     IO.puts("#{bold("Before:")} #{validate_instance_balance(instance)}")
+
+    TelemetryCollector.start()
+
     start_time = System.monotonic_time(:millisecond)
     # Run time in milliseconds
     end_time = start_time + 1000 * seconds
@@ -56,6 +60,10 @@ defmodule DoubleEntryLedger.LoadTesting do
 
     IO.puts("Transactions processed in #{seconds} second(s): #{successful_transactions}")
     IO.puts("Transactions per second: #{successful_transactions / seconds} tps")
+
+    TelemetryCollector.print_summary()
+    TelemetryCollector.stop()
+
     validate_instance_balance(instance)
     IO.puts("#{bold("After:")} #{validate_instance_balance(instance)}")
   end
