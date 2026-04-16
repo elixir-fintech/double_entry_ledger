@@ -5,6 +5,10 @@ defprotocol DoubleEntryLedger.Utils.Traceable do
   Implementations focus on command-centric structs (commands and command maps) while accepting
   related domain entities or errors to enrich the metadata. Keys are prefixed with `event_*`
   for backward compatibility with existing log consumers, but values describe command activity.
+
+  The metadata includes a `trace_context` field that propagates the consumer-supplied
+  distributed tracing context (e.g. W3C traceparent/tracestate) into Logger metadata,
+  enabling correlation with upstream request spans.
   """
   @spec metadata(t()) :: map()
   def metadata(schema)
@@ -27,6 +31,7 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command do
       status: command_queue_item.status,
       action: Map.get(command_map, :action),
       source: Map.get(command_map, :source),
+      trace_context: command.trace_context,
       trace_id:
         [
           Map.get(command_map, :source),
@@ -86,6 +91,7 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Accoun
       instance_address: Map.get(command_map, :instance_address),
       action: Map.get(command_map, :action),
       source: Map.get(command_map, :source),
+      trace_context: command_map.trace_context,
       trace_id:
         [
           Map.get(command_map, :source),
@@ -124,6 +130,7 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command.Transa
       instance_address: Map.get(command_map, :instance_address),
       action: Map.get(command_map, :action),
       source: Map.get(command_map, :source),
+      trace_context: command_map.trace_context,
       trace_id:
         [
           Map.get(command_map, :source),
@@ -162,6 +169,8 @@ defimpl DoubleEntryLedger.Utils.Traceable, for: Map do
         Map.get(command_map, :instance_address) || Map.get(command_map, "instance_address"),
       action: Map.get(command_map, :action) || Map.get(command_map, "action"),
       source: Map.get(command_map, :source) || Map.get(command_map, "source"),
+      trace_context:
+        Map.get(command_map, :trace_context) || Map.get(command_map, "trace_context"),
       trace_id:
         [
           Map.get(command_map, :source) || Map.get(command_map, "source"),

@@ -81,6 +81,71 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMapTest do
     end
   end
 
+  describe "trace_context" do
+    test "changeset accepts optional trace_context map" do
+      attrs =
+        command_map_attrs(%{
+          trace_context: %{"traceparent" => "00-abc123", "tracestate" => "vendor=xyz"}
+        })
+
+      changeset = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+      assert changeset.valid?
+
+      assert Changeset.get_field(changeset, :trace_context) == %{
+               "traceparent" => "00-abc123",
+               "tracestate" => "vendor=xyz"
+             }
+    end
+
+    test "changeset rejects trace_context with more than 10 keys" do
+      large_context =
+        0..10
+        |> Enum.map(fn i -> {"key_#{i}", "value_#{i}"} end)
+        |> Map.new()
+
+      attrs = command_map_attrs(%{trace_context: large_context})
+
+      changeset = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+      refute changeset.valid?
+      assert {"must have at most 10 keys", _} = changeset.errors[:trace_context]
+    end
+
+    test "changeset rejects trace_context with nested maps" do
+      attrs = command_map_attrs(%{trace_context: %{"parent" => %{"nested" => "value"}}})
+
+      changeset = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+      refute changeset.valid?
+      assert {"values must be strings", _} = changeset.errors[:trace_context]
+    end
+
+    test "changeset valid without trace_context" do
+      attrs = command_map_attrs()
+
+      changeset = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+      assert changeset.valid?
+      assert Changeset.get_field(changeset, :trace_context) == nil
+    end
+
+    test "trace_context included in to_map when present" do
+      {:ok, command_map} =
+        TransactionCommandMap.create(
+          command_map_attrs(%{
+            trace_context: %{"traceparent" => "00-abc123"}
+          })
+        )
+
+      map = TransactionCommandMap.to_map(command_map)
+      assert map.trace_context == %{"traceparent" => "00-abc123"}
+    end
+
+    test "trace_context excluded from to_map when nil" do
+      {:ok, command_map} = TransactionCommandMap.create(command_map_attrs())
+
+      map = TransactionCommandMap.to_map(command_map)
+      refute Map.has_key?(map, :trace_context)
+    end
+  end
+
   def command_map_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{

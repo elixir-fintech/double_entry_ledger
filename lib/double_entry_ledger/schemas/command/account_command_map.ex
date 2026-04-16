@@ -37,6 +37,12 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
       # Convert to map for serialization
       map_data = AccountCommandMap.to_map(command_map)
 
+  ## Optional Fields
+
+  * `trace_context` - Vendor-neutral distributed tracing context map
+    (e.g. `%{"traceparent" => "00-...", "tracestate" => "..."}`). Must be a flat
+    string-valued map with at most `:max_trace_context_keys` keys (default 10).
+
   ## Validation
 
   The module validates:
@@ -79,6 +85,8 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
       validate_required: 2,
       validate_inclusion: 3
     ]
+
+  import DoubleEntryLedger.Utils.Changeset, only: [validate_trace_context: 1]
 
   import DoubleEntryLedger.Command.Helper,
     only: [
@@ -125,6 +133,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
           instance_address: String.t(),
           account_address: String.t() | nil,
           source: String.t(),
+          trace_context: map() | nil,
           payload: AccountData.t()
         }
 
@@ -136,6 +145,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
     field(:instance_address, :string)
     field(:account_address, :string)
     field(:source, :string)
+    field(:trace_context, :map)
 
     embeds_one(:payload, AccountData, on_replace: :delete)
   end
@@ -283,11 +293,13 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
     |> cast(attrs, [
       :action,
       :instance_address,
-      :source
+      :source,
+      :trace_context
     ])
     |> validate_required([:action, :instance_address, :source])
     |> validate_format(:source, source_regex())
     |> validate_inclusion(:action, @actions)
+    |> validate_trace_context()
   end
 
   def update_changeset(struct, attrs) do
@@ -305,6 +317,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
       instance_address: Map.get(command_map, :instance_address),
       account_address: Map.get(command_map, :account_address),
       source: Map.get(command_map, :source),
+      trace_context: Map.get(command_map, :trace_context),
       payload: AccountData.to_map(Map.get(command_map, :payload))
     }
     |> Map.reject(fn {_, v} -> is_nil(v) end)

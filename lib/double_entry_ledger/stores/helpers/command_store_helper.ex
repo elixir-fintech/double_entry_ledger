@@ -63,7 +63,8 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
     %Command{}
     |> Command.changeset(%{
       instance_id: instance_id,
-      command_map: TransactionCommandMap.to_map(command_map)
+      command_map: TransactionCommandMap.to_map(command_map),
+      trace_context: command_map.trace_context
     })
   end
 
@@ -71,7 +72,8 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
     %Command{}
     |> Command.changeset(%{
       instance_id: instance_id,
-      command_map: AccountCommandMap.to_map(command_map)
+      command_map: AccountCommandMap.to_map(command_map),
+      trace_context: command_map.trace_context
     })
   end
 
