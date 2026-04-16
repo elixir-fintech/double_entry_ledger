@@ -34,6 +34,9 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   * `source_idempk`: Primary identifier from the source system (used for idempotency)
   * `update_idempk`: Unique identifier for update operations, enabling multiple distinct updates
      to the same original transaction while maintaining idempotency
+  * `trace_context`: Optional map of vendor-neutral distributed tracing context
+     (e.g. `%{"traceparent" => "00-...", "tracestate" => "..."}`). Must be a flat
+     string-valued map with at most `:max_trace_context_keys` keys (default 10).
   * `payload`: Embedded TransactionData containing entries and transaction details
 
   ## Key Functions
@@ -126,6 +129,8 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
       validate_format: 3
     ]
 
+  import DoubleEntryLedger.Utils.Changeset, only: [validate_trace_context: 1]
+
   alias DoubleEntryLedger.Command.TransactionData
   alias Ecto.Changeset
 
@@ -149,6 +154,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   * `source_data`: Optional metadata from the source system (default: `%{}`)
   * `source_idempk`: Primary identifier used for idempotency
   * `update_idempk`: Unique identifier for update operations to maintain idempotency
+  * `trace_context`: Optional vendor-neutral distributed tracing context map
 
   ## Transaction-Specific Field
 
@@ -174,6 +180,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
           source_idempk: String.t(),
           update_idempk: String.t() | nil,
           update_source: String.t() | nil,
+          trace_context: map() | nil,
           payload: TransactionData.t()
         }
 
@@ -198,6 +205,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
     field(:source_idempk, :string)
     field(:update_idempk, :string)
     field(:update_source, :string)
+    field(:trace_context, :map)
     embeds_one(:payload, TransactionData, on_replace: :delete)
   end
 
@@ -361,12 +369,14 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
       :action,
       :instance_address,
       :source,
-      :source_idempk
+      :source_idempk,
+      :trace_context
     ])
     |> validate_required([:action, :instance_address, :source, :source_idempk])
     |> validate_format(:source, ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/)
     |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
     |> validate_inclusion(:action, @actions)
+    |> validate_trace_context()
   end
 
   def update_changeset(struct, attrs) do
@@ -385,6 +395,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
       source_idempk: Map.get(command_map, :source_idempk),
       update_idempk: Map.get(command_map, :update_idempk),
       update_source: Map.get(command_map, :update_source),
+      trace_context: Map.get(command_map, :trace_context),
       payload: TransactionData.to_map(Map.get(command_map, :payload))
     }
     |> Map.reject(fn {_, v} -> is_nil(v) end)

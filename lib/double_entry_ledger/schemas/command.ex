@@ -33,6 +33,9 @@ defmodule DoubleEntryLedger.Command do
 
   * `id`: UUID primary key
   * `command_map`: map containing the command payload
+  * `trace_context`: optional map of vendor-neutral distributed tracing context
+    (e.g. W3C traceparent/tracestate). Stored in its own column for independent
+    access. The library never interprets the contents.
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
   * `inserted_at`: Creation timestamp
@@ -41,6 +44,7 @@ defmodule DoubleEntryLedger.Command do
   @type t :: %Command{
           id: Ecto.UUID.t() | nil,
           command_map: map() | nil,
+          trace_context: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           journal_event_command_link:
@@ -57,6 +61,7 @@ defmodule DoubleEntryLedger.Command do
 
   schema "commands" do
     field(:command_map, CommandMap, skip_default_validation: true)
+    field(:trace_context, :map)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_one(:journal_event_command_link, JournalEventCommandLink)
@@ -173,7 +178,8 @@ defmodule DoubleEntryLedger.Command do
     command
     |> cast(attrs, [
       :instance_id,
-      :command_map
+      :command_map,
+      :trace_context
     ])
     |> validate_required([:instance_id, :command_map])
     |> cast_assoc(:command_queue_item, with: &CommandQueueItem.changeset/2, required: true)

@@ -14,9 +14,16 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
     "source_idempk" => String.t(),
     "update_idempk" => String.t() | nil,
     "update_source" => String.t() | nil,
+    "trace_context" => map() | nil,
     "payload" => map()
   }
   ```
+
+  The optional `"trace_context"` field accepts a flat string-valued map of
+  vendor-neutral distributed tracing headers (e.g. W3C traceparent/tracestate).
+  It is persisted on the command and propagated through Logger metadata.
+  The library does not index this column — consumers who need to query by
+  trace context should add their own index (e.g. a GIN index on the JSONB column).
 
   Use `create_from_params/1` to enqueue commands for asynchronous processing or
   `process_from_params/2` to run the full worker pipeline synchronously.

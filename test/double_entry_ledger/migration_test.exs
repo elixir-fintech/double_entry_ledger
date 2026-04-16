@@ -4,8 +4,8 @@ defmodule DoubleEntryLedger.MigrationTest do
   alias DoubleEntryLedger.Migration
 
   describe "latest_version/0" do
-    test "returns 2" do
-      assert Migration.latest_version() == 2
+    test "returns 3" do
+      assert Migration.latest_version() == 3
     end
   end
 end

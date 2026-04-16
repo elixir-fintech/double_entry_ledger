@@ -10,7 +10,9 @@ config :double_entry_ledger,
   schema_prefix: "double_entry_ledger",
   start_command_queue: true,
   # set this for test and development
-  idempotency_secret: "lskfdjsdkfjsdkj"
+  idempotency_secret: "lskfdjsdkfjsdkj",
+  # maximum number of keys allowed in the trace_context map
+  max_trace_context_keys: 10
 
 # Event queue configuration
 config :double_entry_ledger, :command_queue,

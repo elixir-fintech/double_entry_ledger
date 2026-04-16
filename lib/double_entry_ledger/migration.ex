@@ -27,6 +27,9 @@ defmodule DoubleEntryLedger.Migration do
 
     * Version 1 — initial schema (v0.1.0)
     * Version 2 — FK constraint fixes, `negative_limit` replaces `allowed_negative`
+    * Version 3 — `trace_context` JSONB column on commands for distributed tracing.
+      The column is not indexed — consumers who need to query by trace context
+      should add their own index.
 
   New consumers use `up()` which applies all versions. Existing consumers
   upgrading from v0.1.0 use the `:from` option to skip already-applied versions:
@@ -56,7 +59,7 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  @latest_version 2
+  @latest_version 3
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -82,7 +85,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 2 and version >= 2, do: v2_up(prefix)
+    if from < 2 and version >= 2 do
+      v2_up(prefix)
+      flush()
+    end
+
+    if from < 3 and version >= 3, do: v3_up(prefix)
 
     :ok
   end
@@ -101,6 +109,11 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 3 and version < 3 do
+      v3_down(prefix)
+      flush()
+    end
 
     if from >= 2 and version < 2 do
       v2_down(prefix)
@@ -239,6 +252,20 @@ defmodule DoubleEntryLedger.Migration do
       modify(:instance_id, references(:instances, on_delete: :restrict, type: :binary_id),
         null: false
       )
+    end
+  end
+
+  # ── Version 3: trace_context on commands ────────────────────────────
+
+  defp v3_up(prefix) do
+    alter table(:commands, prefix: prefix) do
+      add(:trace_context, :map, null: true)
+    end
+  end
+
+  defp v3_down(prefix) do
+    alter table(:commands, prefix: prefix) do
+      remove(:trace_context)
     end
   end
 
