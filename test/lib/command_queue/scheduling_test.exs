@@ -4,6 +4,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   """
   use ExUnit.Case, async: true
   import Mox
+  import ExUnit.CaptureLog
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.CommandFixtures
@@ -107,6 +108,19 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert command_queue_item.changes.processing_completed_at != nil
       assert Ecto.Changeset.get_field(command_queue_item, :next_retry_after) == nil
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
+    end
+
+    test "logs at error level when dead-lettering", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      log =
+        capture_log([level: :error], fn ->
+          Scheduling.build_mark_as_dead_letter(command, "Terminal failure")
+        end)
+
+      assert log =~ "dead-lettering command #{command.id}"
+      assert log =~ "Terminal failure"
     end
   end
 
