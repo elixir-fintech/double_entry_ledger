@@ -125,7 +125,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   alias DoubleEntryLedger.{
     Command,
     Transaction,
-    Account
+    Account,
+    Telemetry
   }
 
   alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
@@ -298,11 +299,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   @spec process_new_command(TransactionCommandMap.t()) ::
           success_tuple() | error_tuple()
   def process_new_command(%TransactionCommandMap{action: :create_transaction} = command_map) do
-    CreateTransactionCommandMap.process(command_map)
+    Telemetry.command_process_span(span_metadata(command_map), fn ->
+      CreateTransactionCommandMap.process(command_map)
+    end)
   end
 
   def process_new_command(%TransactionCommandMap{action: :update_transaction} = command_map) do
-    UpdateTransactionCommandMap.process(command_map)
+    Telemetry.command_process_span(span_metadata(command_map), fn ->
+      UpdateTransactionCommandMap.process(command_map)
+    end)
   end
 
   def process_new_command(_command_map), do: {:error, :action_not_supported}
@@ -408,25 +413,33 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   def process_new_command_no_save_on_error(
         %TransactionCommandMap{action: :create_transaction} = command_map
       ) do
-    CreateTransactionCommandMapNoSaveOnError.process(command_map)
+    Telemetry.command_process_span(span_metadata(command_map), fn ->
+      CreateTransactionCommandMapNoSaveOnError.process(command_map)
+    end)
   end
 
   def process_new_command_no_save_on_error(
         %TransactionCommandMap{action: :update_transaction} = command_map
       ) do
-    UpdateTransactionCommandMapNoSaveOnError.process(command_map)
+    Telemetry.command_process_span(span_metadata(command_map), fn ->
+      UpdateTransactionCommandMapNoSaveOnError.process(command_map)
+    end)
   end
 
   def process_new_command_no_save_on_error(
         %AccountCommandMap{action: :create_account} = command_map
       ) do
-    CreateAccountCommandMapNoSaveOnError.process(command_map)
+    Telemetry.command_process_span(span_metadata(command_map), fn ->
+      CreateAccountCommandMapNoSaveOnError.process(command_map)
+    end)
   end
 
   def process_new_command_no_save_on_error(
         %AccountCommandMap{action: :update_account} = command_map
       ) do
-    UpdateAccountCommandMapNoSaveOnError.process(command_map)
+    Telemetry.command_process_span(span_metadata(command_map), fn ->
+      UpdateAccountCommandMapNoSaveOnError.process(command_map)
+    end)
   end
 
   def process_new_command_no_save_on_error(_command_map), do: {:error, :action_not_supported}
@@ -530,7 +543,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   def process_command_with_id(uuid, processor_id \\ "manual") do
     case claim_command_for_processing(uuid, processor_id) do
       {:ok, command} ->
-        process_command(command)
+        Telemetry.command_process_span(span_metadata(command), fn ->
+          process_command(command)
+        end)
 
       {:error, error} ->
         {:error, error}
@@ -580,4 +595,22 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   end
 
   defp process_command(%Command{} = _command), do: {:error, :command_not_in_processing_state}
+
+  defp span_metadata(%Command{command_map: command_map} = command) do
+    %{
+      action: Map.get(command_map, :action) || Map.get(command_map, "action"),
+      instance_id: command.instance_id,
+      source: Map.get(command_map, :source) || Map.get(command_map, "source"),
+      trace_context: command.trace_context
+    }
+  end
+
+  defp span_metadata(%{action: action, source: source, trace_context: trace_context}) do
+    %{
+      action: action,
+      instance_id: nil,
+      source: source,
+      trace_context: trace_context
+    }
+  end
 end

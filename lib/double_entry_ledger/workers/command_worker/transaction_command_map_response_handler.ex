@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
   alias DoubleEntryLedger.Occ.Occable
   alias DoubleEntryLedger.Command.{TransactionCommandMap, IdempotencyKey}
 
-  alias DoubleEntryLedger.{Command, Transaction}
+  alias DoubleEntryLedger.{Command, Transaction, Telemetry}
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @doc """
@@ -71,11 +71,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
     case response do
       {:ok, %{transaction: transaction, command_success: event}} ->
         info("Processed successfully", event, transaction)
+        Telemetry.emit_transaction(transaction, command_map.trace_context)
 
         {:ok, transaction, event}
 
       {:error, :idempotency, %Changeset{data: %IdempotencyKey{}} = changeset, _} ->
         error("Idempotency violation", command_map, changeset)
+
+        Telemetry.command_idempotency_hit(%{
+          action: command_map.action,
+          instance_id: nil,
+          source: command_map.source,
+          source_idempk: command_map.source_idempk,
+          trace_context: command_map.trace_context
+        })
 
         {:error, from_idempotency_key_to_command_map(command_map, changeset)}
 

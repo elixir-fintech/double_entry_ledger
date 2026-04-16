@@ -43,7 +43,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
   alias Ecto.{Multi, Changeset}
   alias DoubleEntryLedger.Occ.Occable
 
-  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.{Command, Telemetry}
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @doc """
@@ -63,6 +63,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
     case response do
       {:ok, %{command_success: event, transaction: transaction}} ->
         info("Processed successfully", event, transaction)
+        Telemetry.emit_transaction(transaction, original_event.trace_context)
 
         {:ok, transaction, event}
 

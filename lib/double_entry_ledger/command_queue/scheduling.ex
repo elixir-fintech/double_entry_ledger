@@ -17,6 +17,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   """
 
   require Logger
+  alias DoubleEntryLedger.Telemetry
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
 
@@ -103,8 +104,25 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
       %{command_queue_item: %{status: state} = eqi} = command when state in @processable_states ->
         try do
-          Command.processing_start_changeset(command, processor_id, retry_count_by_status(eqi))
-          |> repo.update()
+          case Command.processing_start_changeset(
+                 command,
+                 processor_id,
+                 retry_count_by_status(eqi)
+               )
+               |> repo.update() do
+            {:ok, claimed} = result ->
+              Telemetry.command_claim(%{
+                command_id: claimed.id,
+                instance_id: claimed.instance_id,
+                processor_id: processor_id,
+                trace_context: claimed.trace_context
+              })
+
+              result
+
+            error ->
+              error
+          end
         rescue
           Ecto.StaleEntryError ->
             {:error, :command_already_claimed}
@@ -193,6 +211,14 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         "Max retry count (#{@max_retries}) exceeded: #{error || status}"
       )
     else
+      Telemetry.command_retry(%{
+        command_id: command.id,
+        instance_id: command.instance_id,
+        status: status,
+        retry_count: retry_count,
+        trace_context: command.trace_context
+      })
+
       # Calculate next retry time with exponential backoff
       retry_delay = calculate_retry_delay(retry_count)
 
@@ -255,6 +281,13 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   @spec build_mark_as_dead_letter(Command.t(), String.t()) :: Changeset.t()
   def build_mark_as_dead_letter(%{command_queue_item: command_queue_item} = command, error) do
     Logger.error("dead-lettering command #{command.id}: #{error}")
+
+    Telemetry.command_dead_letter(%{
+      command_id: command.id,
+      instance_id: command.instance_id,
+      error: error,
+      trace_context: command.trace_context
+    })
 
     command_queue_changeset =
       command_queue_item

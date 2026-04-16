@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.Command.AccountCommandMap
-  alias DoubleEntryLedger.{Command, Account}
+  alias DoubleEntryLedger.{Command, Account, Telemetry}
 
   @typedoc """
   Success response tuple containing the processed account and associated event.
@@ -101,6 +101,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
     case response do
       {:ok, %{account: account, command_success: event}} ->
         info("Processed successfully", event, account)
+        Telemetry.emit_account(account, command_map.trace_context)
 
         {:ok, account, event}
 

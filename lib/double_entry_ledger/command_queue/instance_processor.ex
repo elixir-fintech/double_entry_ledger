@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   use GenServer
   require Logger
 
-  alias DoubleEntryLedger.{Repo, Command}
+  alias DoubleEntryLedger.{Repo, Command, Telemetry}
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.CommandStore
@@ -64,6 +64,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   @impl true
   def init(%{instance_id: instance_id, worker: worker}) do
     Logger.info("Starting command processor for instance #{instance_id}")
+    Telemetry.instance_processor_start(%{instance_id: instance_id})
     # Schedule immediate processing
     send(self(), :process_next)
 
@@ -89,6 +90,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
       nil ->
         # No more commands to process, terminate
         Logger.info("No more commands to process for instance #{instance_id}, shutting down")
+        Telemetry.instance_processor_stop(%{instance_id: instance_id})
         {:stop, :normal, state}
 
       command ->
