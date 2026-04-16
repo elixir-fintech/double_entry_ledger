@@ -16,6 +16,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   * Jitter to prevent thundering herd problems during retries
   """
 
+  require Logger
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
 
@@ -253,6 +254,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   """
   @spec build_mark_as_dead_letter(Command.t(), String.t()) :: Changeset.t()
   def build_mark_as_dead_letter(%{command_queue_item: command_queue_item} = command, error) do
+    Logger.error("dead-lettering command #{command.id}: #{error}")
+
     command_queue_changeset =
       command_queue_item
       |> CommandQueueItem.dead_letter_changeset(error)
