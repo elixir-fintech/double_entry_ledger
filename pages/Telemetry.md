@@ -262,18 +262,78 @@ Duration metrics use `unit: {:native, :millisecond}` for human-readable display.
 
 ## Writing Custom Handlers
 
-To attach a custom handler for any event, use `:telemetry.attach/4` at
-application boot:
+The library emits events and stops there. Anything beyond metrics — alerts,
+external notifications, audit streams — is the consumer's responsibility.
+Attach a handler to the event you care about and do whatever you need in it.
+
+### Example: dead-letter alert handler
+
+Send a PagerDuty alert whenever a command is dead-lettered:
 
 ```elixir
-:telemetry.attach(
-  "my-ledger-handler",
-  [:double_entry_ledger, :command, :dead_letter],
-  &MyApp.Alerts.on_dead_letter/4,
-  nil
-)
+# lib/my_app/ledger_alerts.ex
+defmodule MyApp.LedgerAlerts do
+  @moduledoc "Turns DoubleEntryLedger telemetry events into operational alerts."
+
+  require Logger
+  alias MyApp.TaskSupervisor
+
+  @events [
+    [:double_entry_ledger, :command, :dead_letter],
+    [:double_entry_ledger, :command, :process, :exception]
+  ]
+
+  @handler_id "my_app-ledger-alerts"
+
+  def attach do
+    :telemetry.attach_many(@handler_id, @events, &__MODULE__.handle_event/4, %{})
+  end
+
+  def detach, do: :telemetry.detach(@handler_id)
+
+  def handle_event([:double_entry_ledger, :command, :dead_letter], _meas, metadata, _config) do
+    # Handlers run in the emitting process, so offload blocking work.
+    Task.Supervisor.start_child(TaskSupervisor, fn ->
+      MyApp.PagerDuty.trigger(
+        severity: :high,
+        summary: "Ledger command dead-lettered",
+        command_id: metadata.command_id,
+        error: metadata.error
+      )
+    end)
+  end
+
+  def handle_event([:double_entry_ledger, :command, :process, :exception], _meas, metadata, _config) do
+    Logger.error("ledger command raised", metadata)
+  end
+end
 ```
 
-The handler function signature is `handler(event_name, measurements, metadata, config)`.
-If your handler raises, `:telemetry` automatically detaches it — handler
-failures never affect the emitting code.
+Wire it up at application boot:
+
+```elixir
+# lib/my_app/application.ex
+def start(_type, _args) do
+  children = [
+    {Task.Supervisor, name: MyApp.TaskSupervisor}
+    # ... your other children
+  ]
+
+  MyApp.LedgerAlerts.attach()
+
+  Supervisor.start_link(children, strategy: :one_for_one, name: MyApp.Supervisor)
+end
+```
+
+### Things to know
+
+- The handler signature is `(event_name, measurements, metadata, config)`.
+- Use `attach_many/4` for multiple events — one handler_id, one function.
+- Namespace the handler_id with your app name to avoid collisions with other
+  libraries that may attach their own handlers.
+- **Handlers run synchronously in the process that emitted the event.** Any
+  blocking call (HTTP, SMTP, slow DB write) will block the ledger's work.
+  Spawn a supervised task for external I/O.
+- If a handler raises, `:telemetry` automatically detaches it — a broken
+  handler will not be called again, but it also won't crash the emitter.
+  Wrap risky work in `try/rescue` if you need the handler to remain attached.
