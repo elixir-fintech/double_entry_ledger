@@ -1,76 +1,53 @@
 defmodule DoubleEntryLedger.Stores.JournalEventStore do
   @moduledoc """
-  Provides functions for managing events in the double-entry ledger system.
+  Provides read-only queries over journal events in the double-entry ledger system.
 
-  This module serves as the primary interface for all event-related operations, including
-  creating, retrieving, processing, and querying events. It manages the complete lifecycle
-  of events from creation through processing to completion or failure.
+  Journal events are immutable, append-only records emitted as a side effect of
+  successful command processing. They are the audit trail for state changes in the
+  ledger (account creation, transaction creation, transaction updates). This module
+  exposes paginated queries for retrieving journal events by instance, account, or
+  transaction scope.
 
   ## Key Functionality
 
-    * **Command Management**: Create, retrieve, and track events.
-    * **Command Processing**: Claim events for processing, mark events as processed or failed.
-    * **Command Queries**: Find events by instance, transaction ID, account ID, or other criteria.
-    * **Error Handling**: Track and manage errors that occur during event processing.
+    * **Journal Event Retrieval**: Look up individual journal events by ID.
+    * **Scoped Journal Event Queries**: List events for an instance, account, or
+      transaction, with cursor pagination via `Flop`.
+    * **Account-Create Event Lookup**: Fetch the `:create_account` event for a given
+      account (useful for surfacing provenance metadata).
 
   ## Usage Examples
 
-  ### Creating and processing a new event
-  Events can be created and processed immediately or queued for asynchronous processing.
-  If the event is processed immediately, it will create the associated transaction
-  and update the event status. If the event processing fails, it will be queued and retried.
+  ### Producing journal events
 
-      event_params = %{
-        "instance_id" => instance.id,
-        "action" => "create_transaction",
-        "source" => "payment_system",
-        "source_idempk" => "txn_123",
-        "payload" => %{
-          "status" => "pending",
-          "entries" => [
-            %{"account_id" => cash_account.id, "amount" => 100_00, "currency" => "USD"},
-            %{"account_id" => revenue_account.id, "amount" => 100_00, "currency" => "USD"}
-          ]
-        }
-      }
-
-      # create and process the event immediately
-      {:ok, transaction, event} = DoubleEntryLedger.Apis.CommandApi.process_from_params(event_params)
-
-      # create event for asynchronous processing later
-      {:ok, event} = DoubleEntryLedger.Stores.CommandStore.create(event_params)
+  Journal events are emitted automatically when a command is processed successfully.
+  They are not created directly — use the command pipeline (see
+  `DoubleEntryLedger.Apis.CommandApi` or `DoubleEntryLedger.Stores.CommandStore`) to
+  produce events.
 
   ### Retrieving events for an instance
 
-      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_instance(instance.id)
+      {:ok, {events, meta}} = DoubleEntryLedger.Stores.JournalEventStore.list_for_instance(instance.id)
 
   ### Retrieving events for a transaction
 
-      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_transaction(transaction.id)
+      {:ok, {events, meta}} = DoubleEntryLedger.Stores.JournalEventStore.list_for_transaction(transaction.id)
 
   ### Retrieving events for an account
 
-      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_account(account.id)
-
-  ### Process event without saving it in the CommandStore on error
-  If you want more control over error handling, you can process an event without saving it
-  in the CommandStore on error. This allows you to handle the event processing logic
-  without automatically persisting the event, which can be useful for debugging or custom error handling.
-
-      {:ok, transaction, event} = DoubleEntryLedger.Apis.CommandApi.process_from_params(event_params, [on_error: :fail])
+      {:ok, {events, meta}} = DoubleEntryLedger.Stores.JournalEventStore.list_for_account(account.id)
 
   ## Implementation Notes
 
-  - The module implements optimistic concurrency control for event claiming and processing,
-    ensuring that events are processed exactly once even in high-concurrency environments.
-  - All queries are paginated and ordered by insertion time descending for efficient retrieval.
-  - Error handling is explicit, with clear return values for all failure modes.
+  - All list queries return `{:ok, {events, Flop.Meta.t()}}` on success and
+    `{:error, Flop.Meta.t()}` when the supplied params fail validation.
+  - Queries preload commonly joined associations (`:account`, `:transaction`) to
+    avoid N+1 access patterns in callers.
   """
   import Ecto.Query
   import DoubleEntryLedger.Stores.JournalEventStoreHelper
-  import DoubleEntryLedger.Utils.Pagination
 
-  alias DoubleEntryLedger.{Repo, Command, JournalEvent, Account}
+  alias DoubleEntryLedger.{Account, Command, Instance, JournalEvent, Repo, Transaction}
   alias DoubleEntryLedger.Stores.AccountStore
 
   @doc """
@@ -105,47 +82,49 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
   end
 
   @doc """
-  Lists events for a specific instance with pagination.
+  Lists journal events for an instance with cursor pagination via Flop.
+
+  Accepts either an `%Instance{}` struct or its UUID string. Preloads `:account`
+  and `:transaction` on each event.
 
   ## Parameters
-    - `instance_id`: ID of the instance to list events for
-    - `page`: Page number for pagination (defaults to 1)
-    - `per_page`: Number of events per page (defaults to 40)
+
+    - `instance_or_id` (`Instance.t() | Ecto.UUID.t()`): Parent instance.
+    - `flop_params` (map, optional): Flop params. No filterable fields (JSONB `command_map` filtering deferred).
 
   ## Returns
-    - List of Command structs, ordered by insertion time descending
+
+    - `{:ok, {[JournalEvent.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
 
   ## Examples
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :posted,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> length(JournalEventStore.list_all_for_instance_id(instance.id))
+      iex> {:ok, a1} = AccountStore.create(instance.address, account_data, "u1")
+      iex> {:ok, a2} = AccountStore.create(instance.address, %{account_data | address: "Liab:Account", type: :liability}, "u2")
+      iex> create_attrs = %{status: :posted, entries: [
+      ...>   %{account_address: a1.address, amount: 100, currency: :USD},
+      ...>   %{account_address: a2.address, amount: 100, currency: :USD}]}
+      iex> {:ok, _} = TransactionStore.create(instance.address, create_attrs, "idem-je-a")
+      iex> {:ok, {events, %Flop.Meta{}}} = JournalEventStore.list_for_instance(instance)
+      iex> # 2 :create_account events (one per AccountStore.create) + 1 :create_transaction event
+      iex> length(events)
       3
-      iex> # test pagination
-      iex> length(JournalEventStore.list_all_for_instance_id(instance.id, 2, 2))
-      1
-
   """
-  @spec list_all_for_instance_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(JournalEvent.t())
-  def list_all_for_instance_id(instance_id, page \\ 1, per_page \\ 40) do
+  @spec list_for_instance(Instance.t() | Ecto.UUID.t(), map()) ::
+          {:ok, {[JournalEvent.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_instance(instance_or_id, flop_params \\ %{})
+
+  def list_for_instance(%Instance{id: id}, flop_params),
+    do: list_for_instance(id, flop_params)
+
+  def list_for_instance(id, flop_params) when is_binary(id) do
     from(e in JournalEvent,
-      where: e.instance_id == ^instance_id,
-      order_by: [desc: e.inserted_at],
-      select: e
+      where: e.instance_id == ^id,
+      preload: [:account, :transaction]
     )
-    |> paginate(page, per_page)
-    |> preload([:account, :transaction])
-    |> Repo.all()
+    |> Flop.validate_and_run(flop_params, for: JournalEvent)
   end
 
   @doc """
@@ -177,126 +156,119 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
   end
 
   @doc """
-  Lists all events associated with a specific account using the Account id.
+  Lists journal events for an account with cursor pagination via Flop.
+
+  Accepts either an `%Account{}` struct or its UUID string. Preloads `:account`.
 
   ## Parameters
-    - `account_id`: ID of the account to list events for
+
+    - `account_or_id` (`Account.t() | Ecto.UUID.t()`): Scoping account.
+    - `flop_params` (map, optional): Flop params.
 
   ## Returns
-    - List of Command structs, ordered by insertion time descending
+
+    - `{:ok, {[JournalEvent.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
 
   ## Examples
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :posted,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_id(asset_account.id)
-      iex> length(events)
-      2
-      iex> acc_event.command_map.action
-      :create_account
-      iex> trx_event.command_map.action
-      :create_transaction
-
-      iex> JournalEventStore.list_all_for_account_id(Ecto.UUID.generate())
-      []
-
+      iex> {:ok, a1} = AccountStore.create(instance.address, account_data, "u1")
+      iex> {:ok, _a2} = AccountStore.create(instance.address, %{account_data | address: "Liab:Account", type: :liability}, "u2")
+      iex> {:ok, {events, %Flop.Meta{}}} = JournalEventStore.list_for_account(a1)
+      iex> Enum.map(events, & &1.command_map.action)
+      [:create_account]
   """
-  @spec list_all_for_account_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Command.t())
-  def list_all_for_account_id(account_id, page \\ 1, per_page \\ 40) do
-    all_processed_events_for_account_id(account_id)
-    |> paginate(page, per_page)
+  @spec list_for_account(Account.t() | Ecto.UUID.t(), map()) ::
+          {:ok, {[JournalEvent.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_account(account_or_id, flop_params \\ %{})
+
+  def list_for_account(%Account{id: id}, flop_params),
+    do: list_for_account(id, flop_params)
+
+  def list_for_account(id, flop_params) when is_binary(id) do
+    all_processed_events_for_account_id(id)
+    |> exclude(:order_by)
     |> preload([:account])
-    |> Repo.all()
+    |> Flop.validate_and_run(flop_params, for: JournalEvent)
   end
 
   @doc """
-  Lists all events associated with a specific account using the Account address
+  Lists journal events for an account identified by (instance_address, account_address)
+  with cursor pagination.
+
+  Returns an empty first page if the pair does not resolve to an existing account.
 
   ## Parameters
-    - `instance_address`: Address if the instance the account is on
-    - `address`: Address of the account to list events for
+
+    - `instance_address` (`String.t()`): Address of the parent instance.
+    - `account_address` (`String.t()`): Address of the scoping account.
+    - `flop_params` (map, optional): Flop params.
 
   ## Returns
-    - List of Command structs, ordered by insertion time descending
+
+    - `{:ok, {[JournalEvent.t()], Flop.Meta.t()}}` on success (empty page if the pair is unknown).
+    - `{:error, Flop.Meta.t()}` on invalid params.
 
   ## Examples
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :posted,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> [trx_event, acc_event | _] = events = JournalEventStore.list_all_for_account_address(instance.address, liability_account.address)
-      iex> length(events)
-      2
-      iex> acc_event.command_map.action
-      :create_account
-      iex> trx_event.command_map.action
-      :create_transaction
-
-      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> JournalEventStore.list_all_for_account_address(instance.address, "nonexistent")
-
-      iex> JournalEventStore.list_all_for_account_address("nonexistent", "nonexistent")
-      []
-
+      iex> {:ok, {[], %Flop.Meta{}}} = JournalEventStore.list_for_account_address(instance.address, "no:such:account")
   """
-  @spec list_all_for_account_address(String.t(), String.t()) :: list(Command.t())
-  def list_all_for_account_address(instance_address, address) do
-    case AccountStore.get_by_address(instance_address, address) do
-      %Account{id: id} -> list_all_for_account_id(id)
-      _ -> []
+  @spec list_for_account_address(String.t(), String.t(), map()) ::
+          {:ok, {[JournalEvent.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_account_address(instance_address, account_address, flop_params \\ %{}) do
+    case AccountStore.get_by_address(instance_address, account_address) do
+      %Account{id: id} ->
+        list_for_account(id, flop_params)
+
+      _ ->
+        from(e in JournalEvent, where: false)
+        |> Flop.validate_and_run(flop_params, for: JournalEvent)
     end
   end
 
   @doc """
-  Lists all events associated with a specific transaction.
+  Lists journal events for a transaction with cursor pagination via Flop.
+
+  Accepts either a `%Transaction{}` struct or its UUID string.
 
   ## Parameters
-    - `transaction_id`: ID of the transaction to list events for
+
+    - `transaction_or_id` (`Transaction.t() | Ecto.UUID.t()`): Scoping transaction.
+    - `flop_params` (map, optional): Flop params.
 
   ## Returns
-    - List of Command structs, ordered by insertion time descending
+
+    - `{:ok, {[JournalEvent.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
 
   ## Examples
 
-      iex> alias DoubleEntryLedger.Stores.{JournalEventStore, AccountStore, InstanceStore, TransactionStore}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :pending,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
-      iex> length(JournalEventStore.list_all_for_transaction_id(id))
+      iex> {:ok, a1} = AccountStore.create(instance.address, account_data, "u1")
+      iex> {:ok, a2} = AccountStore.create(instance.address, %{account_data | address: "Liab:Account", type: :liability}, "u2")
+      iex> attrs = %{status: :pending, entries: [
+      ...>   %{account_address: a1.address, amount: 100, currency: :USD},
+      ...>   %{account_address: a2.address, amount: 100, currency: :USD}]}
+      iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, attrs, "idem-je-b")
+      iex> TransactionStore.update(instance.address, id, %{status: :posted}, "idem-je-b")
+      iex> {:ok, {events, %Flop.Meta{}}} = JournalEventStore.list_for_transaction(id)
+      iex> length(events)
       2
   """
-  @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Command.t())
-  def list_all_for_transaction_id(transaction_id) do
-    base_transaction_query(transaction_id)
-    |> order_by(desc: :inserted_at)
-    |> Repo.all()
+  @spec list_for_transaction(Transaction.t() | Ecto.UUID.t(), map()) ::
+          {:ok, {[JournalEvent.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_transaction(transaction_or_id, flop_params \\ %{})
+
+  def list_for_transaction(%Transaction{id: id}, flop_params),
+    do: list_for_transaction(id, flop_params)
+
+  def list_for_transaction(id, flop_params) when is_binary(id) do
+    base_transaction_query(id)
+    |> Flop.validate_and_run(flop_params, for: JournalEvent)
   end
 
   @doc """
