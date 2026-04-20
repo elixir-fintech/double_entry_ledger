@@ -36,11 +36,11 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   Retrieving accounts for an instance:
 
-      {:ok, accounts} = DoubleEntryLedger.Stores.AccountStore.get_all_accounts_by_instance_address(instance.address)
+      {:ok, {accounts, _meta}} = DoubleEntryLedger.Stores.AccountStore.list_for_instance_address(instance.address)
 
   Accessing an account's balance history:
 
-      {:ok, history} = DoubleEntryLedger.Stores.AccountStore.get_balance_history(account.id)
+      {:ok, {history, _meta}} = DoubleEntryLedger.Stores.AccountStore.list_balance_history(account)
 
   ## Implementation Notes
 
@@ -64,8 +64,6 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   import Ecto.Query, only: [from: 2]
 
-  import DoubleEntryLedger.Utils.Pagination, only: [paginate: 3]
-
   alias DoubleEntryLedger.Command.AccountCommandMap
   alias DoubleEntryLedger.Apis.CommandApi
   alias DoubleEntryLedger.Utils.Currency
@@ -74,9 +72,9 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   alias DoubleEntryLedger.{
     Repo,
     Account,
+    Instance,
     Types,
-    BalanceHistoryEntry,
-    Entry
+    BalanceHistoryEntry
   }
 
   @type create_map() :: %{
@@ -330,118 +328,89 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   end
 
   @doc """
-  Retrieves an account's balance history by its ID with pagination support.
+  Lists accounts for a ledger instance with cursor pagination.
 
-  Returns a paginated list of balance history entries showing how the account's
-  balance has changed over time. Each entry includes the associated transaction
-  ID for complete traceability.
+  Accepts either an `%Instance{}` struct or its UUID string.
 
   ## Parameters
 
-    - `id` (Ecto.UUID.t()): The unique ID of the account.
-    - `page` (non_neg_integer(), optional): The page number for pagination (default: 1).
-    - `per_page` (non_neg_integer(), optional): The number of entries per page (default: 40).
+    - `instance_or_id` (`Instance.t() | Ecto.UUID.t()`): Parent instance or its id.
+    - `flop_params` (map, optional): Flop params. Filterable fields: `:type`, `:currency`, `:address`.
 
   ## Returns
 
-    - `{:ok, list(BalanceHistoryEntry)}`: A list of balance history entries on success.
-    - `{:error, message}`: If the account is not found.
+    - `{:ok, {[Account.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
 
   ## Examples
 
-      iex> {:ok, %{address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", currency: :EUR, type: :asset}
-      iex> {:ok, account} = AccountStore.create(instance_address, attrs, "unique_id_123")
-      iex> {:ok, balance_history} = AccountStore.get_balance_history_by_id(account.id)
-      iex> is_list(balance_history)
-      true
-
-      iex> {:ok, %{id: instance_id}} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:error, :account_not_found} = AccountStore.get_balance_history_by_id(instance_id)
+      iex> {:ok, %{address: instance_address} = instance} = InstanceStore.create(%{address: "Sample:Instance"})
+      iex> attrs = %{address: "account:main1", currency: :EUR, type: :asset}
+      iex> {:ok, _} = AccountStore.create(instance_address, attrs, "unique_id_123")
+      iex> {:ok, {[account], %Flop.Meta{}}} = AccountStore.list_for_instance(instance)
+      iex> account.address
+      "account:main1"
 
   """
-  @spec get_balance_history_by_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          {:ok, list(BalanceHistoryEntry.t())} | {:error, :account_not_found}
-  def get_balance_history_by_id(id, page \\ 1, per_page \\ 40) do
-    case get_by_id(id) do
-      nil -> {:error, :account_not_found}
-      account -> get_balance_history_by_account(account, page, per_page)
-    end
+  @spec list_for_instance(Instance.t() | Ecto.UUID.t(), map()) ::
+          {:ok, {[Account.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_instance(instance_or_id, flop_params \\ %{})
+
+  def list_for_instance(%Instance{id: id}, flop_params), do: list_for_instance(id, flop_params)
+
+  def list_for_instance(id, flop_params) when is_binary(id) do
+    from(a in Account, where: a.instance_id == ^id)
+    |> Flop.validate_and_run(flop_params, for: Account)
   end
 
   @doc """
-  Retrieves an account's balance history by its address within a specific instance, with pagination support.
+  Lists accounts for the instance with the given human-readable address.
 
-  Returns a paginated list of balance history entries showing how the account's
-  balance has changed over time. Each entry includes the associated transaction
-  ID for complete traceability.
-
-  ## Parameters
-
-    - `instance_address` (String.t()): The address of the instance.
-    - `account_address` (String.t()): The address of the account within the instance.
-    - `page` (non_neg_integer(), optional): The page number for pagination (default: 1).
-    - `per_page` (non_neg_integer(), optional): The number of entries per page (default: 40).
-
-  ## Returns
-
-    - `{:ok, list(BalanceHistoryEntry)}`: A list of balance history entries on success.
-    - `{:error, message}`: If the account is not found.
-
-  ## Examples
-
-      iex> {:ok, %{address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", currency: :EUR, type: :asset}
-      iex> {:ok, account} = AccountStore.create(instance_address, attrs, "unique_id_123")
-      iex> {:ok, balance_history} = AccountStore.get_balance_history_by_address(instance_address, account.address)
-      iex> is_list(balance_history)
-      true
-
-      iex> {:ok, %{address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:error, :account_not_found} = AccountStore.get_balance_history_by_address(instance_address, "nonexistent_account")
-
+  Returns an empty first page when the instance address does not exist, so callers
+  don't need to branch on existence separately from the pagination meta.
   """
-  @spec get_balance_history_by_address(
-          String.t(),
-          String.t(),
-          non_neg_integer(),
-          non_neg_integer()
-        ) ::
-          {:ok, list(BalanceHistoryEntry.t())} | {:error, :account_not_found}
-  def get_balance_history_by_address(instance_address, account_address, page \\ 1, per_page \\ 40) do
-    case get_by_address(instance_address, account_address) do
-      nil -> {:error, :account_not_found}
-      account -> get_balance_history_by_account(account, page, per_page)
-    end
+  @spec list_for_instance_address(String.t(), map()) ::
+          {:ok, {[Account.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_instance_address(instance_address, flop_params \\ %{}) do
+    from(a in Account,
+      join: i in assoc(a, :instance),
+      where: i.address == ^instance_address
+    )
+    |> Flop.validate_and_run(flop_params, for: Account)
   end
 
-  @spec get_balance_history_by_account(Account.t(), non_neg_integer(), non_neg_integer()) ::
-          {:ok, list(BalanceHistoryEntry.t())}
-  def get_balance_history_by_account(%Account{id: id}, page \\ 1, per_page \\ 40) do
-    {:ok,
-     Repo.all(
-       from(b in BalanceHistoryEntry,
-         where: b.account_id == ^id,
-         left_join: e in Entry,
-         on: b.entry_id == e.id,
-         select:
-           merge(
-             map(b, [
-               :id,
-               :account_id,
-               :entry_id,
-               :available,
-               :posted,
-               :pending,
-               :inserted_at,
-               :updated_at
-             ]),
-             %{transaction_id: e.transaction_id}
-           ),
-         order_by: [desc: b.inserted_at]
-       )
-       |> paginate(page, per_page)
-     )}
+  @doc """
+  Lists an account's balance history with cursor pagination.
+
+  Accepts either an `%Account{}` struct or its UUID string.
+  """
+  @spec list_balance_history(Account.t() | Ecto.UUID.t(), map()) ::
+          {:ok, {[BalanceHistoryEntry.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_balance_history(account_or_id, flop_params \\ %{})
+
+  def list_balance_history(%Account{id: id}, flop_params),
+    do: list_balance_history(id, flop_params)
+
+  def list_balance_history(id, flop_params) when is_binary(id) do
+    from(b in BalanceHistoryEntry, where: b.account_id == ^id)
+    |> Flop.validate_and_run(flop_params, for: BalanceHistoryEntry)
+  end
+
+  @doc """
+  Lists an account's balance history by instance+account address with cursor pagination.
+
+  Returns an empty first page when the (instance_address, account_address) pair does
+  not resolve to an existing account.
+  """
+  @spec list_balance_history_by_address(String.t(), String.t(), map()) ::
+          {:ok, {[BalanceHistoryEntry.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_balance_history_by_address(instance_address, account_address, flop_params \\ %{}) do
+    from(b in BalanceHistoryEntry,
+      join: a in assoc(b, :account),
+      join: i in assoc(a, :instance),
+      where: i.address == ^instance_address and a.address == ^account_address
+    )
+    |> Flop.validate_and_run(flop_params, for: BalanceHistoryEntry)
   end
 
   @doc """
@@ -519,123 +488,9 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
     |> handle_accounts_by_instance_id_queries(length(account_addresses))
   end
 
-  @doc """
-  Retrieves accounts by instance ID and account type.
-
-  ## Parameters
-
-    - `instance_id` (Ecto.UUID.t()): The ID of the instance.
-    - `type` (Types.account_type()): The type of the accounts.
-
-  ## Returns
-
-    - `{:ok, accounts}`: On success.
-    - `{:error, message}`: If no accounts of the specified type were found.
-
-  ## Examples
-
-      iex> {:ok, %{address: instance_address, id: instance_id}} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", currency: :EUR, type: :asset}
-      iex> {:ok, _} = AccountStore.create(instance_address, attrs, "unique_id_123")
-      iex> {:ok, _} = AccountStore.create(instance_address, %{attrs | address: "account:main2", name: "Account 2"}, "unique_id_456")
-      iex> {:ok, _} = AccountStore.create(instance_address, %{attrs | address: "account:main3", name: "Account 3", type: :liability}, "unique_id_789")
-      iex> {:ok, accounts} = AccountStore.get_accounts_by_instance_id_and_type(instance_id, :asset)
-      iex> length(accounts)
-      2
-
-  """
-  @spec get_accounts_by_instance_id_and_type(Ecto.UUID.t(), Types.account_type()) ::
-          {:ok, list(Account.t())}
-          | {:error, :no_accounts_found_for_provided_type}
-  def get_accounts_by_instance_id_and_type(instance_id, type) do
-    from(a in Account,
-      where: a.instance_id == ^instance_id and a.type == ^type
-    )
-    |> handle_accounts_by_instance_id_queries(0)
-  end
-
-  @doc """
-  Retrieves all accounts by instance ID.
-
-  ## Parameters
-
-    - `instance_address` (String.t()): The address of the instance.
-
-  ## Returns
-
-    - `{:ok, accounts}`: On success.
-    - `{:error, message}`: If no accounts were found.
-
-  ## Examples
-
-      iex> {:ok, %{address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:ok, %{address: instance_address2}} = InstanceStore.create(%{address: "Sample:Instance2"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", currency: :EUR, type: :asset}
-      iex> {:ok, _} = AccountStore.create(instance_address, attrs, "unique_id_123")
-      iex> {:ok, _} = AccountStore.create(instance_address, %{attrs | address: "account:main2", name: "Account 2"}, "unique_id_456")
-      iex> {:ok, _} = AccountStore.create(instance_address, %{attrs | address: "account:main3", name: "Account 3"}, "unique_id_789")
-      iex> {:ok, _} = AccountStore.create(instance_address2, %{attrs | address: "account:main3", name: "Account 3"}, "unique_id_101")
-      iex> {:ok, accounts} = AccountStore.get_all_accounts_by_instance_address(instance_address)
-      iex> length(accounts)
-      3
-
-  """
-  @spec get_all_accounts_by_instance_address(String.t()) ::
-          {:ok, list(Account.t())} | {:error, :no_accounts_found}
-  def get_all_accounts_by_instance_address(instance_address) do
-    from(a in Account,
-      join: i in assoc(a, :instance),
-      where: i.address == ^instance_address,
-      select: a
-    )
-    |> handle_accounts_by_instance_id_queries(0)
-  end
-
-  @doc """
-  Retrieves all accounts by instance ID.
-
-  ## Parameters
-
-    - `instance_id` (Ecto.UUID.t()): The ID of the instance.
-
-  ## Returns
-
-    - `{:ok, accounts}`: On success.
-    - `{:error, message}`: If no accounts were found.
-
-  ## Examples
-
-      iex> {:ok, %{id: instance_id, address: instance_address}} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> {:ok, %{address: instance_address2}} = InstanceStore.create(%{address: "Sample:Instance2"})
-      iex> attrs = %{name: "Test Account", address: "account:main1", currency: :EUR, type: :asset}
-      iex> {:ok, _} = AccountStore.create(instance_address, attrs, "unique_id_123")
-      iex> {:ok, _} = AccountStore.create(instance_address, %{attrs | address: "account:main2", name: "Account 2"}, "unique_id_456")
-      iex> {:ok, _} = AccountStore.create(instance_address, %{attrs | address: "account:main3", name: "Account 3"}, "unique_id_789")
-      iex> {:ok, _} = AccountStore.create(instance_address2, %{attrs | address: "account:main3", name: "Account 3"}, "unique_id_101")
-      iex> {:ok, accounts} = AccountStore.get_all_accounts_by_instance_id(instance_id)
-      iex> length(accounts)
-      3
-
-  """
-  @spec get_all_accounts_by_instance_id(Ecto.UUID.t()) ::
-          {:ok, list(Account.t())} | {:error, :no_accounts_found}
-  def get_all_accounts_by_instance_id(instance_id) do
-    from(a in Account,
-      where: a.instance_id == ^instance_id
-    )
-    |> handle_accounts_by_instance_id_queries(0)
-  end
-
   @spec handle_accounts_by_instance_id_queries(Ecto.Query.t(), non_neg_integer()) ::
           {:ok, list(Account.t())}
           | {:error, :no_accounts_found | :some_accounts_not_found}
-  defp handle_accounts_by_instance_id_queries(query, 0) do
-    case get_accounts(query) do
-      [] -> {:error, :no_accounts_found}
-      accounts -> {:ok, accounts}
-    end
-  end
-
   defp handle_accounts_by_instance_id_queries(query, input_length) do
     accounts = get_accounts(query)
 
