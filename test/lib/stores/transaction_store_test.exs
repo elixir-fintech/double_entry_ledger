@@ -117,4 +117,113 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
                |> Repo.transaction()
     end
   end
+
+  describe "list_for_instance/2" do
+    setup [:create_instance, :create_accounts]
+
+    test "returns transactions for the instance", %{instance: instance, accounts: [a1, a2 | _]} do
+      attrs = %{
+        status: :posted,
+        entries: [
+          %{account_address: a1.address, amount: 100, currency: :EUR},
+          %{account_address: a2.address, amount: 100, currency: :EUR}
+        ]
+      }
+
+      {:ok, trx} = TransactionStore.create(instance.address, attrs, "idem-1")
+
+      assert {:ok, {[%{id: id}], %Flop.Meta{}}} = TransactionStore.list_for_instance(instance)
+      assert id == trx.id
+    end
+
+    test "accepts UUID string for scope arg", %{instance: instance, accounts: [a1, a2 | _]} do
+      attrs = %{
+        status: :posted,
+        entries: [
+          %{account_address: a1.address, amount: 100, currency: :EUR},
+          %{account_address: a2.address, amount: 100, currency: :EUR}
+        ]
+      }
+
+      {:ok, _} = TransactionStore.create(instance.address, attrs, "idem-2")
+
+      {:ok, {by_struct, _}} = TransactionStore.list_for_instance(instance)
+      {:ok, {by_id, _}} = TransactionStore.list_for_instance(instance.id)
+
+      assert Enum.map(by_struct, & &1.id) == Enum.map(by_id, & &1.id)
+    end
+
+    test "filters by status", %{instance: instance, accounts: [a1, a2 | _]} do
+      pending_attrs = %{
+        status: :pending,
+        entries: [
+          %{account_address: a1.address, amount: 10, currency: :EUR},
+          %{account_address: a2.address, amount: 10, currency: :EUR}
+        ]
+      }
+
+      posted_attrs = %{pending_attrs | status: :posted}
+
+      {:ok, pending} = TransactionStore.create(instance.address, pending_attrs, "idem-p")
+      {:ok, _posted} = TransactionStore.create(instance.address, posted_attrs, "idem-x")
+
+      assert {:ok, {[%{id: id}], _meta}} =
+               TransactionStore.list_for_instance(instance, %{
+                 filters: [%{field: :status, op: :==, value: :pending}]
+               })
+
+      assert id == pending.id
+    end
+
+    test "rejects non-allow-listed filter", %{instance: instance} do
+      assert {:error, %Flop.Meta{errors: errors}} =
+               TransactionStore.list_for_instance(instance, %{
+                 filters: [%{field: :instance_id, op: :==, value: instance.id}]
+               })
+
+      refute errors == []
+    end
+  end
+
+  describe "list_for_instance_and_account/3" do
+    setup [:create_instance, :create_accounts]
+
+    test "returns tuples for the scoped account", ctx do
+      %{instance: inst, accounts: [a1, a2 | _]} = ctx
+      attrs = %{
+        status: :posted,
+        entries: [
+          %{account_address: a1.address, amount: 100, currency: :EUR},
+          %{account_address: a2.address, amount: 100, currency: :EUR}
+        ]
+      }
+
+      {:ok, _} = TransactionStore.create(inst.address, attrs, "idem-t")
+
+      assert {:ok, {[{trx, acc, _entry, bh}], %Flop.Meta{}}} =
+               TransactionStore.list_for_instance_and_account(inst, a1)
+
+      assert acc.id == a1.id
+      assert trx.instance_id == inst.id
+      assert bh.available == 100
+    end
+
+    test "accepts UUID strings for both scope args", ctx do
+      %{instance: inst, accounts: [a1, a2 | _]} = ctx
+      attrs = %{
+        status: :posted,
+        entries: [
+          %{account_address: a1.address, amount: 100, currency: :EUR},
+          %{account_address: a2.address, amount: 100, currency: :EUR}
+        ]
+      }
+
+      {:ok, _} = TransactionStore.create(inst.address, attrs, "idem-u")
+
+      {:ok, {via_struct, _}} = TransactionStore.list_for_instance_and_account(inst, a1)
+      {:ok, {via_id, _}} = TransactionStore.list_for_instance_and_account(inst.id, a1.id)
+
+      assert length(via_struct) == length(via_id)
+    end
+  end
 end

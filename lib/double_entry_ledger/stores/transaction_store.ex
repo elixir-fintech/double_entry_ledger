@@ -17,22 +17,24 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   Getting transactions for an instance:
 
-      transactions = DoubleEntryLedger.Stores.TransactionStore.list_all_for_instance(instance.id)
+      {:ok, {transactions, meta}} = DoubleEntryLedger.Stores.TransactionStore.list_for_instance(instance.id)
 
-  Getting transactions for an account in an instance:
+  Getting transactions for an account in an instance (each element is a
+  `{Transaction, Account, Entry, BalanceHistoryEntry}` tuple):
 
-      transactions = DoubleEntryLedger.Stores.TransactionStore.list_all_for_instance_and_account(instance.id, account.id)
+      {:ok, {tuples, meta}} =
+        DoubleEntryLedger.Stores.TransactionStore.list_for_instance_and_account(instance.id, account.id)
+      # tuples is e.g. [{%Transaction{}, %Account{}, %Entry{}, %BalanceHistoryEntry{}}, ...]
 
   """
   import Ecto.Query
-
-  import DoubleEntryLedger.Utils.Pagination, only: [paginate: 3]
 
   alias DoubleEntryLedger.Utils.Currency
 
   alias DoubleEntryLedger.{
     Account,
     Entry,
+    Instance,
     Repo,
     Transaction,
     BalanceHistoryEntry
@@ -229,176 +231,114 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
   end
 
   @doc """
-  Lists all transactions for a given instance.
-  The output is paginated.
+  Lists transactions for an instance with cursor pagination.
+
+  Accepts an `%Instance{}` struct or its UUID string.
 
   ## Parameters
 
-    - `instance_id` - The UUID of the instance.
-    - `page` - The page number (defaults to 1).
-    - `per_page` - The number of transactions per page (defaults to 40).
+    - `instance_or_id` (`Instance.t() | Ecto.UUID.t()`): Parent instance or its id.
+    - `flop_params` (map, optional): Flop params. Filterable: `:status`.
 
   ## Returns
 
-    - A list of transactions.
+    - `{:ok, {[Transaction.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
 
   ## Examples
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :posted,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> {:ok, transaction} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> [trx|_] = TransactionStore.list_all_for_instance_id(instance.id)
-      iex> trx.id == transaction.id && trx.status == :posted
-      true
-
-      iex> TransactionStore.list_all_for_instance_id(Ecto.UUID.generate(), 2, 10)
-      []
-
-      iex> TransactionStore.list_all_for_instance_id(Ecto.UUID.generate(), 0, 1)
-      []
-
-      iex> TransactionStore.list_all_for_instance_id(Ecto.UUID.generate(), 1, 0)
-      []
+      iex> {:ok, a1} = AccountStore.create(instance.address, account_data, "u1")
+      iex> {:ok, a2} = AccountStore.create(instance.address, %{account_data | address: "Liab:Account", type: :liability}, "u2")
+      iex> attrs = %{status: :posted, entries: [
+      ...>   %{account_address: a1.address, amount: 100, currency: :USD},
+      ...>   %{account_address: a2.address, amount: 100, currency: :USD}]}
+      iex> {:ok, _} = TransactionStore.create(instance.address, attrs, "idem-1")
+      iex> {:ok, {[trx], %Flop.Meta{}}} = TransactionStore.list_for_instance(instance)
+      iex> trx.status
+      :posted
   """
-  @spec list_all_for_instance_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Transaction.t())
-  def list_all_for_instance_id(instance_id, page \\ 1, per_page \\ 40)
+  @spec list_for_instance(Instance.t() | Ecto.UUID.t(), map()) ::
+          {:ok, {[Transaction.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_instance(instance_or_id, flop_params \\ %{})
 
-  def list_all_for_instance_id(_instance_id, page, per_page) when page < 1 or per_page < 1,
-    do: []
+  def list_for_instance(%Instance{id: id}, flop_params),
+    do: list_for_instance(id, flop_params)
 
-  def list_all_for_instance_id(instance_id, page, per_page) do
+  def list_for_instance(id, flop_params) when is_binary(id) do
+    from(t in Transaction, where: t.instance_id == ^id)
+    |> Flop.validate_and_run(flop_params, for: Transaction)
+  end
+
+  @doc """
+  Lists transactions for an instance address with cursor pagination.
+
+  ## Parameters
+
+    - `instance_address` (`String.t()`): Address of the parent instance.
+    - `flop_params` (map, optional): Flop params. Filterable: `:status`.
+
+  ## Returns
+
+    - `{:ok, {[Transaction.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
+  """
+  @spec list_for_instance_address(String.t(), map()) ::
+          {:ok, {[Transaction.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_instance_address(instance_address, flop_params \\ %{}) do
     from(t in Transaction,
-      where: t.instance_id == ^instance_id,
-      select: t,
-      order_by: [desc: t.inserted_at]
+      join: i in assoc(t, :instance),
+      where: i.address == ^instance_address
     )
-    |> paginate(page, per_page)
-    |> Repo.all()
+    |> Flop.validate_and_run(flop_params, for: Transaction)
   end
 
   @doc """
-  Lists all transactions for a given instance address. The output is paginated.
+  Lists transactions scoped to an instance+account, returning tuples of
+  `{Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()}` where
+  the `BalanceHistoryEntry` is the latest history row for each entry (via a
+  lateral join).
+
+  Accepts `%Instance{}` or its UUID string for the first arg and `%Account{}`
+  or its UUID string for the second.
 
   ## Parameters
 
-    - `instance_address` - The address of the instance.
-    - `page` - The page number (defaults to 1).
-    - `per_page` - The number of transactions per page (defaults to 40).
+    - `instance_or_id` (`Instance.t() | Ecto.UUID.t()`): Parent instance.
+    - `account_or_id` (`Account.t() | Ecto.UUID.t()`): Scoping account.
+    - `flop_params` (map, optional): Flop params. Filterable: `:status`.
 
   ## Returns
 
-    - A list of transactions.
-
-  ## Examples
-
-      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :posted,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> {:ok, transaction} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> [trx|_] = TransactionStore.list_all_for_instance_address(instance.address)
-      iex> trx.id == transaction.id && trx.status == :posted
-      true
-
-      iex> TransactionStore.list_all_for_instance_address("NonExistentInstance", 2, 10)
-      []
-
+    - `{:ok, {[{Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()}], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
   """
-  @spec list_all_for_instance_address(String.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Transaction.t())
-  def list_all_for_instance_address(instance_address, page \\ 1, per_page \\ 40) do
-    instance = DoubleEntryLedger.Stores.InstanceStore.get_by_address(instance_address)
-
-    if instance do
-      list_all_for_instance_id(instance.id, page, per_page)
-    else
-      []
-    end
-  end
-
-  @doc """
-  Lists all transactions for a given instance and account. This function joins the transactions
-  with their associated entries, accounts, and the latest balance history entry for each entry.
-  The output is paginated.
-
-  ## Parameters
-
-    - `instance_id` - The UUID of the instance.
-    - `account_id` - The UUID of the account
-    - `page` - The page number (defaults to 1).
-    - `per_page` - The number of transactions per page (defaults to 40).
-
-  ## Returns
-
-    - A list of tuples containing the transaction, account, entry, and the latest balance history entry.
-
-  ## Examples
-
-      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :posted,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> {:ok, transaction1} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> {:ok, transaction2} = TransactionStore.create(instance.address, create_attrs, "unique_id_456")
-      iex> [{trx1, acc1, _ , bh1}, {trx2, acc2, _ , _}| _] = TransactionStore.list_all_for_instance_id_and_account_id(instance.id, asset_account.id)
-      iex> trx1.id == transaction2.id && trx1.status == :posted && acc1.id == asset_account.id
-      true
-      iex> trx2.id == transaction1.id && trx1.status == :posted && acc2.id == asset_account.id
-      true
-      iex> bh1.available == 200
-      true
-      iex> # Test pagination
-      iex> [{trx3, acc3, _ , _}| _] = tuple_list = TransactionStore.list_all_for_instance_id_and_account_id(instance.id, asset_account.id, 2, 1)
-      iex> trx3.id == transaction1.id && trx1.status == :posted && acc3.id == asset_account.id
-      true
-      iex> length(tuple_list)
-      1
-
-
-      iex> TransactionStore.list_all_for_instance_id_and_account_id(Ecto.UUID.generate(), Ecto.UUID.generate(), 2, 1)
-      []
-  """
-  @spec list_all_for_instance_id_and_account_id(
-          Ecto.UUID.t(),
-          Ecto.UUID.t(),
-          non_neg_integer(),
-          non_neg_integer()
+  @spec list_for_instance_and_account(
+          Instance.t() | Ecto.UUID.t(),
+          Account.t() | Ecto.UUID.t(),
+          map()
         ) ::
-          list({Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()})
-  def list_all_for_instance_id_and_account_id(instance_id, account_id, page \\ 1, per_page \\ 40)
+          {:ok,
+           {[{Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()}], Flop.Meta.t()}}
+          | {:error, Flop.Meta.t()}
+  def list_for_instance_and_account(instance_or_id, account_or_id, flop_params \\ %{})
 
-  def list_all_for_instance_id_and_account_id(_instance_id, _account_id, page, per_page)
-      when page < 1 or per_page < 1,
-      do: []
+  def list_for_instance_and_account(%Instance{id: inst_id}, %Account{id: acc_id}, p),
+    do: list_for_instance_and_account(inst_id, acc_id, p)
 
-  def list_all_for_instance_id_and_account_id(instance_id, account_id, page, per_page) do
+  def list_for_instance_and_account(%Instance{id: inst_id}, acc_id, p) when is_binary(acc_id),
+    do: list_for_instance_and_account(inst_id, acc_id, p)
+
+  def list_for_instance_and_account(inst_id, %Account{id: acc_id}, p) when is_binary(inst_id),
+    do: list_for_instance_and_account(inst_id, acc_id, p)
+
+  def list_for_instance_and_account(inst_id, acc_id, flop_params)
+      when is_binary(inst_id) and is_binary(acc_id) do
     from(transaction in Transaction,
       join: entry in assoc(transaction, :entries),
-      on: entry.transaction_id == transaction.id,
       as: :entry,
       join: account in assoc(entry, :account),
-      on: account.id == entry.account_id,
       left_lateral_join:
         latest_balance_history in subquery(
           from(balance_history in BalanceHistoryEntry,
@@ -409,67 +349,54 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
           )
         ),
       on: latest_balance_history.entry_id == entry.id,
-      order_by: [desc: transaction.inserted_at],
-      where: entry.account_id == ^account_id and transaction.instance_id == ^instance_id,
+      where: entry.account_id == ^acc_id and transaction.instance_id == ^inst_id,
       select: {transaction, account, entry, latest_balance_history}
     )
-    |> paginate(page, per_page)
-    |> Repo.all()
+    |> Flop.validate_and_run(flop_params, for: Transaction)
   end
 
   @doc """
-  It's like `list_all_for_instance_id_and_account_id/4` but takes instance and account addresses instead of IDs.
+  Address-keyed variant of `list_for_instance_and_account/3`. Returns the
+  same `{Transaction, Account, Entry, BalanceHistoryEntry}` 4-tuples.
 
   ## Parameters
 
-    - `instance_address` - Address of the instance.
-    - `account_address` - Address of the account
-    - `page` - The page number (defaults to 1).
-    - `per_page` - The number of transactions per page (defaults to 40).
+    - `instance_address` (`String.t()`): Address of the parent instance.
+    - `account_address` (`String.t()`): Address of the scoping account.
+    - `flop_params` (map, optional): Flop params. Filterable: `:status`.
 
   ## Returns
 
-    - A list of tuples containing the transaction, account, entry, and the latest balance history entry.
-
-  ## Examples
-
-      iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
-      iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :posted,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> {:ok, transaction1} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> {:ok, transaction2} = TransactionStore.create(instance.address, create_attrs, "unique_id_456")
-      iex> [{trx1, acc1, _ , _}, {trx2, acc2, _ , _}| _] = TransactionStore.list_all_for_instance_address_and_account_address(instance.address, asset_account.address)
-      iex> trx1.id == transaction2.id && trx1.status == :posted && acc1.id == asset_account.id
-      true
-      iex> trx2.id == transaction1.id && trx1.status == :posted && acc2.id == asset_account.id
-      true
-
-      iex> TransactionStore.list_all_for_instance_address_and_account_address("NonExistentInstance", "NonExistentAccount", 2, 1)
-      []
-
+    - `{:ok, {[{Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()}], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
   """
-  def list_all_for_instance_address_and_account_address(
+  @spec list_for_instance_and_account_address(String.t(), String.t(), map()) ::
+          {:ok,
+           {[{Transaction.t(), Account.t(), Entry.t(), BalanceHistoryEntry.t()}], Flop.Meta.t()}}
+          | {:error, Flop.Meta.t()}
+  def list_for_instance_and_account_address(
         instance_address,
         account_address,
-        page \\ 1,
-        per_page \\ 40
+        flop_params \\ %{}
       ) do
-    instance = DoubleEntryLedger.Stores.InstanceStore.get_by_address(instance_address)
-
-    account =
-      DoubleEntryLedger.Stores.AccountStore.get_by_address(instance_address, account_address)
-
-    if instance && account do
-      list_all_for_instance_id_and_account_id(instance.id, account.id, page, per_page)
-    else
-      []
-    end
+    from(transaction in Transaction,
+      join: i in assoc(transaction, :instance),
+      join: entry in assoc(transaction, :entries),
+      as: :entry,
+      join: account in assoc(entry, :account),
+      left_lateral_join:
+        latest_balance_history in subquery(
+          from(balance_history in BalanceHistoryEntry,
+            where: balance_history.entry_id == parent_as(:entry).id,
+            order_by: [desc: balance_history.inserted_at],
+            limit: 1,
+            select: balance_history
+          )
+        ),
+      on: latest_balance_history.entry_id == entry.id,
+      where: i.address == ^instance_address and account.address == ^account_address,
+      select: {transaction, account, entry, latest_balance_history}
+    )
+    |> Flop.validate_and_run(flop_params, for: Transaction)
   end
 end
