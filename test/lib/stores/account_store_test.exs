@@ -126,7 +126,9 @@ defmodule DoubleEntryLedger.Stores.AccountStoreTest do
     test "returns accounts for the instance address", %{instance: instance} do
       a1 = account_fixture(instance_id: instance.id)
 
-      assert {:ok, {[%{id: id}], _meta}} = AccountStore.list_for_instance_address(instance.address)
+      assert {:ok, {[%{id: id}], _meta}} =
+               AccountStore.list_for_instance_address(instance.address)
+
       assert id == a1.id
     end
 

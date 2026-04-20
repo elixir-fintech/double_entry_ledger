@@ -53,7 +53,10 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreTest do
   describe "list_for_account/2 and list_for_account_address/3" do
     setup [:create_instance, :create_accounts]
 
-    test "list_for_account returns events for the account", %{instance: inst, accounts: [a1, a2 | _]} do
+    test "list_for_account returns events for the account", %{
+      instance: inst,
+      accounts: [a1, a2 | _]
+    } do
       :ok = post_transaction(inst, a1, a2, "idem-je-acc")
 
       assert {:ok, {events, %Flop.Meta{}}} = JournalEventStore.list_for_account(a1)
@@ -61,7 +64,10 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreTest do
       assert hd(events).command_map.action == :create_transaction
     end
 
-    test "list_for_account accepts UUID string for scope arg", %{instance: inst, accounts: [a1, a2 | _]} do
+    test "list_for_account accepts UUID string for scope arg", %{
+      instance: inst,
+      accounts: [a1, a2 | _]
+    } do
       :ok = post_transaction(inst, a1, a2, "idem-je-acc-u")
 
       {:ok, {by_struct, _}} = JournalEventStore.list_for_account(a1)

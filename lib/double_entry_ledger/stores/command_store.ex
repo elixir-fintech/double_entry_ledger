@@ -70,7 +70,16 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   import DoubleEntryLedger.Stores.CommandStoreHelper
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Command, Instance, PendingTransactionLookup, Repo, Telemetry, Transaction}
+
+  alias DoubleEntryLedger.{
+    Command,
+    Instance,
+    PendingTransactionLookup,
+    Repo,
+    Telemetry,
+    Transaction
+  }
+
   alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 

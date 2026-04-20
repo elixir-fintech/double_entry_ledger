@@ -118,14 +118,16 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
     setup [:create_instance, :create_accounts]
 
     test "returns commands for the instance", %{instance: instance} do
-      {:ok, _} = CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+      {:ok, _} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       assert {:ok, {commands, %Flop.Meta{}}} = CommandStore.list_for_instance(instance)
       assert length(commands) == 1
     end
 
     test "accepts UUID string for scope arg", %{instance: instance} do
-      {:ok, _} = CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+      {:ok, _} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       {:ok, {by_struct, _}} = CommandStore.list_for_instance(instance)
       {:ok, {by_id, _}} = CommandStore.list_for_instance(instance.id)

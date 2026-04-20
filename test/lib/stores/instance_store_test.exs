@@ -70,7 +70,9 @@ defmodule DoubleEntryLedger.Stores.InstanceStoreTest do
       {:ok, _} = InstanceStore.create(%{address: "tenant:other"})
 
       assert {:ok, {[%{id: ^match_id}], _meta}} =
-               InstanceStore.list(%{filters: [%{field: :address, op: :==, value: "tenant:match"}]})
+               InstanceStore.list(%{
+                 filters: [%{field: :address, op: :==, value: "tenant:match"}]
+               })
     end
 
     test "rejects filtering by non-allow-listed field" do

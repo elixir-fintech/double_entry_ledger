@@ -190,6 +190,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
 
     test "returns tuples for the scoped account", ctx do
       %{instance: inst, accounts: [a1, a2 | _]} = ctx
+
       attrs = %{
         status: :posted,
         entries: [
@@ -210,6 +211,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
 
     test "accepts UUID strings for both scope args", ctx do
       %{instance: inst, accounts: [a1, a2 | _]} = ctx
+
       attrs = %{
         status: :posted,
         entries: [
