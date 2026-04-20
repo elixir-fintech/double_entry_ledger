@@ -113,4 +113,66 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
                )
     end
   end
+
+  describe "list_for_instance/2" do
+    setup [:create_instance, :create_accounts]
+
+    test "returns commands for the instance", %{instance: instance} do
+      {:ok, _} = CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      assert {:ok, {commands, %Flop.Meta{}}} = CommandStore.list_for_instance(instance)
+      assert length(commands) == 1
+    end
+
+    test "accepts UUID string for scope arg", %{instance: instance} do
+      {:ok, _} = CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      {:ok, {by_struct, _}} = CommandStore.list_for_instance(instance)
+      {:ok, {by_id, _}} = CommandStore.list_for_instance(instance.id)
+
+      assert length(by_struct) == length(by_id)
+    end
+
+    test "cursor pagination with first/after", %{instance: instance} do
+      for i <- 1..3 do
+        {:ok, _} =
+          CommandStore.create(
+            transaction_command_attrs(instance_address: instance.address, source_idempk: "s#{i}")
+          )
+      end
+
+      {:ok, {page_1, meta_1}} = CommandStore.list_for_instance(instance, %{first: 2})
+      assert length(page_1) == 2
+
+      {:ok, {page_2, _}} =
+        CommandStore.list_for_instance(instance, %{first: 2, after: meta_1.end_cursor})
+
+      assert length(page_2) == 1
+      page_1_ids = Enum.map(page_1, & &1.id)
+      page_2_ids = Enum.map(page_2, & &1.id)
+      assert page_1_ids -- page_2_ids == page_1_ids
+    end
+  end
+
+  describe "list_for_transaction/2" do
+    setup [:create_instance, :create_accounts]
+
+    test "returns commands for the transaction with pagination meta", ctx do
+      %{command: command} = new_create_transaction_command(ctx, :pending)
+      {:ok, transaction, _} = CreateTransactionCommand.process(command)
+
+      assert {:ok, {commands, %Flop.Meta{}}} = CommandStore.list_for_transaction(transaction)
+      assert length(commands) == 1
+    end
+
+    test "accepts UUID string for scope arg", ctx do
+      %{command: command} = new_create_transaction_command(ctx, :pending)
+      {:ok, transaction, _} = CreateTransactionCommand.process(command)
+
+      {:ok, {by_struct, _}} = CommandStore.list_for_transaction(transaction)
+      {:ok, {by_id, _}} = CommandStore.list_for_transaction(transaction.id)
+
+      assert length(by_struct) == length(by_id)
+    end
+  end
 end
