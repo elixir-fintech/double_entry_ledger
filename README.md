@@ -50,7 +50,7 @@ Every command requires a `source` and `source_idempk` (plus `update_idempk` for 
 ```elixir
 def deps do
   [
-    {:double_entry_ledger, "~> 0.3.0"}
+    {:double_entry_ledger, "~> 0.4.0"}
   ]
 end
 ```
@@ -291,6 +291,60 @@ Extras are bundled in `pages/` when you run `mix docs`.
 - `mix test` – run the test suite (aliases automatically create/migrate the test DB).
 - `mix credo --strict` and `mix dialyzer` – static analysis.
 - `mix docs` – regenerate documentation, or `mix tidewave` to preview docs via the built-in dev server.
+
+## Migrating from 0.3.x to 0.4.0
+
+Release 0.4.0 replaces the hand-rolled pagination helper with [Flop](https://hex.pm/packages/flop). All store list functions now:
+
+- take `(parent_or_id, flop_params \\ %{})` instead of `(id, page, per_page)`,
+- return `{:ok, {entries, %Flop.Meta{}}} | {:error, %Flop.Meta{}}`,
+- paginate by cursor (`first` / `after`) instead of offset.
+
+### Before (0.3.x)
+
+```elixir
+transactions = TransactionStore.list_all_for_instance_id(instance.id, 1, 40)
+```
+
+### After (0.4.x)
+
+```elixir
+{:ok, {transactions, meta}} = TransactionStore.list_for_instance(instance)
+
+# Next page — cursor pagination
+{:ok, {next, _meta}} =
+  TransactionStore.list_for_instance(instance, %{first: 40, after: meta.end_cursor})
+
+# With a filter (allow-listed field)
+{:ok, {pending, _meta}} =
+  TransactionStore.list_for_instance(instance, %{
+    filters: [%{field: :status, op: :==, value: :pending}]
+  })
+```
+
+### Function rename map
+
+| 0.3.x | 0.4.0 |
+|---|---|
+| `InstanceStore.list_all/0` | `InstanceStore.list/1` |
+| `AccountStore.get_all_accounts_by_instance_id/1` | `AccountStore.list_for_instance/2` |
+| `AccountStore.get_all_accounts_by_instance_address/1` | `AccountStore.list_for_instance_address/2` |
+| `AccountStore.get_accounts_by_instance_id_and_type/2` | `AccountStore.list_for_instance/2` with `filters: [%{field: :type, op: :==, value: type}]` |
+| `AccountStore.get_balance_history_by_id/3` | `AccountStore.list_balance_history/2` |
+| `AccountStore.get_balance_history_by_address/4` | `AccountStore.list_balance_history_by_address/3` |
+| `AccountStore.get_balance_history_by_account/3` | `AccountStore.list_balance_history/2` |
+| `TransactionStore.list_all_for_instance_id/3` | `TransactionStore.list_for_instance/2` |
+| `TransactionStore.list_all_for_instance_address/3` | `TransactionStore.list_for_instance_address/2` |
+| `TransactionStore.list_all_for_instance_id_and_account_id/4` | `TransactionStore.list_for_instance_and_account/3` |
+| `TransactionStore.list_all_for_instance_address_and_account_address/4` | `TransactionStore.list_for_instance_and_account_address/3` |
+| `CommandStore.list_all_for_instance_id/3` | `CommandStore.list_for_instance/2` |
+| `CommandStore.list_all_for_transaction_id/1` | `CommandStore.list_for_transaction/2` |
+| `JournalEventStore.list_all_for_instance_id/3` | `JournalEventStore.list_for_instance/2` |
+| `JournalEventStore.list_all_for_account_id/3` | `JournalEventStore.list_for_account/2` |
+| `JournalEventStore.list_all_for_account_address/2` | `JournalEventStore.list_for_account_address/3` |
+| `JournalEventStore.list_all_for_transaction_id/1` | `JournalEventStore.list_for_transaction/2` |
+
+All `list_for_*` functions that take a parent scope accept either the parent struct (`Instance.t()`, `Account.t()`, `Transaction.t()`) **or** its UUID string.
 
 ## License
 

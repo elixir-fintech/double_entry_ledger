@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.MixProject do
   def project do
     [
       app: :double_entry_ledger,
-      version: "0.3.0",
+      version: "0.4.0",
       description: """
         DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engine for Elixir and PostgreSQL.
       """,
