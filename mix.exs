@@ -48,6 +48,7 @@ defmodule DoubleEntryLedger.MixProject do
       {:logger_json, "~> 7.0"},
       {:jason, "~> 1.4"},
       {:oban, "~> 2.19"},
+      {:flop, "~> 0.26"},
       {:telemetry_metrics, "~> 1.0", optional: true},
 
       # dev and test deps
