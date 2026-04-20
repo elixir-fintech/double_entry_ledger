@@ -42,6 +42,18 @@ defmodule DoubleEntryLedger.JournalEvent do
 
   @derive {Jason.Encoder, only: [:id, :command_map]}
 
+  @derive {
+    Flop.Schema,
+    filterable: [],
+    sortable: [:inserted_at, :id],
+    default_limit: 40,
+    max_limit: 200,
+    default_order: %{
+      order_by: [:inserted_at, :id],
+      order_directions: [:desc, :desc]
+    }
+  }
+
   schema "journal_events" do
     field(:command_map, CommandMap, skip_default_validation: true)
 

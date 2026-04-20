@@ -90,6 +90,18 @@ defmodule DoubleEntryLedger.Transaction do
 
   @required_attrs ~w(status instance_id)a
 
+  @derive {
+    Flop.Schema,
+    filterable: [:status],
+    sortable: [:inserted_at, :id],
+    default_limit: 40,
+    max_limit: 200,
+    default_order: %{
+      order_by: [:inserted_at, :id],
+      order_directions: [:desc, :desc]
+    }
+  }
+
   schema "transactions" do
     field(:posted_at, :utc_datetime_usec)
     field(:status, Ecto.Enum, values: @states)
