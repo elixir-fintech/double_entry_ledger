@@ -193,7 +193,6 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Utils.Changeset,
           DoubleEntryLedger.Utils.Currency,
           DoubleEntryLedger.Utils.Map,
-          DoubleEntryLedger.Utils.Pagination,
           DoubleEntryLedger.Utils.Traceable,
           DoubleEntryLedger.Logger
         ],
