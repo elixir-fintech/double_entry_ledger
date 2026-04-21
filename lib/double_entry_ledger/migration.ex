@@ -35,12 +35,17 @@ defmodule DoubleEntryLedger.Migration do
       of the latest balance history entry per entry (leading-column prefix also
       serves queries filtered by `entry_id` alone).
 
-  New consumers use `up()` which applies all versions. Existing consumers
-  upgrading from v0.1.0 use the `:from` option to skip already-applied versions:
+  New consumers add a single migration calling `up()` / `down()` — all versions
+  apply in order. Existing consumers upgrading to a new library release add a
+  new migration per upgrade, using `:from` to skip already-applied versions:
 
-      # Upgrade from v0.1.0 (version 1 already applied via copied migrations)
+      # Upgrade from v0.1.0 (version 1 already applied)
       def up, do: DoubleEntryLedger.Migration.up(from: 1)
       def down, do: DoubleEntryLedger.Migration.down(version: 1)
+
+      # Upgrade from 0.3.x to 0.4.0 (versions 1-3 already applied)
+      def up, do: DoubleEntryLedger.Migration.up(from: 3)
+      def down, do: DoubleEntryLedger.Migration.down(from: 4, version: 3)
 
   ## Oban
 
