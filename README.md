@@ -160,36 +160,43 @@ The package uses Oban for background processing but does **not** ship
 its own Oban migration — this avoids locking you to a specific Oban
 version. Install and migrate Oban in your application
 ([Oban installation guide](https://hexdocs.pm/oban/installation.html)),
-then configure DoubleEntryLedger's Oban instance under the
-`:double_entry_ledger` namespace (this is the config DEL reads at boot):
+then configure DoubleEntryLedger's **named** Oban instance:
 
 ```elixir
 # config/runtime.exs (runtime so deps are compiled when the module
 # reference below is evaluated)
 config :double_entry_ledger, Oban,
+  name: DoubleEntryLedger.Oban,
   engine: Oban.Engines.Basic,
   queues: [double_entry_ledger: 10],
   repo: MyApp.Repo
 ```
 
+The `name: DoubleEntryLedger.Oban` line is required — the library
+targets this exact instance for every enqueue. It also lets DEL's Oban
+coexist with any Oban your own app runs for unrelated work, since each
+Oban needs a unique name.
+
 In BYO-repo mode, add `DoubleEntryLedger.children/0` to your
-supervision tree so Oban and the command queue start after your repo:
+supervision tree so DEL's Oban and command queue start after your repo:
 
 ```elixir
 # lib/my_app/application.ex
 children =
   [
     MyApp.Repo,
-    # …other children…
+    # …your own Oban, if any (with a different :name), other children…
   ] ++ DoubleEntryLedger.children()
 ```
 
-In standalone mode the library supervises Oban itself and consumers do
-not need to add `DoubleEntryLedger.children()`.
+In standalone mode the library supervises the named Oban itself and
+consumers do not need to call `DoubleEntryLedger.children/0`.
 
-If you already run Oban in your own application, that instance is
-separate from DoubleEntryLedger's — they can coexist under different
-app namespaces (`:my_app` vs `:double_entry_ledger`).
+**Already running Oban for your own jobs?** Keep your existing
+`{Oban, Application.fetch_env!(:my_app, Oban)}` child as-is (with its
+own `:name` such as `MyApp.Oban`, or the default unnamed `Oban`).
+DEL's instance is strictly separate and won't interfere — the two run
+side by side, each processing its own queues against its own config.
 
 ## Quickstart
 

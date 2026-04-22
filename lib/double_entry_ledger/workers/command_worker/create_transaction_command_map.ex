@@ -204,7 +204,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
           PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
         end)
-        |> Oban.insert(:create_transaction_link, fn _ ->
+        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn _ ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: cid,
             transaction_id: tid,
@@ -221,7 +221,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
         Multi.update(Multi.new(), :command_success, fn _ ->
           build_mark_as_processed(command)
         end)
-        |> Oban.insert(:create_transaction_link, fn _ ->
+        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn _ ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: cid,
             transaction_id: tid,

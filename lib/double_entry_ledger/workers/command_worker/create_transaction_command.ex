@@ -177,7 +177,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
       conflict_target: [:source, :source_idempk, :instance_id],
       on_conflict: {:replace, [:transaction_id, :journal_event_id]}
     )
-    |> Oban.insert(
+    |> DoubleEntryLedger.Oban.insert(
       :create_transaction_link,
       fn %{
            transaction: %{id: tid},
@@ -200,7 +200,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
     |> Multi.insert(:journal_event, fn %{command_success: %{command_map: em, instance_id: id}} ->
       JournalEvent.build_create(%{command_map: em, instance_id: id})
     end)
-    |> Oban.insert(
+    |> DoubleEntryLedger.Oban.insert(
       :create_transaction_link,
       fn %{
            transaction: %{id: tid},

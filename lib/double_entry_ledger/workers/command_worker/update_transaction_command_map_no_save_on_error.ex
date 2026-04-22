@@ -125,7 +125,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
         |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
         end)
-        |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
+        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: eid,
             transaction_id: tid,
