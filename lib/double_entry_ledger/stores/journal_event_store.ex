@@ -124,7 +124,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
       where: e.instance_id == ^id,
       preload: [:account, :transaction]
     )
-    |> Flop.validate_and_run(flop_params, for: JournalEvent)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: JournalEvent)
   end
 
   @doc """
@@ -191,7 +191,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     all_processed_events_for_account_id(id)
     |> exclude(:order_by)
     |> preload([:account])
-    |> Flop.validate_and_run(flop_params, for: JournalEvent)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: JournalEvent)
   end
 
   @doc """
@@ -225,7 +225,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
       _ ->
         from(e in JournalEvent, where: false)
-        |> Flop.validate_and_run(flop_params, for: JournalEvent)
+        |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: JournalEvent)
     end
   end
 
@@ -268,7 +268,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
 
   def list_for_transaction(id, flop_params) when is_binary(id) do
     base_transaction_query(id)
-    |> Flop.validate_and_run(flop_params, for: JournalEvent)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: JournalEvent)
   end
 
   @doc """

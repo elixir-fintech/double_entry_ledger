@@ -251,7 +251,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
       where: c.instance_id == ^id,
       preload: [:command_queue_item, :transaction]
     )
-    |> Flop.validate_and_run(flop_params, for: Command)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Command)
   end
 
   @doc """
@@ -293,6 +293,6 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
   def list_for_transaction(id, flop_params) when is_binary(id) do
     base_transaction_query(id)
-    |> Flop.validate_and_run(flop_params, for: Command)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Command)
   end
 end

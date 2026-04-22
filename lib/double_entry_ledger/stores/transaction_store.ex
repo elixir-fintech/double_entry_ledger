@@ -268,7 +268,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   def list_for_instance(id, flop_params) when is_binary(id) do
     from(t in Transaction, where: t.instance_id == ^id)
-    |> Flop.validate_and_run(flop_params, for: Transaction)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Transaction)
   end
 
   @doc """
@@ -291,7 +291,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       join: i in assoc(t, :instance),
       where: i.address == ^instance_address
     )
-    |> Flop.validate_and_run(flop_params, for: Transaction)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Transaction)
   end
 
   @doc """
@@ -352,7 +352,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       where: entry.account_id == ^acc_id and transaction.instance_id == ^inst_id,
       select: {transaction, account, entry, latest_balance_history}
     )
-    |> Flop.validate_and_run(flop_params, for: Transaction)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Transaction)
   end
 
   @doc """
@@ -397,6 +397,6 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
       where: i.address == ^instance_address and account.address == ^account_address,
       select: {transaction, account, entry, latest_balance_history}
     )
-    |> Flop.validate_and_run(flop_params, for: Transaction)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Transaction)
   end
 end

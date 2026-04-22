@@ -14,8 +14,6 @@ config :double_entry_ledger,
   # maximum number of keys allowed in the trace_context map
   max_trace_context_keys: 10
 
-config :flop, repo: DoubleEntryLedger.Repo
-
 # Event queue configuration
 config :double_entry_ledger, :command_queue,
   # Poll for new events every 5 seconds

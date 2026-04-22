@@ -300,6 +300,12 @@ Release 0.4.0 replaces the hand-rolled pagination helper with [Flop](https://hex
 - return `{:ok, {entries, %Flop.Meta{}}} | {:error, %Flop.Meta{}}`,
 - paginate by cursor (`first` / `after`) instead of offset.
 
+**Flop configuration.** Consumers do **not** need to set a global
+`config :flop, repo: DoubleEntryLedger.Repo`. Store functions dispatch
+through an internal Flop backend (`DoubleEntryLedger.Flop`) bound to
+`DoubleEntryLedger.Repo`, so host applications can configure Flop against
+their own repo (or define their own backend module) without conflict.
+
 ### Before (0.3.x)
 
 ```elixir

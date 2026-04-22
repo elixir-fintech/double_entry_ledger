@@ -107,7 +107,7 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
   @spec list(map()) ::
           {:ok, {[Instance.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
   def list(flop_params \\ %{}) do
-    Flop.validate_and_run(Instance, flop_params, for: Instance)
+    DoubleEntryLedger.Flop.validate_and_run(Instance, flop_params, for: Instance)
   end
 
   @doc """

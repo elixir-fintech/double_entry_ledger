@@ -360,7 +360,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   def list_for_instance(id, flop_params) when is_binary(id) do
     from(a in Account, where: a.instance_id == ^id)
-    |> Flop.validate_and_run(flop_params, for: Account)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Account)
   end
 
   @doc """
@@ -376,7 +376,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
       join: i in assoc(a, :instance),
       where: i.address == ^instance_address
     )
-    |> Flop.validate_and_run(flop_params, for: Account)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Account)
   end
 
   @doc """
@@ -393,7 +393,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   def list_balance_history(id, flop_params) when is_binary(id) do
     from(b in BalanceHistoryEntry, where: b.account_id == ^id)
-    |> Flop.validate_and_run(flop_params, for: BalanceHistoryEntry)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: BalanceHistoryEntry)
   end
 
   @doc """
@@ -410,7 +410,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
       join: i in assoc(a, :instance),
       where: i.address == ^instance_address and a.address == ^account_address
     )
-    |> Flop.validate_and_run(flop_params, for: BalanceHistoryEntry)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: BalanceHistoryEntry)
   end
 
   @doc """
