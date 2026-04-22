@@ -14,7 +14,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Workers
-  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 

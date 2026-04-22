@@ -26,7 +26,8 @@ defmodule DoubleEntryLedger.Instance do
   """
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Account, Repo, Transaction}
+  alias DoubleEntryLedger.{Account, Transaction}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias __MODULE__, as: Instance
 
   @typedoc """

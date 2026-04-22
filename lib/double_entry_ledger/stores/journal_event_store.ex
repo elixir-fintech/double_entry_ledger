@@ -47,7 +47,8 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
   import Ecto.Query
   import DoubleEntryLedger.Stores.JournalEventStoreHelper
 
-  alias DoubleEntryLedger.{Account, Command, Instance, JournalEvent, Repo, Transaction}
+  alias DoubleEntryLedger.{Account, Command, Instance, JournalEvent, Transaction}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.AccountStore
 
   @doc """

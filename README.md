@@ -34,7 +34,7 @@ Each transaction updates `Account` projections plus immutable `BalanceHistoryEnt
 
 ### Idempotency & Isolation
 
-Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside the configurable `schema_prefix` (`double_entry_ledger` by default), so migrations never clash with your application schema.
+Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside the `double_entry_ledger` Postgres schema, so migrations never clash with your application schema.
 
 ## Requirements
 
@@ -59,26 +59,19 @@ Run `mix deps.get` after updating `mix.exs`.
 
 ### 2. Configure the application
 
+Most consumers point DoubleEntryLedger at their own Ecto repo so the
+library shares one connection pool (and one Ecto sandbox in tests):
+
 ```elixir
 # config/config.exs
 import Config
 
 config :double_entry_ledger,
-  ecto_repos: [DoubleEntryLedger.Repo],
-  schema_prefix: "double_entry_ledger",
+  repo: MyApp.Repo,
   idempotency_secret: System.fetch_env!("LEDGER_IDEMPOTENCY_SECRET"),
   start_command_queue: true,
   max_retries: 5,
   retry_interval: 200
-
-config :double_entry_ledger, DoubleEntryLedger.Repo,
-  database: "double_entry_ledger_repo",
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
 
 config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
@@ -86,10 +79,36 @@ config :double_entry_ledger, :command_queue,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
   processor_name: "command_queue"
-
 ```
 
-Set a strong `idempotency_secret` — it is used to hash incoming keys. Set `start_command_queue: false` to disable background processing (useful in test or when embedding the ledger without the queue). `max_retries` and `retry_interval` are read at runtime, so they can be changed without recompilation. Production systems should override the repo credentials and command queue settings. For Oban configuration, see [step 4](#4-set-up-oban).
+In this "BYO-repo" mode the library does not start its own repo. Oban
+and the command queue need the consumer's repo to be running, so add
+`DoubleEntryLedger.children/0` to your supervision tree **after** your
+repo — see [step 4](#4-set-up-oban).
+
+Set a strong `idempotency_secret` — it hashes incoming keys. Set
+`start_command_queue: false` to disable background processing (useful in
+tests or when embedding the ledger without the queue). `max_retries` and
+`retry_interval` are read at runtime, so they can be changed without
+recompilation.
+
+**Standalone mode** (omit `:repo`): the library ships its own
+`DoubleEntryLedger.Repo` and supervises it automatically. Configure it
+as a normal Ecto repo per env:
+
+```elixir
+config :double_entry_ledger, ecto_repos: [DoubleEntryLedger.Repo]
+
+config :double_entry_ledger, DoubleEntryLedger.Repo,
+  database: "double_entry_ledger_repo",
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  pool_size: 10
+```
+
+This is useful for running DEL on its own (tests, demos), but for
+production apps prefer the BYO-repo form above.
 
 ### 3. Run the migrations
 
@@ -137,17 +156,40 @@ See `DoubleEntryLedger.Migration` docs for all options (`:version`, `:from`,
 
 ### 4. Set up Oban
 
-The package uses Oban for background processing but does **not** ship its own
-Oban migration — this avoids locking you to a specific Oban version. Ensure
-Oban is installed and migrated in your application
-([Oban installation guide](https://hexdocs.pm/oban/installation.html)), then
-add the `double_entry_ledger` queue to your Oban config:
+The package uses Oban for background processing but does **not** ship
+its own Oban migration — this avoids locking you to a specific Oban
+version. Install and migrate Oban in your application
+([Oban installation guide](https://hexdocs.pm/oban/installation.html)),
+then configure DoubleEntryLedger's Oban instance under the
+`:double_entry_ledger` namespace (this is the config DEL reads at boot):
 
 ```elixir
-config :my_app, Oban,
-  repo: MyApp.Repo,
-  queues: [default: 10, double_entry_ledger: 5]
+# config/runtime.exs (runtime so deps are compiled when the module
+# reference below is evaluated)
+config :double_entry_ledger, Oban,
+  engine: Oban.Engines.Basic,
+  queues: [double_entry_ledger: 10],
+  repo: MyApp.Repo
 ```
+
+In BYO-repo mode, add `DoubleEntryLedger.children/0` to your
+supervision tree so Oban and the command queue start after your repo:
+
+```elixir
+# lib/my_app/application.ex
+children =
+  [
+    MyApp.Repo,
+    # …other children…
+  ] ++ DoubleEntryLedger.children()
+```
+
+In standalone mode the library supervises Oban itself and consumers do
+not need to add `DoubleEntryLedger.children()`.
+
+If you already run Oban in your own application, that instance is
+separate from DoubleEntryLedger's — they can coexist under different
+app namespaces (`:my_app` vs `:double_entry_ledger`).
 
 ## Quickstart
 
@@ -213,7 +255,7 @@ async_command = Map.put(command, "source_idempk", "initial-capital-async")
 # InstanceMonitor will claim it, process it, and update the command_queue_item status.
 ```
 
-Inspect queued work with `DoubleEntryLedger.Stores.CommandStore.list_all_for_instance_id/3` or check `command.command_queue_item.status`.
+Inspect queued work with `DoubleEntryLedger.Stores.CommandStore.list_for_instance/2` or check `command.command_queue_item.status`.
 
 ### Reserve funds with pending transactions
 
@@ -250,16 +292,24 @@ CommandApi.process_from_params(%{
 ### Query ledger state
 
 ```elixir
+alias DoubleEntryLedger.Instance
 alias DoubleEntryLedger.Stores.{AccountStore, TransactionStore, JournalEventStore, CommandStore}
 
 AccountStore.get_by_id(cash.id).available
-AccountStore.get_balance_history(cash.id)
-TransactionStore.list_all_for_instance(instance.id)
-JournalEventStore.list_all_for_account_id(cash.id)
+
+{:ok, {history, _meta}} = AccountStore.list_balance_history(cash.id)
+{:ok, {transactions, _meta}} = TransactionStore.list_for_instance(instance.id)
+{:ok, {events, _meta}} = JournalEventStore.list_for_account(cash.id)
+
 CommandStore.get_by_id(command.id)
 ```
 
-Use `InstanceStore.validate_account_balances(instance.address)` to assert the ledger still balances, or `PendingTransactionLookup` to inspect open holds.
+Each list function accepts an optional second-argument map of
+[Flop](https://hex.pm/packages/flop) params (cursor, filters, ordering) —
+see the store moduledocs for the allow-listed filter fields.
+
+Use `Instance.validate_account_balances(instance)` to assert the ledger
+still balances, or `PendingTransactionLookup` to inspect open holds.
 
 ## Background Processing
 
@@ -294,17 +344,22 @@ Extras are bundled in `pages/` when you run `mix docs`.
 
 ## Migrating from 0.3.x to 0.4.0
 
-Release 0.4.0 replaces the hand-rolled pagination helper with [Flop](https://hex.pm/packages/flop). All store list functions now:
+Release 0.4.0 brings two changes:
 
-- take `(parent_or_id, flop_params \\ %{})` instead of `(id, page, per_page)`,
-- return `{:ok, {entries, %Flop.Meta{}}} | {:error, %Flop.Meta{}}`,
-- paginate by cursor (`first` / `after`) instead of offset.
+- **Bring your own repo.** Consumers can point DEL at their own Ecto repo
+  via `config :double_entry_ledger, repo: MyApp.Repo` — see
+  [Configuration](#2-configure-the-application) and [Oban](#4-set-up-oban)
+  for the full setup. The previous "configure `DoubleEntryLedger.Repo`
+  per env" path still works when `:repo` is omitted.
 
-**Flop configuration.** Consumers do **not** need to set a global
-`config :flop, repo: DoubleEntryLedger.Repo`. Store functions dispatch
-through an internal Flop backend (`DoubleEntryLedger.Flop`) bound to
-`DoubleEntryLedger.Repo`, so host applications can configure Flop against
-their own repo (or define their own backend module) without conflict.
+- **Pagination via [Flop](https://hex.pm/packages/flop).** The hand-rolled
+  pagination helper is gone. All store list functions now:
+  - take `(parent_or_id, flop_params \\ %{})` instead of `(id, page, per_page)`,
+  - return `{:ok, {entries, %Flop.Meta{}}} | {:error, %Flop.Meta{}}`,
+  - paginate by cursor (`first` / `after`) instead of offset.
+
+  You do **not** need to set a global `config :flop, repo: …` — DEL
+  ships an internal Flop backend bound to the configured repo.
 
 ### Before (0.3.x)
 

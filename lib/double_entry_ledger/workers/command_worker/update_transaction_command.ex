@@ -34,7 +34,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
   alias Ecto.Multi
 
-  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
 

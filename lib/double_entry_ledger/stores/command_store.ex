@@ -75,10 +75,11 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     Command,
     Instance,
     PendingTransactionLookup,
-    Repo,
     Telemetry,
     Transaction
   }
+
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper

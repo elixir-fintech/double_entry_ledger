@@ -54,7 +54,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker.{AccountCommandMapResponseHandler}
   alias DoubleEntryLedger.Command.AccountCommandMap
-  alias DoubleEntryLedger.{JournalEvent, Repo}
+  alias DoubleEntryLedger.JournalEvent
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.{AccountStoreHelper, CommandStoreHelper, InstanceStoreHelper}
 
   @doc """

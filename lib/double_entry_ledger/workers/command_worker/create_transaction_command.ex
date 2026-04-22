@@ -37,7 +37,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
   use DoubleEntryLedger.Occ.Processor
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Command, JournalEvent, Repo, PendingTransactionLookup}
+  alias DoubleEntryLedger.{Command, JournalEvent, PendingTransactionLookup}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.TransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Workers

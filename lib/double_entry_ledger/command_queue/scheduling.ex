@@ -21,10 +21,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
 
-  alias DoubleEntryLedger.{
-    Repo,
-    Command
-  }
+  alias DoubleEntryLedger.Command
+
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.CommandQueueItem

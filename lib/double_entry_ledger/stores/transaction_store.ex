@@ -35,10 +35,11 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
     Account,
     Entry,
     Instance,
-    Repo,
     Transaction,
     BalanceHistoryEntry
   }
+
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias DoubleEntryLedger.Stores.JournalEventStore
   alias DoubleEntryLedger.Apis.CommandApi

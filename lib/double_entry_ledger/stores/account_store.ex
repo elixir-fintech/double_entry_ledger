@@ -70,12 +70,13 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   alias DoubleEntryLedger.Stores.AccountStoreHelper
 
   alias DoubleEntryLedger.{
-    Repo,
     Account,
     Instance,
     Types,
     BalanceHistoryEntry
   }
+
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   @type create_map() :: %{
           address: String.t(),

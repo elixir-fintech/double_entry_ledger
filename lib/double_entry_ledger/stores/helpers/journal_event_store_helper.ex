@@ -20,7 +20,8 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
   """
   import Ecto.Query, only: [from: 2, subquery: 1, union: 2]
 
-  alias DoubleEntryLedger.{Repo, Command, JournalEvent, Account, Entry}
+  alias DoubleEntryLedger.{Command, JournalEvent, Account, Entry}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
 
   @doc """

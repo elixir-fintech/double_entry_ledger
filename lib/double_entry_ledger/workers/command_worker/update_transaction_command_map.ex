@@ -30,7 +30,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
   import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
     only: [default_response_handler: 2]
 
-  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}

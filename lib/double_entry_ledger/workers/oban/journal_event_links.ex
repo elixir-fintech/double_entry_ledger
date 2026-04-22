@@ -9,9 +9,10 @@ defmodule DoubleEntryLedger.Workers.Oban.JournalEventLinks do
   alias DoubleEntryLedger.{
     JournalEventTransactionLink,
     JournalEventAccountLink,
-    JournalEventCommandLink,
-    Repo
+    JournalEventCommandLink
   }
+
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   @impl Oban.Worker
   def perform(%Oban.Job{
