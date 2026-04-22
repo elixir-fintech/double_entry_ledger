@@ -25,7 +25,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   alias DoubleEntryLedger.Stores.CommandStore
   import Ecto.Query
 
-  @schema_prefix "double_entry_ledger"
+  @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
   # Client API
 

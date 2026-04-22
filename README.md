@@ -34,7 +34,7 @@ Each transaction updates `Account` projections plus immutable `BalanceHistoryEnt
 
 ### Idempotency & Isolation
 
-Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside the `double_entry_ledger` Postgres schema, so migrations never clash with your application schema.
+Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside a dedicated Postgres schema (`double_entry_ledger` by default, overridable via `config :double_entry_ledger, schema_prefix: …`), so migrations never clash with your application schema. The schema prefix is separate from Oban's own `:prefix` option.
 
 ## Requirements
 
@@ -351,22 +351,41 @@ Extras are bundled in `pages/` when you run `mix docs`.
 
 ## Migrating from 0.3.x to 0.4.0
 
-Release 0.4.0 brings two changes:
+> ⚠️ **0.4.0 contains breaking changes.** Read this whole section before
+> bumping the dependency — at minimum you'll update store call sites and
+> the Oban config. See [CHANGELOG.md](CHANGELOG.md) for the canonical
+> migration notes per item.
 
-- **Bring your own repo.** Consumers can point DEL at their own Ecto repo
-  via `config :double_entry_ledger, repo: MyApp.Repo` — see
-  [Configuration](#2-configure-the-application) and [Oban](#4-set-up-oban)
-  for the full setup. The previous "configure `DoubleEntryLedger.Repo`
-  per env" path still works when `:repo` is omitted.
+### Breaking changes at a glance
 
-- **Pagination via [Flop](https://hex.pm/packages/flop).** The hand-rolled
-  pagination helper is gone. All store list functions now:
-  - take `(parent_or_id, flop_params \\ %{})` instead of `(id, page, per_page)`,
-  - return `{:ok, {entries, %Flop.Meta{}}} | {:error, %Flop.Meta{}}`,
-  - paginate by cursor (`first` / `after`) instead of offset.
+1. **Store list functions renamed and re-shaped.** `list_all_*` and
+   `get_all_accounts_*` are gone; replacements are `list_for_*` under
+   Flop. Returns are now `{:ok, {[item], %Flop.Meta{}}}`. Update every
+   call site — see the [Function rename map](#function-rename-map) and
+   the Before/After example below.
 
-  You do **not** need to set a global `config :flop, repo: …` — DEL
-  ships an internal Flop backend bound to the configured repo.
+2. **Pagination is cursor-based** via [Flop](https://hex.pm/packages/flop).
+   `(id, page, per_page)` → `(id, flop_params_map)`. No consumer
+   `config :flop, repo: …` required — DEL ships its own backend.
+
+3. **Oban instance is named `DoubleEntryLedger.Oban`.** Add
+   `name: DoubleEntryLedger.Oban` to your `config :double_entry_ledger,
+   Oban, …` block or boot will fail. See [Oban setup](#4-set-up-oban).
+
+4. **Supervision shift in BYO-repo mode.** If you opt into BYO-repo
+   via `config :double_entry_ledger, repo: MyApp.Repo`, DEL no longer
+   supervises Oban or the command queue from its own tree. Add
+   `DoubleEntryLedger.children/0` to your app's supervisor. Standalone
+   consumers (no `:repo` set) are unaffected.
+
+### New: bring your own repo
+
+0.4.0 adds `config :double_entry_ledger, repo: MyApp.Repo` so the library
+shares the host's connection pool (and one Ecto sandbox in tests)
+instead of shipping its own `DoubleEntryLedger.Repo`. When `:repo` is
+omitted, the library runs in standalone mode as before. See
+[Configuration](#2-configure-the-application) and
+[Oban](#4-set-up-oban) for the full setup.
 
 ### Before (0.3.x)
 

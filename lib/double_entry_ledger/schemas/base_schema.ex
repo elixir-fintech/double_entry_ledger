@@ -30,7 +30,7 @@ defmodule DoubleEntryLedger.BaseSchema do
       @primary_key {:id, :binary_id, autogenerate: true}
       @foreign_key_type :binary_id
 
-      @schema_prefix "double_entry_ledger"
+      @schema_prefix DoubleEntryLedger.Config.schema_prefix()
     end
   end
 end

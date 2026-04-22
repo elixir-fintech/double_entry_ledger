@@ -37,7 +37,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
 
   import Ecto.Query
 
-  @schema_prefix "double_entry_ledger"
+  @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
   # Client API
 
