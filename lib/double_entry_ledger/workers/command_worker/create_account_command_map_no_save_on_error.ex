@@ -142,10 +142,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
       build_mark_as_processed(event)
     end)
     |> DoubleEntryLedger.Oban.insert(:create_account_link, fn %{
-                                              command_success: event,
-                                              account: account,
-                                              journal_event: journal_event
-                                            } ->
+                                                                command_success: event,
+                                                                account: account,
+                                                                journal_event: journal_event
+                                                              } ->
       Workers.Oban.JournalEventLinks.new(%{
         command_id: event.id,
         account_id: account.id,

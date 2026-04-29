@@ -14,6 +14,6 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
 config :logger, level: :warning
 
 config :double_entry_ledger,
-    start_command_queue: false
+  start_command_queue: false
 
 config :double_entry_ledger, Oban, testing: :manual
