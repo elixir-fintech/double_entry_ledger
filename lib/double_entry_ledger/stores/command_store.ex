@@ -42,11 +42,11 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
   ### Retrieving commands for an instance
 
-      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_instance(instance.id)
+      {:ok, {commands, meta}} = DoubleEntryLedger.Stores.CommandStore.list_for_instance(instance.id)
 
   ### Retrieving commands for a transaction
 
-      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_transaction(transaction.id)
+      {:ok, {commands, meta}} = DoubleEntryLedger.Stores.CommandStore.list_for_transaction(transaction.id)
 
   ### Retrieving commands for an account
 
@@ -68,10 +68,19 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   """
   import Ecto.Query
   import DoubleEntryLedger.Stores.CommandStoreHelper
-  import DoubleEntryLedger.Utils.Pagination
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Command, PendingTransactionLookup, Telemetry}
+
+  alias DoubleEntryLedger.{
+    Command,
+    Instance,
+    PendingTransactionLookup,
+    Telemetry,
+    Transaction
+  }
+
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
+
   alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
@@ -202,79 +211,89 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   end
 
   @doc """
-  Lists events for a specific instance with pagination.
+  Lists commands for an instance with cursor pagination via Flop.
+
+  Accepts either an `%Instance{}` struct or its UUID string. Preloads
+  `:command_queue_item` and `:transaction` on each command.
 
   ## Parameters
-    - `instance_id`: ID of the instance to list events for
-    - `page`: Page number for pagination (defaults to 1)
-    - `per_page`: Number of events per page (defaults to 40)
+
+    - `instance_or_id` (`Instance.t() | Ecto.UUID.t()`): Parent instance.
+    - `flop_params` (map, optional): Flop params. No filterable fields (JSONB `command_map` filtering deferred).
 
   ## Returns
-    - List of Command structs, ordered by insertion time descending
+
+    - `{:ok, {[Command.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
 
   ## Examples
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :posted,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> length(CommandStore.list_all_for_instance_id(instance.id))
+      iex> {:ok, a1} = AccountStore.create(instance.address, account_data, "u1")
+      iex> {:ok, a2} = AccountStore.create(instance.address, %{account_data | address: "Liab:Account", type: :liability}, "u2")
+      iex> create_attrs = %{status: :posted, entries: [
+      ...>   %{account_address: a1.address, amount: 100, currency: :USD},
+      ...>   %{account_address: a2.address, amount: 100, currency: :USD}]}
+      iex> {:ok, _} = TransactionStore.create(instance.address, create_attrs, "idem-1")
+      iex> {:ok, {commands, %Flop.Meta{}}} = CommandStore.list_for_instance(instance)
+      iex> length(commands)
       3
-      iex> # test pagination
-      iex> length(CommandStore.list_all_for_instance_id(instance.id, 2, 2))
-      1
-
   """
-  @spec list_all_for_instance_id(Ecto.UUID.t(), non_neg_integer(), non_neg_integer()) ::
-          list(Command.t())
-  def list_all_for_instance_id(instance_id, page \\ 1, per_page \\ 40) do
-    from(e in Command,
-      where: e.instance_id == ^instance_id,
-      order_by: [desc: e.inserted_at],
-      select: e
+  @spec list_for_instance(Instance.t() | Ecto.UUID.t(), map()) ::
+          {:ok, {[Command.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_instance(instance_or_id, flop_params \\ %{})
+
+  def list_for_instance(%Instance{id: id}, flop_params),
+    do: list_for_instance(id, flop_params)
+
+  def list_for_instance(id, flop_params) when is_binary(id) do
+    from(c in Command,
+      where: c.instance_id == ^id,
+      preload: [:command_queue_item, :transaction]
     )
-    |> paginate(page, per_page)
-    |> preload([:command_queue_item, :transaction])
-    |> Repo.all()
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Command)
   end
 
   @doc """
-  Lists all events associated with a specific transaction.
+  Lists commands for a transaction with cursor pagination via Flop.
+
+  Accepts either a `%Transaction{}` struct or its UUID string.
 
   ## Parameters
-    - `transaction_id`: ID of the transaction to list events for
+
+    - `transaction_or_id` (`Transaction.t() | Ecto.UUID.t()`): Scoping transaction.
+    - `flop_params` (map, optional): Flop params.
 
   ## Returns
-    - List of Command structs, ordered by insertion time descending
+
+    - `{:ok, {[Command.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` on invalid params.
 
   ## Examples
 
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> account_data = %{address: "Cash:Account", type: :asset, currency: :USD}
-      iex> {:ok, asset_account} = AccountStore.create(instance.address, account_data, "unique_id_123")
-      iex> {:ok, liability_account} = AccountStore.create(instance.address, %{account_data | address: "Liability:Account", type: :liability}, "unique_id_456")
-      iex> create_attrs = %{
-      ...>   status: :pending,
-      ...>   entries: [
-      ...>     %{account_address: asset_account.address, amount: 100, currency: :USD},
-      ...>     %{account_address: liability_account.address, amount: 100, currency: :USD}
-      ...>   ]}
-      iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "unique_id_123")
-      iex> TransactionStore.update(instance.address, id, %{status: :posted}, "unique_id_123")
-      iex> length(CommandStore.list_all_for_transaction_id(id))
+      iex> {:ok, a1} = AccountStore.create(instance.address, account_data, "u1")
+      iex> {:ok, a2} = AccountStore.create(instance.address, %{account_data | address: "Liab:Account", type: :liability}, "u2")
+      iex> create_attrs = %{status: :pending, entries: [
+      ...>   %{account_address: a1.address, amount: 100, currency: :USD},
+      ...>   %{account_address: a2.address, amount: 100, currency: :USD}]}
+      iex> {:ok, %{id: id}} = TransactionStore.create(instance.address, create_attrs, "idem-2")
+      iex> TransactionStore.update(instance.address, id, %{status: :posted}, "idem-2")
+      iex> {:ok, {commands, %Flop.Meta{}}} = CommandStore.list_for_transaction(id)
+      iex> length(commands)
       2
   """
-  @spec list_all_for_transaction_id(Ecto.UUID.t()) :: list(Command.t())
-  def list_all_for_transaction_id(transaction_id) do
-    base_transaction_query(transaction_id)
-    |> order_by(desc: :inserted_at)
-    |> Repo.all()
+  @spec list_for_transaction(Transaction.t() | Ecto.UUID.t(), map()) ::
+          {:ok, {[Command.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list_for_transaction(transaction_or_id, flop_params \\ %{})
+
+  def list_for_transaction(%Transaction{id: id}, flop_params),
+    do: list_for_transaction(id, flop_params)
+
+  def list_for_transaction(id, flop_params) when is_binary(id) do
+    base_transaction_query(id)
+    |> DoubleEntryLedger.Flop.validate_and_run(flop_params, for: Command)
   end
 end

@@ -14,7 +14,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Workers
-  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 
@@ -37,7 +38,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
       JournalEvent.build_create(%{command_map: command_map, instance_id: instance_id})
     )
     |> Multi.update(:command_success, build_mark_as_processed(event))
-    |> Oban.insert(:create_account_link, fn %{
+    |> DoubleEntryLedger.Oban.insert(:create_account_link, fn %{
                                               command_success: event,
                                               account: account,
                                               journal_event: journal_event

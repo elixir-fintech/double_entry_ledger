@@ -10,16 +10,27 @@ defmodule DoubleEntryLedger.Application do
   @impl true
   def start(_type, _args) do
     children =
-      [
-        DoubleEntryLedger.Repo,
-        if(@start_command_queue, do: {DoubleEntryLedger.CommandQueue.Supervisor, []}),
-        {Oban, Application.fetch_env!(:double_entry_ledger, Oban)}
-      ]
-      |> Enum.reject(&is_nil/1)
+      if DoubleEntryLedger.Config.repo() == DoubleEntryLedger.Repo do
+        # Standalone mode: library owns its repo and supervises everything.
+        [DoubleEntryLedger.Repo | DoubleEntryLedger.children()]
+      else
+        # BYO-repo mode: consumer's repo must be up before Oban and the
+        # command queue start, so the consumer supervises those via
+        # `DoubleEntryLedger.children/0` in their own application.
+        []
+      end
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: DoubleEntryLedger.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  @doc false
+  @spec managed_children() :: [Supervisor.child_spec() | {module(), term()} | module()]
+  def managed_children do
+    [
+      if(@start_command_queue, do: {DoubleEntryLedger.CommandQueue.Supervisor, []}),
+      {Oban, Application.fetch_env!(:double_entry_ledger, Oban)}
+    ]
+    |> Enum.reject(&is_nil/1)
   end
 end

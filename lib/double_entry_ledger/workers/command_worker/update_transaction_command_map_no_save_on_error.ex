@@ -32,7 +32,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
     only: [default_response_handler: 2]
 
-  alias DoubleEntryLedger.{JournalEvent, Repo}
+  alias DoubleEntryLedger.JournalEvent
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
@@ -124,7 +125,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
         |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
         end)
-        |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
+        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: eid,
             transaction_id: tid,

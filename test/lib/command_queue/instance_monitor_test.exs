@@ -99,8 +99,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitorTest do
         Registry.lookup(DoubleEntryLedger.CommandQueue.Registry, instance.id)
 
       command_was_processed =
-        case CommandStore.list_all_for_instance_id(instance.id) do
-          [cmd | _] -> cmd.command_queue_item.status != :pending
+        case CommandStore.list_for_instance(instance.id) do
+          {:ok, {[cmd | _], _meta}} -> cmd.command_queue_item.status != :pending
           _ -> false
         end
 

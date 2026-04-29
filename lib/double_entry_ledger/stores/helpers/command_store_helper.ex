@@ -39,7 +39,8 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
   alias Ecto.Changeset
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Command, Transaction, Account, Entry, PendingTransactionLookup}
+  alias DoubleEntryLedger.{Command, Transaction, Account, Entry, PendingTransactionLookup}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
 
   @doc """

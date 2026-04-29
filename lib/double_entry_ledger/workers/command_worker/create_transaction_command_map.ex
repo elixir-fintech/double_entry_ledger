@@ -27,7 +27,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
   use DoubleEntryLedger.Occ.Processor
   use DoubleEntryLedger.Logger
 
-  alias DoubleEntryLedger.{Command, Repo, JournalEvent, PendingTransactionLookup}
+  alias DoubleEntryLedger.{Command, JournalEvent, PendingTransactionLookup}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
@@ -203,7 +204,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
           PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
         end)
-        |> Oban.insert(:create_transaction_link, fn _ ->
+        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn _ ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: cid,
             transaction_id: tid,
@@ -220,7 +221,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
         Multi.update(Multi.new(), :command_success, fn _ ->
           build_mark_as_processed(command)
         end)
-        |> Oban.insert(:create_transaction_link, fn _ ->
+        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn _ ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: cid,
             transaction_id: tid,

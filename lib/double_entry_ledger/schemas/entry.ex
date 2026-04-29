@@ -40,10 +40,11 @@ defmodule DoubleEntryLedger.Entry do
   alias DoubleEntryLedger.{
     Account,
     BalanceHistoryEntry,
-    Repo,
     Transaction,
     Types
   }
+
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias __MODULE__, as: Entry
 

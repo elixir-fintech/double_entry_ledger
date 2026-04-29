@@ -46,7 +46,8 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
   to ensure consistency when concurrent operations are taking place.
   """
   import Ecto.Query, only: [from: 2]
-  alias DoubleEntryLedger.{Instance, Repo, Account, Telemetry}
+  alias DoubleEntryLedger.{Instance, Account, Telemetry}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @doc """
@@ -83,8 +84,31 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
     end
   end
 
-  def list_all do
-    Repo.all(Instance)
+  @doc """
+  Lists ledger instances with cursor pagination via `Flop`.
+
+  ## Parameters
+
+    - `flop_params` (map, optional): Flop parameter map. Common keys:
+      - `:first` / `:after` — cursor forward pagination
+      - `:last` / `:before` — cursor backward pagination
+      - `:filters` — list of `%{field: atom, op: atom, value: any}` (only `:address` is allow-listed)
+      - `:order_by` / `:order_directions` — override default `[inserted_at desc, id desc]`
+
+  ## Returns
+
+    - `{:ok, {[Instance.t()], Flop.Meta.t()}}` on success.
+    - `{:error, Flop.Meta.t()}` if params fail validation (e.g. filtering on a non-allow-listed field).
+
+  ## Examples
+
+      iex> {:ok, %{id: id}} = InstanceStore.create(%{address: "Sample:Ledger"})
+      iex> {:ok, {[%{id: ^id}], %Flop.Meta{}}} = InstanceStore.list()
+  """
+  @spec list(map()) ::
+          {:ok, {[Instance.t()], Flop.Meta.t()}} | {:error, Flop.Meta.t()}
+  def list(flop_params \\ %{}) do
+    DoubleEntryLedger.Flop.validate_and_run(Instance, flop_params, for: Instance)
   end
 
   @doc """

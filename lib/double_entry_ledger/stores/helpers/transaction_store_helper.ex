@@ -15,7 +15,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
   """
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Repo, Transaction, Types}
+  alias DoubleEntryLedger.{Transaction, Types}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   @doc """
   Builds an `Ecto.Multi` to create a new transaction. This is used as a building block for more complex

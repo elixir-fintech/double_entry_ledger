@@ -30,13 +30,22 @@ defmodule DoubleEntryLedger.Migration do
     * Version 3 — `trace_context` JSONB column on commands for distributed tracing.
       The column is not indexed — consumers who need to query by trace context
       should add their own index.
+    * Version 4 — replace single-column `(entry_id)` index on `balance_history_entries`
+      with compound `(entry_id, inserted_at)` index to support ordered lookups
+      of the latest balance history entry per entry (leading-column prefix also
+      serves queries filtered by `entry_id` alone).
 
-  New consumers use `up()` which applies all versions. Existing consumers
-  upgrading from v0.1.0 use the `:from` option to skip already-applied versions:
+  New consumers add a single migration calling `up()` / `down()` — all versions
+  apply in order. Existing consumers upgrading to a new library release add a
+  new migration per upgrade, using `:from` to skip already-applied versions:
 
-      # Upgrade from v0.1.0 (version 1 already applied via copied migrations)
+      # Upgrade from v0.1.0 (version 1 already applied)
       def up, do: DoubleEntryLedger.Migration.up(from: 1)
       def down, do: DoubleEntryLedger.Migration.down(version: 1)
+
+      # Upgrade from 0.3.x to 0.4.0 (versions 1-3 already applied)
+      def up, do: DoubleEntryLedger.Migration.up(from: 3)
+      def down, do: DoubleEntryLedger.Migration.down(from: 4, version: 3)
 
   ## Oban
 
@@ -59,7 +68,7 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  @latest_version 3
+  @latest_version 4
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -90,7 +99,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 3 and version >= 3, do: v3_up(prefix)
+    if from < 3 and version >= 3 do
+      v3_up(prefix)
+      flush()
+    end
+
+    if from < 4 and version >= 4, do: v4_up(prefix)
 
     :ok
   end
@@ -109,6 +123,11 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 4 and version < 4 do
+      v4_down(prefix)
+      flush()
+    end
 
     if from >= 3 and version < 3 do
       v3_down(prefix)
@@ -267,6 +286,18 @@ defmodule DoubleEntryLedger.Migration do
     alter table(:commands, prefix: prefix) do
       remove(:trace_context)
     end
+  end
+
+  # ── Version 4: compound (entry_id, inserted_at) index on balance_history_entries ──
+
+  defp v4_up(prefix) do
+    drop(index(:balance_history_entries, [:entry_id], prefix: prefix))
+    create(index(:balance_history_entries, [:entry_id, :inserted_at], prefix: prefix))
+  end
+
+  defp v4_down(prefix) do
+    drop(index(:balance_history_entries, [:entry_id, :inserted_at], prefix: prefix))
+    create(index(:balance_history_entries, [:entry_id], prefix: prefix))
   end
 
   # ── V1 table definitions ───────────────────────────────────────────

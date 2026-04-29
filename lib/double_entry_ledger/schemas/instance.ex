@@ -26,7 +26,8 @@ defmodule DoubleEntryLedger.Instance do
   """
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Account, Repo, Transaction}
+  alias DoubleEntryLedger.{Account, Transaction}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias __MODULE__, as: Instance
 
   @typedoc """
@@ -78,6 +79,18 @@ defmodule DoubleEntryLedger.Instance do
           pending_debit: integer(),
           pending_credit: integer()
         }
+
+  @derive {
+    Flop.Schema,
+    filterable: [:address],
+    sortable: [:inserted_at, :id, :address],
+    default_limit: 40,
+    max_limit: 200,
+    default_order: %{
+      order_by: [:inserted_at, :id],
+      order_directions: [:desc, :desc]
+    }
+  }
 
   schema "instances" do
     field(:config, :map)

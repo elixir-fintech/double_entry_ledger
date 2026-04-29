@@ -66,6 +66,14 @@ defmodule DoubleEntryLedger.Command.IdempotencyKey do
 
   @spec secret() :: binary()
   defp secret() do
-    Application.fetch_env!(:double_entry_ledger, :idempotency_secret)
+    Application.get_env(:double_entry_ledger, :idempotency_secret) ||
+      raise """
+      :double_entry_ledger, :idempotency_secret is not set.
+
+      Set it in your config — typically from an env var in runtime.exs:
+
+          config :double_entry_ledger,
+            idempotency_secret: System.fetch_env!("DEL_IDEMPOTENCY_SECRET")
+      """
   end
 end

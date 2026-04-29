@@ -50,7 +50,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
   alias DoubleEntryLedger.Command.AccountCommandMap
   alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler
-  alias DoubleEntryLedger.{JournalEvent, Repo}
+  alias DoubleEntryLedger.JournalEvent
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.{InstanceStoreHelper, CommandStoreHelper, AccountStoreHelper}
 
   @doc """
@@ -140,7 +141,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
     |> Multi.update(:command_success, fn %{new_command: event} ->
       build_mark_as_processed(event)
     end)
-    |> Oban.insert(:create_account_link, fn %{
+    |> DoubleEntryLedger.Oban.insert(:create_account_link, fn %{
                                               command_success: event,
                                               account: account,
                                               journal_event: journal_event

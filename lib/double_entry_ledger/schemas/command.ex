@@ -59,6 +59,18 @@ defmodule DoubleEntryLedger.Command do
 
   @derive {Jason.Encoder, only: [:id, :command_map, :command_queue_item]}
 
+  @derive {
+    Flop.Schema,
+    filterable: [],
+    sortable: [:inserted_at, :id],
+    default_limit: 40,
+    max_limit: 200,
+    default_order: %{
+      order_by: [:inserted_at, :id],
+      order_directions: [:desc, :desc]
+    }
+  }
+
   schema "commands" do
     field(:command_map, CommandMap, skip_default_validation: true)
     field(:trace_context, :map)

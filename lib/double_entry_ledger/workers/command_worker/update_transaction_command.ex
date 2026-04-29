@@ -34,7 +34,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
   alias Ecto.Multi
 
-  alias DoubleEntryLedger.{Command, JournalEvent, Repo}
+  alias DoubleEntryLedger.{Command, JournalEvent}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
 
@@ -195,7 +196,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
         |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
         end)
-        |> Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
+        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
           Workers.Oban.JournalEventLinks.new(%{
             command_id: eid,
             transaction_id: tid,

@@ -169,7 +169,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
     quote do
       @behaviour DoubleEntryLedger.Occ.Processor
 
-      alias DoubleEntryLedger.{Repo, Telemetry}
+      alias DoubleEntryLedger.Telemetry
+      alias DoubleEntryLedger.Repo.Proxy, as: Repo
       alias Ecto.Multi
       import DoubleEntryLedger.Occ.Helper
       import DoubleEntryLedger.CommandQueue.Scheduling

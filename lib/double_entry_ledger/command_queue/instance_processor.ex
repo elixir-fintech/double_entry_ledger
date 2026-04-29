@@ -18,13 +18,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   use GenServer
   require Logger
 
-  alias DoubleEntryLedger.{Repo, Command, Telemetry}
+  alias DoubleEntryLedger.{Command, Telemetry}
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.CommandStore
   import Ecto.Query
 
-  @schema_prefix Application.compile_env(:double_entry_ledger, :schema_prefix)
+  @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
   # Client API
 

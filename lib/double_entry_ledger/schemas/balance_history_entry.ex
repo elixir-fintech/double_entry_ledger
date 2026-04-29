@@ -66,6 +66,18 @@ defmodule DoubleEntryLedger.BalanceHistoryEntry do
           updated_at: DateTime.t()
         }
 
+  @derive {
+    Flop.Schema,
+    filterable: [],
+    sortable: [:inserted_at, :id],
+    default_limit: 40,
+    max_limit: 200,
+    default_order: %{
+      order_by: [:inserted_at, :id],
+      order_directions: [:desc, :desc]
+    }
+  }
+
   schema "balance_history_entries" do
     field(:available, :integer, default: 0)
 

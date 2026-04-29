@@ -28,6 +28,7 @@ config :double_entry_ledger, :command_queue,
   processor_name: "command_queue"
 
 config :double_entry_ledger, Oban,
+  name: DoubleEntryLedger.Oban,
   engine: Oban.Engines.Basic,
   queues: [double_entry_ledger: 1],
   repo: DoubleEntryLedger.Repo,
