@@ -32,13 +32,15 @@ defmodule DoubleEntryLedger.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger] ++ tools_for(Mix.env()),
       # use below for profiling
       # extra_applications: [:logger, :tools, :runtime_tools],
       mod: {DoubleEntryLedger.Application, []}
     ]
   end
 
+  # defp tools_for(:perf), do: [:tools]
+  defp tools_for(_), do: []
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [

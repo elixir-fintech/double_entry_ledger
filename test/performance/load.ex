@@ -44,13 +44,16 @@ defmodule DoubleEntryLedger.LoadTesting do
     end_time = start_time + 1000 * seconds
 
     # https://blog.appsignal.com/2022/04/26/using-profiling-in-elixir-to-improve-performance.html
-    # :eprof.start_profiling([self()])
+    # :eprof.start_profiling(Process.list())
     # :fprof.start()
     # :fprof.trace([:start, procs: :all])
 
-    # Use a counter to keep track of successful transactions
+    # Sliding-window driver: holds exactly `concurrency` workers in flight at all
+    # times until end_time. Each worker is a long-lived process that pulls its
+    # next params from `transaction_lists` based on its worker_id and iteration,
+    # so there is no central queue and no per-round barrier.
     successful_transactions =
-      run_transactions(concurrency, end_time, 0, instance, 0, transaction_lists)
+      run_sliding_window(concurrency, end_time, instance, transaction_lists)
 
     # :eprof.stop_profiling()
     # :eprof.analyze()
@@ -68,45 +71,72 @@ defmodule DoubleEntryLedger.LoadTesting do
     IO.puts("#{bold("After:")} #{validate_instance_balance(instance)}")
   end
 
-  # Helper function to run multiple transactions concurrently
-  defp run_transactions(concurrency, end_time, counter, instance, index, transaction_lists) do
-    # Keep running tasks until the time limit is reached
-    if System.monotonic_time(:millisecond) < end_time do
-      tasks =
-        transaction_lists
-        |> Enum.at(index)
-        |> Enum.map(&create_task(instance, &1))
+  # Sliding-window orchestrator. Spawns `concurrency` worker processes that each
+  # loop until end_time. Each worker reports its total success count to the
+  # caller exactly once, on exit. No barrier, no central work queue.
+  defp run_sliding_window(concurrency, end_time, instance, transaction_lists) do
+    parent = self()
+    num_rounds = length(transaction_lists)
 
-      # Await the tasks and increment the counter for successful transactions
-      results = Enum.map(tasks, &Task.await/1)
-
-      # Count how many were successful
-      successes =
-        Enum.count(results, fn
-          {:ok, _, _} -> true
-          _ -> false
+    workers =
+      Enum.map(0..(concurrency - 1), fn worker_id ->
+        spawn_link(fn ->
+          worker_loop(parent, instance, transaction_lists, num_rounds, worker_id, 0, 0, end_time)
         end)
+      end)
 
-      # Calculate the next index to use or loop back to the beginning
-      new_index =
-        if index == @destination_accounts - 1 do
-          0
-        else
-          index + 1
+    collect_results(MapSet.new(workers), 0)
+  end
+
+  # Each worker is bound to a fixed source account (its worker_id). Across
+  # iterations it cycles through the @destination_accounts destination accounts
+  # for that source, mirroring the slot the original barrier-based driver would
+  # have placed it in.
+  defp worker_loop(
+         parent,
+         instance,
+         transaction_lists,
+         num_rounds,
+         worker_id,
+         iter,
+         success_count,
+         end_time
+       ) do
+    if System.monotonic_time(:millisecond) >= end_time do
+      send(parent, {:worker_done, self(), success_count})
+    else
+      params =
+        transaction_lists
+        |> Enum.at(rem(iter, num_rounds))
+        |> Enum.at(worker_id)
+
+      delta =
+        case run_transaction(instance, params) do
+          {:ok, _, _} -> 1
+          _ -> 0
         end
 
-      # Recur with updated time and count
-      run_transactions(
-        concurrency,
-        end_time,
-        counter + successes,
+      worker_loop(
+        parent,
         instance,
-        new_index,
-        transaction_lists
+        transaction_lists,
+        num_rounds,
+        worker_id,
+        iter + 1,
+        success_count + delta,
+        end_time
       )
+    end
+  end
+
+  defp collect_results(pending, total) do
+    if MapSet.size(pending) == 0 do
+      total
     else
-      # Return the total count after time runs out
-      counter
+      receive do
+        {:worker_done, pid, count} ->
+          collect_results(MapSet.delete(pending, pid), total + count)
+      end
     end
   end
 
@@ -194,13 +224,6 @@ defmodule DoubleEntryLedger.LoadTesting do
           ]
         }
       end)
-    end)
-  end
-
-  # create a single async task to run an event/transaction
-  defp create_task(instance, trx_params) do
-    Task.async(fn ->
-      run_transaction(instance, trx_params)
     end)
   end
 
