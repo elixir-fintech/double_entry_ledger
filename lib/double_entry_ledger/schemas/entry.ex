@@ -150,7 +150,6 @@ defmodule DoubleEntryLedger.Entry do
     |> put_account(id)
     |> validate_same_account_currency()
     |> put_account_assoc(transition)
-    |> put_balance_history_entry_assoc()
   end
 
   # catch-all clause
@@ -260,7 +259,6 @@ defmodule DoubleEntryLedger.Entry do
     |> validate_same_account_currency()
     |> validate_amount_sign(entry, attrs)
     |> put_account_assoc(transition)
-    |> put_balance_history_entry_assoc()
   end
 
   @doc """
@@ -291,24 +289,6 @@ defmodule DoubleEntryLedger.Entry do
       :account,
       Account.update_balances(account, %{entry: changeset, trx: transition})
     )
-  end
-
-  @spec put_balance_history_entry_assoc(Ecto.Changeset.t()) :: Ecto.Changeset.t()
-  defp put_balance_history_entry_assoc(%{valid?: false} = changeset), do: changeset
-
-  defp put_balance_history_entry_assoc(changeset) do
-    account_changeset = get_assoc(changeset, :account, :changeset)
-    balance_history_entries = get_assoc(changeset, :balance_history_entries, :struct)
-
-    balance_history_entry_changeset =
-      BalanceHistoryEntry.build_from_account_changeset(account_changeset)
-
-    # generally not right way to do it, but most entries will have only one balance history entry
-    # and this gets around using a multi
-    changeset
-    |> put_assoc(:balance_history_entries, [
-      balance_history_entry_changeset | balance_history_entries
-    ])
   end
 
   @spec validate_same_account_currency(Ecto.Changeset.t()) :: Ecto.Changeset.t()

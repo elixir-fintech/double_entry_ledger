@@ -15,8 +15,10 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
   """
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Transaction, Types}
+  alias DoubleEntryLedger.{BalanceHistoryEntry, Transaction, Types}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
+
+  @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
   @doc """
   Builds an `Ecto.Multi` to create a new transaction. This is used as a building block for more complex
@@ -50,6 +52,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
           {:error, e}
       end
     end)
+    |> insert_balance_history_entries({step, :balance_history_entries}, step, repo)
   end
 
   @doc """
@@ -82,7 +85,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
           is_struct(transaction_or_step, Transaction) -> transaction_or_step
           is_atom(transaction_or_step) -> Map.fetch!(changes, transaction_or_step)
         end
-        |> Repo.preload([entries: [:account, :balance_history_entries]], force: true)
+        |> Repo.preload([entries: :account], force: true)
 
       transition = update_transition(transaction, attrs)
 
@@ -93,6 +96,28 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
         e in Ecto.StaleEntryError ->
           {:error, e}
       end
+    end)
+    |> insert_balance_history_entries({step, :balance_history_entries}, step, repo)
+  end
+
+  # Inserts one BalanceHistoryEntry per entry on the transaction at `tx_step`.
+  # Reads the post-write `Account` struct from `entry.account` (populated by
+  # `put_account_assoc/2` during the cascading insert/update). Bypasses
+  # `cast_assoc`/`put_assoc` to use a single batched `Repo.insert_all/3`.
+  @spec insert_balance_history_entries(Multi.t(), term(), atom(), Ecto.Repo.t()) :: Multi.t()
+  defp insert_balance_history_entries(multi, bhe_step, tx_step, repo) do
+    Multi.run(multi, bhe_step, fn _repo, changes ->
+      transaction = Map.fetch!(changes, tx_step)
+      now = DateTime.utc_now()
+
+      bhe_attrs =
+        Enum.map(transaction.entries, fn entry ->
+          BalanceHistoryEntry.build_from_account(entry.account, entry, now)
+        end)
+
+      {count, _} = repo.insert_all(BalanceHistoryEntry, bhe_attrs, prefix: @schema_prefix)
+
+      {:ok, count}
     end)
   end
 

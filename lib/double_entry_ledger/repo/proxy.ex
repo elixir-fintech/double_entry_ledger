@@ -24,6 +24,13 @@ defmodule DoubleEntryLedger.Repo.Proxy do
   def insert(x, opts), do: Config.repo().insert(x, opts)
   def insert!(x), do: Config.repo().insert!(x)
   def insert!(x, opts), do: Config.repo().insert!(x, opts)
+
+  def insert_all(schema_or_source, entries),
+    do: Config.repo().insert_all(schema_or_source, entries)
+
+  def insert_all(schema_or_source, entries, opts),
+    do: Config.repo().insert_all(schema_or_source, entries, opts)
+
   def update(x), do: Config.repo().update(x)
   def update(x, opts), do: Config.repo().update(x, opts)
   def update!(x), do: Config.repo().update!(x)
