@@ -17,7 +17,7 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
 config :double_entry_ledger, Oban, testing: :inline, prefix: "double_entry_ledger"
 
 config :logger,
-  level: :info
+  level: :warning
 
 config :logger, :console,
   format: "$time $message $metadata[$level]\n",

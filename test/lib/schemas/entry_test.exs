@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EntryTest do
 
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Account, Entry, Repo, Balance}
+  alias DoubleEntryLedger.{Account, Entry, Repo}
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures

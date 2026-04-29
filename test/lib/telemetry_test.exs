@@ -19,20 +19,25 @@ defmodule DoubleEntryLedger.TelemetryTest do
   defp attach(event_name) do
     test_pid = self()
     ref = make_ref()
-
     handler_id = "test-#{inspect(ref)}"
 
+    # Pass test_pid + ref via the config arg so the handler itself can be a
+    # module function (MFA capture). Anonymous-closure handlers trigger a
+    # runtime warning from :telemetry.attach/4 about a performance penalty.
     :telemetry.attach(
       handler_id,
       event_name,
-      fn event, measurements, metadata, _config ->
-        send(test_pid, {:telemetry_event, ref, event, measurements, metadata})
-      end,
-      nil
+      &__MODULE__.forward_event/4,
+      %{test_pid: test_pid, ref: ref}
     )
 
     on_exit(fn -> :telemetry.detach(handler_id) end)
     ref
+  end
+
+  @doc false
+  def forward_event(event, measurements, metadata, %{test_pid: pid, ref: ref}) do
+    send(pid, {:telemetry_event, ref, event, measurements, metadata})
   end
 
   describe "command_enqueue" do

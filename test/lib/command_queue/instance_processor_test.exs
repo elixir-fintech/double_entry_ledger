@@ -12,8 +12,9 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
 
-  alias DoubleEntryLedger.CommandQueue.InstanceProcessor
+  alias DoubleEntryLedger.CommandQueue.{InstanceProcessor, Scheduling}
   alias DoubleEntryLedger.Stores.CommandStore
+  alias DoubleEntryLedger.Repo
 
   setup [:create_instance, :create_accounts, :verify_on_exit!]
 
@@ -42,9 +43,18 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
 
   describe "successful processing" do
     test "processes command and shuts down", %{instance: instance, command: command} do
+      # Mimic the real worker's side effect: mark the command as :processed.
+      # Without this, the InstanceProcessor's `:process_next` loop would re-claim
+      # the same command (status still :pending) and call the mock a second
+      # time, producing spurious Mox.UnexpectedCallError noise in test output.
       DoubleEntryLedger.MockCommandWorker
-      |> expect(:process_command_with_id, fn id, _processor_name ->
+      |> stub(:process_command_with_id, fn id, _processor_name ->
         assert id == command.id
+
+        command
+        |> Scheduling.build_mark_as_processed()
+        |> Repo.update!()
+
         {:ok, nil, nil}
       end)
 
@@ -56,9 +66,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
   end
 
   describe "error processing" do
-    test "handles worker error and shuts down", %{instance: instance} do
+    test "handles worker error and shuts down", %{instance: instance, command: command} do
+      # Same rationale as the success test: terminate the loop by
+      # transitioning the command to a non-claimable state — here
+      # :dead_letter, since the test simulates a non-recoverable worker error.
       DoubleEntryLedger.MockCommandWorker
-      |> expect(:process_command_with_id, fn _id, _processor_name ->
+      |> stub(:process_command_with_id, fn _id, _processor_name ->
+        Scheduling.mark_as_dead_letter(command, "some worker error")
+
         {:error, :some_worker_error}
       end)
 
@@ -71,8 +86,13 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
 
   describe "task crash recovery" do
     test "schedules retry when worker crashes", %{instance: instance, command: command} do
+      # `stub` (not `expect`) — the InstanceProcessor's retry loop may invoke
+      # the mock more than once before the command is dead-lettered, depending
+      # on timing of `next_retry_after`. A 1-call `expect` would itself raise
+      # `Mox.UnexpectedCallError` on a second invocation, polluting the
+      # output and triggering further retry cycles before final shutdown.
       DoubleEntryLedger.MockCommandWorker
-      |> expect(:process_command_with_id, fn _id, _processor_name ->
+      |> stub(:process_command_with_id, fn _id, _processor_name ->
         raise "intentional crash"
       end)
 
@@ -96,7 +116,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       |> Repo.update!()
 
       DoubleEntryLedger.MockCommandWorker
-      |> expect(:process_command_with_id, fn _id, _processor_name ->
+      |> stub(:process_command_with_id, fn _id, _processor_name ->
         raise "crash after max retries"
       end)
 
