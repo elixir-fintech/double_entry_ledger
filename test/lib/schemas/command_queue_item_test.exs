@@ -22,7 +22,11 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
     end
 
     test "invalid changeset with invalid status" do
-      attrs = %{event_id: Ecto.UUID.generate(), status: "invalid_status"}
+      attrs = %{
+        event_id: Ecto.UUID.generate(),
+        instance_id: Ecto.UUID.generate(),
+        status: "invalid_status"
+      }
 
       assert %Changeset{errors: [status: {"is invalid", _}]} =
                CommandQueueItem.changeset(%CommandQueueItem{}, attrs)

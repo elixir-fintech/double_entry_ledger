@@ -42,6 +42,13 @@ defmodule DoubleEntryLedger.Migration do
       never both") is enforced by a `transaction_xor_account` CHECK constraint
       that allows the post-deletion `(NULL, NULL)` state since commands and
       accounts are deletable.
+    * Version 6 — denormalize `instance_id` onto `command_queue_items` and
+      add a partial index `(instance_id, inserted_at) WHERE status IN
+      ('pending', 'occ_timeout', 'failed')`. Removes the O(N²) drain pattern
+      where `find_next_command` scanned all already-`:processed` rows in
+      `inserted_at` order to find the next in-flight item. The new index
+      contains only in-flight rows (tiny in steady state) and is partitioned
+      by instance for multi-instance correctness.
 
   New consumers add a single migration calling `up()` / `down()` — all versions
   apply in order. Existing consumers upgrading to a new library release add a
@@ -76,7 +83,7 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  @latest_version 5
+  @latest_version 6
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -117,7 +124,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 5 and version >= 5, do: v5_up(prefix)
+    if from < 5 and version >= 5 do
+      v5_up(prefix)
+      flush()
+    end
+
+    if from < 6 and version >= 6, do: v6_up(prefix)
 
     :ok
   end
@@ -136,6 +148,11 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 6 and version < 6 do
+      v6_down(prefix)
+      flush()
+    end
 
     if from >= 5 and version < 5 do
       v5_down(prefix)
@@ -434,6 +451,58 @@ defmodule DoubleEntryLedger.Migration do
       remove(:account_id)
       remove(:transaction_id)
       remove(:command_id)
+    end
+  end
+
+  # ── Version 6: denormalize instance_id onto command_queue_items + partial index ──
+
+  defp v6_up(prefix) do
+    # 1. Add nullable FK column to command_queue_items.
+    alter table(:command_queue_items, prefix: prefix) do
+      add(:instance_id, references(:instances, on_delete: :nothing, type: :binary_id))
+    end
+
+    flush()
+
+    # 2. Backfill from commands.
+    execute("""
+    UPDATE #{prefix}.command_queue_items eqi
+    SET instance_id = c.instance_id
+    FROM #{prefix}.commands c
+    WHERE c.id = eqi.command_id
+    """)
+
+    flush()
+
+    # 3. Enforce NOT NULL. Done via raw SQL because `modify/3` with a
+    # `references/2` definition tries to re-create the FK constraint
+    # we already added in step 1.
+    execute("ALTER TABLE #{prefix}.command_queue_items ALTER COLUMN instance_id SET NOT NULL")
+
+    # 4. Partial index keyed on (instance_id, inserted_at) for in-flight rows.
+    # This is the index that fixes the O(N²) drain in InstanceProcessor's
+    # find_next_command query — the index contains only currently-in-flight
+    # queue items and is naturally ordered by (instance, inserted_at), which
+    # is exactly the access pattern.
+    create(
+      index(:command_queue_items, [:instance_id, :inserted_at],
+        prefix: prefix,
+        where: "status IN ('pending', 'occ_timeout', 'failed')",
+        name: "idx_command_queue_items_in_flight"
+      )
+    )
+  end
+
+  defp v6_down(prefix) do
+    drop(
+      index(:command_queue_items, [:instance_id, :inserted_at],
+        prefix: prefix,
+        name: "idx_command_queue_items_in_flight"
+      )
+    )
+
+    alter table(:command_queue_items, prefix: prefix) do
+      remove(:instance_id)
     end
   end
 

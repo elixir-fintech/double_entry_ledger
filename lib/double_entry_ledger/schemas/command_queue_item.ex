@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
   import Ecto.Changeset
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   alias DoubleEntryLedger.Command.ErrorMap
-  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.{Command, Instance}
   import DoubleEntryLedger.Command.ErrorMap, only: [build_error: 1]
 
   alias __MODULE__, as: CommandQueueItem
@@ -24,7 +24,8 @@ defmodule DoubleEntryLedger.CommandQueueItem do
           next_retry_after: DateTime.t() | nil,
           occ_retry_count: integer() | nil,
           errors: list(map()) | nil,
-          command_id: Ecto.UUID.t() | nil
+          command_id: Ecto.UUID.t() | nil,
+          instance_id: Ecto.UUID.t() | nil
         }
 
   @states [:pending, :processed, :failed, :occ_timeout, :processing, :dead_letter]
@@ -50,6 +51,10 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     timestamps(type: :utc_datetime_usec)
 
     belongs_to(:command, Command, type: Ecto.UUID)
+    # Denormalized from `commands.instance_id` (migration v6) so the
+    # `find_next_command` partial index can be keyed on
+    # (instance_id, inserted_at) without a JOIN.
+    belongs_to(:instance, Instance, type: Ecto.UUID)
   end
 
   @doc false
@@ -65,9 +70,10 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       :next_retry_after,
       :occ_retry_count,
       :errors,
-      :command_id
+      :command_id,
+      :instance_id
     ])
-    |> validate_required([:status])
+    |> validate_required([:status, :instance_id])
     |> validate_inclusion(:status, @states)
   end
 

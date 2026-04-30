@@ -181,7 +181,7 @@ defmodule DoubleEntryLedger.Command do
 
   @spec base_changeset(Command.t() | Ecto.Changeset.t(Command.t()), map()) :: Ecto.Changeset.t()
   defp base_changeset(command, attrs) do
-    attrs = Map.put_new(attrs, :command_queue_item, %{})
+    attrs = ensure_queue_item_instance_id(attrs)
 
     command
     |> cast(attrs, [
@@ -192,6 +192,20 @@ defmodule DoubleEntryLedger.Command do
     |> validate_required([:instance_id, :command_map])
     |> cast_assoc(:command_queue_item, with: &CommandQueueItem.changeset/2, required: true)
     |> validate_command_map(attrs)
+  end
+
+  # The denormalized `instance_id` on `command_queue_items` (migration v6)
+  # must always match the parent command's. Enforce that invariant here so
+  # callers don't need to set it in two places.
+  defp ensure_queue_item_instance_id(attrs) do
+    instance_id = Map.get(attrs, :instance_id) || Map.get(attrs, "instance_id")
+
+    queue_item_attrs =
+      attrs
+      |> Map.get(:command_queue_item, %{})
+      |> Map.put(:instance_id, instance_id)
+
+    Map.put(attrs, :command_queue_item, queue_item_attrs)
   end
 
   defp validate_command_map(changeset, attrs) do

@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   use GenServer
   require Logger
 
-  alias DoubleEntryLedger.{Command, Telemetry}
+  alias DoubleEntryLedger.{CommandQueueItem, Telemetry}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.CommandQueue.Scheduling
@@ -87,29 +87,29 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   @impl true
   def handle_info(:process_next, %{instance_id: instance_id, worker: worker} = state) do
-    case find_next_command(instance_id) do
+    case find_next_command_id(instance_id) do
       nil ->
         # No more commands to process, terminate
         Logger.info("No more commands to process for instance #{instance_id}, shutting down")
         Telemetry.instance_processor_stop(%{instance_id: instance_id})
         {:stop, :normal, state}
 
-      command ->
+      command_id ->
         # Start processing the command
         # Process command in a separate task to not block the GenServer
-        Logger.info("Processing command #{command.id} for instance #{instance_id}")
+        Logger.info("Processing command #{command_id} for instance #{instance_id}")
 
         parent = self()
 
         {:ok, pid} =
           Task.start(fn ->
-            process_result = worker.process_command_with_id(command.id, processor_name())
-            send(parent, {:processing_complete, command.id, process_result})
+            process_result = worker.process_command_with_id(command_id, processor_name())
+            send(parent, {:processing_complete, command_id, process_result})
           end)
 
         ref = Process.monitor(pid)
 
-        {:noreply, %{state | processing: true, current_command_id: command.id, task_ref: ref}}
+        {:noreply, %{state | processing: true, current_command_id: command_id, task_ref: ref}}
     end
   end
 
@@ -168,19 +168,24 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end
   end
 
-  defp find_next_command(instance_id) do
+  # Returns the id of the next in-flight command for this instance, or
+  # nil if none. Drives off the partial index
+  # `idx_command_queue_items_in_flight` added in migration v6:
+  # (instance_id, inserted_at) WHERE status IN ('pending', 'occ_timeout',
+  # 'failed'). Before v6 this query started from `commands` and walked
+  # every row in inserted_at order — O(N²) drain behaviour.
+  defp find_next_command_id(instance_id) do
     now = DateTime.utc_now()
 
-    # Find a command for this instance that's ready to be processed
-    from(e in Command,
-      join: eqi in assoc(e, :command_queue_item),
+    from(eqi in CommandQueueItem,
       prefix: ^@schema_prefix,
       where:
-        eqi.status in [:pending, :occ_timeout, :failed] and
-          e.instance_id == ^instance_id and
+        eqi.instance_id == ^instance_id and
+          eqi.status in [:pending, :occ_timeout, :failed] and
           (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
-      order_by: [asc: e.inserted_at],
-      limit: 1
+      order_by: [asc: eqi.inserted_at],
+      limit: 1,
+      select: eqi.command_id
     )
     |> Repo.one()
   end
