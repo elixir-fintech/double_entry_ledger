@@ -39,7 +39,7 @@ defmodule DoubleEntryLedger.MixProject do
     ]
   end
 
-  # defp tools_for(:perf), do: [:tools]
+  defp tools_for(:perf), do: [:tools]
   defp tools_for(_), do: []
   # Run "mix help deps" to learn about dependencies.
   defp deps do

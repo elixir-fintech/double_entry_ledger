@@ -44,9 +44,15 @@ defmodule DoubleEntryLedger.LoadTesting do
     end_time = start_time + 1000 * seconds
 
     # https://blog.appsignal.com/2022/04/26/using-profiling-in-elixir-to-improve-performance.html
+    # To profile: uncomment the four `:eprof.*` lines (and the
+    # `Application.ensure_all_started/1` call). `mix.exs` keeps `:tools` in
+    # `extra_applications` for the `:perf` env so `:eprof` is available.
+    # Pass `Process.list()` to the rootset so workers spawn_link'd below are
+    # picked up — `:eprof.profile(fun)` and `start_profiling([self()])` only
+    # capture the driver and miss the actual transaction work.
+    # Application.ensure_all_started(:tools)
+    # {:ok, _} = :eprof.start()
     # :eprof.start_profiling(Process.list())
-    # :fprof.start()
-    # :fprof.trace([:start, procs: :all])
 
     # Sliding-window driver: holds exactly `concurrency` workers in flight at all
     # times until end_time. Each worker is a long-lived process that pulls its
@@ -57,9 +63,6 @@ defmodule DoubleEntryLedger.LoadTesting do
 
     # :eprof.stop_profiling()
     # :eprof.analyze()
-    # :fprof.trace(:stop)
-    # :fprof.profile()
-    # :fprof.analyse(totals: false, dest: 'prof.analysis')
 
     IO.puts("Transactions processed in #{seconds} second(s): #{successful_transactions}")
     IO.puts("Transactions per second: #{successful_transactions / seconds} tps")
