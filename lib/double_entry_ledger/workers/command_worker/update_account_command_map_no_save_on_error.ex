@@ -51,7 +51,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
     only: [default_response_handler: 2]
 
   alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker.{AccountCommandMapResponseHandler}
   alias DoubleEntryLedger.Command.AccountCommandMap
   alias DoubleEntryLedger.JournalEvent
@@ -132,16 +131,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
         Multi.insert(
           Multi.new(),
           :journal_event,
-          JournalEvent.build_create(%{command_map: command_map, instance_id: iid})
+          JournalEvent.build_create(%{
+            command_map: command_map,
+            instance_id: iid,
+            command_id: eid,
+            account_id: aid
+          })
         )
         |> Multi.update(:command_success, build_mark_as_processed(event))
-        |> DoubleEntryLedger.Oban.insert(:create_account_link, fn %{journal_event: %{id: jid}} ->
-          Workers.Oban.JournalEventLinks.new(%{
-            command_id: eid,
-            account_id: aid,
-            journal_event_id: jid
-          })
-        end)
 
       _ ->
         command_map_changeset =

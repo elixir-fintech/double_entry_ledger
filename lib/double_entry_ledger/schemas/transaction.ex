@@ -36,7 +36,6 @@ defmodule DoubleEntryLedger.Transaction do
   alias DoubleEntryLedger.{
     Entry,
     JournalEvent,
-    JournalEventTransactionLink,
     Instance,
     Types
   }
@@ -81,8 +80,6 @@ defmodule DoubleEntryLedger.Transaction do
           posted_at: DateTime.t() | nil,
           status: state() | nil,
           entries: [Entry.t()] | Ecto.Association.NotLoaded.t(),
-          journal_event_transaction_links:
-            [JournalEventTransactionLink.t()] | Ecto.Association.NotLoaded.t(),
           journal_events: [JournalEvent.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
@@ -107,8 +104,7 @@ defmodule DoubleEntryLedger.Transaction do
     field(:status, Ecto.Enum, values: @states)
     belongs_to(:instance, Instance)
     has_many(:entries, Entry)
-    has_many(:journal_event_transaction_links, JournalEventTransactionLink)
-    has_many(:journal_events, through: [:journal_event_transaction_links, :journal_event])
+    has_many(:journal_events, JournalEvent)
 
     timestamps(type: :utc_datetime_usec)
   end

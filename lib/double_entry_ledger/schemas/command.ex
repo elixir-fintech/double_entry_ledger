@@ -14,7 +14,6 @@ defmodule DoubleEntryLedger.Command do
     Transaction,
     Instance,
     JournalEvent,
-    JournalEventCommandLink,
     CommandQueueItem
   }
 
@@ -47,8 +46,6 @@ defmodule DoubleEntryLedger.Command do
           trace_context: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
-          journal_event_command_link:
-            JournalEventCommandLink.t() | Ecto.Association.NotLoaded.t(),
           journal_event: JournalEvent.t() | Ecto.Association.NotLoaded.t(),
           transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
           account: Account.t() | Ecto.Association.NotLoaded.t(),
@@ -76,8 +73,7 @@ defmodule DoubleEntryLedger.Command do
     field(:trace_context, :map)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    has_one(:journal_event_command_link, JournalEventCommandLink)
-    has_one(:journal_event, through: [:journal_event_command_link, :journal_event])
+    has_one(:journal_event, JournalEvent)
     has_one(:transaction, through: [:journal_event, :transaction])
     has_one(:account, through: [:journal_event, :account])
     has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)

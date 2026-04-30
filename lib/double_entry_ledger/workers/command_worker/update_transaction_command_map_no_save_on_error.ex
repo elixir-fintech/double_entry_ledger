@@ -35,19 +35,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   alias DoubleEntryLedger.JournalEvent
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Command.TransactionCommandMap
-  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
 
   alias Ecto.{Multi, Changeset}
 
   @impl true
   defdelegate handle_occ_final_timeout(command_map, repo),
-    to: Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnError,
+    to: DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnError,
     as: :handle_occ_final_timeout
 
   @impl true
   defdelegate build_transaction(command_map, transaction_map, instance_id, repo),
-    to: Workers.CommandWorker.UpdateTransactionCommandMap,
+    to: DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap,
     as: :build_transaction
 
   @doc """
@@ -120,17 +119,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
         new_command: %{id: eid, command_map: em, instance_id: iid} = event
       } ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
-          JournalEvent.build_create(%{command_map: em, instance_id: iid})
+          JournalEvent.build_create(%{
+            command_map: em,
+            instance_id: iid,
+            command_id: eid,
+            transaction_id: tid
+          })
         end)
         |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
-        end)
-        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
-          Workers.Oban.JournalEventLinks.new(%{
-            command_id: eid,
-            transaction_id: tid,
-            journal_event_id: jid
-          })
         end)
 
       %{get_create_transaction_event_error: %{reason: reason}, new_command: _event} ->

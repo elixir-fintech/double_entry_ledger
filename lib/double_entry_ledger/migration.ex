@@ -34,6 +34,14 @@ defmodule DoubleEntryLedger.Migration do
       with compound `(entry_id, inserted_at)` index to support ordered lookups
       of the latest balance history entry per entry (leading-column prefix also
       serves queries filtered by `entry_id` alone).
+    * Version 5 — collapse the three `journal_event_*_links` join tables into
+      direct nullable FK columns on `journal_events` (`command_id`,
+      `transaction_id`, `account_id`). Removes one synchronous Oban job per
+      command and three rows of write amplification. The XOR invariant
+      ("a journal event is either a transaction event or an account event,
+      never both") is enforced by a `transaction_xor_account` CHECK constraint
+      that allows the post-deletion `(NULL, NULL)` state since commands and
+      accounts are deletable.
 
   New consumers add a single migration calling `up()` / `down()` — all versions
   apply in order. Existing consumers upgrading to a new library release add a
@@ -68,7 +76,7 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  @latest_version 4
+  @latest_version 5
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -104,7 +112,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 4 and version >= 4, do: v4_up(prefix)
+    if from < 4 and version >= 4 do
+      v4_up(prefix)
+      flush()
+    end
+
+    if from < 5 and version >= 5, do: v5_up(prefix)
 
     :ok
   end
@@ -123,6 +136,11 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 5 and version < 5 do
+      v5_down(prefix)
+      flush()
+    end
 
     if from >= 4 and version < 4 do
       v4_down(prefix)
@@ -298,6 +316,125 @@ defmodule DoubleEntryLedger.Migration do
   defp v4_down(prefix) do
     drop(index(:balance_history_entries, [:entry_id, :inserted_at], prefix: prefix))
     create(index(:balance_history_entries, [:entry_id], prefix: prefix))
+  end
+
+  # ── Version 5: collapse journal_event_*_links into direct FKs on journal_events ──
+
+  defp v5_up(prefix) do
+    # 1. Add nullable FK columns. command_id and account_id are nullable on
+    # delete because commands and accounts are deletable; journal_events
+    # outlive them and surface NULL after the source is removed (matching
+    # the previous on_delete: :delete_all behaviour of the link tables).
+    alter table(:journal_events, prefix: prefix) do
+      add(:command_id, references(:commands, on_delete: :nilify_all, type: :binary_id))
+
+      add(
+        :transaction_id,
+        references(:transactions, on_delete: :nothing, type: :binary_id)
+      )
+
+      add(:account_id, references(:accounts, on_delete: :nilify_all, type: :binary_id))
+    end
+
+    flush()
+
+    # 2. Backfill the new columns from the existing link tables. Rows whose
+    # link was already cascade-deleted (e.g. the source account is gone)
+    # remain NULL, matching post-deletion semantics.
+    execute("""
+    UPDATE #{prefix}.journal_events je
+    SET command_id = l.command_id
+    FROM #{prefix}.journal_event_command_links l
+    WHERE l.journal_event_id = je.id
+    """)
+
+    execute("""
+    UPDATE #{prefix}.journal_events je
+    SET transaction_id = l.transaction_id
+    FROM #{prefix}.journal_event_transaction_links l
+    WHERE l.journal_event_id = je.id
+    """)
+
+    execute("""
+    UPDATE #{prefix}.journal_events je
+    SET account_id = l.account_id
+    FROM #{prefix}.journal_event_account_links l
+    WHERE l.journal_event_id = je.id
+    """)
+
+    flush()
+
+    # 3. XOR-style invariant: at most one of (transaction_id, account_id).
+    # The (NULL, NULL) state is allowed so that account deletion doesn't
+    # break the constraint for previously-set account events.
+    create(
+      constraint(:journal_events, :transaction_xor_account,
+        check: "NOT (transaction_id IS NOT NULL AND account_id IS NOT NULL)",
+        prefix: prefix
+      )
+    )
+
+    # 4. Indexes for the new FKs (mirrors what the link tables had).
+    create(index(:journal_events, [:command_id], prefix: prefix))
+    create(index(:journal_events, [:transaction_id], prefix: prefix))
+    create(index(:journal_events, [:account_id], prefix: prefix))
+
+    # 5. Drop the now-redundant link tables.
+    drop(table(:journal_event_command_links, prefix: prefix))
+    drop(table(:journal_event_transaction_links, prefix: prefix))
+    drop(table(:journal_event_account_links, prefix: prefix))
+  end
+
+  defp v5_down(prefix) do
+    # 1. Recreate the link tables with the original v1 schema shape.
+    create_journal_event_transaction_links(prefix)
+    create_journal_event_account_links(prefix)
+    create_journal_event_command_links(prefix)
+
+    flush()
+
+    # 2. Backfill the link tables from the journal_events columns. Requires
+    # PostgreSQL 13+ for `gen_random_uuid()`. NULL columns produce no row.
+    execute("""
+    INSERT INTO #{prefix}.journal_event_command_links
+      (id, journal_event_id, command_id, inserted_at, updated_at)
+    SELECT gen_random_uuid(), id, command_id, NOW(), NOW()
+    FROM #{prefix}.journal_events
+    WHERE command_id IS NOT NULL
+    """)
+
+    execute("""
+    INSERT INTO #{prefix}.journal_event_transaction_links
+      (id, journal_event_id, transaction_id, inserted_at, updated_at)
+    SELECT gen_random_uuid(), id, transaction_id, NOW(), NOW()
+    FROM #{prefix}.journal_events
+    WHERE transaction_id IS NOT NULL
+    """)
+
+    execute("""
+    INSERT INTO #{prefix}.journal_event_account_links
+      (id, journal_event_id, account_id, inserted_at, updated_at)
+    SELECT gen_random_uuid(), id, account_id, NOW(), NOW()
+    FROM #{prefix}.journal_events
+    WHERE account_id IS NOT NULL
+    """)
+
+    flush()
+
+    # 3. Drop indexes.
+    drop(index(:journal_events, [:account_id], prefix: prefix))
+    drop(index(:journal_events, [:transaction_id], prefix: prefix))
+    drop(index(:journal_events, [:command_id], prefix: prefix))
+
+    # 4. Drop the XOR check constraint.
+    drop(constraint(:journal_events, :transaction_xor_account, prefix: prefix))
+
+    # 5. Drop the columns.
+    alter table(:journal_events, prefix: prefix) do
+      remove(:account_id)
+      remove(:transaction_id)
+      remove(:command_id)
+    end
   end
 
   # ── V1 table definitions ───────────────────────────────────────────

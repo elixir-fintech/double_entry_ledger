@@ -48,7 +48,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
 
   alias Ecto.Multi
   alias DoubleEntryLedger.Command.AccountCommandMap
-  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler
   alias DoubleEntryLedger.JournalEvent
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
@@ -132,25 +131,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
     |> Multi.insert(:new_command, fn %{instance: id} ->
       CommandStoreHelper.build_create(command_map, id)
     end)
-    |> Multi.insert(:journal_event, fn %{instance: id} ->
-      JournalEvent.build_create(%{command_map: command_map, instance_id: id})
-    end)
     |> Multi.insert(:account, fn %{instance: id} ->
       AccountStoreHelper.build_create(payload, id)
     end)
+    |> Multi.insert(:journal_event, fn %{instance: id, new_command: cmd, account: acc} ->
+      JournalEvent.build_create(%{
+        command_map: command_map,
+        instance_id: id,
+        command_id: cmd.id,
+        account_id: acc.id
+      })
+    end)
     |> Multi.update(:command_success, fn %{new_command: event} ->
       build_mark_as_processed(event)
-    end)
-    |> DoubleEntryLedger.Oban.insert(:create_account_link, fn %{
-                                                                command_success: event,
-                                                                account: account,
-                                                                journal_event: journal_event
-                                                              } ->
-      Workers.Oban.JournalEventLinks.new(%{
-        command_id: event.id,
-        account_id: account.id,
-        journal_event_id: journal_event.id
-      })
     end)
   end
 end

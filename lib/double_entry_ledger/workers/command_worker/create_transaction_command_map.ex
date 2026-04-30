@@ -30,7 +30,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
   alias DoubleEntryLedger.{Command, JournalEvent, PendingTransactionLookup}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Command.TransactionCommandMap
-  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
 
@@ -157,10 +156,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
     |> Multi.insert(:new_command, fn _ ->
       CommandStoreHelper.build_create(new_command_map, instance_id)
     end)
-    |> Multi.insert(:journal_event, fn %{new_command: %{command_map: em}} ->
-      JournalEvent.build_create(%{command_map: em, instance_id: instance_id})
-    end)
     |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
+    |> Multi.insert(:journal_event, fn %{
+                                         new_command: %{id: cid, command_map: em},
+                                         transaction: %{id: tid}
+                                       } ->
+      JournalEvent.build_create(%{
+        command_map: em,
+        instance_id: instance_id,
+        command_id: cid,
+        transaction_id: tid
+      })
+    end)
   end
 
   @impl true
@@ -204,29 +211,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
 
           PendingTransactionLookup.upsert_changeset(%PendingTransactionLookup{}, attrs)
         end)
-        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn _ ->
-          Workers.Oban.JournalEventLinks.new(%{
-            command_id: cid,
-            transaction_id: tid,
-            journal_event_id: jid
-          })
-        end)
     end)
   end
 
   def handle_build_transaction(multi, _command_map, _repo) do
     multi
     |> Multi.merge(fn
-      %{transaction: %{id: tid}, new_command: %{id: cid} = command, journal_event: %{id: jid}} ->
+      %{new_command: %{id: _cid} = command} ->
         Multi.update(Multi.new(), :command_success, fn _ ->
           build_mark_as_processed(command)
-        end)
-        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn _ ->
-          Workers.Oban.JournalEventLinks.new(%{
-            command_id: cid,
-            transaction_id: tid,
-            journal_event_id: jid
-          })
         end)
     end)
   end

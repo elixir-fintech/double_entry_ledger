@@ -41,11 +41,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.TransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Workers
 
   import DoubleEntryLedger.CommandQueue.Scheduling
 
-  import Workers.CommandWorker.TransactionCommandResponseHandler,
+  import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
     only: [default_response_handler: 2]
 
   @impl true
@@ -65,7 +64,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(command_map, error, repo),
-    to: Workers.CommandWorker.TransactionCommandResponseHandler,
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
@@ -84,7 +83,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(command_map, repo),
-    to: Workers.CommandWorker.TransactionCommandResponseHandler,
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_occ_final_timeout
 
   @doc """
@@ -155,8 +154,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
     |> Multi.update(:command_success, fn _ ->
       build_mark_as_processed(command)
     end)
-    |> Multi.insert(:journal_event, fn %{command_success: %{command_map: em, instance_id: id}} ->
-      JournalEvent.build_create(%{command_map: em, instance_id: id})
+    |> Multi.insert(:journal_event, fn %{
+                                         command_success: %{command_map: em, instance_id: id},
+                                         transaction: %{id: tid}
+                                       } ->
+      JournalEvent.build_create(%{
+        command_map: em,
+        instance_id: id,
+        command_id: cid,
+        transaction_id: tid
+      })
     end)
     |> Multi.insert(
       :pending_transaction_lookup,
@@ -177,19 +184,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
       conflict_target: [:source, :source_idempk, :instance_id],
       on_conflict: {:replace, [:transaction_id, :journal_event_id]}
     )
-    |> DoubleEntryLedger.Oban.insert(
-      :create_transaction_link,
-      fn %{
-           transaction: %{id: tid},
-           journal_event: %{id: jid}
-         } ->
-        Workers.Oban.JournalEventLinks.new(%{
-          command_id: cid,
-          transaction_id: tid,
-          journal_event_id: jid
-        })
-      end
-    )
   end
 
   def handle_build_transaction(multi, %{id: cid} = command, _repo) do
@@ -197,21 +191,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
     |> Multi.update(:command_success, fn _ ->
       build_mark_as_processed(command)
     end)
-    |> Multi.insert(:journal_event, fn %{command_success: %{command_map: em, instance_id: id}} ->
-      JournalEvent.build_create(%{command_map: em, instance_id: id})
+    |> Multi.insert(:journal_event, fn %{
+                                         command_success: %{command_map: em, instance_id: id},
+                                         transaction: %{id: tid}
+                                       } ->
+      JournalEvent.build_create(%{
+        command_map: em,
+        instance_id: id,
+        command_id: cid,
+        transaction_id: tid
+      })
     end)
-    |> DoubleEntryLedger.Oban.insert(
-      :create_transaction_link,
-      fn %{
-           transaction: %{id: tid},
-           journal_event: %{id: jid}
-         } ->
-        Workers.Oban.JournalEventLinks.new(%{
-          command_id: cid,
-          transaction_id: tid,
-          journal_event_id: jid
-        })
-      end
-    )
   end
 end

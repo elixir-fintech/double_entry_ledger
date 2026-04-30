@@ -35,7 +35,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
 
   alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
-  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   alias Ecto.Multi
@@ -57,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(command_map, error, repo),
-    to: Workers.CommandWorker.TransactionCommandResponseHandler,
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
@@ -76,7 +75,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
     - An `Ecto.Multi` that updates the event as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(command_map, repo),
-    to: Workers.CommandWorker.TransactionCommandResponseHandler,
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_occ_final_timeout
 
   @doc """
@@ -205,17 +204,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
         new_command: %{id: eid, command_map: em, instance_id: iid} = event
       } ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
-          JournalEvent.build_create(%{command_map: em, instance_id: iid})
+          JournalEvent.build_create(%{
+            command_map: em,
+            instance_id: iid,
+            command_id: eid,
+            transaction_id: tid
+          })
         end)
         |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
-        end)
-        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
-          Workers.Oban.JournalEventLinks.new(%{
-            command_id: eid,
-            transaction_id: tid,
-            journal_event_id: jid
-          })
         end)
 
       %{

@@ -6,8 +6,8 @@ defmodule DoubleEntryLedger.MigrationTest do
   @prefix Application.compile_env(:double_entry_ledger, :schema_prefix, "double_entry_ledger")
 
   describe "latest_version/0" do
-    test "returns 4" do
-      assert Migration.latest_version() == 4
+    test "returns 5" do
+      assert Migration.latest_version() == 5
     end
   end
 
