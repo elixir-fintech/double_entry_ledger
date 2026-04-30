@@ -1,17 +1,36 @@
 defmodule DoubleEntryLedger.LoadTesting do
   @moduledoc """
-  Load testing for DoubleEntryLedger.
+  Load-testing harness for DoubleEntryLedger.
 
-  This module provides functions to perform load testing on the DoubleEntryLedger system.
-  It includes functions to create accounts and events, run transactions, and validate balances.
+  Three orthogonal entry points, surfaced as mix tasks:
+
+    * `run_load_test/2` — full processing (`mix load.process`).
+      Sliding window of N concurrent workers calling
+      `CommandWorker.process_new_command/1` directly. Bypasses the queue.
+
+    * `run_enqueue_load_test/2` — producer-only (`mix load.enqueue`).
+      Sliding window of N concurrent workers calling
+      `CommandApi.create_from_params/1`. Inserts `Command` +
+      `CommandQueueItem` only; no transaction processing. Queue is
+      configured off in `:perf` so commands accumulate.
+
+    * `run_drain_load_test/1` — consumer-only K=1 drain
+      (`mix load.drain`). Pre-fills the queue with N commands, starts a
+      single `InstanceProcessor`, times the drain.
+
+  All three share the same instance/account setup and the same
+  sliding-window driver (`run_with_driver/4`) where applicable.
+  Latencies are aggregated by `LoadTesting.TelemetryCollector`.
   """
 
   alias DoubleEntryLedger.{Account, Balance, Instance, Repo}
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Apis.CommandApi
+  alias DoubleEntryLedger.CommandQueue.InstanceProcessor
   alias DoubleEntryLedger.LoadTesting.TelemetryCollector
   @destination_accounts 10
+  @drain_prefill_concurrency 10
   # Function to run a single transaction process
 
   @doc """
@@ -30,7 +49,7 @@ defmodule DoubleEntryLedger.LoadTesting do
       concurrency,
       seconds,
       &run_transaction/2,
-      "Running load test with"
+      "load.process — full processing,"
     )
   end
 
@@ -56,7 +75,7 @@ defmodule DoubleEntryLedger.LoadTesting do
       concurrency,
       seconds,
       &enqueue_command/2,
-      "Running enqueue load test with"
+      "load.enqueue — producer only,"
     )
   end
 
@@ -75,7 +94,11 @@ defmodule DoubleEntryLedger.LoadTesting do
 
     transaction_lists = create_transaction_lists(sources, destination_arrays)
 
-    IO.puts("#{banner} #{bold(to_string(concurrency))} concurrent transaction(s)")
+    IO.puts(
+      "#{bold(banner)} concurrency=#{bold(to_string(concurrency))} " <>
+        "duration=#{bold(to_string(seconds))}s"
+    )
+
     IO.puts("#{bold("Before:")} #{validate_instance_balance(instance)}")
 
     TelemetryCollector.start()
@@ -104,14 +127,128 @@ defmodule DoubleEntryLedger.LoadTesting do
     # :eprof.stop_profiling()
     # :eprof.analyze()
 
-    IO.puts("Operations processed in #{seconds} second(s): #{successful}")
-    IO.puts("Operations per second: #{successful / seconds} ops/s")
+    IO.puts(
+      "Operations: #{bold(to_string(successful))} in #{seconds}s — " <>
+        "#{bold(:erlang.float_to_binary(successful / seconds, decimals: 1))} ops/s"
+    )
 
     TelemetryCollector.print_summary()
     TelemetryCollector.stop()
 
     validate_instance_balance(instance)
     IO.puts("#{bold("After:")} #{validate_instance_balance(instance)}")
+  end
+
+  @doc """
+  Runs a queue-drain load test for the **consumer-only** path.
+
+  Pre-fills the queue with `prefill_count` pending commands via
+  `CommandApi.create_from_params/1` (the producer path), then starts a
+  single `InstanceProcessor` and times how long it takes to drain
+  every command. The `InstanceProcessor` exits `:normal` when the
+  queue is empty, which is the signal we use to stop the clock.
+
+  Pre-fill is parallelized across `@drain_prefill_concurrency` workers
+  but is **not** part of the measurement — only drain throughput is
+  reported. Drain throughput here is the K=1 single-instance,
+  single-processor consumer ceiling: the rate at which one
+  `InstanceProcessor` can claim, process, and mark commands processed
+  one at a time.
+
+  Requires `start_command_queue: false` in `config/perf.exs` (the
+  default for `:perf`) so the queue's normal supervision isn't
+  competing for the same instance.
+
+  ## Parameters
+
+    - prefill_count: Number of commands to enqueue before draining.
+      Bigger means more steady-state, longer test. Default suggestion: 10000.
+  """
+  def run_drain_load_test(prefill_count) when is_integer(prefill_count) and prefill_count > 0 do
+    debit_sum = max(trunc(100_000 * prefill_count / 10), 1_000_000)
+    pool_size = min(10, prefill_count)
+
+    {:ok, instance} = %Instance{address: "instance:#{System.unique_integer()}"} |> Repo.insert()
+    sources = create_debit_sources(pool_size, instance, debit_sum)
+    destination_arrays = create_debit_destinations(pool_size, instance)
+    create_balancing_credit_account(instance, debit_sum * pool_size)
+
+    transaction_lists = create_transaction_lists(sources, destination_arrays)
+    flat_params = List.flatten(transaction_lists)
+    flat_count = length(flat_params)
+
+    IO.puts(
+      "#{bold("load.drain")} — consumer only, K=1: " <>
+        "pre-fill #{bold(to_string(prefill_count))} commands, " <>
+        "then drain via a single InstanceProcessor"
+    )
+
+    IO.puts("#{bold("Before:")} #{validate_instance_balance(instance)}")
+
+    # ── Pre-fill phase (not measured) ───────────────────────────────────
+    prefill_start = System.monotonic_time(:millisecond)
+
+    1..prefill_count
+    |> Task.async_stream(
+      fn i ->
+        params = Enum.at(flat_params, rem(i - 1, flat_count))
+        enqueue_command(instance, params)
+      end,
+      max_concurrency: @drain_prefill_concurrency,
+      timeout: :infinity,
+      ordered: false
+    )
+    |> Stream.run()
+
+    prefill_elapsed = (System.monotonic_time(:millisecond) - prefill_start) / 1000.0
+
+    IO.puts(
+      "Pre-fill: #{bold(to_string(prefill_count))} commands in " <>
+        "#{Float.round(prefill_elapsed, 2)}s — " <>
+        "#{bold(:erlang.float_to_binary(prefill_count / prefill_elapsed, decimals: 1))} ops/s " <>
+        "(not measured)"
+    )
+
+    # ── Drain phase (measured) ──────────────────────────────────────────
+    # The InstanceProcessor uses a Registry-keyed via_tuple. Start the
+    # Registry locally for the test if the queue's own supervision isn't
+    # running (which is the perf-env default).
+    ensure_command_queue_registry_started()
+
+    TelemetryCollector.start()
+
+    drain_start = System.monotonic_time(:millisecond)
+    {:ok, processor_pid} = InstanceProcessor.start_link(instance_id: instance.id)
+    ref = Process.monitor(processor_pid)
+
+    receive do
+      {:DOWN, ^ref, :process, _pid, :normal} ->
+        :ok
+
+      {:DOWN, ^ref, :process, _pid, reason} ->
+        raise "InstanceProcessor crashed: #{inspect(reason)}"
+    end
+
+    drain_elapsed = (System.monotonic_time(:millisecond) - drain_start) / 1000.0
+    drain_tps = prefill_count / drain_elapsed
+
+    IO.puts(
+      "Drain: #{bold(to_string(prefill_count))} commands in " <>
+        "#{Float.round(drain_elapsed, 2)}s — " <>
+        "#{bold(:erlang.float_to_binary(drain_tps, decimals: 1))} tps"
+    )
+
+    TelemetryCollector.print_summary()
+    TelemetryCollector.stop()
+
+    IO.puts("#{bold("After:")} #{validate_instance_balance(instance)}")
+  end
+
+  defp ensure_command_queue_registry_started do
+    case Registry.start_link(keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
   end
 
   # Sliding-window orchestrator. Spawns `concurrency` worker processes that each
