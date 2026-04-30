@@ -1,16 +1,21 @@
 defmodule Mix.Tasks.Load.Enqueue do
   @moduledoc """
-  Load-test the **enqueue-only path** of DoubleEntryLedger.
+  Production producer-side load test.
 
-  Drives `CommandApi.create_from_params/1` with N concurrent workers:
-  each call validates the param shape, hashes the idempotency key, and
-  inserts a `Command` + `CommandQueueItem` row. **No transaction
-  processing** is exercised — the queue is configured off via
-  `start_command_queue: false` in `config/perf.exs`, so claimed work
-  doesn't drain in the background.
+  Drives `CommandApi.create_from_params/1` with N concurrent workers
+  — **the same public API real production callers use to enqueue
+  commands**. Each call:
 
-  Use this task to measure how fast the producer side (the path real
-  production callers funnel through) can push commands into the queue.
+    1. Validates the param shape (`TransactionCommandMap.create/1`).
+    2. Hashes the idempotency key (`Command.IdempotencyKey`).
+    3. Inserts the `Command` + `CommandQueueItem` rows in one txn.
+
+  No transaction processing is exercised here — the queue is
+  configured off via `start_command_queue: false` in
+  `config/perf.exs`, so claimed work doesn't drain in the background.
+
+  Use this task to measure how fast the **producer** side can push
+  commands into the queue, in isolation from the consumer.
 
   ## Setup
 
@@ -34,12 +39,16 @@ defmodule Mix.Tasks.Load.Enqueue do
 
   ## See also
 
-  * `mix load.process` — full processing path (`process_new_command/1`).
-  * `mix load.drain` — consumer-only K=1 drain via `InstanceProcessor`.
+  * `mix load.drain` — **production consumer (K=1)**: drains a
+    pre-filled queue with one `InstanceProcessor`. Pair this with
+    `load.enqueue` to model the full production lifecycle.
+  * `mix load.process` — synthetic in-process baseline that bypasses
+    both the queue and the public API. Useful for comparing against
+    end-to-end production cost.
   """
   use Mix.Task
 
-  @shortdoc "Load-test the enqueue path (CommandApi.create_from_params/1) — :perf env"
+  @shortdoc "Production producer (CommandApi.create_from_params/1) — :perf env"
 
   @compile {:no_warn_undefined, DoubleEntryLedger.LoadTesting}
 

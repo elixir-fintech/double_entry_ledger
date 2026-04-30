@@ -1,19 +1,22 @@
 defmodule Mix.Tasks.Load.Drain do
   @moduledoc """
-  Load-test the **consumer-only K=1 drain path** of DoubleEntryLedger.
+  Production consumer-side load test (K=1).
 
-  Pre-fills the queue with N pending commands (via
-  `CommandApi.create_from_params/1`), then starts a single
-  `InstanceProcessor` and times how long it takes to drain. Reports the
-  drain throughput in transactions per second — the K=1 (one processor
-  per instance), single-instance consumer ceiling.
+  Pre-fills the queue with N pending commands (via the production
+  producer path, `CommandApi.create_from_params/1`), then starts a
+  single `InstanceProcessor` and times how long it takes to drain.
 
-  Pre-fill is parallelized but **not** included in the measurement.
-  Only the drain phase is timed.
+  This measures the **K=1 consumer ceiling**: one
+  `InstanceProcessor` per instance claiming and processing commands
+  one at a time through `CommandWorker.process_command_with_id/2` —
+  the actual production consumer code path.
 
-  Requires `start_command_queue: false` in `config/perf.exs` (the perf
-  default) so the library's own queue supervision isn't competing for
-  the same instance.
+  Pre-fill is parallelized via `Task.async_stream` but **not**
+  included in the measurement. Only the drain phase is timed.
+
+  Requires `start_command_queue: false` in `config/perf.exs` (the
+  perf default) so the library's own queue supervision isn't
+  competing for the same instance.
 
   ## Setup
 
@@ -37,12 +40,16 @@ defmodule Mix.Tasks.Load.Drain do
 
   ## See also
 
-  * `mix load.process` — full processing path (`process_new_command/1`).
-  * `mix load.enqueue` — producer-only path (`create_from_params/1`).
+  * `mix load.enqueue` — **production producer**:
+    `CommandApi.create_from_params/1`. Pair with `load.drain` to
+    model the full production lifecycle.
+  * `mix load.process` — synthetic in-process baseline that bypasses
+    both the queue and the public API. Useful for comparing against
+    the end-to-end production cost measured by enqueue + drain.
   """
   use Mix.Task
 
-  @shortdoc "Drain a pre-filled queue with one InstanceProcessor (K=1) — :perf env"
+  @shortdoc "Production consumer K=1 drain (single InstanceProcessor) — :perf env"
 
   @compile {:no_warn_undefined, DoubleEntryLedger.LoadTesting}
 

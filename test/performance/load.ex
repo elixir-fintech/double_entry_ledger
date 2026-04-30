@@ -4,23 +4,37 @@ defmodule DoubleEntryLedger.LoadTesting do
 
   Three orthogonal entry points, surfaced as mix tasks:
 
-    * `run_load_test/2` — full processing (`mix load.process`).
-      Sliding window of N concurrent workers calling
-      `CommandWorker.process_new_command/1` directly. Bypasses the queue.
+    * `run_enqueue_load_test/2` — **production producer**
+      (`mix load.enqueue`). Sliding window of N concurrent workers
+      calling `CommandApi.create_from_params/1` — the same public
+      API real production callers use. Validates params, hashes
+      idempotency, inserts `Command` + `CommandQueueItem`. No
+      processing.
 
-    * `run_enqueue_load_test/2` — producer-only (`mix load.enqueue`).
-      Sliding window of N concurrent workers calling
-      `CommandApi.create_from_params/1`. Inserts `Command` +
-      `CommandQueueItem` only; no transaction processing. Queue is
-      configured off in `:perf` so commands accumulate.
+    * `run_drain_load_test/1` — **production consumer (K=1)**
+      (`mix load.drain`). Pre-fills the queue with N commands via
+      the producer path, then starts a single `InstanceProcessor`
+      and times the drain. Goes through
+      `CommandWorker.process_command_with_id/2` — the real
+      consumer code path.
 
-    * `run_drain_load_test/1` — consumer-only K=1 drain
-      (`mix load.drain`). Pre-fills the queue with N commands, starts a
-      single `InstanceProcessor`, times the drain.
+    * `run_load_test/2` — **synthetic in-process baseline**
+      (`mix load.process`). Sliding window of N concurrent workers
+      calling `CommandWorker.process_new_command/1` directly.
+      Bypasses both the queue *and* the public API
+      (`create_from_params`/`process_from_params`). Useful as a
+      per-call ceiling baseline; **not a model of production
+      traffic.**
 
-  All three share the same instance/account setup and the same
-  sliding-window driver (`run_with_driver/4`) where applicable.
-  Latencies are aggregated by `LoadTesting.TelemetryCollector`.
+  Production load is modelled by `enqueue` + `drain` running
+  concurrently. `load.process` is a synthetic per-call baseline,
+  not a path real callers hit.
+
+  All three share the same instance/account fixtures. The
+  enqueue/process tests share the sliding-window driver
+  (`run_with_driver/4`); drain has its own pre-fill + monitor
+  shape. Latencies are aggregated by
+  `LoadTesting.TelemetryCollector`.
   """
 
   alias DoubleEntryLedger.{Account, Balance, Instance, Repo}

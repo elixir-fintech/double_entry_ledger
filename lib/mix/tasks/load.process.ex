@@ -1,17 +1,28 @@
 defmodule Mix.Tasks.Load.Process do
   @moduledoc """
-  Load-test the **full processing path** of DoubleEntryLedger.
+  Synthetic in-process per-call ceiling baseline.
 
-  Drives `CommandWorker.process_new_command/1` directly with N concurrent
-  workers — bypasses the queue entirely. Each call validates the
-  command, inserts the `Command` + `CommandQueueItem`, runs the full
-  `Ecto.Multi` (transaction + entries + account updates +
+  Drives `CommandWorker.process_new_command/1` directly with N
+  concurrent workers. **This is not the production code path.** It
+  skips both:
+
+    1. The public API entry point (`CommandApi.create_from_params/1`
+       or `process_from_params/2`) — so no string-key parsing, no
+       `TransactionCommandMap.create/1` validation pass.
+    2. The queue. Each command is processed inline in the calling
+       process; no `InstanceProcessor`, no `command_queue_item` claim
+       cycle.
+
+  Each call still inserts `Command` + `CommandQueueItem`, runs the
+  full `Ecto.Multi` (transaction + entries + account updates +
   balance_history_entries + journal_event), and marks the command as
   `:processed`.
 
-  Use this task to measure the synchronous in-memory ceiling for the
-  full end-to-end command lifecycle, decoupled from the queue's
-  claim/reschedule overhead.
+  Use this task to measure the **theoretical per-call CPU + I/O cost
+  of the processing Multi alone**, with everything else (validation,
+  idempotency hashing, queue overhead) stripped away. It's a useful
+  baseline for comparing against `load.enqueue + load.drain`, which
+  together represent the actual production lifecycle.
 
   ## Setup
 
@@ -35,12 +46,18 @@ defmodule Mix.Tasks.Load.Process do
 
   ## See also
 
-  * `mix load.enqueue` — producer-only path (`create_from_params/1`).
-  * `mix load.drain` — consumer-only K=1 drain via `InstanceProcessor`.
+  * `mix load.enqueue` — **production producer**: validates,
+    hashes idempotency, inserts `Command` + `CommandQueueItem`.
+  * `mix load.drain` — **production consumer (K=1)**: drains a
+    pre-filled queue with one `InstanceProcessor`.
+
+  Production load ≈ `load.enqueue` + `load.drain` running
+  concurrently. `load.process` is the synthetic per-call baseline,
+  not a model of production traffic.
   """
   use Mix.Task
 
-  @shortdoc "Load-test the full processing path (process_new_command/1) — :perf env"
+  @shortdoc "Synthetic per-call baseline (bypasses queue + public API) — :perf env"
 
   @compile {:no_warn_undefined, DoubleEntryLedger.LoadTesting}
 
