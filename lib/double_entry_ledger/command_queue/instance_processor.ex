@@ -75,7 +75,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
        worker: worker,
        processing: false,
        current_command_id: nil,
-       task_ref: nil
+       task_ref: nil,
+       pending_ids: []
      }}
   end
 
@@ -86,30 +87,26 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   @impl true
-  def handle_info(:process_next, %{instance_id: instance_id, worker: worker} = state) do
-    case find_next_command_id(instance_id) do
-      nil ->
-        # No more commands to process, terminate
-        Logger.info("No more commands to process for instance #{instance_id}, shutting down")
-        Telemetry.instance_processor_stop(%{instance_id: instance_id})
+  def handle_info(:process_next, %{pending_ids: [head | rest]} = state) do
+    # Drain from the in-memory buffer first; only hit the DB to refill
+    # when it's empty. This amortizes the find_next SELECT cost across
+    # `claim_batch_size/0` commands per round-trip.
+    start_processing(%{state | pending_ids: rest}, head)
+  end
+
+  @impl true
+  def handle_info(:process_next, %{pending_ids: []} = state) do
+    case find_next_command_ids(state.instance_id, claim_batch_size()) do
+      [] ->
+        Logger.info(
+          "No more commands to process for instance #{state.instance_id}, shutting down"
+        )
+
+        Telemetry.instance_processor_stop(%{instance_id: state.instance_id})
         {:stop, :normal, state}
 
-      command_id ->
-        # Start processing the command
-        # Process command in a separate task to not block the GenServer
-        Logger.info("Processing command #{command_id} for instance #{instance_id}")
-
-        parent = self()
-
-        {:ok, pid} =
-          Task.start(fn ->
-            process_result = worker.process_command_with_id(command_id, processor_name())
-            send(parent, {:processing_complete, command_id, process_result})
-          end)
-
-        ref = Process.monitor(pid)
-
-        {:noreply, %{state | processing: true, current_command_id: command_id, task_ref: ref}}
+      [head | rest] ->
+        start_processing(%{state | pending_ids: rest}, head)
     end
   end
 
@@ -168,13 +165,32 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end
   end
 
-  # Returns the id of the next in-flight command for this instance, or
-  # nil if none. Drives off the partial index
+  # Spawns a Task to run the worker for a single command id, monitors it,
+  # and updates state. Caller is responsible for popping the id off
+  # pending_ids before calling.
+  defp start_processing(%{worker: worker, instance_id: instance_id} = state, command_id) do
+    Logger.info("Processing command #{command_id} for instance #{instance_id}")
+
+    parent = self()
+
+    {:ok, pid} =
+      Task.start(fn ->
+        process_result = worker.process_command_with_id(command_id, processor_name())
+        send(parent, {:processing_complete, command_id, process_result})
+      end)
+
+    ref = Process.monitor(pid)
+
+    {:noreply, %{state | processing: true, current_command_id: command_id, task_ref: ref}}
+  end
+
+  # Returns up to `limit` ids of the next in-flight commands for this
+  # instance, oldest first. Drives off the partial index
   # `idx_command_queue_items_in_flight` added in migration v6:
   # (instance_id, inserted_at) WHERE status IN ('pending', 'occ_timeout',
   # 'failed'). Before v6 this query started from `commands` and walked
   # every row in inserted_at order — O(N²) drain behaviour.
-  defp find_next_command_id(instance_id) do
+  defp find_next_command_ids(instance_id, limit) do
     now = DateTime.utc_now()
 
     from(eqi in CommandQueueItem,
@@ -184,10 +200,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
           eqi.status in [:pending, :occ_timeout, :failed] and
           (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
       order_by: [asc: eqi.inserted_at],
-      limit: 1,
+      limit: ^limit,
       select: eqi.command_id
     )
-    |> Repo.one()
+    |> Repo.all()
+  end
+
+  defp claim_batch_size do
+    Application.get_env(:double_entry_ledger, :command_queue, [])[:claim_batch_size] || 50
   end
 
   defp processor_name do
