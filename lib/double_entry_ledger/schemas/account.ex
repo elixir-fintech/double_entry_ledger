@@ -309,6 +309,125 @@ defmodule DoubleEntryLedger.Account do
     |> no_assoc_constraint(:balance_history_entries)
   end
 
+  @typedoc """
+  Plain-map result of `compute_balance_changes/3`.
+
+  All four fields are the *new* values that should be persisted to the
+  account row. `lock_version` is the *expected new* version
+  (i.e. `account.lock_version + 1`); the caller must enforce optimistic
+  concurrency by including the *old* `lock_version` in its UPDATE WHERE
+  clause.
+  """
+  @type balance_change_result :: %{
+          posted: Balance.t(),
+          pending: Balance.t(),
+          available: integer(),
+          lock_version: integer()
+        }
+
+  @doc """
+  Pure equivalent of `update_balances/2` for the create-transaction path.
+
+  Computes the new balances and `available` for an account given a single
+  entry and a `:posted` or `:pending` transition. Performs the same
+  validations as `update_balances/2` (account_id match, currency match,
+  negative_limit) but returns plain data — no changeset, no DB.
+
+  Used by the `insert_all` build path; the caller is responsible for
+  issuing the UPDATE with a `lock_version` check.
+
+  Only `:posted` and `:pending` transitions are supported. Update-path
+  transitions (`:pending_to_posted`, `:pending_to_pending`,
+  `:pending_to_archived`) still go through `update_balances/2`.
+
+  ## Returns
+
+    * `{:ok, %{posted: _, pending: _, available: _, lock_version: _}}`
+    * `{:error, field, message}` — preserves the same field/message
+      surface as the changeset version, so callers can translate back to
+      changeset errors when needed.
+  """
+  @spec compute_balance_changes(Account.t(), map(), Types.trx_types()) ::
+          {:ok, balance_change_result()} | {:error, atom(), String.t()}
+  def compute_balance_changes(account, entry, trx) when trx in [:posted, :pending] do
+    with :ok <- validate_entry_for_account(account, entry),
+         {:ok, %{posted: po, pending: pe}} <- compute_new_balances(account, entry, trx),
+         {:ok, available} <- compute_new_available(account, %{posted: po, pending: pe}) do
+      {:ok,
+       %{
+         posted: po,
+         pending: pe,
+         available: available,
+         lock_version: account.lock_version + 1
+       }}
+    end
+  end
+
+  def compute_balance_changes(_account, _entry, trx) do
+    {:error, :entry, "invalid transition: #{trx}"}
+  end
+
+  @spec validate_entry_for_account(Account.t(), map()) :: :ok | {:error, atom(), String.t()}
+  defp validate_entry_for_account(
+         %{id: account_id, currency: account_currency},
+         %{account_id: entry_account_id, value: %{currency: entry_currency}}
+       ) do
+    cond do
+      account_id != entry_account_id ->
+        {:error, :id,
+         "entry account_id (#{entry_account_id}) must be equal to account id (#{account_id})"}
+
+      account_currency != entry_currency ->
+        {:error, :currency,
+         "entry currency (#{entry_currency}) must be equal to account currency (#{account_currency})"}
+
+      true ->
+        :ok
+    end
+  end
+
+  @spec compute_new_balances(Account.t(), map(), :posted | :pending) ::
+          {:ok, %{posted: Balance.t(), pending: Balance.t()}} | {:error, atom(), String.t()}
+  defp compute_new_balances(
+         %{posted: po, pending: pe, normal_balance: nb},
+         %{type: e_type, value: %{amount: amount}},
+         :posted
+       ) do
+    with {:ok, new_posted} <- Balance.apply_amount_pure(po, amount, e_type, nb) do
+      {:ok, %{posted: new_posted, pending: pe}}
+    end
+  end
+
+  defp compute_new_balances(
+         %{posted: po, pending: pe, normal_balance: nb},
+         %{type: e_type, value: %{amount: amount}},
+         :pending
+       ) do
+    with {:ok, new_pending} <- Balance.apply_amount_pure(pe, amount, e_type, nb) do
+      {:ok, %{posted: po, pending: new_pending}}
+    end
+  end
+
+  @spec compute_new_available(Account.t(), %{posted: Balance.t(), pending: Balance.t()}) ::
+          {:ok, integer()} | {:error, atom(), String.t()}
+  defp compute_new_available(
+         %{negative_limit: limit, normal_balance: nb},
+         %{posted: %{amount: amount}, pending: pending}
+       ) do
+    available = amount - Map.get(pending, opposite_direction(nb), 0)
+
+    cond do
+      limit == 0 && available < 0 ->
+        {:error, :available, "amount can't be negative"}
+
+      limit > 0 && available < -limit ->
+        {:error, :available, "amount can't be below negative limit of -#{limit}"}
+
+      true ->
+        {:ok, available}
+    end
+  end
+
   @doc """
   Updates account balances based on an entry and transaction type.
 

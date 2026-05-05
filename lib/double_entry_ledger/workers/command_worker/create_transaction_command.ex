@@ -128,7 +128,35 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
   """
   def build_transaction(_command, transaction_map, _instance_id, repo) do
     Multi.new()
-    |> TransactionStoreHelper.build_create(:transaction, transaction_map, repo)
+    |> dispatch_build_create(:transaction, transaction_map, repo)
+  end
+
+  # The `:insert_path` config selects between the legacy cascade
+  # (`build_create/4`, default) and the parallel insert_all path
+  # (`build_create_insert_all/4`). The new path is feature-flagged so
+  # we can run both side-by-side during validation and bisect any
+  # divergence.
+  defp dispatch_build_create(multi, step, transaction_map, repo) do
+    case Application.get_env(:double_entry_ledger, :insert_path, :legacy) do
+      :insert_all ->
+        log_active_path_once(:insert_all)
+        TransactionStoreHelper.build_create_insert_all(multi, step, transaction_map, repo)
+
+      _ ->
+        log_active_path_once(:legacy)
+        TransactionStoreHelper.build_create(multi, step, transaction_map, repo)
+    end
+  end
+
+  defp log_active_path_once(path) do
+    case :persistent_term.get({__MODULE__, :path_logged}, nil) do
+      ^path ->
+        :ok
+
+      _ ->
+        :persistent_term.put({__MODULE__, :path_logged}, path)
+        IO.puts("[CreateTransactionCommand] active build path = #{inspect(path)}")
+    end
   end
 
   @impl true

@@ -35,6 +35,9 @@ defmodule DoubleEntryLedger.Repo.Proxy do
   def update(x, opts), do: Config.repo().update(x, opts)
   def update!(x), do: Config.repo().update!(x)
   def update!(x, opts), do: Config.repo().update!(x, opts)
+
+  def update_all(q, updates), do: Config.repo().update_all(q, updates)
+  def update_all(q, updates, opts), do: Config.repo().update_all(q, updates, opts)
   def delete(x), do: Config.repo().delete(x)
   def delete(x, opts), do: Config.repo().delete(x, opts)
   def get(q, id), do: Config.repo().get(q, id)

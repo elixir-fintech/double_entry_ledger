@@ -623,4 +623,106 @@ defmodule DoubleEntryLedger.AccountTest do
       assert Ecto.Changeset.get_change(changeset, :available) == -100
     end
   end
+
+  # The pure path mirrors update_balances/2's arithmetic but returns a
+  # plain map. These equivalence tests assert that for a given input,
+  # `compute_balance_changes/3` produces the same persisted state as
+  # `update_balances/2 |> apply_changes/1` would.
+  describe "compute_balance_changes/3 (pure) vs update_balances/2 (legacy)" do
+    setup [:create_instance]
+
+    test "debit account, debit entry, posted", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, normal_balance: :debit)
+      entry_struct = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :debit}
+      entry_map = entry_to_map(entry_struct)
+
+      assert_equivalent(account, entry_struct, entry_map, :posted)
+    end
+
+    test "debit account, credit entry, posted (within negative_limit)", %{instance: %{id: id}} do
+      account =
+        account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 2_147_483_647)
+
+      entry_struct = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :credit}
+      entry_map = entry_to_map(entry_struct)
+
+      assert_equivalent(account, entry_struct, entry_map, :posted)
+    end
+
+    test "debit account, debit entry, pending", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, normal_balance: :debit)
+      entry_struct = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :debit}
+      entry_map = entry_to_map(entry_struct)
+
+      assert_equivalent(account, entry_struct, entry_map, :pending)
+    end
+
+    test "credit account, credit entry, posted", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, normal_balance: :credit)
+      entry_struct = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :credit}
+      entry_map = entry_to_map(entry_struct)
+
+      assert_equivalent(account, entry_struct, entry_map, :posted)
+    end
+
+    test "negative_limit = 0 rejects credit posting on debit account", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 0)
+      entry_map = %{account_id: account.id, value: %{amount: 100, currency: :EUR}, type: :credit}
+
+      assert {:error, :available, "amount can't be negative"} =
+               Account.compute_balance_changes(account, entry_map, :posted)
+    end
+
+    test "negative_limit > 0 rejects below-limit credit posting", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 50)
+      entry_map = %{account_id: account.id, value: %{amount: 100, currency: :EUR}, type: :credit}
+
+      assert {:error, :available, _} =
+               Account.compute_balance_changes(account, entry_map, :posted)
+    end
+
+    test "currency mismatch returns :currency error", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, normal_balance: :debit, currency: :EUR)
+      entry_map = %{account_id: account.id, value: %{amount: 100, currency: :USD}, type: :debit}
+
+      assert {:error, :currency, _} =
+               Account.compute_balance_changes(account, entry_map, :posted)
+    end
+
+    test "account_id mismatch returns :id error", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, normal_balance: :debit)
+      entry_map = %{account_id: Ecto.UUID.generate(), value: %{amount: 100, currency: :EUR}, type: :debit}
+
+      assert {:error, :id, _} =
+               Account.compute_balance_changes(account, entry_map, :posted)
+    end
+
+    test "unsupported transition returns :entry error", %{instance: %{id: id}} do
+      account = account_fixture(instance_id: id, normal_balance: :debit)
+      entry_map = %{account_id: account.id, value: %{amount: 100, currency: :EUR}, type: :debit}
+
+      assert {:error, :entry, "invalid transition: pending_to_posted"} =
+               Account.compute_balance_changes(account, entry_map, :pending_to_posted)
+    end
+
+    defp entry_to_map(%Entry{account_id: aid, type: t, value: %Money{amount: a, currency: c}}) do
+      %{account_id: aid, type: t, value: %{amount: a, currency: c}}
+    end
+
+    defp assert_equivalent(account, entry_struct, entry_map, trx) do
+      legacy_cs = Account.update_balances(account, %{entry: entry_struct, trx: trx})
+      assert legacy_cs.valid?, "legacy changeset must be valid: #{inspect(legacy_cs.errors)}"
+      legacy_account = Ecto.Changeset.apply_changes(legacy_cs)
+
+      assert {:ok, %{posted: po, pending: pe, available: avail, lock_version: lv}} =
+               Account.compute_balance_changes(account, entry_map, trx)
+
+      assert po == legacy_account.posted, "posted balance mismatch"
+      assert pe == legacy_account.pending, "pending balance mismatch"
+      assert avail == legacy_account.available, "available mismatch"
+      # apply_changes/1 doesn't run optimistic_lock's increment — Repo does
+      # that on the actual UPDATE. Compare against the post-Repo value.
+      assert lv == legacy_account.lock_version + 1, "lock_version mismatch"
+    end
+  end
 end

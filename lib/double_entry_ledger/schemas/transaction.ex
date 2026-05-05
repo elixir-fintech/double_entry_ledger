@@ -168,6 +168,22 @@ defmodule DoubleEntryLedger.Transaction do
   end
 
   @doc """
+  Parent-only changeset for the `insert_all` build path.
+
+  Casts and validates the `Transaction` row's own fields (`status`,
+  `instance_id`, etc.) but **does not** `cast_assoc(:entries)`. Entries
+  are inserted separately via `Repo.insert_all/3` by the caller.
+
+  The same balance / entry-count / same-ledger invariants that the
+  full `changeset/2` enforces via `validate_*` are checked
+  independently in the caller (see `Transaction.assert_balanced/1`).
+  """
+  @spec parent_changeset(Transaction.t(), map()) :: Ecto.Changeset.t()
+  def parent_changeset(transaction, attrs) do
+    transaction_changeset(transaction, attrs)
+  end
+
+  @doc """
   Returns the list of all valid transaction states.
 
   ## Returns
@@ -178,6 +194,66 @@ defmodule DoubleEntryLedger.Transaction do
   """
   @spec states() :: states()
   def states, do: @states
+
+  @doc """
+  Pure invariant: sum of debit amounts equals sum of credit amounts per currency.
+
+  This is the same business rule that
+  `validate_debit_equals_credit_per_currency/1` enforces in the
+  changeset path, expressed as a plain function on a list of entries.
+  Used by the `insert_all` build path to assert the invariant before
+  shipping rows to the DB.
+
+  Each entry must expose `:type` (`:debit | :credit`) and a `:value`
+  with `:amount` and `:currency`. Both `Money` structs and plain maps
+  are accepted as `:value`.
+
+  Returns `:ok` if balanced for every currency, `{:error, :unbalanced}`
+  otherwise.
+
+  ## Examples
+
+      iex> entries = [
+      ...>   %{type: :debit,  value: %{amount: 100, currency: :USD}},
+      ...>   %{type: :credit, value: %{amount: 100, currency: :USD}}
+      ...> ]
+      iex> DoubleEntryLedger.Transaction.assert_balanced(entries)
+      :ok
+
+      iex> entries = [
+      ...>   %{type: :debit,  value: %{amount: 100, currency: :USD}},
+      ...>   %{type: :credit, value: %{amount:  90, currency: :USD}}
+      ...> ]
+      iex> DoubleEntryLedger.Transaction.assert_balanced(entries)
+      {:error, :unbalanced}
+
+      iex> entries = [
+      ...>   %{type: :debit,  value: %{amount: 100, currency: :USD}},
+      ...>   %{type: :credit, value: %{amount: 100, currency: :USD}},
+      ...>   %{type: :debit,  value: %{amount:  50, currency: :EUR}},
+      ...>   %{type: :credit, value: %{amount:  50, currency: :EUR}}
+      ...> ]
+      iex> DoubleEntryLedger.Transaction.assert_balanced(entries)
+      :ok
+  """
+  @spec assert_balanced([map()]) :: :ok | {:error, :unbalanced}
+  def assert_balanced(entries) when is_list(entries) do
+    by_currency =
+      Enum.reduce(entries, %{}, fn entry, acc ->
+        currency = entry.value.currency
+        delta = signed_amount(entry)
+        Map.update(acc, currency, delta, &(&1 + delta))
+      end)
+
+    if Enum.all?(by_currency, fn {_currency, sum} -> sum == 0 end) do
+      :ok
+    else
+      {:error, :unbalanced}
+    end
+  end
+
+  defp signed_amount(%{type: :debit, value: %{amount: amount}}), do: amount
+  defp signed_amount(%{type: :credit, value: %{amount: amount}}), do: -amount
 
   @spec validate_state_transition(Ecto.Changeset.t()) :: Ecto.Changeset.t()
   defp validate_state_transition(%{data: %{status: now}} = changeset) do
