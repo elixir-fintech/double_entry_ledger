@@ -367,6 +367,54 @@ defmodule DoubleEntryLedger.Account do
     {:error, :entry, "invalid transition: #{trx}"}
   end
 
+  @doc """
+  Pure helper: bumps an in-memory `Account` struct to its post-this-entry
+  state given the result of `compute_balance_changes/3`.
+
+  Used by the batched-write fold (`DoubleEntryLedger.BatchProcessor`) to
+  chain successive entries against the same in-memory account without
+  going through Ecto changesets. The caller still holds the
+  `old_lock_version` it needs for the `WHERE lock_version = ?` clause
+  in the eventual `UPDATE`.
+
+  Pure — no DB, no IO. Mirrors the field set produced by
+  `compute_balance_changes/3`: `posted`, `pending`, `available`,
+  `lock_version`. Other fields are preserved.
+
+  ## Examples
+
+      iex> account = %DoubleEntryLedger.Account{
+      ...>   posted: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   pending: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   available: 0,
+      ...>   lock_version: 1
+      ...> }
+      iex> change = %{
+      ...>   posted: %DoubleEntryLedger.Balance{amount: 100, debit: 100, credit: 0},
+      ...>   pending: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   available: 100,
+      ...>   lock_version: 2
+      ...> }
+      iex> next = DoubleEntryLedger.Account.apply_balance_change(account, change)
+      iex> {next.posted.amount, next.available, next.lock_version}
+      {100, 100, 2}
+  """
+  @spec apply_balance_change(Account.t(), balance_change_result()) :: Account.t()
+  def apply_balance_change(%Account{} = account, %{
+        posted: posted,
+        pending: pending,
+        available: available,
+        lock_version: lock_version
+      }) do
+    %Account{
+      account
+      | posted: posted,
+        pending: pending,
+        available: available,
+        lock_version: lock_version
+    }
+  end
+
   @spec validate_entry_for_account(Account.t(), map()) :: :ok | {:error, atom(), String.t()}
   defp validate_entry_for_account(
          %{id: account_id, currency: account_currency},
