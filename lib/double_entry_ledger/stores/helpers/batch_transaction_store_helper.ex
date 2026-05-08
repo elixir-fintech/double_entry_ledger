@@ -34,6 +34,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   alias DoubleEntryLedger.{Account, BatchProcessor, BatchSerializer}
   alias DoubleEntryLedger.Command.TransactionCommandMap
+  alias DoubleEntryLedger.CommandQueue.Scheduling
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
@@ -70,6 +71,45 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         action: :update,
         changeset: Ecto.Changeset.change(%Account{})
     end
+  end
+
+  @doc """
+  Executes the failure half of a batched write in one round-trip.
+
+  For each failed command, asks `CommandQueue.Scheduling.build_schedule_retry_with_reason/3`
+  whether the command should be retried or dead-lettered. The legacy helper
+  branches on `retry_count >= max_retries`:
+
+    * Retry branch → queue row marked `:failed`, `next_retry_after` set to
+      the exponential-backoff timestamp.
+    * Dead-letter branch → queue row marked `:dead_letter`,
+      `next_retry_after` cleared (`NULL`).
+
+  In either case the new error payload is appended to the `errors` JSONB
+  array. `retry_count` and `processor_version` are NOT touched here — to
+  match legacy semantics, `retry_count` is bumped at claim time by
+  `Scheduling.retry_count_by_status/1` (via `processing_start_changeset/3`)
+  and `processor_version` is only advanced by the optimistic_lock in the
+  same claim changeset. On the `:failed` branch we additionally clear
+  `processor_id` (mirroring `schedule_retry_changeset/4`); on the
+  `:dead_letter` branch we preserve it (mirroring `dead_letter_changeset/2`).
+
+  ## Parameters
+
+    * `failures` - list of `t:BatchProcessor.failure_record/0`
+    * `repo` - the Ecto repo module
+    * `now` - DateTime to use for `processing_completed_at`/`updated_at`
+      and as the `inserted_at` timestamp inside each error payload.
+
+  Returns `:ok` immediately (no SQL) when `failures == []`.
+  """
+  @spec write_failures([BatchProcessor.failure_record()], Ecto.Repo.t(), DateTime.t()) :: :ok
+  def write_failures([], _repo, _now), do: :ok
+
+  def write_failures(failures, repo, now) when is_list(failures) do
+    {sql, params} = build_failure_query(failures, now)
+    Ecto.Adapters.SQL.query!(repo, sql, params)
+    :ok
   end
 
   # ── SQL building ─────────────────────────────────────────────────
@@ -364,7 +404,6 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
       SET status = 'processed',
           processing_completed_at = #{p(placeholders, 1)}::timestamptz,
           next_retry_after = NULL,
-          processor_version = processor_version + 1,
           updated_at = #{p(placeholders, 1)}::timestamptz
       WHERE id = ANY(#{p(placeholders, 0)}::uuid[])
       RETURNING id
@@ -373,6 +412,129 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
     {sql, state}
   end
+
+  # ── failure UPDATE builder ───────────────────────────────────────
+
+  # Builds a single batched UPDATE statement that, for each failed
+  # command, either marks the queue row `:failed` with a fresh
+  # `next_retry_after` or `:dead_letter` with `next_retry_after = NULL`
+  # (per `compute_failure_outcome/3`). In both cases the new error
+  # payload is appended to the existing `errors` JSONB array (using
+  # Postgres's `jsonb || jsonb_build_array(...)` pattern) and
+  # `retry_count`/`processor_version` are incremented.
+  @spec build_failure_query([BatchProcessor.failure_record()], DateTime.t()) ::
+          {String.t(), [term()]}
+  defp build_failure_query(failures, now) do
+    state = %{params: [], idx: 0}
+
+    {rows, state} =
+      Enum.reduce(failures, {[], state}, fn failure, {rows, st} ->
+        qi_id = failure.command.command_queue_item.id
+        {status, next_retry_after} = compute_failure_outcome(failure.command, failure.reason, now)
+        error_map = error_payload(failure.reason, now)
+
+        # Mirror legacy:
+        #   * `schedule_retry_changeset/4` clears `processor_id` (→ nil) on `:failed`
+        #   * `dead_letter_changeset/2` does NOT touch `processor_id` (→ preserve)
+        processor_id_after =
+          case status do
+            :failed -> nil
+            :dead_letter -> failure.command.command_queue_item.processor_id
+          end
+
+        {placeholders, st} =
+          push_params(st, [
+            uuid(qi_id),
+            Atom.to_string(status),
+            processor_id_after,
+            error_map,
+            next_retry_after
+          ])
+
+        cast =
+          "(#{p(placeholders, 0)}::uuid, " <>
+            "#{p(placeholders, 1)}::text, " <>
+            "#{p(placeholders, 2)}::text, " <>
+            "#{p(placeholders, 3)}::jsonb, " <>
+            "#{p(placeholders, 4)}::timestamptz)"
+
+        {[cast | rows], st}
+      end)
+
+    {now_placeholder, state} = push_param(state, now)
+
+    sql = """
+    UPDATE #{table("command_queue_items")} AS c
+    SET status = u.status,
+        errors = c.errors || jsonb_build_array(u.new_error),
+        next_retry_after = u.next_retry_after,
+        processing_completed_at = #{now_placeholder}::timestamptz,
+        processor_id = u.processor_id_after,
+        updated_at = #{now_placeholder}::timestamptz
+    FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
+      AS u(id, status, processor_id_after, new_error, next_retry_after)
+    WHERE c.id = u.id
+    """
+
+    {sql, Enum.reverse(state.params)}
+  end
+
+  # Use the legacy `Scheduling.build_schedule_retry_with_reason/3` as
+  # the source-of-truth for the per-row failure decision. We never
+  # apply the changeset (the orchestrator owns the DB write); we only
+  # inspect it to decide whether the row should be retried (`:failed`
+  # with a backoff timestamp) or dead-lettered (`:dead_letter` with
+  # `next_retry_after = NULL`).
+  #
+  # The legacy helper produces:
+  #   * `schedule_retry_changeset` (status = `:failed`, next_retry_after set)
+  #     when `retry_count < max_retries`
+  #   * `dead_letter_changeset` (status = `:dead_letter`, next_retry_after nil)
+  #     when `retry_count >= max_retries`
+  #
+  # Both branches `put_assoc(:command_queue_item, ...)`, so we always
+  # reach the inner changeset and dispatch on its `:status` change.
+  @spec compute_failure_outcome(
+          DoubleEntryLedger.Command.t(),
+          BatchProcessor.failure_reason(),
+          DateTime.t()
+        ) :: {:failed, DateTime.t()} | {:dead_letter, nil}
+  defp compute_failure_outcome(command, reason, _now) do
+    cs = Scheduling.build_schedule_retry_with_reason(command, reason_to_message(reason), :failed)
+    qi_cs = Ecto.Changeset.get_change(cs, :command_queue_item)
+
+    case Ecto.Changeset.get_change(qi_cs, :status) do
+      :dead_letter ->
+        {:dead_letter, nil}
+
+      :failed ->
+        next = Ecto.Changeset.get_change(qi_cs, :next_retry_after)
+        # If the legacy helper produced a `:failed` retry without a
+        # `next_retry_after`, that's a bug we want to surface, not
+        # paper over with a fallback.
+        true = match?(%DateTime{}, next)
+        {:failed, next}
+    end
+  end
+
+  # Build a JSONB-encodable error map mirroring the shape of
+  # `Command.ErrorMap.build_error/1` (`%{message, inserted_at}`).
+  @spec error_payload(BatchProcessor.failure_reason(), DateTime.t()) :: %{
+          message: String.t(),
+          inserted_at: DateTime.t()
+        }
+  defp error_payload(reason, now) do
+    %{message: reason_to_message(reason), inserted_at: now}
+  end
+
+  @spec reason_to_message(BatchProcessor.failure_reason()) :: String.t()
+  defp reason_to_message({:unbalanced}), do: "batch fold: entries do not balance"
+
+  defp reason_to_message({:account_not_found, account_id}),
+    do: "batch fold: account not found: #{account_id}"
+
+  defp reason_to_message({:balance_change_error, field, message}),
+    do: "#{field}: #{message}"
 
   # ── helpers ──────────────────────────────────────────────────────
 

@@ -193,11 +193,13 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       assert a1_after.posted.amount == 100
       assert a2_after.posted.amount == 100
 
-      # Queue item marked :processed and version bumped
+      # Queue item marked :processed; processor_version is NOT bumped here
+      # (legacy `processing_complete_changeset/1` doesn't touch it; only
+      # the claim's `optimistic_lock` advances it).
       qi = Repo.get!(CommandQueueItem, command.command_queue_item.id)
       assert qi.status == :processed
       assert qi.processing_completed_at != nil
-      assert qi.processor_version == command.command_queue_item.processor_version + 1
+      assert qi.processor_version == command.command_queue_item.processor_version
 
       # No pending_transaction_lookup row created for :posted
       assert Repo.get_by(PendingTransactionLookup, command_id: command.id) == nil
@@ -473,6 +475,341 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
 
       assert count(PendingTransactionLookup) == lookup_before
+    end
+
+    # ── 8. processor_version NOT bumped in success path ──────────────
+
+    test "write_successes/3 does NOT bump processor_version (matches legacy processing_complete_changeset)",
+         %{accounts: [a1, a2, _, _]} = ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+      now = DateTime.utc_now()
+
+      version_before = command.command_queue_item.processor_version
+
+      initial = accounts_map([a1, a2])
+
+      {success, advanced} =
+        success_for(command, initial, :posted, [
+          {a1.id, :debit, 100},
+          {a2.id, :credit, 100}
+        ])
+
+      write_plan = %{
+        successes: [success],
+        failures: [],
+        merged_accounts: merged_accounts(initial, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
+
+      qi = reload_qi(command.command_queue_item.id)
+      assert qi.processor_version == version_before
+    end
+
+    # ── 9. fresh INSERT branch of pending_transaction_lookup upsert ───
+
+    test "write_successes/3 inserts a fresh pending_transaction_lookup row when none exists (no-conflict INSERT branch)",
+         %{accounts: [a1, a2, _, _]} = ctx do
+      [command] = insert_commands(ctx, 1, :pending)
+      now = DateTime.utc_now()
+
+      # `CommandStore.create` already inserted a lookup row at enqueue
+      # time; remove it so the writer's `INSERT ... ON CONFLICT DO UPDATE`
+      # exercises the no-conflict INSERT branch.
+      {1, _} =
+        Repo.delete_all(
+          Ecto.Query.from(l in PendingTransactionLookup, where: l.command_id == ^command.id)
+        )
+
+      lookup_before = count(PendingTransactionLookup)
+
+      initial = accounts_map([a1, a2])
+
+      {success, advanced} =
+        success_for(command, initial, :pending, [
+          {a1.id, :debit, 100},
+          {a2.id, :credit, 100}
+        ])
+
+      write_plan = %{
+        successes: [success],
+        failures: [],
+        merged_accounts: merged_accounts(initial, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
+
+      assert count(PendingTransactionLookup) - lookup_before == 1
+
+      # `journal_event_id` is generated inside `write_successes/3` by
+      # `assign_ids/1`, so we can't compare to the input record — only
+      # assert presence.
+      lk = Repo.get_by!(PendingTransactionLookup, command_id: command.id)
+      assert lk.transaction_id == success.transaction_id
+      assert lk.journal_event_id != nil
+    end
+  end
+
+  # ── write_failures/3 ────────────────────────────────────────────────
+
+  # Reload a queue item directly from the DB.
+  defp reload_qi(id), do: Repo.get!(CommandQueueItem, id)
+
+  # Seed a queue row's `errors` JSONB array with a pre-existing entry,
+  # so we can assert the failure UPDATE *appends* rather than replaces.
+  defp seed_existing_error(qi_id, message) do
+    qi = Repo.get!(CommandQueueItem, qi_id)
+
+    qi
+    |> Ecto.Changeset.change(
+      errors: [%{"message" => message, "inserted_at" => "2026-01-01T00:00:00Z"}]
+    )
+    |> Repo.update!()
+  end
+
+  describe "write_failures/3" do
+    setup [:create_instance, :create_accounts]
+
+    # ── 1. empty failures returns :ok with no SQL ─────────────────────
+
+    test "empty failures returns :ok without raising or writing", _ctx do
+      now = DateTime.utc_now()
+      qi_before = count(CommandQueueItem)
+
+      assert :ok == BatchTransactionStoreHelper.write_failures([], Repo, now)
+
+      assert count(CommandQueueItem) == qi_before
+    end
+
+    # ── 2. single :unbalanced failure ─────────────────────────────────
+
+    test "single :unbalanced failure marks queue row :failed, leaves retry_count untouched, sets future next_retry_after, appends one error",
+         ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+      now = DateTime.utc_now()
+
+      failure = %{command: command, reason: {:unbalanced}}
+
+      :ok = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
+
+      qi = reload_qi(command.command_queue_item.id)
+
+      assert qi.status == :failed
+      # Legacy `schedule_retry_changeset/4` does NOT touch retry_count;
+      # the bump happens at claim time via `retry_count_by_status/1`.
+      assert qi.retry_count == command.command_queue_item.retry_count
+      # Legacy never advances processor_version outside the claim's
+      # `optimistic_lock`; the failure writer must leave it untouched.
+      assert qi.processor_version == command.command_queue_item.processor_version
+      assert qi.processing_completed_at != nil
+      assert qi.next_retry_after != nil
+      assert DateTime.compare(qi.next_retry_after, now) == :gt
+
+      assert length(qi.errors) == 1
+      [%{"message" => message, "inserted_at" => _}] = qi.errors
+      assert is_binary(message)
+      assert String.contains?(message, "balance")
+    end
+
+    # ── 3. single :balance_change_error failure ──────────────────────
+
+    test "single :balance_change_error failure produces an error map carrying field+message",
+         ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+      now = DateTime.utc_now()
+
+      failure = %{
+        command: command,
+        reason: {:balance_change_error, :available, "amount can't be negative"}
+      }
+
+      :ok = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
+
+      qi = reload_qi(command.command_queue_item.id)
+
+      assert qi.status == :failed
+      # Legacy: failure mark does NOT bump retry_count.
+      assert qi.retry_count == command.command_queue_item.retry_count
+
+      assert length(qi.errors) == 1
+      [%{"message" => message}] = qi.errors
+      assert String.contains?(message, "available")
+      assert String.contains?(message, "negative")
+    end
+
+    # ── 4. command at/over max retries gets dead-lettered ────────────
+
+    test "command with retry_count >= max retries gets marked :dead_letter with next_retry_after = nil",
+         ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+      now = DateTime.utc_now()
+
+      max_retries = Application.get_env(:double_entry_ledger, :command_queue)[:max_retries] || 5
+
+      # Bump retry_count to max so the legacy `Scheduling` helper
+      # produces a `dead_letter_changeset` instead of a retry.
+      command.command_queue_item
+      |> Ecto.Changeset.change(%{retry_count: max_retries})
+      |> Repo.update!()
+
+      # Reload so the writer sees the bumped retry_count.
+      command = reload_command_with_qi(command.id)
+
+      failure = %{command: command, reason: {:unbalanced}}
+
+      :ok = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
+
+      qi = reload_qi(command.command_queue_item.id)
+
+      assert qi.status == :dead_letter
+      assert qi.next_retry_after == nil
+      # Legacy `dead_letter_changeset/2` does NOT touch retry_count;
+      # it stays at whatever the most recent claim wrote.
+      assert qi.retry_count == max_retries
+      # Legacy never advances processor_version outside the claim.
+      assert qi.processor_version == command.command_queue_item.processor_version
+      assert qi.processing_completed_at != nil
+
+      # Dead-letter still records the failure in the errors array.
+      assert length(qi.errors) == 1
+      [%{"message" => message}] = qi.errors
+      assert is_binary(message)
+    end
+
+    # ── 5. multiple failures, one with pre-existing errors ───────────
+
+    test "multiple failures: each row updated; pre-existing errors entry preserved alongside new",
+         ctx do
+      [c1, c2, c3] = insert_commands(ctx, 3, :posted)
+      now = DateTime.utc_now()
+
+      # Seed c2's queue row with a pre-existing error to verify list-preservation.
+      pre_existing_message = "earlier failure"
+      seed_existing_error(c2.command_queue_item.id, pre_existing_message)
+
+      failures = [
+        %{command: c1, reason: {:unbalanced}},
+        %{
+          command: c2,
+          reason: {:balance_change_error, :available, "amount can't be negative"}
+        },
+        %{command: c3, reason: {:account_not_found, Ecto.UUID.generate()}}
+      ]
+
+      :ok = BatchTransactionStoreHelper.write_failures(failures, Repo, now)
+
+      qi1 = reload_qi(c1.command_queue_item.id)
+      qi2 = reload_qi(c2.command_queue_item.id)
+      qi3 = reload_qi(c3.command_queue_item.id)
+
+      assert qi1.status == :failed
+      assert qi2.status == :failed
+      assert qi3.status == :failed
+
+      # Legacy: failure mark does NOT bump retry_count for any row.
+      assert qi1.retry_count == c1.command_queue_item.retry_count
+      assert qi2.retry_count == c2.command_queue_item.retry_count
+      assert qi3.retry_count == c3.command_queue_item.retry_count
+
+      # Each row has a future next_retry_after.
+      assert DateTime.compare(qi1.next_retry_after, now) == :gt
+      assert DateTime.compare(qi2.next_retry_after, now) == :gt
+      assert DateTime.compare(qi3.next_retry_after, now) == :gt
+
+      # qi1 / qi3 had no pre-existing errors → exactly one new entry.
+      assert length(qi1.errors) == 1
+      assert length(qi3.errors) == 1
+
+      # qi2 had one pre-existing error → now has two; old one preserved.
+      assert length(qi2.errors) == 2
+      messages = Enum.map(qi2.errors, & &1["message"])
+      assert pre_existing_message in messages
+      assert Enum.any?(messages, &String.contains?(&1, "available"))
+
+      # Correct error content per row.
+      [%{"message" => m1}] = qi1.errors
+      assert String.contains?(m1, "balance")
+
+      [%{"message" => m3}] = qi3.errors
+      assert String.contains?(m3, "account not found")
+    end
+
+    # ── 6. processor_version NOT bumped in failure path ──────────────
+
+    test "write_failures/3 does NOT bump processor_version (matches legacy schedule_retry_changeset / dead_letter_changeset)",
+         ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+      now = DateTime.utc_now()
+
+      version_before = command.command_queue_item.processor_version
+
+      :ok =
+        BatchTransactionStoreHelper.write_failures(
+          [%{command: command, reason: {:unbalanced}}],
+          Repo,
+          now
+        )
+
+      qi = reload_qi(command.command_queue_item.id)
+      assert qi.processor_version == version_before
+    end
+
+    # ── 7. processor_id cleared on :failed (matches schedule_retry_changeset) ─
+
+    test "write_failures/3 clears processor_id on :failed branch (mirrors schedule_retry_changeset)",
+         ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+      now = DateTime.utc_now()
+
+      # Seed a known processor_id so we can detect that the writer cleared it.
+      command.command_queue_item
+      |> Ecto.Changeset.change(processor_id: "test-processor")
+      |> Repo.update!()
+
+      command = reload_command_with_qi(command.id)
+      assert command.command_queue_item.processor_id == "test-processor"
+
+      :ok =
+        BatchTransactionStoreHelper.write_failures(
+          [%{command: command, reason: {:unbalanced}}],
+          Repo,
+          now
+        )
+
+      qi = reload_qi(command.command_queue_item.id)
+      assert qi.status == :failed
+      assert qi.processor_id == nil
+    end
+
+    # ── 8. processor_id preserved on :dead_letter (matches dead_letter_changeset) ─
+
+    test "write_failures/3 preserves processor_id on :dead_letter branch (mirrors dead_letter_changeset)",
+         ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+      now = DateTime.utc_now()
+
+      max_retries = Application.get_env(:double_entry_ledger, :command_queue)[:max_retries] || 5
+
+      # Push retry_count to max so legacy dispatches to dead_letter, and
+      # seed a processor_id we can detect is preserved unchanged.
+      command.command_queue_item
+      |> Ecto.Changeset.change(retry_count: max_retries, processor_id: "test-processor")
+      |> Repo.update!()
+
+      command = reload_command_with_qi(command.id)
+      assert command.command_queue_item.processor_id == "test-processor"
+      assert command.command_queue_item.retry_count == max_retries
+
+      :ok =
+        BatchTransactionStoreHelper.write_failures(
+          [%{command: command, reason: {:unbalanced}}],
+          Repo,
+          now
+        )
+
+      qi = reload_qi(command.command_queue_item.id)
+      assert qi.status == :dead_letter
+      assert qi.processor_id == "test-processor"
     end
   end
 end
