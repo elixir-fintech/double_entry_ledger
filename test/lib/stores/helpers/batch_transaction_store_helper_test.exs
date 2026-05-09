@@ -66,6 +66,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
     success = %{
       command: command,
       transaction_id: transaction_id,
+      journal_event_id: Ecto.UUID.generate(),
       status: status,
       entries: Enum.reverse(entries_with_snap)
     }
@@ -541,12 +542,11 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
       assert count(PendingTransactionLookup) - lookup_before == 1
 
-      # `journal_event_id` is generated inside `write_successes/3` by
-      # `assign_ids/1`, so we can't compare to the input record — only
-      # assert presence.
+      # `journal_event_id` is now stamped by the orchestrator (Step 5)
+      # before reaching the writer; the writer only persists it.
       lk = Repo.get_by!(PendingTransactionLookup, command_id: command.id)
       assert lk.transaction_id == success.transaction_id
-      assert lk.journal_event_id != nil
+      assert lk.journal_event_id == success.journal_event_id
     end
   end
 
