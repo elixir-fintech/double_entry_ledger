@@ -10,7 +10,15 @@
 # snapshots. Exits 0 on equivalence, non-zero on divergence.
 #
 # Run with:
-#   MIX_ENV=test mix run test/performance/batch_equivalence.exs
+#   MIX_ENV=equiv mix run --no-start test/performance/batch_equivalence.exs
+#
+# The dedicated `:equiv` Mix env uses its own database
+# (`double_entry_ledger_repo_equivalence`) so leftover rows from the
+# script's runs never pollute the `:test` DB. The script creates and
+# migrates the database on first run; subsequent runs reuse it (the
+# script truncates between paths regardless). `--no-start` ensures the
+# app boots AFTER the DB is ready, avoiding noisy connect-failure logs
+# on the first run.
 #
 # Configurable via env var:
 #   BATCH_EQ_N — number of commands to generate (default 200).
@@ -33,11 +41,28 @@ alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
 
 # ── boot setup ────────────────────────────────────────────────────────
 
-# Sandbox starts in :manual mode (test_helper.exs convention). Switch to
-# :auto so this script can speak to the DB directly without per-process
-# checkouts. The script truncates tables explicitly between paths, so
-# leftover state is fine.
-Ecto.Adapters.SQL.Sandbox.mode(Repo, :auto)
+# Refuse to run under the wrong env. Running this script with
+# `MIX_ENV=test` (the previous default) silently pollutes the test DB
+# with leftover instances — that's what introduced the
+# `instance:eq:b` ghost row that broke `instance_store_test` until it
+# was hand-truncated.
+if Mix.env() != :equiv do
+  Mix.raise("""
+  batch_equivalence.exs must run under MIX_ENV=equiv to keep its
+  output out of the test / dev / perf databases.
+
+      MIX_ENV=equiv mix run --no-start test/performance/batch_equivalence.exs
+
+  Current MIX_ENV=#{Mix.env()}.
+  """)
+end
+
+# `mix run --no-start` skipped starting the app. First make sure the
+# DB exists and is migrated, THEN start the app — this avoids Repo and
+# Oban's noisy connect-failure logs on the first run.
+Mix.Task.run("ecto.create", ["--quiet"])
+Mix.Task.run("ecto.migrate", ["--quiet"])
+Mix.Task.run("app.start", [])
 
 # Squelch the per-batch processed log lines from CreateTransactionCommand
 # during Path A — the repeated "Processed successfully" warnings would
