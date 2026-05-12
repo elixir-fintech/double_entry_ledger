@@ -304,11 +304,13 @@ defmodule DoubleEntryLedger.BatchProcessor do
     # One `now` for all rows in this logical batch (retries reuse it;
     # split recursion calls generate their own).
     now = DateTime.utc_now()
+    started = System.monotonic_time()
 
     {command_inputs, initial_failures} = extract_inputs(commands)
 
     case write_with_retry(command_inputs, initial_failures, commands, repo, now, 0) do
       {:ok, write_plan} ->
+        emit_per_command_telemetry(write_plan, System.monotonic_time() - started)
         {:ok, summarize(write_plan)}
 
       {:error, %Ecto.StaleEntryError{} = stale} ->
@@ -319,6 +321,30 @@ defmodule DoubleEntryLedger.BatchProcessor do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  # Emit one synthetic `[:double_entry_ledger, :command, :process, :stop]`
+  # event per successful command with `duration = batch_native / cmd_count`.
+  # This keeps the same telemetry surface that legacy
+  # `Telemetry.command_process_span/2` produces, so downstream consumers
+  # (load tests, dashboards) see consistent per-cmd latency under either
+  # path.
+  defp emit_per_command_telemetry(%{successes: []}, _batch_duration), do: :ok
+
+  defp emit_per_command_telemetry(%{successes: successes}, batch_duration) do
+    per_cmd_duration = div(batch_duration, length(successes))
+
+    Enum.each(successes, fn success ->
+      :telemetry.execute(
+        [:double_entry_ledger, :command, :process, :stop],
+        %{duration: per_cmd_duration},
+        %{
+          command_id: success.command.id,
+          instance_id: success.command.instance_id,
+          source: :batch
+        }
+      )
+    end)
   end
 
   # ── extract: filter unsupported actions + run transformer ────────

@@ -16,3 +16,12 @@ case System.get_env("BATCH") do
   "on" -> config :double_entry_ledger, batch_enabled: true
   _ -> :ok
 end
+
+# Override the InstanceProcessor batch size when BATCH_SIZE is set.
+# Used to sweep across M values during perf validation. The
+# `:batch_size` top-level key is the override; the InstanceProcessor
+# falls back to its hardcoded default of 8 if neither is set.
+case System.get_env("BATCH_SIZE") do
+  size when is_binary(size) -> config :double_entry_ledger, batch_size: String.to_integer(size)
+  _ -> :ok
+end

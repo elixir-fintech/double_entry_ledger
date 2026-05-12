@@ -363,7 +363,9 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   defp batch_size do
-    Application.get_env(:double_entry_ledger, :command_queue, [])[:batch_size] || 8
+    Application.get_env(:double_entry_ledger, :batch_size) ||
+      Application.get_env(:double_entry_ledger, :command_queue, [])[:batch_size] ||
+      8
   end
 
   defp processor_name do
