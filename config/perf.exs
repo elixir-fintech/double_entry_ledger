@@ -8,7 +8,7 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   port: "5432",
   stacktrace: false,
   show_sensitive_data_on_connection_error: false,
-  pool_size: 30,
+  pool_size: 60,
   parameters: [synchronous_commit: "off"]
 
 config :logger, level: :warning

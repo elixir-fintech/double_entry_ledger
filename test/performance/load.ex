@@ -265,6 +265,242 @@ defmodule DoubleEntryLedger.LoadTesting do
     end
   end
 
+  @doc """
+  Runs `n_instances` `InstanceProcessor`s in parallel, each draining
+  `prefill_per_instance` commands. Reports per-instance + aggregate
+  tps to validate the horizontal-scaling claim.
+
+  Separate instances have non-overlapping accounts and disjoint queue
+  partitions, so M `InstanceProcessor`s on M instances should give
+  roughly M × per-instance-tps aggregate throughput. This script
+  measures that.
+
+  Setup (not measured): creates `n_instances` instances with
+  deterministic addresses (`"instance:multi:<i>"`), each with its
+  own pool of source / destination / balancing accounts, then
+  pre-fills `prefill_per_instance` commands per instance via
+  `Task.async_stream` (parallel across instances and across
+  commands).
+
+  Drain (measured): one `InstanceProcessor` per instance is started
+  in parallel from per-instance Task drivers; each driver records its
+  own start / end timestamps. Aggregate wall time is `max(end) -
+  min(start)`. Aggregate tps is `(n_instances *
+  prefill_per_instance) / aggregate_wall_time`.
+
+  ## TelemetryCollector choice
+
+  Started once at the top of the drain phase and stopped at the end
+  — so latency stats (min/mean/P50/P95/P99/max) are aggregated
+  across all instances into one combined histogram. This matches
+  what we want to know: "does the per-command latency distribution
+  shift as N grows?"
+
+  ## Parameters
+
+    - n_instances: number of parallel `InstanceProcessor`s / instances.
+    - prefill_per_instance: number of pre-filled commands per instance.
+  """
+  @spec run_multi_drain_load_test(pos_integer(), pos_integer()) :: :ok
+  def run_multi_drain_load_test(n_instances, prefill_per_instance)
+      when is_integer(n_instances) and n_instances > 0 and
+             is_integer(prefill_per_instance) and prefill_per_instance > 0 do
+    debit_sum = max(trunc(100_000 * prefill_per_instance / 10), 1_000_000)
+    pool_size = min(10, prefill_per_instance)
+    total_commands = n_instances * prefill_per_instance
+
+    IO.puts(
+      "#{bold("load.multi_drain")} — consumer scaling, K=#{bold(to_string(n_instances))}: " <>
+        "pre-fill #{bold(to_string(prefill_per_instance))} commands/instance, " <>
+        "then drain via #{bold(to_string(n_instances))} parallel InstanceProcessors"
+    )
+
+    # ── Setup phase (not measured) ──────────────────────────────────────
+    setup_start = System.monotonic_time(:millisecond)
+
+    instances =
+      1..n_instances
+      |> Enum.map(fn i ->
+        {:ok, instance} =
+          %Instance{address: "instance:multi:#{i}:#{System.unique_integer([:positive])}"}
+          |> Repo.insert()
+
+        sources = create_multi_debit_sources(pool_size, instance, debit_sum, i)
+        destination_arrays = create_multi_debit_destinations(pool_size, instance, i)
+        create_balancing_credit_account(instance, debit_sum * pool_size)
+
+        transaction_lists = create_transaction_lists(sources, destination_arrays)
+        flat_params = List.flatten(transaction_lists)
+
+        %{instance: instance, flat_params: flat_params, flat_count: length(flat_params)}
+      end)
+
+    Enum.each(instances, fn %{instance: instance} ->
+      IO.puts("#{bold("Before [#{instance.address}]:")} #{validate_instance_balance(instance)}")
+    end)
+
+    # Pre-fill in parallel across all (instance, command) pairs.
+    pairs =
+      for %{instance: inst, flat_params: fp, flat_count: fc} <- instances,
+          i <- 1..prefill_per_instance,
+          do: {inst, Enum.at(fp, rem(i - 1, fc))}
+
+    pairs
+    |> Task.async_stream(
+      fn {instance, params} -> enqueue_command(instance, params) end,
+      max_concurrency: @drain_prefill_concurrency * n_instances,
+      timeout: :infinity,
+      ordered: false
+    )
+    |> Stream.run()
+
+    setup_elapsed = (System.monotonic_time(:millisecond) - setup_start) / 1000.0
+
+    IO.puts(
+      "Pre-fill: #{bold(to_string(total_commands))} commands across " <>
+        "#{bold(to_string(n_instances))} instances in " <>
+        "#{Float.round(setup_elapsed, 2)}s — " <>
+        "#{bold(:erlang.float_to_binary(total_commands / setup_elapsed, decimals: 1))} ops/s " <>
+        "(not measured)"
+    )
+
+    # ── Drain phase (measured) ──────────────────────────────────────────
+    ensure_command_queue_registry_started()
+
+    TelemetryCollector.start()
+
+    overall_start = System.monotonic_time(:millisecond)
+
+    per_instance_results =
+      instances
+      |> Task.async_stream(
+        fn %{instance: instance} -> drive_one_processor(instance) end,
+        max_concurrency: n_instances,
+        timeout: :infinity,
+        ordered: true
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    overall_elapsed = (System.monotonic_time(:millisecond) - overall_start) / 1000.0
+
+    # Per-instance wall times use each driver's own start/end stamps;
+    # aggregate wall time is max(end) - min(start) across drivers,
+    # which closely matches `overall_elapsed` but is robust to
+    # Task.async_stream scheduling jitter.
+    min_start = per_instance_results |> Enum.map(& &1.start_ms) |> Enum.min()
+    max_end = per_instance_results |> Enum.map(& &1.end_ms) |> Enum.max()
+    aggregate_wall = (max_end - min_start) / 1000.0
+    aggregate_tps = total_commands / aggregate_wall
+
+    IO.puts("\n#{bold("Per-instance drain:")}")
+
+    Enum.each(per_instance_results, fn r ->
+      tps = prefill_per_instance / r.elapsed_s
+
+      IO.puts(
+        "  [#{r.address}] #{prefill_per_instance} cmds in " <>
+          "#{Float.round(r.elapsed_s, 2)}s — " <>
+          "#{bold(:erlang.float_to_binary(tps, decimals: 1))} tps"
+      )
+    end)
+
+    IO.puts(
+      "\n#{bold("Aggregate drain:")} #{total_commands} commands in " <>
+        "#{Float.round(aggregate_wall, 2)}s — " <>
+        "#{bold(:erlang.float_to_binary(aggregate_tps, decimals: 1))} tps " <>
+        "(overall_elapsed=#{Float.round(overall_elapsed, 2)}s)"
+    )
+
+    # Scaling efficiency. The "baseline" is the K=1 per-instance tps
+    # from prior measurements on this machine (≈881 tps with
+    # BATCH=on BATCH_SIZE=64). At N instances we expect aggregate ≈ N
+    # × baseline; efficiency is how close we got.
+    baseline_per_instance = 881.0
+    expected_aggregate = n_instances * baseline_per_instance
+    efficiency_vs_baseline = aggregate_tps / expected_aggregate
+
+    IO.puts(
+      "Scaling: aggregate_tps / (N × baseline #{baseline_per_instance}) = " <>
+        "#{Float.round(efficiency_vs_baseline, 3)} " <>
+        "(1.0 = perfect linear scaling vs prior K=1 measurement)"
+    )
+
+    TelemetryCollector.print_summary()
+    TelemetryCollector.stop()
+
+    Enum.each(instances, fn %{instance: instance} ->
+      IO.puts("#{bold("After [#{instance.address}]:")} #{validate_instance_balance(instance)}")
+    end)
+
+    :ok
+  end
+
+  # Drives one InstanceProcessor end-to-end. Captures its own
+  # start/end monotonic timestamps so per-instance tps is accurate
+  # regardless of when Task.async_stream actually schedules this
+  # closure.
+  defp drive_one_processor(instance) do
+    start_ms = System.monotonic_time(:millisecond)
+    {:ok, processor_pid} = InstanceProcessor.start_link(instance_id: instance.id)
+    ref = Process.monitor(processor_pid)
+
+    receive do
+      {:DOWN, ^ref, :process, _pid, :normal} ->
+        :ok
+
+      {:DOWN, ^ref, :process, _pid, reason} ->
+        raise "InstanceProcessor for #{instance.address} crashed: #{inspect(reason)}"
+    end
+
+    end_ms = System.monotonic_time(:millisecond)
+
+    %{
+      address: instance.address,
+      start_ms: start_ms,
+      end_ms: end_ms,
+      elapsed_s: (end_ms - start_ms) / 1000.0
+    }
+  end
+
+  # Same shape as create_debit_sources/3 but uses deterministic
+  # addresses scoped to a specific multi-drain instance index, so
+  # account addresses don't collide and are disjoint across the
+  # n_instances under test.
+  defp create_multi_debit_sources(pool_size, instance, debit_sum, instance_idx) do
+    1..pool_size
+    |> Enum.map(fn j ->
+      %Account{
+        instance_id: instance.id,
+        address: "instance:multi:#{instance_idx}:source:#{j}",
+        type: :asset,
+        normal_balance: :debit,
+        posted: %Balance{amount: debit_sum, debit: debit_sum, credit: 0},
+        available: debit_sum,
+        currency: :EUR
+      }
+      |> Repo.insert!()
+    end)
+  end
+
+  defp create_multi_debit_destinations(pool_size, instance, instance_idx) do
+    1..pool_size
+    |> Enum.map(fn j ->
+      1..@destination_accounts
+      |> Enum.map(fn k ->
+        %Account{
+          instance_id: instance.id,
+          address: "instance:multi:#{instance_idx}:destination:#{j}:#{k}",
+          type: :asset,
+          normal_balance: :debit,
+          posted: %Balance{amount: 0, debit: 0, credit: 0},
+          available: 0,
+          currency: :EUR
+        }
+        |> Repo.insert!()
+      end)
+    end)
+  end
+
   # Sliding-window orchestrator. Spawns `concurrency` worker processes that each
   # loop until end_time. Each worker reports its total success count to the
   # caller exactly once, on exit. No barrier, no central work queue.
