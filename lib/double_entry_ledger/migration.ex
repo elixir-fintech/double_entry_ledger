@@ -83,7 +83,7 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  @latest_version 6
+  @latest_version 7
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -129,7 +129,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 6 and version >= 6, do: v6_up(prefix)
+    if from < 6 and version >= 6 do
+      v6_up(prefix)
+      flush()
+    end
+
+    if from < 7 and version >= 7, do: v7_up(prefix)
 
     :ok
   end
@@ -148,6 +153,11 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 7 and version < 7 do
+      v7_down(prefix)
+      flush()
+    end
 
     if from >= 6 and version < 6 do
       v6_down(prefix)
@@ -503,6 +513,40 @@ defmodule DoubleEntryLedger.Migration do
 
     alter table(:command_queue_items, prefix: prefix) do
       remove(:instance_id)
+    end
+  end
+
+  # ── Version 7: widen balance/limit columns to bigint ──────────────
+  #
+  # `accounts.available`, `accounts.negative_limit`, and
+  # `balance_history_entries.available` were `int4` (max 2,147,483,647).
+  # That caps balances at ~$21M when amounts are stored in cents and
+  # less for finer-grained currencies — easy to hit on high-volume
+  # merchant or treasury accounts. JSONB-stored balances
+  # (`accounts.posted`, `accounts.pending`, etc.) are already unbounded
+  # because JSON numbers are arbitrary precision.
+  #
+  # Postgres ≥ 14 treats `integer → bigint` ALTER COLUMN TYPE as
+  # metadata-only (no row rewrite), so this is fast on large tables.
+  defp v7_up(prefix) do
+    alter table(:accounts, prefix: prefix) do
+      modify(:available, :bigint, from: :integer)
+      modify(:negative_limit, :bigint, from: :integer)
+    end
+
+    alter table(:balance_history_entries, prefix: prefix) do
+      modify(:available, :bigint, from: :integer)
+    end
+  end
+
+  defp v7_down(prefix) do
+    alter table(:balance_history_entries, prefix: prefix) do
+      modify(:available, :integer, from: :bigint)
+    end
+
+    alter table(:accounts, prefix: prefix) do
+      modify(:negative_limit, :integer, from: :bigint)
+      modify(:available, :integer, from: :bigint)
     end
   end
 

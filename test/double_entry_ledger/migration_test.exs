@@ -6,8 +6,8 @@ defmodule DoubleEntryLedger.MigrationTest do
   @prefix Application.compile_env(:double_entry_ledger, :schema_prefix, "double_entry_ledger")
 
   describe "latest_version/0" do
-    test "returns 6" do
-      assert Migration.latest_version() == 6
+    test "returns 7" do
+      assert Migration.latest_version() == 7
     end
   end
 
@@ -18,6 +18,30 @@ defmodule DoubleEntryLedger.MigrationTest do
       assert compound_index_exists?()
       refute single_column_entry_id_index_exists?()
     end
+  end
+
+  describe "v7 migration — bigint widening for balance/limit columns" do
+    test "up/1 widens accounts.available, accounts.negative_limit, and balance_history_entries.available to bigint" do
+      assert column_data_type("accounts", "available") == "bigint"
+      assert column_data_type("accounts", "negative_limit") == "bigint"
+      assert column_data_type("balance_history_entries", "available") == "bigint"
+    end
+  end
+
+  defp column_data_type(table, column) do
+    result =
+      Ecto.Adapters.SQL.query!(
+        Repo,
+        """
+        SELECT data_type
+        FROM information_schema.columns
+        WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+        """,
+        [@prefix, table, column]
+      )
+
+    [[type]] = result.rows
+    type
   end
 
   defp compound_index_exists? do
