@@ -63,7 +63,10 @@ defmodule DoubleEntryLedger.MixProject do
 
       # security
       {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false, warn_if_outdated: true},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+
+      # property-based testing
+      {:stream_data, "~> 1.3", only: [:test, :equiv], runtime: false}
 
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
@@ -107,6 +110,7 @@ defmodule DoubleEntryLedger.MixProject do
         "pages/HandlingPendingTransactions.md",
         "pages/EventSourcing.md",
         "pages/Telemetry.md",
+        "pages/PerformanceTesting.md",
         "LICENSE"
       ],
       groups_for_modules: [
