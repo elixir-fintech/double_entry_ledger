@@ -71,6 +71,65 @@ defmodule DoubleEntryLedger.BatchProcessorTest do
     }
   end
 
+  # Asset (debit-normal) account with a non-zero pending debit balance —
+  # the setup the update transitions reverse from.
+  defp pre_pending_asset_account(id, pending_debit) do
+    %Account{
+      id: id,
+      currency: :USD,
+      type: :asset,
+      normal_balance: :debit,
+      negative_limit: 0,
+      posted: %Balance{amount: 0, debit: 0, credit: 0},
+      pending: %Balance{amount: pending_debit, debit: pending_debit, credit: 0},
+      available: 0,
+      lock_version: 1,
+      instance_id: "11111111-1111-1111-1111-111111111111"
+    }
+  end
+
+  # Liability (credit-normal) account with a non-zero pending credit balance.
+  defp pre_pending_liability_account(id, pending_credit) do
+    %Account{
+      id: id,
+      currency: :USD,
+      type: :liability,
+      normal_balance: :credit,
+      negative_limit: 0,
+      posted: %Balance{amount: 0, debit: 0, credit: 0},
+      pending: %Balance{amount: pending_credit, debit: 0, credit: pending_credit},
+      available: 0,
+      lock_version: 1,
+      instance_id: "11111111-1111-1111-1111-111111111111"
+    }
+  end
+
+  defp update_entry(account_id, type, new_amount, old_amount) do
+    %{
+      id: Ecto.UUID.generate(),
+      account_id: account_id,
+      type: type,
+      value: money(new_amount),
+      old_value: money(old_amount)
+    }
+  end
+
+  # Synthetic Stage 2 update command_input — mimics what
+  # `enrich_updates_with_existing/2` (B4) will produce. Includes
+  # `:transaction_id`, `:transition`, and per-entry `:id`/`:old_value`
+  # that B2's `extract_one/1` deliberately omits.
+  defp update_input(opts) do
+    %{
+      command: %Command{id: Keyword.fetch!(opts, :command_id)},
+      action: :update_transaction,
+      transaction_id: Keyword.get(opts, :transaction_id, Ecto.UUID.generate()),
+      journal_event_id: Keyword.get(opts, :journal_event_id, Ecto.UUID.generate()),
+      status: Keyword.fetch!(opts, :status),
+      transition: Keyword.fetch!(opts, :transition),
+      entries: Keyword.fetch!(opts, :entries)
+    }
+  end
+
   # ── 1. 1 cmd, 2 entries, success ─────────────────────────────────
 
   test "1 cmd, 2 entries, success" do
@@ -425,4 +484,238 @@ defmodule DoubleEntryLedger.BatchProcessorTest do
     assert result.merged_accounts[b_id].posted.amount == 30
   end
 
+  # ── B2: create success_record carries :action :create_transaction ─
+
+  test "create success_record carries action: :create_transaction" do
+    a_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    b_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+    accounts = %{
+      a_id => asset_account(a_id),
+      b_id => liability_account(b_id)
+    }
+
+    inputs = [
+      input(
+        command_id: "cmd-1",
+        entries: [
+          entry(a_id, :debit, 100),
+          entry(b_id, :credit, 100)
+        ]
+      )
+    ]
+
+    result = BatchProcessor.simulate_batch(inputs, accounts)
+
+    [success] = result.successes
+    assert success.action == :create_transaction
+    refute Map.has_key?(success, :transition)
+  end
+
+  # ── B2: update transitions through the fold ──────────────────────
+
+  test "update :pending_to_posted moves pending balance into posted" do
+    a_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    b_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+    accounts = %{
+      a_id => pre_pending_asset_account(a_id, 100),
+      b_id => pre_pending_liability_account(b_id, 100)
+    }
+
+    inputs = [
+      update_input(
+        command_id: "cmd-u1",
+        status: :posted,
+        transition: :pending_to_posted,
+        entries: [
+          update_entry(a_id, :debit, 100, 100),
+          update_entry(b_id, :credit, 100, 100)
+        ]
+      )
+    ]
+
+    result = BatchProcessor.simulate_batch(inputs, accounts)
+
+    assert result.failures == []
+    [success] = result.successes
+    assert success.action == :update_transaction
+    assert success.status == :posted
+    assert success.transition == :pending_to_posted
+    assert length(success.entries) == 2
+
+    a_merged = result.merged_accounts[a_id]
+    assert a_merged.pending.amount == 0
+    assert a_merged.pending.debit == 0
+    assert a_merged.posted.amount == 100
+    assert a_merged.posted.debit == 100
+    assert a_merged.new_lock_version == 2
+
+    b_merged = result.merged_accounts[b_id]
+    assert b_merged.pending.amount == 0
+    assert b_merged.pending.credit == 0
+    assert b_merged.posted.amount == 100
+    assert b_merged.posted.credit == 100
+    assert b_merged.new_lock_version == 2
+  end
+
+  test "update :pending_to_pending with value change 100→150 adjusts pending" do
+    a_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    b_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+    accounts = %{
+      a_id => pre_pending_asset_account(a_id, 100),
+      b_id => pre_pending_liability_account(b_id, 100)
+    }
+
+    inputs = [
+      update_input(
+        command_id: "cmd-u2",
+        status: :pending,
+        transition: :pending_to_pending,
+        entries: [
+          update_entry(a_id, :debit, 150, 100),
+          update_entry(b_id, :credit, 150, 100)
+        ]
+      )
+    ]
+
+    result = BatchProcessor.simulate_batch(inputs, accounts)
+
+    assert result.failures == []
+    [success] = result.successes
+    assert success.action == :update_transaction
+    assert success.transition == :pending_to_pending
+
+    a_merged = result.merged_accounts[a_id]
+    assert a_merged.pending.amount == 150
+    assert a_merged.pending.debit == 150
+    assert a_merged.posted.amount == 0
+
+    b_merged = result.merged_accounts[b_id]
+    assert b_merged.pending.amount == 150
+    assert b_merged.pending.credit == 150
+    assert b_merged.posted.amount == 0
+  end
+
+  test "update :pending_to_archived cancels the pending balance" do
+    a_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    b_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+    accounts = %{
+      a_id => pre_pending_asset_account(a_id, 100),
+      b_id => pre_pending_liability_account(b_id, 100)
+    }
+
+    inputs = [
+      update_input(
+        command_id: "cmd-u3",
+        status: :archived,
+        transition: :pending_to_archived,
+        entries: [
+          update_entry(a_id, :debit, 100, 100),
+          update_entry(b_id, :credit, 100, 100)
+        ]
+      )
+    ]
+
+    result = BatchProcessor.simulate_batch(inputs, accounts)
+
+    assert result.failures == []
+    [success] = result.successes
+    assert success.action == :update_transaction
+    assert success.status == :archived
+    assert success.transition == :pending_to_archived
+
+    a_merged = result.merged_accounts[a_id]
+    assert a_merged.pending.amount == 0
+    assert a_merged.pending.debit == 0
+    assert a_merged.posted.amount == 0
+
+    b_merged = result.merged_accounts[b_id]
+    assert b_merged.pending.amount == 0
+    assert b_merged.pending.credit == 0
+    assert b_merged.posted.amount == 0
+  end
+
+  test "mixed batch (1 create + 1 update) — both succeed" do
+    # Two unrelated pairs so the create and update touch disjoint accounts.
+    a_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"
+    b_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"
+    c_id = "cccccccc-cccc-cccc-cccc-cccccccccc01"
+    d_id = "dddddddd-dddd-dddd-dddd-ddddddddddd1"
+
+    accounts = %{
+      a_id => asset_account(a_id),
+      b_id => liability_account(b_id),
+      c_id => pre_pending_asset_account(c_id, 50),
+      d_id => pre_pending_liability_account(d_id, 50)
+    }
+
+    inputs = [
+      input(
+        command_id: "cmd-c1",
+        entries: [
+          entry(a_id, :debit, 30),
+          entry(b_id, :credit, 30)
+        ]
+      ),
+      update_input(
+        command_id: "cmd-u1",
+        status: :posted,
+        transition: :pending_to_posted,
+        entries: [
+          update_entry(c_id, :debit, 50, 50),
+          update_entry(d_id, :credit, 50, 50)
+        ]
+      )
+    ]
+
+    result = BatchProcessor.simulate_batch(inputs, accounts)
+
+    assert result.failures == []
+    assert length(result.successes) == 2
+
+    [create_success, update_success] = result.successes
+    assert create_success.action == :create_transaction
+    assert update_success.action == :update_transaction
+    assert update_success.transition == :pending_to_posted
+
+    assert result.merged_accounts[a_id].posted.amount == 30
+    assert result.merged_accounts[c_id].pending.amount == 0
+    assert result.merged_accounts[c_id].posted.amount == 50
+  end
+
+  test "update fails when entry's old_value exceeds current pending" do
+    # Account has pending=20 but we ask to reverse 100 → underflow.
+    a_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    b_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+    accounts = %{
+      a_id => pre_pending_asset_account(a_id, 20),
+      b_id => pre_pending_liability_account(b_id, 20)
+    }
+
+    inputs = [
+      update_input(
+        command_id: "cmd-u-fail",
+        status: :archived,
+        transition: :pending_to_archived,
+        entries: [
+          update_entry(a_id, :debit, 100, 100),
+          update_entry(b_id, :credit, 100, 100)
+        ]
+      )
+    ]
+
+    result = BatchProcessor.simulate_batch(inputs, accounts)
+
+    assert result.successes == []
+    [failure] = result.failures
+    assert failure.command.id == "cmd-u-fail"
+    assert {:balance_change_error, :debit, _} = failure.reason
+
+    # No accounts advanced — the failed command leaves state untouched.
+    assert result.merged_accounts == %{}
+  end
 end

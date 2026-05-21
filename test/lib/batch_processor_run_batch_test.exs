@@ -243,20 +243,22 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
     # ── 7. unsupported action ─────────────────────────────────────
 
-    test "command with action :update_transaction yields {:unsupported_action, action} failure; siblings still process",
+    test "command with unsupported action yields {:unsupported_action, action} failure; siblings still process",
          %{instance: inst, accounts: [a1, a2, _, _]} do
       good = insert_balanced_command(inst, a1, a2, :posted)
       bogus = insert_balanced_command(inst, a1, a2, :posted, 50)
 
       # Mutate the in-memory struct so the orchestrator sees a
-      # non-:create_transaction action. The persisted DB row is left
-      # alone (it's still :create_transaction in the DB) — the
-      # orchestrator only inspects the in-memory struct passed to it.
+      # non-batchable action. The persisted DB row is left alone
+      # (it's still :create_transaction in the DB) — the orchestrator
+      # only inspects the in-memory struct passed to it. `:create_account`
+      # is intentionally not batched (account commands stay on the
+      # legacy single-cmd path) so it hits the catch-all clause.
       tampered =
         Map.put(
           bogus,
           :command_map,
-          Map.put(bogus.command_map, :action, :update_transaction)
+          Map.put(bogus.command_map, :action, :create_account)
         )
 
       assert {:ok, %{successes: [success], failures: [failure]}} =
@@ -264,7 +266,7 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
       assert success.command_id == good.id
       assert failure.command_id == bogus.id
-      assert failure.reason == {:unsupported_action, :update_transaction}
+      assert failure.reason == {:unsupported_action, :create_account}
 
       # Good cmd persisted.
       tx = Repo.get!(Transaction, success.transaction_id)
