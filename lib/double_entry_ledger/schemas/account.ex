@@ -643,7 +643,7 @@ defmodule DoubleEntryLedger.Account do
 
   defp update(%{data: %{pending: pe, normal_balance: nb}} = changeset, entry, entry_type, trx)
        when trx == :pending_to_archived do
-    entry_value = get_field(entry, :value)
+    entry_value = entry.data.value
 
     changeset
     |> put_change(:pending, Balance.reverse_pending(pe, entry_value.amount, entry_type, nb))
