@@ -230,21 +230,28 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         send(self(), :process_next)
         {:noreply, %{state | pending_ids: rest_after_batch}}
 
-      all_create_transaction?(commands) ->
+      all_batchable?(commands) ->
         start_batch_processing(%{state | pending_ids: rest_after_batch}, commands, batch_ids)
 
       true ->
-        # Mixed batch: process exactly one command via the legacy path.
-        # The remaining ids stay pending; on the next cycle they'll be
-        # re-evaluated and may now form an all-create round.
+        # Mixed batch with non-batchable action(s) (e.g. account commands):
+        # process exactly one command via the legacy path. The remaining
+        # ids stay pending; on the next cycle they'll be re-evaluated
+        # and may now form an all-batchable round.
         [head | rest] = ids
         start_processing(%{state | pending_ids: rest}, head)
     end
   end
 
-  defp all_create_transaction?(commands) do
+  # A batch is dispatched to `BatchProcessor.run_batch/2` when every
+  # command's action is supported by the batched path. Currently that's
+  # `:create_transaction` (Phase A) and `:update_transaction` (Phase B,
+  # via `enrich_updates_with_existing/2`). Account commands stay on the
+  # legacy single-cmd path.
+  defp all_batchable?(commands) do
     Enum.all?(commands, fn
       %Command{command_map: %{action: :create_transaction}} -> true
+      %Command{command_map: %{action: :update_transaction}} -> true
       _ -> false
     end)
   end

@@ -305,20 +305,17 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert Enum.all?(qi_statuses, &(&1 == :processed))
     end
 
-    test "mixed batch (create + update) falls back to legacy single-cmd path; no batch run dispatched",
+    test "mixed batch with non-batchable action falls back to legacy single-cmd path; no batch run dispatched",
          %{instance: instance, command: create_cmd} do
-      # Insert an :update_transaction command alongside the existing
-      # :create_transaction. With batch_enabled and a mixed action set,
-      # the InstanceProcessor must fall back to the legacy per-cmd path
-      # for at least one round (no batch dispatch this round).
-      {:ok, update_cmd} =
-        new_update_transaction_command(
-          "src",
-          "src-update-idempk-#{System.unique_integer([:positive])}",
-          instance.address,
-          :posted,
-          []
-        )
+      # Insert a :create_account command alongside the existing
+      # :create_transaction. `:create_account` is intentionally NOT in
+      # `all_batchable?/1` (account commands stay on the legacy single-cmd
+      # path), so a batch containing one must fall back to the legacy
+      # per-cmd path for at least one round.
+      # (B5 made `:update_transaction` itself batchable, so a
+      # create+update mix is now an all-batchable batch.)
+      {:ok, account_cmd} =
+        CommandStore.create(account_command_attrs(%{instance_address: instance.address}))
 
       # Legacy worker path: mark each command processed when invoked,
       # so the GenServer drains and shuts down naturally.
@@ -343,10 +340,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
 
       # Both commands ended up :processed via the legacy path.
-      [cqi_create, cqi_update] =
+      [cqi_create, cqi_account] =
         Repo.all(
           from(q in CommandQueueItem,
-            where: q.command_id in ^[create_cmd.id, update_cmd.id],
+            where: q.command_id in ^[create_cmd.id, account_cmd.id],
             order_by: q.command_id,
             select: q
           )
@@ -354,7 +351,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
         |> Enum.sort_by(& &1.command_id)
 
       assert cqi_create.status == :processed
-      assert cqi_update.status == :processed
+      assert cqi_account.status == :processed
 
       # Sanity: no batch dispatch message arrived.
       refute_received {:batch_run_received, _}
