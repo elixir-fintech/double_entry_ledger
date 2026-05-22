@@ -472,8 +472,19 @@ defmodule DoubleEntryLedger.BatchProcessor do
            entries: entries
          }}
 
-      {:ok, _no_entries} ->
-        {:error, %{command: cmd, reason: {:transformer_error, :no_entries_provided}}}
+      {:ok, %{status: status}} ->
+        # No entries in the payload — valid for updates because
+        # `TransactionData.update_command_changeset/2` strips entries
+        # for `:archived` (and for `:posted` with no entries).
+        # Enrichment will populate `:entries` from the existing
+        # transaction.
+        {:ok,
+         %{
+           command: cmd,
+           action: :update_transaction,
+           status: status,
+           entries: []
+         }}
 
       {:error, reason} ->
         {:error, %{command: cmd, reason: {:transformer_error, reason}}}
@@ -521,8 +532,6 @@ defmodule DoubleEntryLedger.BatchProcessor do
           non_neg_integer()
         ) :: {:ok, write_plan()} | {:error, term()}
   defp write_with_retry(command_inputs, initial_failures, commands, repo, now, attempt) do
-    accounts = preload_accounts(command_inputs, repo)
-
     # B4 same-batch dep detection runs FIRST: same triple appearing on a
     # create+update (the update can't see the still-uncommitted create)
     # or on multiple updates (double-reversal) both produce diverted
@@ -537,6 +546,12 @@ defmodule DoubleEntryLedger.BatchProcessor do
     # enrich_failures. Re-runs per retry attempt; results are NOT
     # carried across retries.
     {final_inputs, enrich_failures} = enrich_updates_with_existing(survivors, repo)
+
+    # Preload accounts AFTER enrichment so that update inputs with
+    # entries inferred from the existing transaction (e.g., :archived
+    # whose payload entries were stripped by the schema layer) have
+    # their account_ids populated and visible to preload_accounts/2.
+    accounts = preload_accounts(final_inputs, repo)
 
     fold_plan = simulate_batch(final_inputs, accounts)
 
@@ -757,15 +772,35 @@ defmodule DoubleEntryLedger.BatchProcessor do
       is_nil(tx) or tx.status != :pending ->
         {:error, :transaction_not_pending}
 
-      length(input.entries) != length(tx.entries) ->
-        {:error, :entry_count_mismatch}
-
       true ->
-        with {:ok, paired} <- pair_entries(input.entries, tx.entries) do
-          {:ok, build_enriched_input(input, lookup, paired)}
+        # Updates with status `:archived` (or `:posted` with no payload
+        # entries) reach us with `input.entries == []` because the
+        # legacy schema layer strips entries in those cases. Reconstruct
+        # from the existing transaction's entries so the fold can apply
+        # the transition. For `:archived` the new value defaults to the
+        # existing one, which is exactly what reverse_pending consumes.
+        effective_entries = effective_entries(input.entries, tx.entries)
+        input = %{input | entries: effective_entries}
+
+        cond do
+          length(effective_entries) != length(tx.entries) ->
+            {:error, :entry_count_mismatch}
+
+          true ->
+            with {:ok, paired} <- pair_entries(effective_entries, tx.entries) do
+              {:ok, build_enriched_input(input, lookup, paired)}
+            end
         end
     end
   end
+
+  defp effective_entries([], existing_entries) do
+    Enum.map(existing_entries, fn e ->
+      %{account_id: e.account_id, type: e.type, value: e.value}
+    end)
+  end
+
+  defp effective_entries(payload_entries, _existing_entries), do: payload_entries
 
   # Pair each new-payload entry with exactly one existing entry by
   # `account_id`. Halts on the first mismatch (account or type).

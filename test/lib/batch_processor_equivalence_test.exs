@@ -45,6 +45,7 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
   alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand
 
   @num_accounts 8
   # Range of [1, 1000] per spec; used by the generator below.
@@ -76,18 +77,23 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
 
   describe "property: paths are equivalent" do
     property "random valid corpora produce identical state under both paths" do
-      check all command_attrs_list <- corpus_generator(), max_runs: 20 do
+      check all corpus <- corpus_generator(), max_runs: 20 do
         iteration = System.unique_integer([:positive])
 
         # ── Path A ────────────────────────────────────────────────
+        # Legacy path: process creates serially via
+        # CreateTransactionCommand, then updates serially via
+        # UpdateTransactionCommand. Each update sees its create's
+        # tx already committed in :pending status.
         {instance_a, _accounts_a} = seed_instance("eq_a_#{iteration}")
-        commands_a = insert_commands(instance_a, command_attrs_list)
+        {create_cmds_a, update_cmds_a} = insert_commands(instance_a, corpus)
 
         prior = Application.get_env(:double_entry_ledger, :insert_path, :legacy)
         Application.put_env(:double_entry_ledger, :insert_path, :insert_all)
 
         try do
-          run_path_a(commands_a)
+          run_path_a_creates(create_cmds_a)
+          run_path_a_updates(update_cmds_a)
         after
           Application.put_env(:double_entry_ledger, :insert_path, prior)
         end
@@ -95,15 +101,21 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
         snapshot_a = snapshot(instance_a.id)
 
         # ── Path B ────────────────────────────────────────────────
+        # Batched path in two phases: creates batch first (commits all
+        # the pending txs), then updates batch (sees committed creates
+        # via the lookup table). The same-batch dep check in B4 makes
+        # this two-phase shape necessary — running everything in one
+        # batch would divert updates with :create_pending_in_batch.
         {instance_b, _accounts_b} = seed_instance("eq_b_#{iteration}")
-        commands_b = insert_commands(instance_b, command_attrs_list)
+        {create_cmds_b, update_cmds_b} = insert_commands(instance_b, corpus)
 
-        {:ok, _result} = BatchProcessor.run_batch(commands_b, Repo)
+        {:ok, _create_result} = BatchProcessor.run_batch(create_cmds_b, Repo)
+        {:ok, _update_result} = BatchProcessor.run_batch(update_cmds_b, Repo)
 
         snapshot_b = snapshot(instance_b.id)
 
         # ── Compare ───────────────────────────────────────────────
-        assert_snapshots_equivalent!(snapshot_a, snapshot_b, command_attrs_list)
+        assert_snapshots_equivalent!(snapshot_a, snapshot_b, corpus)
       end
     end
   end
@@ -118,7 +130,7 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
 
       # ── Path A ────────────────────────────────────────────────
       {instance_a, _accounts_a} = seed_instance_2acct("stress_a")
-      commands_a = insert_commands(instance_a, command_attrs_list)
+      {commands_a, []} = insert_commands(instance_a, command_attrs_list)
 
       prior = Application.get_env(:double_entry_ledger, :insert_path, :legacy)
       Application.put_env(:double_entry_ledger, :insert_path, :insert_all)
@@ -126,7 +138,7 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
       {time_a_us, _} =
         :timer.tc(fn ->
           try do
-            run_path_a(commands_a)
+            run_path_a_creates(commands_a)
           after
             Application.put_env(:double_entry_ledger, :insert_path, prior)
           end
@@ -136,7 +148,7 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
 
       # ── Path B ────────────────────────────────────────────────
       {instance_b, _accounts_b} = seed_instance_2acct("stress_b")
-      commands_b = insert_commands(instance_b, command_attrs_list)
+      {commands_b, []} = insert_commands(instance_b, command_attrs_list)
 
       {time_b_us, batch_result} =
         :timer.tc(fn -> BatchProcessor.run_batch(commands_b, Repo) end)
@@ -173,30 +185,52 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
   # Generators
   # ─────────────────────────────────────────────────────────────────
 
-  # Generates a list of 5..30 transaction-command attribute maps.
-  # Each command:
+  # Generates a mixed corpus: 5..20 creates plus 0..N updates targeting
+  # the :pending creates. Returns `%{creates: [...], updates: [...]}`.
+  #
+  # Each create:
   #   - has exactly 2 entries (one debit, one credit, balanced)
   #   - picks 2 distinct accounts from the pool of @num_accounts
   #   - random amount in [@amount_min, @amount_max]
   #   - status is :posted or :pending, ~50/50
+  #
+  # Each update:
+  #   - targets a :pending create by its idempk_idx
+  #   - new_status: :posted | :pending | :archived, ~equiprobable
+  #   - new_amount in [@amount_min, @amount_max] (may differ from create)
+  #   - At most one update per create (multi-update chains would test
+  #     the OCC retry path, which is exercised separately)
   defp corpus_generator do
     addrs = Enum.map(1..@num_accounts, &account_address/1)
 
     StreamData.bind(
-      StreamData.list_of(command_generator(addrs), min_length: 5, max_length: 30),
-      fn raw_list ->
-        # StreamData.list_of can shrink below min_length on rare paths;
-        # filter+bind to constrain explicitly.
-        if length(raw_list) >= 5 do
-          StreamData.constant(stamp_unique_idempk(raw_list))
-        else
-          StreamData.constant(stamp_unique_idempk(raw_list ++ List.duplicate(hd(raw_list), 5 - length(raw_list))))
-        end
+      StreamData.list_of(create_generator(addrs), min_length: 5, max_length: 20),
+      fn raw_creates ->
+        creates =
+          if length(raw_creates) >= 5 do
+            stamp_unique_idempk(raw_creates)
+          else
+            stamp_unique_idempk(
+              raw_creates ++ List.duplicate(hd(raw_creates), 5 - length(raw_creates))
+            )
+          end
+
+        eligible_idempks =
+          Enum.flat_map(creates, fn c ->
+            if c.status == :pending, do: [c.idempk_idx], else: []
+          end)
+
+        StreamData.bind(
+          updates_generator(creates, eligible_idempks),
+          fn updates ->
+            StreamData.constant(%{creates: creates, updates: updates})
+          end
+        )
       end
     )
   end
 
-  defp command_generator(addrs) do
+  defp create_generator(addrs) do
     StreamData.fixed_map(%{
       addr_pair: pair_of_distinct(addrs),
       amount: StreamData.integer(@amount_min..@amount_max),
@@ -204,11 +238,51 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
     })
     |> StreamData.map(fn %{addr_pair: [a, b], amount: amt, status: status} ->
       %{
+        action: :create,
         addr_a: a,
         addr_b: b,
         amount: amt,
         status: status
       }
+    end)
+  end
+
+  # Pick a random subset of eligible-create idempks and produce an
+  # update spec for each. Each spec carries the original create's
+  # accounts/types implicitly (resolved at insertion time from
+  # `creates` by `for_idempk_idx`) plus the update's own new
+  # status + amount.
+  defp updates_generator(_creates, []), do: StreamData.constant([])
+
+  defp updates_generator(_creates, eligible_idempks) do
+    StreamData.bind(
+      StreamData.list_of(
+        update_generator(eligible_idempks),
+        min_length: 0,
+        max_length: length(eligible_idempks)
+      ),
+      fn raw_updates ->
+        # Dedup by for_idempk_idx so each create gets at most one update.
+        unique =
+          Enum.uniq_by(raw_updates, & &1.for_idempk_idx)
+
+        StreamData.constant(unique)
+      end
+    )
+  end
+
+  defp update_generator(eligible_idempks) do
+    StreamData.fixed_map(%{
+      for_idempk_idx: StreamData.member_of(eligible_idempks),
+      new_status: StreamData.member_of([:posted, :pending, :archived]),
+      new_amount: StreamData.integer(@amount_min..@amount_max)
+    })
+    |> StreamData.map(fn %{
+                          for_idempk_idx: idx,
+                          new_status: status,
+                          new_amount: amt
+                        } ->
+      %{action: :update, for_idempk_idx: idx, new_status: status, new_amount: amt}
     end)
   end
 
@@ -309,40 +383,82 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
   # Command insertion
   # ─────────────────────────────────────────────────────────────────
 
-  # Given an instance and a list of raw command specs (output of the
-  # generator), insert them as Commands via CommandStore.create/1 and
-  # return them preloaded with :command_queue_item in the original
-  # order. Order is significant — Path B's fold must see the same
-  # claim order as Path A's serial loop.
-  defp insert_commands(instance, command_attrs_list) do
-    Enum.map(command_attrs_list, fn spec ->
-      attrs = %TransactionCommandMap{
-        action: :create_transaction,
-        instance_address: instance.address,
-        source: "equivalence_test",
-        source_idempk: "idempk_#{spec.idempk_idx}",
-        payload: %DoubleEntryLedger.Command.TransactionData{
-          status: spec.status,
-          entries: [
-            %{account_address: spec.addr_a, amount: spec.amount, currency: :EUR},
-            %{account_address: spec.addr_b, amount: -spec.amount, currency: :EUR}
-          ]
-        }
-      }
+  # Insert all commands (creates + updates) on an instance via
+  # CommandStore.create/1 and return `{create_commands, update_commands}`
+  # — each list preloaded with :command_queue_item, in their original
+  # order. Insertion order is significant: Path A's serial loops and
+  # Path B's two-phase batches must both see the same claim order.
+  #
+  # For the stress_corpus path (legacy create-only list), this also
+  # handles a plain list of create specs.
+  defp insert_commands(instance, %{creates: creates, updates: updates}) do
+    create_cmds = Enum.map(creates, &insert_create_command(instance, &1))
+    creates_by_idempk_idx = Map.new(creates, &{&1.idempk_idx, &1})
+    update_cmds = Enum.map(updates, &insert_update_command(instance, &1, creates_by_idempk_idx))
+    {create_cmds, update_cmds}
+  end
 
-      {:ok, command} = CommandStore.create(attrs)
-      Repo.preload(command, [:command_queue_item], force: true)
-    end)
+  defp insert_commands(instance, command_attrs_list) when is_list(command_attrs_list) do
+    create_cmds = Enum.map(command_attrs_list, &insert_create_command(instance, &1))
+    {create_cmds, []}
+  end
+
+  defp insert_create_command(instance, spec) do
+    attrs = %TransactionCommandMap{
+      action: :create_transaction,
+      instance_address: instance.address,
+      source: "equivalence_test",
+      source_idempk: "idempk_#{spec.idempk_idx}",
+      payload: %DoubleEntryLedger.Command.TransactionData{
+        status: spec.status,
+        entries: [
+          %{account_address: spec.addr_a, amount: spec.amount, currency: :EUR},
+          %{account_address: spec.addr_b, amount: -spec.amount, currency: :EUR}
+        ]
+      }
+    }
+
+    {:ok, command} = CommandStore.create(attrs)
+    Repo.preload(command, [:command_queue_item], force: true)
+  end
+
+  defp insert_update_command(instance, update_spec, creates_by_idempk_idx) do
+    create = Map.fetch!(creates_by_idempk_idx, update_spec.for_idempk_idx)
+
+    attrs = %TransactionCommandMap{
+      action: :update_transaction,
+      instance_address: instance.address,
+      source: "equivalence_test",
+      source_idempk: "idempk_#{create.idempk_idx}",
+      update_idempk: "upd_#{create.idempk_idx}",
+      payload: %DoubleEntryLedger.Command.TransactionData{
+        status: update_spec.new_status,
+        entries: [
+          %{account_address: create.addr_a, amount: update_spec.new_amount, currency: :EUR},
+          %{account_address: create.addr_b, amount: -update_spec.new_amount, currency: :EUR}
+        ]
+      }
+    }
+
+    {:ok, command} = CommandStore.create(attrs)
+    Repo.preload(command, [:command_queue_item], force: true)
   end
 
   # ─────────────────────────────────────────────────────────────────
   # Path runners
   # ─────────────────────────────────────────────────────────────────
 
-  defp run_path_a(commands) do
+  defp run_path_a_creates(commands) do
     Enum.each(commands, fn cmd ->
       cmd_loaded = CommandStore.get_by_id(cmd.id)
       _ = CreateTransactionCommand.process(cmd_loaded)
+    end)
+  end
+
+  defp run_path_a_updates(commands) do
+    Enum.each(commands, fn cmd ->
+      cmd_loaded = CommandStore.get_by_id(cmd.id)
+      _ = UpdateTransactionCommand.process(cmd_loaded)
     end)
   end
 
@@ -389,12 +505,17 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
   defp snapshot_queue_items(instance_id) do
     import Ecto.Query, only: [from: 2]
 
+    # Key by (action, source_idempk, update_idempk) so creates and
+    # updates with the same source_idempk are distinguished. Both must
+    # appear in the snapshot for a mixed corpus.
     from(c in DoubleEntryLedger.Command,
       join: qi in DoubleEntryLedger.CommandQueueItem,
       on: qi.command_id == c.id,
       where: c.instance_id == ^instance_id,
       select: %{
+        action: fragment("?->>'action'", c.command_map),
         idempk: fragment("?->>'source_idempk'", c.command_map),
+        update_idempk: fragment("?->>'update_idempk'", c.command_map),
         status: qi.status,
         retry_count: qi.retry_count,
         errors: qi.errors,
@@ -403,7 +524,7 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
     )
     |> Repo.all()
     |> Map.new(fn row ->
-      {row.idempk,
+      {{row.action, row.idempk, row.update_idempk},
        %{
          status: row.status,
          retry_count: row.retry_count,
@@ -478,7 +599,9 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
   # Comparison
   # ─────────────────────────────────────────────────────────────────
 
-  defp assert_snapshots_equivalent!(snap_a, snap_b, command_attrs_list) do
+  # Accepts either the mixed-corpus map `%{creates: ..., updates: ...}`
+  # (property test) or a plain create-only list (stress test).
+  defp assert_snapshots_equivalent!(snap_a, snap_b, corpus) do
     account_mismatches = compare_accounts(snap_a, snap_b)
     queue_mismatches = compare_queue_items(snap_a, snap_b)
     row_count_mismatches = compare_row_counts(snap_a, snap_b)
@@ -494,7 +617,7 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
              queue_mismatches,
              row_count_mismatches,
              entry_sum_mismatches,
-             command_attrs_list
+             corpus
            )
   end
 
@@ -572,17 +695,19 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
          queue_mismatches,
          row_count_mismatches,
          entry_sum_mismatches,
-         command_attrs_list
+         corpus
        ) do
+    {corpus_summary, first_commands} = corpus_diagnostic(corpus)
+
     [
       "Path A vs Path B snapshots diverged.\n",
-      "Corpus size: #{length(command_attrs_list)}\n",
-      "First 3 commands: #{inspect(Enum.take(command_attrs_list, 3))}\n",
+      "Corpus: #{corpus_summary}\n",
+      "First 3 commands: #{inspect(first_commands)}\n",
       section("account state", account_mismatches, fn {addr, a, b} ->
         "  #{addr}:\n    A=#{inspect(a)}\n    B=#{inspect(b)}"
       end),
-      section("command queue", queue_mismatches, fn {idempk, a, b} ->
-        "  #{idempk}: A=#{inspect(a)} B=#{inspect(b)}"
+      section("command queue", queue_mismatches, fn {key, a, b} ->
+        "  #{inspect(key)}: A=#{inspect(a)} B=#{inspect(b)}"
       end),
       section("row counts", row_count_mismatches, fn {table, a, b} ->
         "  #{table}: A=#{a} B=#{b}"
@@ -592,6 +717,16 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
       end)
     ]
     |> Enum.join("\n")
+  end
+
+  defp corpus_diagnostic(%{creates: creates, updates: updates}) do
+    summary = "#{length(creates)} creates, #{length(updates)} updates"
+    first = Enum.take(creates ++ updates, 3)
+    {summary, first}
+  end
+
+  defp corpus_diagnostic(list) when is_list(list) do
+    {"#{length(list)} creates", Enum.take(list, 3)}
   end
 
   defp section(_label, [], _fmt), do: ""

@@ -258,6 +258,143 @@ defmodule DoubleEntryLedger.LoadTesting do
     IO.puts("#{bold("After:")} #{validate_instance_balance(instance)}")
   end
 
+  @doc """
+  Mixed-workload drain test for B7: pre-fills `create_count` :pending
+  creates and `update_count` updates targeting those creates, then
+  drains. The drain proceeds in two phases so updates only enqueue
+  after their target creates have committed — there's no same-batch
+  create/update collision noise to obscure the throughput number.
+
+  Phase timing:
+    1. Prefill all creates (deterministic source_idempk per create).
+    2. **Drain creates** — not measured.
+    3. Prefill all updates (one update per create, random new_status).
+    4. **Drain updates** — MEASURED.
+
+  The reported tps is `update_count / phase4_elapsed`. Use a 1:1 ratio
+  (`create_count == update_count`) to model the B7 "50/50 mixed
+  corpus" workload.
+
+  ## Parameters
+
+    - create_count: number of :pending creates to pre-fill in phase 1.
+    - update_count: number of updates to enqueue in phase 3
+      (must be ≤ create_count so every update has a target).
+  """
+  def run_mixed_drain_load_test(create_count, update_count)
+      when is_integer(create_count) and create_count > 0 and
+             is_integer(update_count) and update_count > 0 and
+             update_count <= create_count do
+    debit_sum = max(trunc(100_000 * create_count / 10), 1_000_000)
+    pool_size = min(10, create_count)
+
+    {:ok, instance} =
+      %Instance{address: "instance:mixed:#{System.unique_integer()}"} |> Repo.insert()
+
+    sources = create_debit_sources(pool_size, instance, debit_sum)
+    destination_arrays = create_debit_destinations(pool_size, instance)
+    create_balancing_credit_account(instance, debit_sum * pool_size)
+
+    transaction_lists = create_transaction_lists(sources, destination_arrays)
+    flat_params = List.flatten(transaction_lists)
+    flat_count = length(flat_params)
+
+    IO.puts(
+      "#{bold("load.mixed_drain")} — K=1: " <>
+        "#{bold(to_string(create_count))} :pending creates + " <>
+        "#{bold(to_string(update_count))} updates"
+    )
+
+    IO.puts("#{bold("Before:")} #{validate_instance_balance(instance)}")
+
+    # Per-create idempotency keys; the updates reuse these.
+    create_idempks =
+      Enum.map(1..create_count, fn i -> {i, "create:#{i}"} end)
+
+    # ── Phase 1: prefill creates ────────────────────────────────────────
+    IO.puts("Phase 1: prefilling #{create_count} :pending creates…")
+    prefill_start = System.monotonic_time(:millisecond)
+
+    create_idempks
+    |> Task.async_stream(
+      fn {i, idempk} ->
+        params = Enum.at(flat_params, rem(i - 1, flat_count))
+        enqueue_create_with(instance, idempk, :pending, params)
+      end,
+      max_concurrency: @drain_prefill_concurrency,
+      timeout: :infinity,
+      ordered: false
+    )
+    |> Stream.run()
+
+    prefill_elapsed = (System.monotonic_time(:millisecond) - prefill_start) / 1000.0
+    IO.puts("  Prefill creates: #{Float.round(prefill_elapsed, 2)}s (not measured)")
+
+    # ── Phase 2: drain creates (not measured) ───────────────────────────
+    IO.puts("Phase 2: draining creates (not measured)…")
+    ensure_command_queue_registry_started()
+    drain_phase(instance)
+
+    # ── Phase 3: prefill updates ────────────────────────────────────────
+    # Each update targets a randomly chosen new status. Payload entries
+    # mirror the create's amount/accounts so non-archived transitions
+    # produce sensible deltas.
+    IO.puts("Phase 3: prefilling #{update_count} updates…")
+    update_prefill_start = System.monotonic_time(:millisecond)
+
+    create_idempks
+    |> Enum.take(update_count)
+    |> Task.async_stream(
+      fn {i, source_idempk} ->
+        params = Enum.at(flat_params, rem(i - 1, flat_count))
+        new_status = Enum.random([:posted, :pending, :archived])
+        enqueue_update_with(instance, source_idempk, "upd:#{i}", new_status, params)
+      end,
+      max_concurrency: @drain_prefill_concurrency,
+      timeout: :infinity,
+      ordered: false
+    )
+    |> Stream.run()
+
+    update_prefill_elapsed =
+      (System.monotonic_time(:millisecond) - update_prefill_start) / 1000.0
+
+    IO.puts("  Prefill updates: #{Float.round(update_prefill_elapsed, 2)}s (not measured)")
+
+    # ── Phase 4: drain updates (MEASURED) ───────────────────────────────
+    IO.puts("Phase 4: draining updates (measured)…")
+    TelemetryCollector.start()
+
+    drain_start = System.monotonic_time(:millisecond)
+    drain_phase(instance)
+    drain_elapsed = (System.monotonic_time(:millisecond) - drain_start) / 1000.0
+    drain_tps = update_count / drain_elapsed
+
+    IO.puts(
+      "Drain updates: #{bold(to_string(update_count))} updates in " <>
+        "#{Float.round(drain_elapsed, 2)}s — " <>
+        "#{bold(:erlang.float_to_binary(drain_tps, decimals: 1))} tps"
+    )
+
+    TelemetryCollector.print_summary()
+    TelemetryCollector.stop()
+
+    IO.puts("#{bold("After:")} #{validate_instance_balance(instance)}")
+  end
+
+  defp drain_phase(instance) do
+    {:ok, processor_pid} = InstanceProcessor.start_link(instance_id: instance.id)
+    ref = Process.monitor(processor_pid)
+
+    receive do
+      {:DOWN, ^ref, :process, _pid, :normal} ->
+        :ok
+
+      {:DOWN, ^ref, :process, _pid, reason} ->
+        raise "InstanceProcessor crashed: #{inspect(reason)}"
+    end
+  end
+
   defp ensure_command_queue_registry_started do
     case Registry.start_link(keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry) do
       {:ok, _pid} -> :ok
@@ -603,19 +740,49 @@ defmodule DoubleEntryLedger.LoadTesting do
   # Wraps the call in a synthetic `command.process` telemetry span
   # so `TelemetryCollector` sees the latency without needing changes.
   defp enqueue_command(instance, params) do
+    enqueue_via_command_api(%{
+      "action" => "create_transaction",
+      "source" => "source",
+      "source_idempk" => Ecto.UUID.generate(),
+      "instance_address" => instance.address,
+      "payload" => Map.put(params, :status, :posted)
+    })
+  end
+
+  # Create command with a caller-supplied source_idempk and status —
+  # used by `run_mixed_drain_load_test/2` so the updates phase can
+  # reference each create by its deterministic key.
+  defp enqueue_create_with(instance, source_idempk, status, params) do
+    enqueue_via_command_api(%{
+      "action" => "create_transaction",
+      "source" => "source",
+      "source_idempk" => source_idempk,
+      "instance_address" => instance.address,
+      "payload" => Map.put(params, :status, status)
+    })
+  end
+
+  # Update command targeting the create at `source_idempk`. The
+  # update_idempk uniquifies the update itself.
+  defp enqueue_update_with(instance, source_idempk, update_idempk, status, params) do
+    enqueue_via_command_api(%{
+      "action" => "update_transaction",
+      "source" => "source",
+      "source_idempk" => source_idempk,
+      "update_idempk" => update_idempk,
+      "instance_address" => instance.address,
+      "payload" => Map.put(params, :status, status)
+    })
+  end
+
+  # Shared telemetry-wrapped entry point. Callers build the string-keyed
+  # params map matching `CommandApi.create_from_params/1`'s contract.
+  defp enqueue_via_command_api(params) do
     :telemetry.span(
       [:double_entry_ledger, :command, :process],
       %{},
       fn ->
-        result =
-          CommandApi.create_from_params(%{
-            "action" => "create_transaction",
-            "source" => "source",
-            "source_idempk" => Ecto.UUID.generate(),
-            "instance_address" => instance.address,
-            "payload" => Map.put(params, :status, :posted)
-          })
-
+        result = CommandApi.create_from_params(params)
         {result, %{}}
       end
     )
