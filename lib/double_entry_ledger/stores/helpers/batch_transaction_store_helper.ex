@@ -1,7 +1,8 @@
 defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   @moduledoc """
   Executes the **success** half of a batched write — one CTE per
-  Postgres round-trip — for a batch of `:create_transaction` commands.
+  Postgres round-trip — for a batch of `:create_transaction` and
+  `:update_transaction` commands.
 
   Consumes the output of `BatchProcessor.simulate_batch/2`. Failure
   handling lives in the sibling failure-UPDATE writer (Step 4).
@@ -9,7 +10,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   responsibility (Step 5).
 
   Behaviour-equivalent to the legacy `build_create/4` +
-  `handle_build_transaction/3` path: same row shapes, same
+  `handle_build_transaction/3` path AND the legacy
+  `TransactionStoreHelper.build_update/5` path: same row shapes, same
   `pending_transaction_lookup` upsert behaviour, same
   optimistic-concurrency semantics on accounts.
 
@@ -22,26 +24,45 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   batching, not value chaining. This avoids tying CTE evaluation order
   to row order constraints.
 
+  Successes are partitioned by `:action` at the top of `build_query/3`:
+  `inserted_successes` (creates) feed the INSERT CTEs; `updated_successes`
+  (updates) feed the new UPDATE CTEs. BHE, journal_event, account-update,
+  and queue-mark CTEs accept the whole list (both create and update entries
+  produce BHE/journal rows; both create and update queue items are marked
+  `:processed`).
+
   ## Input contract
 
-  Each success record passed in MUST already carry:
-    * `:transaction_id` (set by the fold)
+  Each success record MUST already carry:
+    * `:action` — `:create_transaction` or `:update_transaction`
+    * `:transaction_id` (set by the fold; for updates this is the existing tx's id)
     * `:journal_event_id` (set by the orchestrator pre-fold)
-    * `:id` on every entry (set by the orchestrator pre-fold)
+    * `:id` on every entry (creates: pre-generated; updates: re-used existing entry id)
+    * `:transition` only on update success records
 
   The writer does not generate UUIDs. The BHE id is the only
   exception — it is generated locally per row since it is never
   referenced elsewhere.
 
-  ## Stale lock_version detection
+  ## Stale lock_version + TOCTOU detection
 
-  `updated_accounts AS (UPDATE ... WHERE lock_version = u.old_lv RETURNING id)`
-  combined with a final `SELECT count(*) FROM updated_accounts` yields the
-  number of accounts that matched their expected `lock_version`. If that
-  count is less than `map_size(write_plan.merged_accounts)` we raise
-  `Ecto.StaleEntryError` with `action: :update`. The orchestrator (Step 5)
-  wraps us in `Repo.transaction/1`, so the raise rolls back the whole
-  batch.
+  Two write-time guards:
+
+    * `updated_accounts AS (UPDATE ... WHERE lock_version = u.old_lv RETURNING id)`
+      → `SELECT count(*) FROM updated_accounts` must equal
+      `map_size(merged_accounts)`. Otherwise an account's `lock_version`
+      moved between fold and write.
+    * `updated_transactions AS (UPDATE ... WHERE t.status = 'pending' RETURNING t.id)`
+      → `SELECT count(*) FROM updated_transactions` must equal
+      `length(updated_successes)`. Otherwise a target transaction's
+      status flipped externally between read and write (e.g., a parallel
+      direct-API write transitioned it to `:posted` / `:archived`). Stronger
+      than legacy, which has only a read-time `validate_state_transition/1`
+      check and no write-time guard.
+
+  Either mismatch raises `Ecto.StaleEntryError` with `action: :update`.
+  The orchestrator (Step 5) wraps us in `Repo.transaction/1`, so the
+  raise rolls back the whole batch.
   """
 
   alias DoubleEntryLedger.{Account, BatchProcessor, BatchSerializer}
@@ -70,12 +91,19 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   def write_successes(%{successes: []}, _repo, _now), do: :ok
 
   def write_successes(%{successes: successes, merged_accounts: merged_accounts}, repo, now) do
-    {sql, params} = build_query(successes, merged_accounts, now)
-    %Postgrex.Result{rows: [[accounts_updated]]} = repo.query!(sql, params)
+    {inserted_successes, updated_successes} =
+      Enum.split_with(successes, &(&1.action == :create_transaction))
 
-    expected = map_size(merged_accounts)
+    {sql, params} =
+      build_query(successes, inserted_successes, updated_successes, merged_accounts, now)
 
-    if accounts_updated == expected do
+    %Postgrex.Result{rows: [[accounts_updated, transactions_updated]]} =
+      repo.query!(sql, params)
+
+    expected_accounts = map_size(merged_accounts)
+    expected_tx_updates = length(updated_successes)
+
+    if accounts_updated == expected_accounts and transactions_updated == expected_tx_updates do
       :ok
     else
       raise Ecto.StaleEntryError,
@@ -128,34 +156,63 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   # Builds a single SQL statement with multiple data-modifying CTEs that
   # together write all rows for the success group. Returns
   # `{sql_string, params_list}` ready for `repo.query!/2`.
-  @spec build_query([map()], map(), DateTime.t()) :: {String.t(), [term()]}
-  defp build_query(successes, merged_accounts, now) do
+  #
+  # The CTEs that operate on a partitioned slice take `inserted_successes`
+  # (creates) or `updated_successes` (updates); CTEs that emit one row
+  # per entry-or-command across both kinds take the whole list.
+  @spec build_query([map()], [map()], [map()], map(), DateTime.t()) ::
+          {String.t(), [term()]}
+  defp build_query(successes, inserted_successes, updated_successes, merged_accounts, now) do
     state = %{params: [], idx: 0}
 
-    {tx_sql, state} = build_transactions_cte(successes, now, state)
-    {entry_sql, state} = build_entries_cte(successes, now, state)
+    {tx_sql, state} = build_transactions_cte(inserted_successes, now, state)
+    {entry_sql, state} = build_entries_cte(inserted_successes, now, state)
     {bhe_sql, state} = build_bhes_cte(successes, now, state)
     {journal_sql, state} = build_journals_cte(successes, now, state)
-    {lookup_sql, state} = build_lookups_cte(successes, now, state)
+    {lookup_sql, state} = build_lookups_cte(inserted_successes, now, state)
     {accounts_sql, state} = build_accounts_cte(merged_accounts, now, state)
     {queue_sql, state} = build_queue_items_cte(successes, now, state)
+    {updated_tx_sql, state} = build_updated_transactions_cte(updated_successes, now, state)
+    {updated_entries_sql, state} = build_updated_entries_cte(updated_successes, now, state)
 
     ctes =
-      [tx_sql, entry_sql, bhe_sql, journal_sql, lookup_sql, accounts_sql, queue_sql]
+      [
+        tx_sql,
+        entry_sql,
+        bhe_sql,
+        journal_sql,
+        lookup_sql,
+        accounts_sql,
+        queue_sql,
+        updated_tx_sql,
+        updated_entries_sql
+      ]
       |> Enum.reject(&is_nil/1)
+
+    # When there are no updates, the `updated_transactions` CTE is omitted
+    # from the WITH clause; emit a literal 0 so the consumer always
+    # destructures two columns.
+    transactions_updated_expr =
+      if updated_successes == [],
+        do: "0",
+        else: "(SELECT count(*) FROM updated_transactions)"
 
     sql =
       "WITH " <>
         Enum.join(ctes, ",\n") <>
-        "\nSELECT (SELECT count(*) FROM updated_accounts) AS accounts_updated"
+        "\nSELECT " <>
+        "(SELECT count(*) FROM updated_accounts) AS accounts_updated, " <>
+        "#{transactions_updated_expr} AS transactions_updated"
 
     {sql, Enum.reverse(state.params)}
   end
 
   # ── transactions CTE ─────────────────────────────────────────────
-  defp build_transactions_cte(successes, now, state) do
+  defp build_transactions_cte([], _now, state), do: {nil, state}
+
+  defp build_transactions_cte(inserted_successes, now, state) do
     {rows, state} =
-      Enum.reduce(successes, {[], state}, fn success, {rows, st} ->
+      Enum.reduce(inserted_successes, {[], state}, fn success, {rows, st} ->
         {placeholders, st} =
           push_params(st, [
             uuid(success.transaction_id),
@@ -186,6 +243,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   end
 
   # ── entries CTE ──────────────────────────────────────────────────
+  defp build_entries_cte([], _now, state), do: {nil, state}
+
   defp build_entries_cte(successes, now, state) do
     {rows, state} =
       Enum.reduce(successes, {[], state}, fn success, acc ->
@@ -403,6 +462,96 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     {sql, state}
   end
 
+  # ── updated_transactions UPDATE CTE ──────────────────────────────
+  # Status transitions for the three update transitions:
+  #   :pending → :posted   (sets posted_at = now)
+  #   :pending → :pending  (no-op on status; posted_at stays NULL)
+  #   :pending → :archived (sets status = 'archived'; posted_at stays NULL)
+  # The `WHERE t.status = 'pending'` predicate is the write-time TOCTOU
+  # guard described in the module docs. The post-write
+  # `count(*) FROM updated_transactions` is compared against
+  # `length(updated_successes)` by `write_successes/3`.
+  defp build_updated_transactions_cte([], _now, state), do: {nil, state}
+
+  defp build_updated_transactions_cte(updated_successes, now, state) do
+    {rows, state} =
+      Enum.reduce(updated_successes, {[], state}, fn success, {rows, st} ->
+        {placeholders, st} =
+          push_params(st, [
+            uuid(success.transaction_id),
+            Atom.to_string(success.status),
+            posted_at_for(success.status, now)
+          ])
+
+        cast =
+          "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}, " <>
+            "#{p(placeholders, 2)}::timestamptz)"
+
+        {[cast | rows], st}
+      end)
+
+    {now_placeholder, state} = push_param(state, now)
+
+    sql = """
+    updated_transactions AS (
+      UPDATE #{table("transactions")} AS t
+      SET status = u.status,
+          posted_at = u.posted_at,
+          updated_at = #{now_placeholder}::timestamptz
+      FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
+        AS u(id, status, posted_at)
+      WHERE t.id = u.id AND t.status = 'pending'
+      RETURNING t.id
+    )
+    """
+
+    {sql, state}
+  end
+
+  # ── updated_entries UPDATE CTE ───────────────────────────────────
+  # One row per entry across all update successes. Entry IDs are re-used
+  # from the existing transaction's entries (filled in by
+  # `enrich_updates_with_existing/2`), and the value is the NEW payload
+  # value. The pre-write OLD value is reconstructable from the BHE chain
+  # if needed for audit.
+  defp build_updated_entries_cte([], _now, state), do: {nil, state}
+
+  defp build_updated_entries_cte(updated_successes, now, state) do
+    {rows, state} =
+      Enum.reduce(updated_successes, {[], state}, fn success, acc ->
+        Enum.reduce(success.entries, acc, fn entry, {rows, st} ->
+          dumped_value = BatchSerializer.dump_money(entry.value)
+
+          {placeholders, st} =
+            push_params(st, [
+              uuid(entry.id),
+              dumped_value
+            ])
+
+          cast =
+            "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::jsonb)"
+
+          {[cast | rows], st}
+        end)
+      end)
+
+    {now_placeholder, state} = push_param(state, now)
+
+    sql = """
+    updated_entries AS (
+      UPDATE #{table("entries")} AS e
+      SET value = u.value,
+          updated_at = #{now_placeholder}::timestamptz
+      FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
+        AS u(id, value)
+      WHERE e.id = u.id
+      RETURNING e.id
+    )
+    """
+
+    {sql, state}
+  end
+
   # ── command_queue_items UPDATE CTE ───────────────────────────────
   defp build_queue_items_cte(successes, now, state) do
     queue_item_ids = Enum.map(successes, &uuid(&1.command.command_queue_item.id))
@@ -571,6 +720,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   defp posted_at_for(:posted, now), do: now
   defp posted_at_for(:pending, _now), do: nil
+  defp posted_at_for(:archived, _now), do: nil
 
   # Dump a TransactionCommandMap struct to a JSONB-encodable map matching
   # what the legacy CommandMap.dump path produces.

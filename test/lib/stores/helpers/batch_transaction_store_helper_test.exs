@@ -65,6 +65,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
     success = %{
       command: command,
+      action: :create_transaction,
       transaction_id: transaction_id,
       journal_event_id: Ecto.UUID.generate(),
       status: status,
@@ -107,6 +108,109 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
   defp accounts_map(accounts), do: Map.new(accounts, &{&1.id, &1})
 
   defp count(schema), do: Repo.aggregate(schema, :count)
+
+  # Seed a pending transaction via write_successes (create path) so
+  # subsequent B3 update tests have a real persisted tx + entries +
+  # advanced accounts + lookup row to act on.
+  #
+  # Returns `{create_success, updated_accounts}` where `create_success`
+  # carries the tx_id + entry ids needed to construct an update
+  # success_record, and `updated_accounts` is a map from account_id to
+  # the post-seed Account struct (with pending balance populated).
+  defp seed_pending_transaction(ctx, entries_spec) do
+    %{accounts: accounts} = ctx
+    [command] = insert_commands(ctx, 1, :pending)
+
+    account_ids = Enum.map(entries_spec, fn {id, _t, _a} -> id end)
+    initial = accounts_map(Enum.filter(accounts, &(&1.id in account_ids)))
+
+    {success, advanced} = success_for(command, initial, :pending, entries_spec)
+
+    write_plan = %{
+      successes: [success],
+      failures: [],
+      merged_accounts: merged_accounts(initial, advanced)
+    }
+
+    :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, DateTime.utc_now())
+
+    reloaded = Map.new(account_ids, &{&1, reload_account(&1)})
+    {success, reloaded}
+  end
+
+  # Build a fold-style update success_record that references the
+  # transaction_id + entry ids from a prior create_success. Mirrors what
+  # `enrich_updates_with_existing/2` (B4) will produce.
+  #
+  # `entries_spec` = `[{account_id, type, new_amount, old_amount}]` in the
+  # same order as `create_success.entries`. Each new entry reuses the
+  # corresponding existing entry's id.
+  defp update_success_for(
+         create_success,
+         update_command,
+         transition,
+         new_status,
+         entries_spec,
+         current_accounts
+       ) do
+    {entries_with_snap, advanced} =
+      create_success.entries
+      |> Enum.zip(entries_spec)
+      |> Enum.reduce({[], current_accounts}, fn {orig_entry, {acc_id, type, new_amt, old_amt}},
+                                                {acc, accs} ->
+        account = Map.fetch!(accs, acc_id)
+
+        entry = %{
+          id: orig_entry.id,
+          account_id: acc_id,
+          type: type,
+          value: Money.new(new_amt, :EUR),
+          old_value: Money.new(old_amt, :EUR)
+        }
+
+        {:ok, change} = Account.compute_balance_changes(account, entry, transition)
+        next_account = Account.apply_balance_change(account, change)
+        snap = Map.put(entry, :account_after, next_account)
+
+        {[snap | acc], Map.put(accs, acc_id, next_account)}
+      end)
+
+    success = %{
+      command: update_command,
+      action: :update_transaction,
+      transaction_id: create_success.transaction_id,
+      journal_event_id: Ecto.UUID.generate(),
+      status: new_status,
+      transition: transition,
+      entries: Enum.reverse(entries_with_snap)
+    }
+
+    {success, advanced}
+  end
+
+  # Insert a single :update_transaction command (with command_queue_item
+  # preloaded). Defaults `source` to "src" and `source_idempk` to a
+  # unique string; the lookup-filter test overrides these via `opts` to
+  # use the create's keys.
+  defp insert_update_cmd_with_qi(ctx, status, amount, opts \\ []) do
+    %{instance: inst, accounts: [a1, a2, _, _]} = ctx
+    source = Keyword.get(opts, :source, "src")
+    source_idempk = Keyword.get(opts, :source_idempk, "u-#{System.unique_integer([:positive])}")
+
+    {:ok, cmd} =
+      DoubleEntryLedger.CommandFixtures.new_update_transaction_command(
+        source,
+        source_idempk,
+        inst.address,
+        status,
+        [
+          %{account_address: a1.address, amount: amount, currency: "EUR"},
+          %{account_address: a2.address, amount: amount, currency: "EUR"}
+        ]
+      )
+
+    reload_command_with_qi(cmd.id)
+  end
 
   # Insert exactly N create_transaction commands with unique idempotency
   # keys, returning a list in claim order.
@@ -547,6 +651,344 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       lk = Repo.get_by!(PendingTransactionLookup, command_id: command.id)
       assert lk.transaction_id == success.transaction_id
       assert lk.journal_event_id == success.journal_event_id
+    end
+
+    # ── B3: update transitions ───────────────────────────────────────
+
+    test ":pending_to_posted update transitions tx + applies posted balance",
+         %{instance: inst, accounts: [a1, a2, _, _]} = ctx do
+      {create_success, current_accounts} =
+        seed_pending_transaction(ctx, [{a1.id, :debit, 100}, {a2.id, :credit, 100}])
+
+      update_cmd = insert_update_cmd_with_qi(ctx, :posted, 100)
+
+      {update_success, advanced} =
+        update_success_for(
+          create_success,
+          update_cmd,
+          :pending_to_posted,
+          :posted,
+          [
+            {a1.id, :debit, 100, 100},
+            {a2.id, :credit, 100, 100}
+          ],
+          current_accounts
+        )
+
+      now = DateTime.utc_now()
+
+      write_plan = %{
+        successes: [update_success],
+        failures: [],
+        merged_accounts: merged_accounts(current_accounts, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
+
+      tx = Repo.get!(Transaction, create_success.transaction_id)
+      assert tx.status == :posted
+      assert DateTime.compare(tx.posted_at, now) == :eq
+      assert tx.instance_id == inst.id
+
+      final_a1 = reload_account(a1.id)
+      assert final_a1.pending.amount == 0
+      assert final_a1.pending.debit == 0
+      assert final_a1.posted.amount == 100
+      assert final_a1.posted.debit == 100
+
+      final_a2 = reload_account(a2.id)
+      assert final_a2.pending.amount == 0
+      assert final_a2.pending.credit == 0
+      assert final_a2.posted.amount == 100
+      assert final_a2.posted.credit == 100
+
+      # 2 fresh BHE rows for this update (one per entry)
+      bhes =
+        Repo.all(
+          Ecto.Query.from(b in BalanceHistoryEntry,
+            where: b.inserted_at == ^now,
+            order_by: b.account_id
+          )
+        )
+
+      assert length(bhes) == 2
+
+      # 1 fresh journal_event for the update
+      assert Repo.get!(JournalEvent, update_success.journal_event_id)
+
+      # Update command's queue item marked :processed
+      update_qi = reload_qi(update_cmd.command_queue_item.id)
+      assert update_qi.status == :processed
+    end
+
+    test ":pending_to_pending update with value change adjusts entries + pending",
+         %{accounts: [a1, a2, _, _]} = ctx do
+      {create_success, current_accounts} =
+        seed_pending_transaction(ctx, [{a1.id, :debit, 50}, {a2.id, :credit, 50}])
+
+      update_cmd = insert_update_cmd_with_qi(ctx, :pending, 75)
+
+      {update_success, advanced} =
+        update_success_for(
+          create_success,
+          update_cmd,
+          :pending_to_pending,
+          :pending,
+          [
+            {a1.id, :debit, 75, 50},
+            {a2.id, :credit, 75, 50}
+          ],
+          current_accounts
+        )
+
+      now = DateTime.utc_now()
+
+      write_plan = %{
+        successes: [update_success],
+        failures: [],
+        merged_accounts: merged_accounts(current_accounts, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
+
+      tx = Repo.get!(Transaction, create_success.transaction_id)
+      assert tx.status == :pending
+      assert tx.posted_at == nil
+
+      # Entries' values updated to 75
+      entries =
+        Repo.all(
+          Ecto.Query.from(e in Entry, where: e.transaction_id == ^tx.id, order_by: e.id)
+        )
+
+      assert length(entries) == 2
+      assert Enum.all?(entries, &(&1.value == Money.new(75, :EUR)))
+
+      final_a1 = reload_account(a1.id)
+      assert final_a1.pending.amount == 75
+      assert final_a1.pending.debit == 75
+
+      final_a2 = reload_account(a2.id)
+      assert final_a2.pending.amount == 75
+      assert final_a2.pending.credit == 75
+    end
+
+    test ":pending_to_archived update cancels pending + flips status to :archived",
+         %{accounts: [a1, a2, _, _]} = ctx do
+      {create_success, current_accounts} =
+        seed_pending_transaction(ctx, [{a1.id, :debit, 100}, {a2.id, :credit, 100}])
+
+      update_cmd = insert_update_cmd_with_qi(ctx, :archived, 100)
+
+      {update_success, advanced} =
+        update_success_for(
+          create_success,
+          update_cmd,
+          :pending_to_archived,
+          :archived,
+          [
+            {a1.id, :debit, 100, 100},
+            {a2.id, :credit, 100, 100}
+          ],
+          current_accounts
+        )
+
+      now = DateTime.utc_now()
+
+      write_plan = %{
+        successes: [update_success],
+        failures: [],
+        merged_accounts: merged_accounts(current_accounts, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
+
+      tx = Repo.get!(Transaction, create_success.transaction_id)
+      assert tx.status == :archived
+      assert tx.posted_at == nil
+
+      final_a1 = reload_account(a1.id)
+      assert final_a1.pending.amount == 0
+      assert final_a1.pending.debit == 0
+      assert final_a1.posted.amount == 0
+
+      final_a2 = reload_account(a2.id)
+      assert final_a2.pending.amount == 0
+      assert final_a2.pending.credit == 0
+    end
+
+    test "update path does NOT touch pending_transaction_lookup row (filter excludes updates)",
+         %{accounts: [a1, a2, _, _]} = ctx do
+      {create_success, current_accounts} =
+        seed_pending_transaction(ctx, [{a1.id, :debit, 50}, {a2.id, :credit, 50}])
+
+      lookup_before = Repo.get_by!(PendingTransactionLookup, command_id: create_success.command.id)
+      lookup_count_before = count(PendingTransactionLookup)
+
+      # Update command uses the SAME source/source_idempk as the create
+      # so the update's lookup-key triple would CONFLICT on the existing
+      # row if the writer were to attempt an INSERT. The B3 filter change
+      # excludes updates from inserted_lookups, so the existing row stays
+      # untouched.
+      update_cmd =
+        insert_update_cmd_with_qi(ctx, :pending, 60,
+          source: create_success.command.command_map.source,
+          source_idempk: create_success.command.command_map.source_idempk
+        )
+
+      {update_success, advanced} =
+        update_success_for(
+          create_success,
+          update_cmd,
+          :pending_to_pending,
+          :pending,
+          [
+            {a1.id, :debit, 60, 50},
+            {a2.id, :credit, 60, 50}
+          ],
+          current_accounts
+        )
+
+      write_plan = %{
+        successes: [update_success],
+        failures: [],
+        merged_accounts: merged_accounts(current_accounts, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, DateTime.utc_now())
+
+      # Row count unchanged.
+      assert count(PendingTransactionLookup) == lookup_count_before
+
+      # Row contents unchanged (still points at the create's journal,
+      # not the update's).
+      lookup_after =
+        Repo.get_by!(PendingTransactionLookup, command_id: create_success.command.id)
+
+      assert lookup_after.command_id == lookup_before.command_id
+      assert lookup_after.journal_event_id == lookup_before.journal_event_id
+      assert lookup_after.transaction_id == lookup_before.transaction_id
+    end
+
+    test "TOCTOU: tx.status flipped externally between read and write raises StaleEntryError",
+         %{accounts: [a1, a2, _, _]} = ctx do
+      {create_success, current_accounts} =
+        seed_pending_transaction(ctx, [{a1.id, :debit, 100}, {a2.id, :credit, 100}])
+
+      # Simulate a concurrent direct-API write that transitions the
+      # transaction to :posted between the orchestrator's read and the
+      # CTE commit. The `WHERE t.status = 'pending'` predicate on the
+      # updated_transactions CTE will then exclude this row, count
+      # comes back as 0 (< expected 1), and write_successes raises.
+      Repo.get!(Transaction, create_success.transaction_id)
+      |> Ecto.Changeset.change(status: :posted)
+      |> Repo.update!()
+
+      update_cmd = insert_update_cmd_with_qi(ctx, :posted, 100)
+
+      {update_success, advanced} =
+        update_success_for(
+          create_success,
+          update_cmd,
+          :pending_to_posted,
+          :posted,
+          [
+            {a1.id, :debit, 100, 100},
+            {a2.id, :credit, 100, 100}
+          ],
+          current_accounts
+        )
+
+      write_plan = %{
+        successes: [update_success],
+        failures: [],
+        merged_accounts: merged_accounts(current_accounts, advanced)
+      }
+
+      assert_raise Ecto.StaleEntryError, fn ->
+        BatchTransactionStoreHelper.write_successes(write_plan, Repo, DateTime.utc_now())
+      end
+    end
+
+    test "mixed batch: 1 create + 1 update on independent txs both succeed",
+         %{instance: inst, accounts: [a1, a2, a3, a4]} = ctx do
+      # Seed a pending tx on a1/a2 — this is the update's target.
+      {create_success_seed, accounts_after_seed} =
+        seed_pending_transaction(ctx, [{a1.id, :debit, 100}, {a2.id, :credit, 100}])
+
+      # Build a brand-new CREATE on a3/a4 that lives in the same batch.
+      reloaded_a3 = reload_account(a3.id)
+      reloaded_a4 = reload_account(a4.id)
+      initial_a34 = accounts_map([reloaded_a3, reloaded_a4])
+
+      new_create_attrs =
+        DoubleEntryLedger.CommandFixtures.transaction_command_attrs(
+          instance_address: inst.address,
+          source: "src",
+          source_idempk: "create-mixed-#{System.unique_integer([:positive])}",
+          payload: %DoubleEntryLedger.Command.TransactionData{
+            status: :posted,
+            entries: [
+              %{account_address: a3.address, amount: 30, currency: "EUR"},
+              %{account_address: a4.address, amount: 30, currency: "EUR"}
+            ]
+          }
+        )
+
+      {:ok, new_create_cmd} = DoubleEntryLedger.Stores.CommandStore.create(new_create_attrs)
+      new_create_cmd = reload_command_with_qi(new_create_cmd.id)
+
+      {new_create_success, advanced_a34} =
+        success_for(new_create_cmd, initial_a34, :posted, [
+          {a3.id, :debit, 30},
+          {a4.id, :credit, 30}
+        ])
+
+      # Build the update on a1/a2.
+      update_cmd = insert_update_cmd_with_qi(ctx, :posted, 100)
+
+      {update_success, advanced_a12} =
+        update_success_for(
+          create_success_seed,
+          update_cmd,
+          :pending_to_posted,
+          :posted,
+          [
+            {a1.id, :debit, 100, 100},
+            {a2.id, :credit, 100, 100}
+          ],
+          accounts_after_seed
+        )
+
+      # Combine the two account maps for merged_accounts. Initial state
+      # was the post-seed state for a1/a2 and pre-seed for a3/a4.
+      combined_initial = Map.merge(accounts_after_seed, initial_a34)
+      combined_advanced = Map.merge(advanced_a12, advanced_a34)
+
+      now = DateTime.utc_now()
+
+      write_plan = %{
+        successes: [new_create_success, update_success],
+        failures: [],
+        merged_accounts: merged_accounts(combined_initial, combined_advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
+
+      # Create side: new tx inserted, a3/a4 advanced
+      created_tx = Repo.get!(Transaction, new_create_success.transaction_id)
+      assert created_tx.status == :posted
+
+      assert reload_account(a3.id).posted.amount == 30
+      assert reload_account(a4.id).posted.amount == 30
+
+      # Update side: original tx settled
+      updated_tx = Repo.get!(Transaction, create_success_seed.transaction_id)
+      assert updated_tx.status == :posted
+      assert reload_account(a1.id).pending.amount == 0
+      assert reload_account(a1.id).posted.amount == 100
+      assert reload_account(a2.id).pending.amount == 0
+      assert reload_account(a2.id).posted.amount == 100
     end
   end
 
