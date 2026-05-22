@@ -12,8 +12,15 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   Behaviour-equivalent to the legacy `build_create/4` +
   `handle_build_transaction/3` path AND the legacy
   `TransactionStoreHelper.build_update/5` path: same row shapes, same
-  `pending_transaction_lookup` upsert behaviour, same
-  optimistic-concurrency semantics on accounts.
+  optimistic-concurrency semantics on accounts, and matching
+  `pending_transaction_lookup` lifecycle:
+
+    * INSERT/upsert on `:pending` create successes (`inserted_lookups`).
+    * DELETE on update successes whose transition is terminal
+      (`:posted` / `:archived`) — see `deleted_lookups`. Mirrors
+      legacy `delete_lookup_on_terminal/4`.
+    * No write for `:pending_to_pending` updates (row stays as the
+      tx remains `:pending`).
 
   ## Strategy
 

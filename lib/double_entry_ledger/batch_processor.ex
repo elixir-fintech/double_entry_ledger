@@ -1,33 +1,34 @@
 defmodule DoubleEntryLedger.BatchProcessor do
   @moduledoc """
-  Pure fold over a batch of `:create_transaction` command inputs.
+  Pure fold + orchestrator for batched `:create_transaction` and
+  `:update_transaction` commands.
 
-  This module implements `simulate_batch/2` — the in-memory simulation
-  that decides which commands in a batch will succeed, which will fail,
-  and what the merged post-batch account state looks like. It performs
-  **no** DB calls, no IO, no system-time reads — all dynamic inputs are
-  passed in by the caller.
+  `simulate_batch/2` is the in-memory simulation that decides which
+  commands in a batch will succeed, which will fail, and what the
+  merged post-batch account state looks like — no DB calls, no IO,
+  no system-time reads. The orchestrator `run_batch/2` wraps it with
+  the extraction, batched lookups, enrichment, write, and retry
+  logic.
 
-  See `docs/superpowers/plans/2026-05-06-multi-command-batching.md`
-  Section 4 for the full design.
+  ## Input shape (`t:command_input/0`)
 
-  ## Input shape
+  Build via `extract_one/1` (private). Creates produce the full shape
+  at extraction time; updates are built in two stages because they
+  need data from the existing pending transaction:
 
-  The fold consumes pre-extracted command inputs (Option B per the plan).
-  Extracting entries from a `Command` struct requires DB access (account
-  address → id resolution via `AccountStore`), so that step lives in the
-  orchestrator (future step 5). The fold itself stays pure.
+  Stage 1 — `extract_one/1` for `:update_transaction` produces a
+  PARTIAL input with `:action`, `:command`, `:status`, `:entries`
+  (NEW values from the transformer; or `[]` when the schema layer
+  stripped them for `:archived`).
 
-  Each input is a map:
+  Stage 2 — `enrich_updates_with_existing/2` (inside the retry loop)
+  fills in `:transaction_id` (existing tx's id), `:transition`,
+  `:journal_event_id`, and per-entry `:id` + `:old_value`. The fold
+  and writer only ever see Stage 2.
 
-      %{
-        command:        Command.t(),
-        transaction_id: Ecto.UUID.t(),       # generated upfront
-        status:         :posted | :pending,
-        entries:        [
-          %{account_id: Ecto.UUID.t(), type: :debit | :credit, value: Money.t()}
-        ]
-      }
+  Creates skip Stage 2 — their `:transaction_id` / `:journal_event_id`
+  are generated upfront in `extract_one/1`, and the entries already
+  carry `:account_id`/`:type`/`:value` from the transformer.
 
   ## Output
 
@@ -35,6 +36,11 @@ defmodule DoubleEntryLedger.BatchProcessor do
   `failures` likewise. `merged_accounts` only contains accounts that
   changed during the batch (untouched accounts are omitted so the
   writer can skip the `UPDATE`).
+
+  Same-batch dependency detection (`same_batch_dependency/1`) runs
+  before enrichment to catch create→update or update→update
+  collisions on the same `(instance_id, source, source_idempk)`
+  triple and divert them to failures with the appropriate reason.
   """
 
   require Logger
@@ -312,19 +318,19 @@ defmodule DoubleEntryLedger.BatchProcessor do
 
   @doc """
   Orchestrates a batch of `:create_transaction` commands end-to-end:
-  filters/extracts entries, preloads accounts, simulates the fold,
-  writes the success CTE + failure UPDATE inside one `Repo.transaction/1`,
-  and retries-with-split on `Ecto.StaleEntryError`.
-
-  See `docs/superpowers/plans/2026-05-06-multi-command-batching.md`
-  Section 5/8 for the full design.
+  filters/extracts entries, runs same-batch dep detection, preloads
+  accounts, enriches update inputs from the existing transactions,
+  simulates the fold, writes the success CTE + failure UPDATE inside
+  one `Repo.transaction/1`, and retries-with-split on
+  `Ecto.StaleEntryError`.
 
   ## Behaviour summary
 
     * Empty input → `{:ok, %{successes: [], failures: []}}` immediately,
       no DB activity.
-    * Commands whose `command_map.action` is not `:create_transaction`
-      become failures with reason `{:unsupported_action, action}`.
+    * Commands whose `command_map.action` is neither `:create_transaction`
+      nor `:update_transaction` become failures with reason
+      `{:unsupported_action, action}`.
     * Commands whose entries can't be extracted via
       `TransactionCommandTransformer.transaction_data_to_transaction_map/2`
       become failures with reason `{:transformer_error, reason}`.

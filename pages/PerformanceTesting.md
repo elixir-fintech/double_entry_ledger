@@ -9,7 +9,8 @@ investigation and the multi-command batching work.
 |---|---|---|---|
 | `mix load.process` | `test/performance/load.ex` | `MIX_ENV=perf mix load.process C S` | Sliding-window synthetic in-process baseline |
 | `mix load.enqueue` | `test/performance/load.ex` | `MIX_ENV=perf mix load.enqueue C S` | Producer-only sliding-window load |
-| `mix load.drain` | `test/performance/load.ex` | `MIX_ENV=perf mix load.drain N` | K=1 single-instance consumer drain |
+| `mix load.drain` | `test/performance/load.ex` | `MIX_ENV=perf mix load.drain N` | K=1 single-instance consumer drain (creates only) |
+| `mix load.mixed_drain` | `test/performance/load.ex` | `MIX_ENV=perf mix load.mixed_drain C U` | K=1 mixed-workload drain (creates + updates) |
 | `mix load.multi_drain` | `test/performance/load.ex` | `MIX_ENV=perf mix load.multi_drain N K` | Multi-instance scaling drain |
 | `batch_equivalence.exs` | `test/performance/batch_equivalence.exs` | `MIX_ENV=equiv mix run --no-start ...` | Path-A vs Path-B equivalence (one-shot) |
 | Equivalence property test | `test/lib/batch_processor_equivalence_test.exs` | `mix test` (auto) | CI-runnable random-corpus equivalence |
@@ -82,6 +83,30 @@ Honors:
   `:create_transaction` commands. Mixed batches fall back per-cmd.
 - `BATCH_SIZE=N` — overrides the default batch size of 8 when
   `BATCH=on`. Useful for M-sweep characterizations.
+
+### `mix load.mixed_drain C U`
+
+```bash
+MIX_ENV=perf mix load.mixed_drain 5000 5000
+```
+
+K=1 mixed-workload drain. **The primary perf gate for the
+update-batching work (Phase B).** Pairs with `load.drain` (which is
+create-only).
+
+Four-phase: pre-fills `C` `:pending` creates with deterministic
+source_idempks; drains them (not measured); pre-fills `U` updates
+targeting the first `U` creates (random new status: `:posted`,
+`:pending`, or `:archived`); drains the updates (MEASURED). Reports
+tps = `U / phase4_elapsed`. Use `C == U` for the 50/50 corpus the
+B7 gate measures (`≥600 tps per instance, ≥300%` improvement vs
+legacy mixed baseline).
+
+Honors:
+- `BATCH=on` — enables `BatchProcessor.run_batch/2`. With `:update_transaction`
+  now batchable (Phase B), mixed batches no longer fall back per-cmd.
+- `BATCH_SIZE=N` — overrides the default batch size of 8 when
+  `BATCH=on`. Larger sizes amortize fixed CTE-bundle overhead.
 
 ### `mix load.multi_drain N K`
 
