@@ -39,9 +39,17 @@ defmodule DoubleEntryLedger.BatchProcessor do
 
   require Logger
 
-  import Ecto.Query, only: [from: 2]
+  import Ecto.Query, only: [from: 2, dynamic: 2]
 
-  alias DoubleEntryLedger.{Account, Balance, Command, Repo, Transaction}
+  alias DoubleEntryLedger.{
+    Account,
+    Balance,
+    Command,
+    Entry,
+    PendingTransactionLookup,
+    Repo,
+    Transaction
+  }
   alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
@@ -514,14 +522,30 @@ defmodule DoubleEntryLedger.BatchProcessor do
         ) :: {:ok, write_plan()} | {:error, term()}
   defp write_with_retry(command_inputs, initial_failures, commands, repo, now, attempt) do
     accounts = preload_accounts(command_inputs, repo)
-    fold_plan = simulate_batch(command_inputs, accounts)
+
+    # B4 same-batch dep detection runs FIRST: same triple appearing on a
+    # create+update (the update can't see the still-uncommitted create)
+    # or on multiple updates (double-reversal) both produce diverted
+    # failures with a more informative reason than the :create_command_*
+    # check would yield. Idempotent across retries.
+    {survivors, dep_failures} = same_batch_dependency(command_inputs)
+
+    # B4 enrichment: load existing transactions for every surviving
+    # :update_transaction input, run per-update validations, fill in
+    # :transaction_id / :transition / :journal_event_id / per-entry
+    # :id+:old_value. Updates that fail validation are diverted to
+    # enrich_failures. Re-runs per retry attempt; results are NOT
+    # carried across retries.
+    {final_inputs, enrich_failures} = enrich_updates_with_existing(survivors, repo)
+
+    fold_plan = simulate_batch(final_inputs, accounts)
 
     # The pure fold builds a fresh success_record and doesn't carry
     # `:journal_event_id` through (that field is the orchestrator's
-    # concern, not the fold's). Re-stamp from the input list — there's
-    # a 1:1 mapping by `command.id`.
+    # concern, not the fold's). Re-stamp from the (post-enrichment) input
+    # list — there's a 1:1 mapping by `command.id`.
     journal_ids_by_command =
-      Map.new(command_inputs, fn input -> {input.command.id, input.journal_event_id} end)
+      Map.new(final_inputs, fn input -> {input.command.id, input.journal_event_id} end)
 
     successes_with_journal_ids =
       Enum.map(fold_plan.successes, fn success ->
@@ -534,7 +558,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
 
     write_plan = %{
       successes: successes_with_journal_ids,
-      failures: fold_plan.failures ++ initial_failures,
+      failures: fold_plan.failures ++ dep_failures ++ enrich_failures ++ initial_failures,
       merged_accounts: fold_plan.merged_accounts
     }
 
@@ -631,4 +655,255 @@ defmodule DoubleEntryLedger.BatchProcessor do
 
     :telemetry.execute([:double_entry_ledger, :batch, :processed], measurements, %{})
   end
+
+  # ── B4: enrich Stage-1 update inputs with existing-transaction data ─
+
+  # For every `:update_transaction` input, look up the existing pending
+  # transaction (and its entries/accounts) via a single batched
+  # `pending_transaction_lookup` SELECT, then enrich the input map with
+  # `:transaction_id`, `:journal_event_id`, `:transition`, and per-entry
+  # `:id` + `:old_value`. Inputs that fail a validation (`:create_command_*`,
+  # `:transaction_not_pending`, `:entry_*`) are diverted to the failure
+  # list; surviving update inputs are returned in their original position
+  # relative to the create inputs (which pass through unchanged).
+  #
+  # Re-runs per retry attempt. Failures are recomputed from scratch each
+  # attempt — a transaction may have flipped out of `:pending` between
+  # attempts, demoting a candidate-success to `:transaction_not_pending`.
+  @spec enrich_updates_with_existing([command_input()], Ecto.Repo.t()) ::
+          {[command_input()], [failure_record()]}
+  defp enrich_updates_with_existing(command_inputs, repo) do
+    {updates, creates} =
+      Enum.split_with(command_inputs, &(Map.get(&1, :action) == :update_transaction))
+
+    case updates do
+      [] ->
+        {command_inputs, []}
+
+      _ ->
+        lookups_by_triple = load_lookups_batched(updates, repo)
+
+        {enriched_rev, failures_rev} =
+          Enum.reduce(updates, {[], []}, fn input, {enr, fails} ->
+            cmd = input.command
+
+            case Map.fetch(lookups_by_triple, triple_for(cmd)) do
+              :error ->
+                {enr, [failure(cmd, :create_command_not_found) | fails]}
+
+              {:ok, lookup} ->
+                case validate_and_enrich(input, lookup) do
+                  {:ok, enriched} -> {[enriched | enr], fails}
+                  {:error, reason} -> {enr, [failure(cmd, reason) | fails]}
+                end
+            end
+          end)
+
+        # Preserve original ordering: creates first (in their original
+        # order), then enriched updates (also in original order). This
+        # matches the partition order produced by `Enum.split_with/2`
+        # above (which is reverse-by-claim because of cons-prepending in
+        # the reducer, but `split_with` builds two reversed lists then
+        # reverses each).
+        {creates ++ Enum.reverse(enriched_rev), Enum.reverse(failures_rev)}
+    end
+  end
+
+  # Single batched SELECT loading every update target via the lookup
+  # table. Each row carries the original create's command (with its
+  # queue item) and the existing transaction (with its entries and
+  # their accounts). Returned as a map indexed by
+  # `{instance_id, source, source_idempk}` for O(1) lookup by the
+  # per-update validator.
+  @spec load_lookups_batched([command_input()], Ecto.Repo.t()) ::
+          %{{Ecto.UUID.t(), String.t(), String.t()} => PendingTransactionLookup.t()}
+  defp load_lookups_batched(updates, repo) do
+    triples = Enum.map(updates, &triple_for(&1.command))
+
+    where_clause =
+      Enum.reduce(triples, false, fn {iid, src, sidempk}, acc ->
+        dynamic(
+          [ptl],
+          (ptl.instance_id == ^iid and ptl.source == ^src and ptl.source_idempk == ^sidempk) or
+            ^acc
+        )
+      end)
+
+    repo.all(
+      from(ptl in PendingTransactionLookup,
+        prefix: ^@schema_prefix,
+        where: ^where_clause,
+        preload: [command: :command_queue_item, transaction: [entries: :account]]
+      )
+    )
+    |> Map.new(fn lookup ->
+      {{lookup.instance_id, lookup.source, lookup.source_idempk}, lookup}
+    end)
+  end
+
+  # Run the four B4 per-update checks against the loaded lookup row,
+  # then build the Stage-2 enriched input on success.
+  defp validate_and_enrich(input, lookup) do
+    cmd_status = lookup.command.command_queue_item.status
+    tx = lookup.transaction
+
+    cond do
+      cmd_status == :dead_letter ->
+        {:error, :create_command_in_dead_letter}
+
+      cmd_status != :processed ->
+        {:error, :create_command_not_processed}
+
+      is_nil(tx) or tx.status != :pending ->
+        {:error, :transaction_not_pending}
+
+      length(input.entries) != length(tx.entries) ->
+        {:error, :entry_count_mismatch}
+
+      true ->
+        with {:ok, paired} <- pair_entries(input.entries, tx.entries) do
+          {:ok, build_enriched_input(input, lookup, paired)}
+        end
+    end
+  end
+
+  # Pair each new-payload entry with exactly one existing entry by
+  # `account_id`. Halts on the first mismatch (account or type).
+  @spec pair_entries([entry()], [Entry.t() | map()]) ::
+          {:ok, [{entry(), Entry.t() | map()}]}
+          | {:error, :entry_account_mismatch | :entry_type_changed}
+  defp pair_entries(new_entries, existing_entries) do
+    existing_by_account_id = Map.new(existing_entries, &{&1.account_id, &1})
+
+    result =
+      Enum.reduce_while(new_entries, {:ok, []}, fn new_entry, {:ok, acc} ->
+        case Map.fetch(existing_by_account_id, new_entry.account_id) do
+          {:ok, existing} ->
+            if new_entry.type == existing.type do
+              {:cont, {:ok, [{new_entry, existing} | acc]}}
+            else
+              {:halt, {:error, :entry_type_changed}}
+            end
+
+          :error ->
+            {:halt, {:error, :entry_account_mismatch}}
+        end
+      end)
+
+    case result do
+      {:ok, paired_rev} -> {:ok, Enum.reverse(paired_rev)}
+      err -> err
+    end
+  end
+
+  # All checks passed — produce the Stage-2 enriched command_input the
+  # fold + writer expect.
+  defp build_enriched_input(input, lookup, paired_entries) do
+    transition =
+      case input.status do
+        :posted -> :pending_to_posted
+        :pending -> :pending_to_pending
+        :archived -> :pending_to_archived
+      end
+
+    enriched_entries =
+      Enum.map(paired_entries, fn {new_entry, existing} ->
+        new_entry
+        |> Map.put(:id, existing.id)
+        |> Map.put(:old_value, existing.value)
+      end)
+
+    Map.merge(input, %{
+      transaction_id: lookup.transaction.id,
+      journal_event_id: Ecto.UUID.generate(),
+      transition: transition,
+      entries: enriched_entries
+    })
+  end
+
+  # ── B4: same-batch dependency detection ─────────────────────────────
+
+  # Group enriched command_inputs by `(instance_id, source, source_idempk)`.
+  # For each group:
+  #   * single entry → pass through.
+  #   * create + 1+ updates → keep the create(s), fail every update with
+  #     `{:create_pending_in_batch, create_command_id}` (update can't see
+  #     the still-uncommitted create's transaction yet).
+  #   * 2+ updates, no create → keep the first update, fail the rest with
+  #     `{:duplicate_update_in_batch, first_command_id}` (avoid
+  #     double-reversal on the same target transaction).
+  #   * 2+ creates, no update → pass through unchanged. The lookup table's
+  #     unique constraint on `(instance_id, source, source_idempk)` is the
+  #     pre-existing guard for this case.
+  #
+  # Idempotent across retries (operates only on static command_input
+  # triples). Returns `{kept_inputs_in_original_order, failures}`.
+  @spec same_batch_dependency([command_input()]) :: {[command_input()], [failure_record()]}
+  defp same_batch_dependency(command_inputs) do
+    by_triple =
+      Enum.reduce(command_inputs, %{}, fn input, acc ->
+        Map.update(acc, triple_for(input.command), [input], &[input | &1])
+      end)
+
+    {keep_ids, dep_failures} =
+      Enum.reduce(by_triple, {MapSet.new(), []}, fn {_triple, group_rev}, {keep_set, fails} ->
+        group = Enum.reverse(group_rev)
+
+        case group do
+          [single] ->
+            {MapSet.put(keep_set, single.command.id), fails}
+
+          multiple ->
+            {creates, updates} =
+              Enum.split_with(multiple, &(Map.get(&1, :action) == :create_transaction))
+
+            cond do
+              creates != [] and updates != [] ->
+                first_create = hd(creates)
+
+                update_fails =
+                  Enum.map(updates, fn input ->
+                    failure(input.command, {:create_pending_in_batch, first_create.command.id})
+                  end)
+
+                keep_set =
+                  Enum.reduce(creates, keep_set, fn c, ks -> MapSet.put(ks, c.command.id) end)
+
+                {keep_set, update_fails ++ fails}
+
+              length(updates) > 1 ->
+                [first_update | rest] = updates
+
+                update_fails =
+                  Enum.map(rest, fn input ->
+                    failure(input.command, {:duplicate_update_in_batch, first_update.command.id})
+                  end)
+
+                {MapSet.put(keep_set, first_update.command.id), update_fails ++ fails}
+
+              true ->
+                # All creates with same triple (no updates). Pass through;
+                # lookup unique constraint catches it at write time.
+                keep_set =
+                  Enum.reduce(creates, keep_set, fn c, ks -> MapSet.put(ks, c.command.id) end)
+
+                {keep_set, fails}
+            end
+        end
+      end)
+
+    kept = Enum.filter(command_inputs, &MapSet.member?(keep_ids, &1.command.id))
+    {kept, Enum.reverse(dep_failures)}
+  end
+
+  defp failure(%Command{} = cmd, reason), do: %{command: cmd, reason: reason}
+
+  # The unique key the lookup table is indexed by — used wherever B4
+  # groups, looks up, or compares commands by their idempotency identity.
+  @spec triple_for(Command.t()) :: {Ecto.UUID.t(), String.t(), String.t()}
+  defp triple_for(%Command{
+         instance_id: iid,
+         command_map: %{source: src, source_idempk: sidempk}
+       }),
+       do: {iid, src, sidempk}
 end

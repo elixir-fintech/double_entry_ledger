@@ -702,6 +702,35 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   defp reason_to_message({:transformer_error, reason}),
     do: "batch transformer: #{reason}"
 
+  defp reason_to_message({:create_pending_in_batch, create_command_id}),
+    do:
+      "batch: create command (#{create_command_id}) for this idempotency key is in the same batch — retry after it commits"
+
+  defp reason_to_message({:duplicate_update_in_batch, first_command_id}),
+    do:
+      "batch: another update (#{first_command_id}) on the same target transaction is in the same batch — retry after it commits"
+
+  defp reason_to_message(:create_command_not_found),
+    do: "update: original create command not found"
+
+  defp reason_to_message(:create_command_in_dead_letter),
+    do: "update: original create command is in dead_letter"
+
+  defp reason_to_message(:create_command_not_processed),
+    do: "update: original create command has not been processed yet"
+
+  defp reason_to_message(:transaction_not_pending),
+    do: "update: target transaction is not in :pending status"
+
+  defp reason_to_message(:entry_count_mismatch),
+    do: "update: payload entry count does not match the existing transaction"
+
+  defp reason_to_message(:entry_account_mismatch),
+    do: "update: payload entry references an account not in the existing transaction"
+
+  defp reason_to_message(:entry_type_changed),
+    do: "update: payload entry changes the debit/credit type of an existing entry"
+
   defp reason_to_message(reason) when is_atom(reason),
     do: "batch: #{reason}"
 

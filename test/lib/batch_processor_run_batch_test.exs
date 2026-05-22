@@ -50,11 +50,25 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
   # the requested status. Uses unique idempotency keys so multiple
   # commands can be inserted in the same test.
   defp insert_balanced_command(inst, a1, a2, status, amount \\ 100) do
+    insert_balanced_command_with_idempk(
+      inst,
+      a1,
+      a2,
+      "idempk-#{System.unique_integer([:positive])}",
+      status,
+      amount
+    )
+  end
+
+  # Same as `insert_balanced_command/5` but the caller controls the
+  # idempotency key — used by B4 tests to construct same-batch
+  # collisions and matching update commands.
+  defp insert_balanced_command_with_idempk(inst, a1, a2, source_idempk, status, amount \\ 100) do
     attrs =
       DoubleEntryLedger.CommandFixtures.transaction_command_attrs(
         instance_address: inst.address,
         source: "src",
-        source_idempk: "idempk-#{System.unique_integer([:positive])}",
+        source_idempk: source_idempk,
         payload: %TransactionData{
           status: status,
           entries: [
@@ -66,6 +80,32 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
     {:ok, command} = CommandStore.create(attrs)
     reload_command_with_qi(command.id)
+  end
+
+  # Insert an :update_transaction command targeting the given
+  # source/source_idempk pair (the create's keys, when matching). The
+  # update's own update_idempk is generated automatically. Accepts a
+  # custom entries list — defaults to the same shape as the create.
+  defp insert_update_command(inst, source, source_idempk, status, entries) do
+    {:ok, command} =
+      DoubleEntryLedger.CommandFixtures.new_update_transaction_command(
+        source,
+        source_idempk,
+        inst.address,
+        status,
+        entries
+      )
+
+    reload_command_with_qi(command.id)
+  end
+
+  # Seed a :pending transaction by running `run_batch/2` on a fresh
+  # balanced create. Returns `{create_command, transaction_id}` so
+  # update tests can target it.
+  defp seed_pending_tx(inst, a1, a2, amount \\ 100) do
+    create_cmd = insert_balanced_command(inst, a1, a2, :pending, amount)
+    {:ok, %{successes: [%{transaction_id: tx_id}]}} = BatchProcessor.run_batch([create_cmd])
+    {create_cmd, tx_id}
   end
 
   # Build a command whose payload references an account address that
@@ -337,6 +377,286 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       qi2 = Repo.get!(CommandQueueItem, bad2.command_queue_item.id)
       assert qi1.status == :failed
       assert qi2.status == :failed
+    end
+
+    # ── B4: update transitions through run_batch ─────────────────────
+
+    test "happy path: update settles a pending tx end-to-end",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      {create_cmd, tx_id} = seed_pending_tx(inst, a1, a2)
+
+      update_cmd =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a2.address, amount: 100, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [success], failures: []}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert success.command_id == update_cmd.id
+      assert success.transaction_id == tx_id
+
+      tx = Repo.get!(Transaction, tx_id)
+      assert tx.status == :posted
+      assert tx.posted_at != nil
+
+      a1_after = Repo.get!(DoubleEntryLedger.Account, a1.id)
+      assert a1_after.pending.amount == 0
+      assert a1_after.posted.amount == 100
+
+      update_qi = Repo.get!(CommandQueueItem, update_cmd.command_queue_item.id)
+      assert update_qi.status == :processed
+    end
+
+    test "update with no matching lookup row yields :create_command_not_found",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      update_cmd =
+        insert_update_command(
+          inst,
+          "src",
+          "nonexistent-#{System.unique_integer([:positive])}",
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a2.address, amount: 100, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [], failures: [failure]}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert failure.command_id == update_cmd.id
+      assert failure.reason == :create_command_not_found
+    end
+
+    test "update against a dead-letter create yields :create_command_in_dead_letter",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      {create_cmd, _tx_id} = seed_pending_tx(inst, a1, a2)
+
+      # Simulate the create having ended up in dead_letter post-commit.
+      create_cmd.command_queue_item
+      |> Ecto.Changeset.change(status: :dead_letter)
+      |> Repo.update!()
+
+      update_cmd =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a2.address, amount: 100, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [], failures: [failure]}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert failure.reason == :create_command_in_dead_letter
+    end
+
+    test "update against a non-:processed create yields :create_command_not_processed",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      {create_cmd, _tx_id} = seed_pending_tx(inst, a1, a2)
+
+      # Simulate corrupted state: lookup exists but qi status got
+      # flipped to :failed externally.
+      create_cmd.command_queue_item
+      |> Ecto.Changeset.change(status: :failed)
+      |> Repo.update!()
+
+      update_cmd =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a2.address, amount: 100, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [], failures: [failure]}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert failure.reason == :create_command_not_processed
+    end
+
+    test "update against a transaction already in :posted yields :transaction_not_pending",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      {create_cmd, tx_id} = seed_pending_tx(inst, a1, a2)
+
+      # Simulate a concurrent direct-API write that flipped the tx.
+      Repo.get!(Transaction, tx_id)
+      |> Ecto.Changeset.change(status: :posted)
+      |> Repo.update!()
+
+      update_cmd =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a2.address, amount: 100, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [], failures: [failure]}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert failure.reason == :transaction_not_pending
+    end
+
+    test "update with mismatched entry count yields :entry_count_mismatch",
+         %{instance: inst, accounts: [a1, a2, _, a4]} do
+      {create_cmd, _tx_id} = seed_pending_tx(inst, a1, a2)
+
+      # Three entries — the existing tx has two. (The TransactionData
+      # changeset requires >= 2 entries at insert time, so we can't
+      # test "too few"; "too many" exercises the same B4 validator.)
+      update_cmd =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a2.address, amount: 50, currency: "EUR"},
+            %{account_address: a4.address, amount: 50, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [], failures: [failure]}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert failure.reason == :entry_count_mismatch
+    end
+
+    test "update referencing a different account yields :entry_account_mismatch",
+         %{instance: inst, accounts: [a1, a2, _, a4]} do
+      {create_cmd, _tx_id} = seed_pending_tx(inst, a1, a2)
+
+      # Swap a2 for a4 — a4 is on the instance but not in the existing tx.
+      update_cmd =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a4.address, amount: 100, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [], failures: [failure]}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert failure.reason == :entry_account_mismatch
+    end
+
+    test "update flipping an entry's debit/credit type yields :entry_type_changed",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      # Seed normally (a1 debits, a2 credits per insert_balanced_command).
+      {create_cmd, _tx_id} = seed_pending_tx(inst, a1, a2)
+
+      # Try to update with NEGATIVE amount on a1 — the transformer flips
+      # the entry type to :credit, which doesn't match the existing :debit.
+      update_cmd =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: -100, currency: "EUR"},
+            %{account_address: a2.address, amount: -100, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [], failures: [failure]}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert failure.reason == :entry_type_changed
+    end
+
+    test "same-batch create+update collision fails the update with :create_pending_in_batch",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      shared_idempk = "shared-#{System.unique_integer([:positive])}"
+
+      # Both commands target the SAME (source, source_idempk).
+      create_cmd =
+        insert_balanced_command_with_idempk(inst, a1, a2, shared_idempk, :pending)
+
+      update_cmd =
+        insert_update_command(
+          inst,
+          "src",
+          shared_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a2.address, amount: 100, currency: "EUR"}
+          ]
+        )
+
+      assert {:ok, %{successes: [create_success], failures: [failure]}} =
+               BatchProcessor.run_batch([create_cmd, update_cmd])
+
+      assert create_success.command_id == create_cmd.id
+      assert failure.command_id == update_cmd.id
+      assert failure.reason == {:create_pending_in_batch, create_cmd.id}
+
+      # Create persisted normally.
+      tx = Repo.get!(Transaction, create_success.transaction_id)
+      assert tx.status == :pending
+    end
+
+    test "two updates on the same target in one batch: first kept, rest :duplicate_update_in_batch",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      {create_cmd, _tx_id} = seed_pending_tx(inst, a1, a2)
+
+      update_payload = [
+        %{account_address: a1.address, amount: 100, currency: "EUR"},
+        %{account_address: a2.address, amount: 100, currency: "EUR"}
+      ]
+
+      update1 =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          update_payload
+        )
+
+      update2 =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          update_payload
+        )
+
+      assert {:ok, %{successes: [success], failures: [failure]}} =
+               BatchProcessor.run_batch([update1, update2])
+
+      assert success.command_id == update1.id
+      assert failure.command_id == update2.id
+      assert failure.reason == {:duplicate_update_in_batch, update1.id}
     end
   end
 
