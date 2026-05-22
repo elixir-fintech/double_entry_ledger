@@ -174,6 +174,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     {queue_sql, state} = build_queue_items_cte(successes, now, state)
     {updated_tx_sql, state} = build_updated_transactions_cte(updated_successes, now, state)
     {updated_entries_sql, state} = build_updated_entries_cte(updated_successes, now, state)
+    {deleted_lookups_sql, state} = build_deleted_lookups_cte(updated_successes, state)
 
     ctes =
       [
@@ -185,7 +186,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         accounts_sql,
         queue_sql,
         updated_tx_sql,
-        updated_entries_sql
+        updated_entries_sql,
+        deleted_lookups_sql
       ]
       |> Enum.reject(&is_nil/1)
 
@@ -550,6 +552,37 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     """
 
     {sql, state}
+  end
+
+  # ── deleted_lookups CTE ──────────────────────────────────────────
+  # Deletes `pending_transaction_lookup` rows for updates whose new
+  # status is terminal (`:posted` or `:archived`). The lookup row is
+  # only useful while the tx remains `:pending`; once it transitions
+  # out, the row is dead weight. Mirrors the legacy path's
+  # `delete_lookup_on_terminal/4` so the two stay byte-equal.
+  defp build_deleted_lookups_cte(updated_successes, state) do
+    terminal = Enum.filter(updated_successes, &(&1.status in [:posted, :archived]))
+
+    case terminal do
+      [] ->
+        {nil, state}
+
+      _ ->
+        {placeholders, state} =
+          push_params(state, Enum.map(terminal, &uuid(&1.transaction_id)))
+
+        id_list = Enum.map_join(placeholders, ", ", &"#{&1}::uuid")
+
+        sql = """
+        deleted_lookups AS (
+          DELETE FROM #{table("pending_transaction_lookup")}
+          WHERE transaction_id IN (#{id_list})
+          RETURNING transaction_id
+        )
+        """
+
+        {sql, state}
+    end
   end
 
   # ── command_queue_items UPDATE CTE ───────────────────────────────

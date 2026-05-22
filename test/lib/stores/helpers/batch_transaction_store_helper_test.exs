@@ -817,7 +817,84 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       assert final_a2.pending.credit == 0
     end
 
-    test "update path does NOT touch pending_transaction_lookup row (filter excludes updates)",
+    test ":pending_to_posted update DELETEs the pending_transaction_lookup row",
+         %{accounts: [a1, a2, _, _]} = ctx do
+      {create_success, current_accounts} =
+        seed_pending_transaction(ctx, [{a1.id, :debit, 100}, {a2.id, :credit, 100}])
+
+      # Sanity: lookup row inserted by the seed.
+      assert Repo.get_by(PendingTransactionLookup, command_id: create_success.command.id)
+
+      update_cmd =
+        insert_update_cmd_with_qi(ctx, :posted, 100,
+          source: create_success.command.command_map.source,
+          source_idempk: create_success.command.command_map.source_idempk
+        )
+
+      {update_success, advanced} =
+        update_success_for(
+          create_success,
+          update_cmd,
+          :pending_to_posted,
+          :posted,
+          [
+            {a1.id, :debit, 100, 100},
+            {a2.id, :credit, 100, 100}
+          ],
+          current_accounts
+        )
+
+      write_plan = %{
+        successes: [update_success],
+        failures: [],
+        merged_accounts: merged_accounts(current_accounts, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, DateTime.utc_now())
+
+      # Lookup row gone — tx is now terminal :posted, the row's purpose
+      # (finding the pending tx for update routing) no longer applies.
+      refute Repo.get_by(PendingTransactionLookup, command_id: create_success.command.id)
+    end
+
+    test ":pending_to_archived update DELETEs the pending_transaction_lookup row",
+         %{accounts: [a1, a2, _, _]} = ctx do
+      {create_success, current_accounts} =
+        seed_pending_transaction(ctx, [{a1.id, :debit, 100}, {a2.id, :credit, 100}])
+
+      assert Repo.get_by(PendingTransactionLookup, command_id: create_success.command.id)
+
+      update_cmd =
+        insert_update_cmd_with_qi(ctx, :archived, 100,
+          source: create_success.command.command_map.source,
+          source_idempk: create_success.command.command_map.source_idempk
+        )
+
+      {update_success, advanced} =
+        update_success_for(
+          create_success,
+          update_cmd,
+          :pending_to_archived,
+          :archived,
+          [
+            {a1.id, :debit, 100, 100},
+            {a2.id, :credit, 100, 100}
+          ],
+          current_accounts
+        )
+
+      write_plan = %{
+        successes: [update_success],
+        failures: [],
+        merged_accounts: merged_accounts(current_accounts, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, DateTime.utc_now())
+
+      refute Repo.get_by(PendingTransactionLookup, command_id: create_success.command.id)
+    end
+
+    test ":pending_to_pending update leaves pending_transaction_lookup row untouched",
          %{accounts: [a1, a2, _, _]} = ctx do
       {create_success, current_accounts} =
         seed_pending_transaction(ctx, [{a1.id, :debit, 50}, {a2.id, :credit, 50}])
@@ -825,11 +902,13 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       lookup_before = Repo.get_by!(PendingTransactionLookup, command_id: create_success.command.id)
       lookup_count_before = count(PendingTransactionLookup)
 
-      # Update command uses the SAME source/source_idempk as the create
-      # so the update's lookup-key triple would CONFLICT on the existing
-      # row if the writer were to attempt an INSERT. The B3 filter change
-      # excludes updates from inserted_lookups, so the existing row stays
-      # untouched.
+      # Update command uses the SAME source/source_idempk as the create.
+      # Two protections:
+      #   1. inserted_lookups CTE filter excludes updates entirely (B3),
+      #      so the update can't re-INSERT a row over the create's.
+      #   2. deleted_lookups CTE only fires for terminal transitions
+      #      (:posted / :archived) — :pending_to_pending isn't terminal,
+      #      so the row stays.
       update_cmd =
         insert_update_cmd_with_qi(ctx, :pending, 60,
           source: create_success.command.command_map.source,

@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.{Command, PendingTransactionLookup, Repo}
   alias DoubleEntryLedger.Command.TransactionData
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
@@ -128,6 +128,67 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
       shared_command_asserts(transaction, processed_command, pending_transaction)
       assert return_pending_balances(ctx) == [0, 0]
       assert transaction.status == :archived
+    end
+
+    test ":pending_to_posted DELETEs the pending_transaction_lookup row",
+         %{instance: inst} = ctx do
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+      {:ok, _tx, %{command_map: %{source: s, source_idempk: s_id}}} =
+        CreateTransactionCommand.process(pending_command)
+
+      assert Repo.get_by!(PendingTransactionLookup,
+               instance_id: inst.id,
+               source: s,
+               source_idempk: s_id
+             )
+
+      {:ok, command} = new_update_transaction_command(s, s_id, inst.address, :posted)
+      {:ok, _tx, _cmd} = UpdateTransactionCommand.process(command)
+
+      refute Repo.get_by(PendingTransactionLookup,
+               instance_id: inst.id,
+               source: s,
+               source_idempk: s_id
+             )
+    end
+
+    test ":pending_to_archived DELETEs the pending_transaction_lookup row",
+         %{instance: inst} = ctx do
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+      {:ok, _tx, %{command_map: %{source: s, source_idempk: s_id}}} =
+        CreateTransactionCommand.process(pending_command)
+
+      {:ok, command} = new_update_transaction_command(s, s_id, inst.address, :archived)
+      {:ok, _tx, _cmd} = UpdateTransactionCommand.process(command)
+
+      refute Repo.get_by(PendingTransactionLookup,
+               instance_id: inst.id,
+               source: s,
+               source_idempk: s_id
+             )
+    end
+
+    test ":pending_to_pending leaves the pending_transaction_lookup row intact",
+         %{instance: inst, accounts: [a1, a2, _, _]} = ctx do
+      %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+      {:ok, _tx, %{command_map: %{source: s, source_idempk: s_id}}} =
+        CreateTransactionCommand.process(pending_command)
+
+      {:ok, command} =
+        new_update_transaction_command(s, s_id, inst.address, :pending, [
+          %{account_address: a1.address, amount: 50, currency: "EUR"},
+          %{account_address: a2.address, amount: 50, currency: "EUR"}
+        ])
+
+      {:ok, _tx, _cmd} = UpdateTransactionCommand.process(command)
+
+      # Row still exists — tx is still :pending so the lookup is still
+      # needed (a future update may still come).
+      assert Repo.get_by!(PendingTransactionLookup,
+               instance_id: inst.id,
+               source: s,
+               source_idempk: s_id
+             )
     end
 
     test "dead letter when create command does not exist", %{instance: inst} do

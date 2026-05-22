@@ -17,7 +17,14 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.{Account, BalanceHistoryEntry, Entry, Transaction, Types}
+  alias DoubleEntryLedger.{
+    Account,
+    BalanceHistoryEntry,
+    Entry,
+    PendingTransactionLookup,
+    Transaction,
+    Types
+  }
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
@@ -298,6 +305,32 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
       end
     end)
     |> insert_balance_history_entries({step, :balance_history_entries}, step, repo)
+    |> delete_lookup_on_terminal({step, :delete_lookup}, step, repo)
+  end
+
+  # Deletes the `pending_transaction_lookup` row for the updated
+  # transaction when its new status is terminal (`:posted` or
+  # `:archived`). The lookup row is no longer needed once the tx
+  # leaves `:pending`. Mirrors the batched writer's `deleted_lookups`
+  # CTE so the two paths stay byte-equal.
+  @spec delete_lookup_on_terminal(Multi.t(), term(), atom(), Ecto.Repo.t()) :: Multi.t()
+  defp delete_lookup_on_terminal(multi, step_name, tx_step, repo) do
+    Multi.run(multi, step_name, fn _repo, changes ->
+      tx = Map.fetch!(changes, tx_step)
+
+      if tx.status in [:posted, :archived] do
+        {count, _} =
+          from(ptl in PendingTransactionLookup,
+            prefix: ^@schema_prefix,
+            where: ptl.transaction_id == ^tx.id
+          )
+          |> repo.delete_all()
+
+        {:ok, count}
+      else
+        {:ok, 0}
+      end
+    end)
   end
 
   # Inserts one BalanceHistoryEntry per entry on the transaction at `tx_step`.
