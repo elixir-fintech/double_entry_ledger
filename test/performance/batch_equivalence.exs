@@ -38,6 +38,7 @@ alias DoubleEntryLedger.{
 
 alias DoubleEntryLedger.Stores.CommandStore
 alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
+alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand
 
 # ── boot setup ────────────────────────────────────────────────────────
 
@@ -172,72 +173,124 @@ defmodule BatchEquivalence do
     {instance, accounts}
   end
 
-  # Generate a deterministic list of TransactionCommandMap-shaped
-  # attribute maps. We pick from a fixed pool of account addresses so
-  # commands routinely overlap. Each command:
+  # Generate a deterministic mixed corpus: N create commands plus a
+  # subset of update commands targeting :pending creates. Returns
+  # `%{creates: [create_attrs], updates: [update_attrs]}`.
+  #
+  # Each create:
   #   - has 2..5 entries (random within bounds)
   #   - is balanced per currency (single currency = :EUR for simplicity)
   #   - alternates between :posted and :pending status (~50/50)
-  #   - has a unique source_idempk so the lookup row's unique
-  #     constraint is never hit accidentally.
+  #   - has a unique source_idempk
+  #
+  # Each update:
+  #   - targets a :pending create's source_idempk
+  #   - new_status uniformly :posted / :pending / :archived
+  #   - payload entries mirror the create's accounts (so non-archived
+  #     transitions exercise the entry-update path; for :archived the
+  #     schema strips entries anyway)
+  #   - At most one update per create.
   def generate_command_attrs(n, instance, accounts) do
     addrs = Enum.map(accounts, & &1.address)
 
-    Enum.map(1..n, fn i ->
-      entry_count = 2 + :rand.uniform(4) - 1  # 2..5
-      status = if :rand.uniform(2) == 1, do: :posted, else: :pending
+    creates =
+      Enum.map(1..n, fn i ->
+        entry_count = 2 + :rand.uniform(4) - 1
+        status = if :rand.uniform(2) == 1, do: :posted, else: :pending
 
-      # Build balanced entries: pick `entry_count - 1` debits with
-      # random amounts, and one credit that balances them. Then assign
-      # each line to a distinct account from the pool.
-      amounts_first_n_minus_one =
-        Enum.map(1..(entry_count - 1), fn _ -> 10 + :rand.uniform(491) end)
+        amounts_head =
+          Enum.map(1..(entry_count - 1), fn _ -> 10 + :rand.uniform(491) end)
 
-      total = Enum.sum(amounts_first_n_minus_one)
-      amounts = amounts_first_n_minus_one ++ [-total]
+        total = Enum.sum(amounts_head)
+        amounts = amounts_head ++ [-total]
+        shuffled = Enum.take_random(addrs, entry_count)
 
-      # Distinct accounts within the command (TransactionData requires
-      # distinct account_addresses per entry).
-      shuffled = Enum.take_random(addrs, entry_count)
+        entries =
+          Enum.zip(shuffled, amounts)
+          |> Enum.map(fn {addr, amt} ->
+            %{account_address: addr, amount: amt, currency: :EUR}
+          end)
 
-      entries =
-        Enum.zip(shuffled, amounts)
-        |> Enum.map(fn {addr, amt} ->
-          %{account_address: addr, amount: amt, currency: :EUR}
-        end)
+        %{
+          action: :create_transaction,
+          instance_address: instance.address,
+          source: "equivalence",
+          source_idempk: "idempk-#{i}",
+          payload: %{status: status, entries: entries}
+        }
+      end)
 
-      %{
-        action: :create_transaction,
-        instance_address: instance.address,
-        source: "equivalence",
-        source_idempk: "idempk-#{i}",
-        payload: %{status: status, entries: entries}
-      }
-    end)
+    # Pick a random subset (~50%) of :pending creates and emit an update
+    # for each. Update entries mirror the create's accounts/amounts so
+    # validation passes on the batched path (type preservation).
+    updates =
+      creates
+      |> Enum.filter(&(&1.payload.status == :pending))
+      |> Enum.filter(fn _ -> :rand.uniform(2) == 1 end)
+      |> Enum.map(fn create ->
+        new_status = Enum.random([:posted, :pending, :archived])
+        new_amounts = regenerate_amounts(length(create.payload.entries))
+
+        new_entries =
+          Enum.zip(
+            Enum.map(create.payload.entries, & &1.account_address),
+            new_amounts
+          )
+          |> Enum.map(fn {addr, amt} ->
+            %{account_address: addr, amount: amt, currency: :EUR}
+          end)
+
+        %{
+          action: :update_transaction,
+          instance_address: instance.address,
+          source: create.source,
+          source_idempk: create.source_idempk,
+          update_idempk: "upd-#{create.source_idempk}",
+          payload: %{status: new_status, entries: new_entries}
+        }
+      end)
+
+    %{creates: creates, updates: updates}
   end
 
-  # Insert the N commands via CommandStore.create/1. Returns the freshly
-  # loaded commands (preloaded with :command_queue_item) in the same
-  # order as command_attrs — Path B's run_batch/2 expects ordered input
-  # for failure-isolation determinism.
+  defp regenerate_amounts(n) when n >= 2 do
+    head = Enum.map(1..(n - 1), fn _ -> 10 + :rand.uniform(491) end)
+    total = Enum.sum(head)
+    head ++ [-total]
+  end
+
+  # Insert one batch of commands (creates OR updates). Returns commands
+  # preloaded with :command_queue_item, in the original order.
   def insert_commands(command_attrs) do
     Enum.map(command_attrs, fn attrs ->
       {:ok, cmd_map} = DoubleEntryLedger.Command.TransactionCommandMap.create(attrs)
       {:ok, command} = CommandStore.create(cmd_map)
-      # Make sure :command_queue_item is loaded (CommandStore.create
-      # returns the command with the queue item from cast_assoc).
+
       command
       |> Repo.preload([:command_queue_item], force: true)
     end)
   end
 
-  # Run Path A: per-command CreateTransactionCommand.process/2.
+  # Run Path A creates: per-command CreateTransactionCommand.process/2.
   # Returns {success_count, failure_count}.
-  def run_path_a(command_ids) do
+  def run_path_a_creates(command_ids) do
     Enum.reduce(command_ids, {0, 0}, fn cid, {ok, err} ->
       command = CommandStore.get_by_id(cid)
 
       case CreateTransactionCommand.process(command) do
+        {:ok, _txn, _cmd} -> {ok + 1, err}
+        {:error, _} -> {ok, err + 1}
+      end
+    end)
+  end
+
+  # Run Path A updates: per-command UpdateTransactionCommand.process/2.
+  # Each update sees its target create's tx already committed.
+  def run_path_a_updates(command_ids) do
+    Enum.reduce(command_ids, {0, 0}, fn cid, {ok, err} ->
+      command = CommandStore.get_by_id(cid)
+
+      case UpdateTransactionCommand.process(command) do
         {:ok, _txn, _cmd} -> {ok + 1, err}
         {:error, _} -> {ok, err + 1}
       end
@@ -287,13 +340,17 @@ defmodule BatchEquivalence do
     end)
   end
 
+  # Key by (action, source_idempk, update_idempk) so creates and
+  # updates sharing a source_idempk are distinguished in the snapshot.
   defp snapshot_queue_items(instance_id) do
     from(c in DoubleEntryLedger.Command,
       join: qi in DoubleEntryLedger.CommandQueueItem,
       on: qi.command_id == c.id,
       where: c.instance_id == ^instance_id,
       select: %{
+        action: fragment("?->>'action'", c.command_map),
         idempk: fragment("?->>'source_idempk'", c.command_map),
+        update_idempk: fragment("?->>'update_idempk'", c.command_map),
         status: qi.status,
         retry_count: qi.retry_count,
         errors: qi.errors,
@@ -302,7 +359,7 @@ defmodule BatchEquivalence do
     )
     |> Repo.all()
     |> Map.new(fn row ->
-      {row.idempk,
+      {{row.action, row.idempk, row.update_idempk},
        %{
          status: row.status,
          retry_count: row.retry_count,
@@ -378,25 +435,29 @@ BatchEquivalence.truncate!(truncate_tables, schema_prefix)
 instance_address_a = "instance:eq:a"
 {instance_a, accounts_a} = BatchEquivalence.seed_instance_and_accounts(instance_address_a)
 :rand.seed(:exsplus, seed)
-command_attrs = BatchEquivalence.generate_command_attrs(n, instance_a, accounts_a)
+%{creates: create_attrs_a, updates: update_attrs_a} =
+  BatchEquivalence.generate_command_attrs(n, instance_a, accounts_a)
 
-# Insert the commands fresh under instance A.
-commands_a = BatchEquivalence.insert_commands(command_attrs)
-command_ids_a = Enum.map(commands_a, & &1.id)
+create_cmds_a = BatchEquivalence.insert_commands(create_attrs_a)
+update_cmds_a = BatchEquivalence.insert_commands(update_attrs_a)
+create_ids_a = Enum.map(create_cmds_a, & &1.id)
+update_ids_a = Enum.map(update_cmds_a, & &1.id)
 
-# Path A: legacy single-command, with insert_all path.
 Application.put_env(:double_entry_ledger, :insert_path, :insert_all)
 
 IO.puts("=== Path A (insert_all) ===")
-IO.puts("N commands processed: #{n}")
+IO.puts(
+  "N creates: #{length(create_attrs_a)}, N updates: #{length(update_attrs_a)}"
+)
 
 t0_a = System.monotonic_time()
-{ok_a, err_a} = BatchEquivalence.run_path_a(command_ids_a)
+{ok_creates_a, err_creates_a} = BatchEquivalence.run_path_a_creates(create_ids_a)
+{ok_updates_a, err_updates_a} = BatchEquivalence.run_path_a_updates(update_ids_a)
 elapsed_a = System.convert_time_unit(System.monotonic_time() - t0_a, :native, :millisecond)
 
 IO.puts("Path A duration: #{Float.round(elapsed_a / 1000, 3)}s")
-IO.puts("Path A successes: #{ok_a}")
-IO.puts("Path A failures:  #{err_a}")
+IO.puts("Path A creates:  successes=#{ok_creates_a}, failures=#{err_creates_a}")
+IO.puts("Path A updates:  successes=#{ok_updates_a}, failures=#{err_updates_a}")
 
 snapshot_a = BatchEquivalence.snapshot(instance_a.id)
 
@@ -407,26 +468,31 @@ BatchEquivalence.truncate!(truncate_tables, schema_prefix)
 instance_address_b = "instance:eq:b"
 {instance_b, accounts_b} = BatchEquivalence.seed_instance_and_accounts(instance_address_b)
 :rand.seed(:exsplus, seed)
-command_attrs_b = BatchEquivalence.generate_command_attrs(n, instance_b, accounts_b)
-commands_b = BatchEquivalence.insert_commands(command_attrs_b)
+%{creates: create_attrs_b, updates: update_attrs_b} =
+  BatchEquivalence.generate_command_attrs(n, instance_b, accounts_b)
 
-# Path B: orchestrator, batched.
+create_cmds_b = BatchEquivalence.insert_commands(create_attrs_b)
+update_cmds_b = BatchEquivalence.insert_commands(update_attrs_b)
+
 IO.puts("\n=== Path B (run_batch) ===")
-IO.puts("N commands processed: #{n}")
+IO.puts(
+  "N creates: #{length(create_attrs_b)}, N updates: #{length(update_attrs_b)}"
+)
 
 t0_b = System.monotonic_time()
-path_b_result = BatchEquivalence.run_path_b(commands_b)
+create_result_b = BatchEquivalence.run_path_b(create_cmds_b)
+update_result_b = BatchEquivalence.run_path_b(update_cmds_b)
 elapsed_b = System.convert_time_unit(System.monotonic_time() - t0_b, :native, :millisecond)
 
 IO.puts("Path B duration: #{Float.round(elapsed_b / 1000, 3)}s")
 
-case path_b_result do
-  {:ok, ok_b, err_b} ->
-    IO.puts("Path B successes: #{ok_b}")
-    IO.puts("Path B failures:  #{err_b}")
+case {create_result_b, update_result_b} do
+  {{:ok, ok_c, err_c}, {:ok, ok_u, err_u}} ->
+    IO.puts("Path B creates: successes=#{ok_c}, failures=#{err_c}")
+    IO.puts("Path B updates: successes=#{ok_u}, failures=#{err_u}")
 
-  {:error, reason} ->
-    IO.puts("Path B errored: #{inspect(reason)}")
+  {_, _} ->
+    IO.puts("Path B errored: creates=#{inspect(create_result_b)} updates=#{inspect(update_result_b)}")
     Application.put_env(:double_entry_ledger, :insert_path, prior_insert_path)
     Logger.configure(level: prior_log_level)
     System.halt(1)
@@ -481,8 +547,9 @@ defmodule BatchEquivalence.Compare do
       a.lock_version == b.lock_version
   end
 
-  # Queue items are keyed by source_idempk (stable across runs) — see
-  # snapshot_queue_items.
+  # Queue items are keyed by (action, source_idempk, update_idempk) —
+  # stable across runs and distinguishes creates vs updates sharing
+  # a source_idempk. See snapshot_queue_items.
   def compare_queue_items(snap_a, snap_b) do
     a = snap_a.queue_items
     b = snap_b.queue_items
