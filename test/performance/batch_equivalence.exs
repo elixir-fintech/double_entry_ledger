@@ -297,12 +297,34 @@ defmodule BatchEquivalence do
     end)
   end
 
-  # Run Path B: orchestrator. Returns
-  # {:ok, success_count, failure_count} or {:error, reason}.
+  # Run Path B: orchestrator. Chunks `commands` into batches of
+  # `batch_size` (configurable via BATCH_SIZE env var, default 100) to
+  # mirror production's `InstanceProcessor.batch_size/0` chunking
+  # before calling `run_batch/2`. Without chunking, large N hits
+  # Postgres' 65535 SQL parameter ceiling — the InstanceProcessor
+  # never sends a 50k-command batch to a single CTE bundle in
+  # production, so neither should the equivalence test.
+  #
+  # Returns {:ok, success_count, failure_count} aggregated across all
+  # sub-batches, or the first {:error, reason}.
   def run_path_b(commands) do
-    case BatchProcessor.run_batch(commands, Repo) do
-      {:ok, %{successes: s, failures: f}} -> {:ok, length(s), length(f)}
-      {:error, reason} -> {:error, reason}
+    chunks = Enum.chunk_every(commands, batch_size())
+
+    Enum.reduce_while(chunks, {:ok, 0, 0}, fn chunk, {:ok, ok_acc, err_acc} ->
+      case BatchProcessor.run_batch(chunk, Repo) do
+        {:ok, %{successes: s, failures: f}} ->
+          {:cont, {:ok, ok_acc + length(s), err_acc + length(f)}}
+
+        {:error, _reason} = err ->
+          {:halt, err}
+      end
+    end)
+  end
+
+  defp batch_size do
+    case System.get_env("BATCH_SIZE") do
+      nil -> 100
+      str -> String.to_integer(str)
     end
   end
 
