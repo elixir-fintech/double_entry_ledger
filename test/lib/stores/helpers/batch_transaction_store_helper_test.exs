@@ -242,6 +242,73 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
   describe "write_successes/3" do
     setup [:create_instance, :create_accounts]
 
+    test "writes accounts.available + balance_history_entries.available above int4 range (post-v7 bigint regression)",
+         %{instance: inst} do
+      # 5_000_000_000 > INT_MAX (~2.14B). The accounts.available and
+      # BHE.available columns were widened to bigint in migration v7
+      # specifically to handle this range; before the fix the writer's
+      # `::integer` casts truncated/erred. With `::bigint` the value
+      # round-trips intact.
+      big = 5_000_000_000
+
+      a1 =
+        DoubleEntryLedger.AccountFixtures.account_fixture(
+          instance_id: inst.id,
+          type: :asset,
+          normal_balance: :debit,
+          posted: %{amount: big, debit: big, credit: 0},
+          available: big
+        )
+
+      a2 =
+        DoubleEntryLedger.AccountFixtures.account_fixture(
+          instance_id: inst.id,
+          type: :liability,
+          normal_balance: :credit,
+          posted: %{amount: big, debit: 0, credit: big},
+          available: big
+        )
+
+      [command] = insert_commands(%{instance: inst, accounts: [a1, a2, a1, a2]}, 1, :posted)
+      now = DateTime.utc_now()
+      initial_accounts = accounts_map([a1, a2])
+
+      {success, advanced} =
+        success_for(command, initial_accounts, :posted, [
+          {a1.id, :debit, 10},
+          {a2.id, :credit, 10}
+        ])
+
+      write_plan = %{
+        successes: [success],
+        failures: [],
+        merged_accounts: merged_accounts(initial_accounts, advanced)
+      }
+
+      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
+
+      a1_after = reload_account(a1.id)
+      assert a1_after.posted.amount == big + 10
+      # available = posted.amount - pending.credit (debit-normal)
+      assert a1_after.available == big + 10
+
+      a2_after = reload_account(a2.id)
+      assert a2_after.posted.amount == big + 10
+      # available = posted.amount - pending.debit (credit-normal)
+      assert a2_after.available == big + 10
+
+      # BHE rows persisted with the bigint available
+      bhe_avails =
+        Repo.all(
+          Ecto.Query.from(b in BalanceHistoryEntry,
+            where: b.account_id in ^[a1.id, a2.id],
+            select: b.available
+          )
+        )
+
+      assert bhe_avails == [big + 10, big + 10]
+    end
+
     test "single-command :posted batch persists tx, entries, BHEs, journal_event, account update, queue mark",
          %{instance: inst, accounts: [a1, a2, _, _]} = ctx do
       [command] = insert_commands(ctx, 1, :posted)

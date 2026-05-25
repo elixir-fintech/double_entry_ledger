@@ -40,6 +40,48 @@ defmodule DoubleEntryLedger.Stores.InstanceStoreTest do
                ]
              } = InstanceStore.sum_accounts_debits_and_credits_by_currency(inst.id)
     end
+
+    test "sums balances above int4 range (regression: post-v7 bigint columns)",
+         %{instance: inst} do
+      # 5_000_000_000 > INT_MAX (~2.14B). Before the fix the SQL fragment
+      # cast `(posted->>'debit')::integer`, which raised PG "integer out
+      # of range" or silently truncated. With `::bigint` extraction +
+      # `sum(...)::bigint` it round-trips as a regular Elixir integer.
+      big = 5_000_000_000
+
+      _debit_account =
+        account_fixture(
+          instance_id: inst.id,
+          type: :asset,
+          normal_balance: :debit,
+          posted: %{amount: big, debit: big, credit: 0},
+          pending: %{amount: big, debit: big, credit: 0},
+          available: big
+        )
+
+      _credit_account =
+        account_fixture(
+          instance_id: inst.id,
+          type: :liability,
+          normal_balance: :credit,
+          posted: %{amount: big, debit: 0, credit: big},
+          pending: %{amount: big, debit: 0, credit: big},
+          available: big
+        )
+
+      assert {
+               :ok,
+               [
+                 %{
+                   currency: :EUR,
+                   posted_debit: ^big,
+                   posted_credit: ^big,
+                   pending_debit: ^big,
+                   pending_credit: ^big
+                 }
+               ]
+             } = InstanceStore.sum_accounts_debits_and_credits_by_currency(inst.id)
+    end
   end
 
   describe "list/1" do

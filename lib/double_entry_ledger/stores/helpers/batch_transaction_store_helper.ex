@@ -317,7 +317,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
           cast =
             "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::uuid, " <>
               "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}::jsonb, " <>
-              "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::integer, " <>
+              "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::bigint, " <>
               "#{p(placeholders, 6)}::timestamptz, #{p(placeholders, 7)}::timestamptz)"
 
           {[cast | rows], st}
@@ -445,7 +445,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
         cast =
           "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::jsonb, " <>
-            "#{p(placeholders, 2)}::jsonb, #{p(placeholders, 3)}::integer, " <>
+            "#{p(placeholders, 2)}::jsonb, #{p(placeholders, 3)}::bigint, " <>
             "#{p(placeholders, 4)}::integer, #{p(placeholders, 5)}::integer)"
 
         {[cast | rows], st}
