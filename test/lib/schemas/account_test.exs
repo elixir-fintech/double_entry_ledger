@@ -633,7 +633,13 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "debit account, debit entry, posted", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, normal_balance: :debit)
-      entry_struct = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :debit}
+
+      entry_struct = %Entry{
+        account_id: account.id,
+        value: %Money{amount: 100, currency: :EUR},
+        type: :debit
+      }
+
       entry_map = entry_to_map(entry_struct)
 
       assert_equivalent(account, entry_struct, entry_map, :posted)
@@ -643,7 +649,12 @@ defmodule DoubleEntryLedger.AccountTest do
       account =
         account_fixture(instance_id: id, normal_balance: :debit, negative_limit: 2_147_483_647)
 
-      entry_struct = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :credit}
+      entry_struct = %Entry{
+        account_id: account.id,
+        value: %Money{amount: 100, currency: :EUR},
+        type: :credit
+      }
+
       entry_map = entry_to_map(entry_struct)
 
       assert_equivalent(account, entry_struct, entry_map, :posted)
@@ -651,7 +662,13 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "debit account, debit entry, pending", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, normal_balance: :debit)
-      entry_struct = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :debit}
+
+      entry_struct = %Entry{
+        account_id: account.id,
+        value: %Money{amount: 100, currency: :EUR},
+        type: :debit
+      }
+
       entry_map = entry_to_map(entry_struct)
 
       assert_equivalent(account, entry_struct, entry_map, :pending)
@@ -659,7 +676,13 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "credit account, credit entry, posted", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, normal_balance: :credit)
-      entry_struct = %Entry{account_id: account.id, value: %Money{amount: 100, currency: :EUR}, type: :credit}
+
+      entry_struct = %Entry{
+        account_id: account.id,
+        value: %Money{amount: 100, currency: :EUR},
+        type: :credit
+      }
+
       entry_map = entry_to_map(entry_struct)
 
       assert_equivalent(account, entry_struct, entry_map, :posted)
@@ -691,7 +714,12 @@ defmodule DoubleEntryLedger.AccountTest do
 
     test "account_id mismatch returns :id error", %{instance: %{id: id}} do
       account = account_fixture(instance_id: id, normal_balance: :debit)
-      entry_map = %{account_id: Ecto.UUID.generate(), value: %{amount: 100, currency: :EUR}, type: :debit}
+
+      entry_map = %{
+        account_id: Ecto.UUID.generate(),
+        value: %{amount: 100, currency: :EUR},
+        type: :debit
+      }
 
       assert {:error, :id, _} =
                Account.compute_balance_changes(account, entry_map, :posted)
@@ -1054,7 +1082,10 @@ defmodule DoubleEntryLedger.AccountTest do
       %{account_id: aid, type: t, value: %{amount: a, currency: c}}
     end
 
-    defp entry_to_map_with_old_value(%Entry{value: %Money{currency: c}} = entry_struct, old_amount) do
+    defp entry_to_map_with_old_value(
+           %Entry{value: %Money{currency: c}} = entry_struct,
+           old_amount
+         ) do
       entry_struct
       |> entry_to_map()
       |> Map.put(:old_value, %{amount: old_amount, currency: c})

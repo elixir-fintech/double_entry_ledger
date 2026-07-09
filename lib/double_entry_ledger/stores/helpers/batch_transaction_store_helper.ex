@@ -72,7 +72,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   raise rolls back the whole batch.
   """
 
-  alias DoubleEntryLedger.{Account, BatchProcessor, BatchSerializer}
+  alias DoubleEntryLedger.{Account, BatchProcessor, BatchSerializer, Transaction}
   alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.CommandQueue.Scheduling
 
@@ -220,8 +220,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   defp build_transactions_cte([], _now, state), do: {nil, state}
 
   defp build_transactions_cte(inserted_successes, now, state) do
-    {rows, state} =
-      Enum.reduce(inserted_successes, {[], state}, fn success, {rows, st} ->
+    {values_sql, state} =
+      accumulate_value_rows(inserted_successes, state, fn success, st ->
         {placeholders, st} =
           push_params(st, [
             uuid(success.transaction_id),
@@ -232,18 +232,19 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
             now
           ])
 
-        cast = "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}, " <>
-                 "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}::timestamptz, " <>
-                 "#{p(placeholders, 4)}::timestamptz, #{p(placeholders, 5)}::timestamptz)"
+        cast =
+          "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}, " <>
+            "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}::timestamptz, " <>
+            "#{p(placeholders, 4)}::timestamptz, #{p(placeholders, 5)}::timestamptz)"
 
-        {[cast | rows], st}
+        {cast, st}
       end)
 
     sql = """
     inserted_txs AS (
       INSERT INTO #{table("transactions")}
         (id, status, instance_id, posted_at, inserted_at, updated_at)
-      VALUES #{Enum.join(Enum.reverse(rows), ", ")}
+      VALUES #{values_sql}
       RETURNING id
     )
     """
@@ -255,37 +256,36 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   defp build_entries_cte([], _now, state), do: {nil, state}
 
   defp build_entries_cte(successes, now, state) do
-    {rows, state} =
-      Enum.reduce(successes, {[], state}, fn success, acc ->
-        Enum.reduce(success.entries, acc, fn entry, {rows, st} ->
-          dumped_value = BatchSerializer.dump_money(entry.value)
+    entries_with_tx =
+      Enum.flat_map(successes, fn s -> Enum.map(s.entries, &{s.transaction_id, &1}) end)
 
-          {placeholders, st} =
-            push_params(st, [
-              uuid(entry.id),
-              uuid(success.transaction_id),
-              uuid(entry.account_id),
-              Atom.to_string(entry.type),
-              dumped_value,
-              now,
-              now
-            ])
+    {values_sql, state} =
+      accumulate_value_rows(entries_with_tx, state, fn {tx_id, entry}, st ->
+        {placeholders, st} =
+          push_params(st, [
+            uuid(entry.id),
+            uuid(tx_id),
+            uuid(entry.account_id),
+            Atom.to_string(entry.type),
+            BatchSerializer.dump_money(entry.value),
+            now,
+            now
+          ])
 
-          cast =
-            "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::uuid, " <>
-              "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}, " <>
-              "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::timestamptz, " <>
-              "#{p(placeholders, 6)}::timestamptz)"
+        cast =
+          "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::uuid, " <>
+            "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}, " <>
+            "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::timestamptz, " <>
+            "#{p(placeholders, 6)}::timestamptz)"
 
-          {[cast | rows], st}
-        end)
+        {cast, st}
       end)
 
     sql = """
     inserted_entries AS (
       INSERT INTO #{table("entries")}
         (id, transaction_id, account_id, type, value, inserted_at, updated_at)
-      VALUES #{Enum.join(Enum.reverse(rows), ", ")}
+      VALUES #{values_sql}
       RETURNING id
     )
     """
@@ -295,40 +295,38 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   # ── balance_history_entries CTE ──────────────────────────────────
   defp build_bhes_cte(successes, now, state) do
-    {rows, state} =
-      Enum.reduce(successes, {[], state}, fn success, acc ->
-        Enum.reduce(success.entries, acc, fn entry, {rows, st} ->
-          account_after = entry.account_after
-          dumped_posted = BatchSerializer.dump_balance(account_after.posted)
-          dumped_pending = BatchSerializer.dump_balance(account_after.pending)
+    entries = Enum.flat_map(successes, & &1.entries)
 
-          {placeholders, st} =
-            push_params(st, [
-              uuid(Ecto.UUID.generate()),
-              uuid(account_after.id),
-              uuid(entry.id),
-              dumped_posted,
-              dumped_pending,
-              account_after.available,
-              now,
-              now
-            ])
+    {values_sql, state} =
+      accumulate_value_rows(entries, state, fn entry, st ->
+        account_after = entry.account_after
 
-          cast =
-            "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::uuid, " <>
-              "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}::jsonb, " <>
-              "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::bigint, " <>
-              "#{p(placeholders, 6)}::timestamptz, #{p(placeholders, 7)}::timestamptz)"
+        {placeholders, st} =
+          push_params(st, [
+            uuid(Ecto.UUID.generate()),
+            uuid(account_after.id),
+            uuid(entry.id),
+            BatchSerializer.dump_balance(account_after.posted),
+            BatchSerializer.dump_balance(account_after.pending),
+            account_after.available,
+            now,
+            now
+          ])
 
-          {[cast | rows], st}
-        end)
+        cast =
+          "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::uuid, " <>
+            "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}::jsonb, " <>
+            "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::bigint, " <>
+            "#{p(placeholders, 6)}::timestamptz, #{p(placeholders, 7)}::timestamptz)"
+
+        {cast, st}
       end)
 
     sql = """
     inserted_bhes AS (
       INSERT INTO #{table("balance_history_entries")}
         (id, account_id, entry_id, posted, pending, available, inserted_at, updated_at)
-      VALUES #{Enum.join(Enum.reverse(rows), ", ")}
+      VALUES #{values_sql}
       RETURNING id
     )
     """
@@ -338,18 +336,15 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   # ── journal_events CTE ───────────────────────────────────────────
   defp build_journals_cte(successes, now, state) do
-    {rows, state} =
-      Enum.reduce(successes, {[], state}, fn success, {rows, st} ->
-        journal_event_id = success.journal_event_id
-        command_map_dumped = dump_command_map(success.command.command_map)
-
+    {values_sql, state} =
+      accumulate_value_rows(successes, state, fn success, st ->
         {placeholders, st} =
           push_params(st, [
-            uuid(journal_event_id),
+            uuid(success.journal_event_id),
             uuid(success.command.id),
             uuid(success.transaction_id),
             uuid(success.command.instance_id),
-            command_map_dumped,
+            dump_command_map(success.command.command_map),
             now,
             now
           ])
@@ -360,14 +355,14 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
             "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::timestamptz, " <>
             "#{p(placeholders, 6)}::timestamptz)"
 
-        {[cast | rows], st}
+        {cast, st}
       end)
 
     sql = """
     inserted_journals AS (
       INSERT INTO #{table("journal_events")}
         (id, command_id, transaction_id, instance_id, command_map, inserted_at, updated_at)
-      VALUES #{Enum.join(Enum.reverse(rows), ", ")}
+      VALUES #{values_sql}
       RETURNING id
     )
     """
@@ -384,8 +379,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         {nil, state}
 
       _ ->
-        {rows, state} =
-          Enum.reduce(pending, {[], state}, fn success, {rows, st} ->
+        {values_sql, state} =
+          accumulate_value_rows(pending, state, fn success, st ->
             cm = success.command.command_map
 
             {placeholders, st} =
@@ -406,14 +401,24 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
                 "#{p(placeholders, 4)}::uuid, #{p(placeholders, 5)}::uuid, " <>
                 "#{p(placeholders, 6)}::timestamptz, #{p(placeholders, 7)}::timestamptz)"
 
-            {[cast | rows], st}
+            {cast, st}
           end)
 
+        # The placeholder-reservation pattern: command persistence
+        # inserts a `pending_transaction_lookup` row with
+        # `transaction_id = NULL` at command-map time (the unique index
+        # on `(instance_id, source, source_idempk)` doubles as the
+        # idempotency guard). The writer then upserts to fill in
+        # `transaction_id` / `journal_event_id` once the tx commits.
+        # `DO UPDATE` is therefore the load-bearing arm, not a silent
+        # overwrite — by the time a CONFLICT fires, the existing row
+        # is the matching placeholder and EXCLUDED.* carries the
+        # freshly-committed ids.
         sql = """
         inserted_lookups AS (
           INSERT INTO #{table("pending_transaction_lookup")}
             (instance_id, source, source_idempk, command_id, transaction_id, journal_event_id, inserted_at, updated_at)
-          VALUES #{Enum.join(Enum.reverse(rows), ", ")}
+          VALUES #{values_sql}
           ON CONFLICT (source, source_idempk, instance_id)
           DO UPDATE SET
             transaction_id = EXCLUDED.transaction_id,
@@ -428,27 +433,28 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   # ── accounts UPDATE CTE ──────────────────────────────────────────
   defp build_accounts_cte(merged_accounts, now, state) do
-    {rows, state} =
-      Enum.reduce(merged_accounts, {[], state}, fn {id, m}, {rows, st} ->
-        dumped_posted = BatchSerializer.dump_balance(m.posted)
-        dumped_pending = BatchSerializer.dump_balance(m.pending)
-
+    {values_sql, state} =
+      accumulate_value_rows(merged_accounts, state, fn {id, m}, st ->
         {placeholders, st} =
           push_params(st, [
             uuid(id),
-            dumped_posted,
-            dumped_pending,
+            BatchSerializer.dump_balance(m.posted),
+            BatchSerializer.dump_balance(m.pending),
             m.available,
             m.old_lock_version,
             m.new_lock_version
           ])
 
+        # `lock_version` columns are currently int4; cast as ::bigint
+        # anyway so the parameter cast is forward-compatible if the
+        # column is later widened (matching posted/pending/available
+        # which were widened in v7). PG auto-coerces the assignment.
         cast =
           "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::jsonb, " <>
             "#{p(placeholders, 2)}::jsonb, #{p(placeholders, 3)}::bigint, " <>
-            "#{p(placeholders, 4)}::integer, #{p(placeholders, 5)}::integer)"
+            "#{p(placeholders, 4)}::bigint, #{p(placeholders, 5)}::bigint)"
 
-        {[cast | rows], st}
+        {cast, st}
       end)
 
     {now_placeholder, state} = push_param(state, now)
@@ -461,7 +467,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
           available = u.available,
           lock_version = u.new_lv,
           updated_at = #{now_placeholder}::timestamptz
-      FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
+      FROM (VALUES #{values_sql})
         AS u(id, posted, pending, available, old_lv, new_lv)
       WHERE a.id = u.id AND a.lock_version = u.old_lv
       RETURNING a.id
@@ -568,7 +574,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   # out, the row is dead weight. Mirrors the legacy path's
   # `delete_lookup_on_terminal/4` so the two stay byte-equal.
   defp build_deleted_lookups_cte(updated_successes, state) do
-    terminal = Enum.filter(updated_successes, &(&1.status in [:posted, :archived]))
+    terminal = Enum.filter(updated_successes, &Transaction.terminal?(&1.status))
 
     case terminal do
       [] ->
@@ -709,11 +715,21 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
       :failed ->
         next = Ecto.Changeset.get_change(qi_cs, :next_retry_after)
-        # If the legacy helper produced a `:failed` retry without a
-        # `next_retry_after`, that's a bug we want to surface, not
-        # paper over with a fallback.
-        true = match?(%DateTime{}, next)
-        {:failed, next}
+
+        if match?(%DateTime{}, next) do
+          {:failed, next}
+        else
+          # If the legacy helper produced a `:failed` retry without a
+          # `next_retry_after`, surface it loudly with full context
+          # rather than crash with an opaque MatchError.
+          raise """
+          compute_failure_outcome: legacy scheduler returned :failed with non-DateTime next_retry_after
+            command_id=#{command.id}
+            instance_id=#{command.instance_id}
+            reason=#{inspect(reason)}
+            next_retry_after=#{inspect(next)}
+          """
+        end
     end
   end
 
@@ -771,11 +787,11 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   defp reason_to_message(:entry_type_changed),
     do: "update: payload entry changes the debit/credit type of an existing entry"
 
-  defp reason_to_message(reason) when is_atom(reason),
-    do: "batch: #{reason}"
-
-  defp reason_to_message(reason),
-    do: "batch: #{inspect(reason)}"
+  # Intentional no catch-all: an unmatched reason raises FunctionClauseError
+  # at the call site, which surfaces the new reason in production logs and
+  # in Dialyzer output. Add an explicit clause when introducing a new
+  # `failure_reason/0` variant rather than letting it ship with a generic
+  # "batch: foo" string.
 
   # ── helpers ──────────────────────────────────────────────────────
 
@@ -800,6 +816,24 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   defp push_param(%{params: params, idx: idx}, value) do
     new_idx = idx + 1
     {"$#{new_idx}", %{params: [value | params], idx: new_idx}}
+  end
+
+  # Reduce over `items`, accumulating each row's cast string into a
+  # single comma-joined VALUES body. `build_row_fn` receives `(item,
+  # state)` and returns `{cast_string, new_state}` after pushing its
+  # params via `push_params/2`. Caller wraps the result in its CTE-
+  # specific SQL template. Shared scaffolding for ~9 row-style CTE
+  # builders (INSERT VALUES and UPDATE FROM VALUES).
+  @spec accumulate_value_rows([term()], map(), (term(), map() -> {String.t(), map()})) ::
+          {String.t(), map()}
+  defp accumulate_value_rows(items, state, build_row_fn) do
+    {rows, state} =
+      Enum.reduce(items, {[], state}, fn item, {rows_acc, st} ->
+        {cast, st} = build_row_fn.(item, st)
+        {[cast | rows_acc], st}
+      end)
+
+    {Enum.join(Enum.reverse(rows), ", "), state}
   end
 
   # Push a list of parameters; returns the list of placeholders for them

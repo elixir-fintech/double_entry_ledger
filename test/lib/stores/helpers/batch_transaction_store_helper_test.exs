@@ -824,9 +824,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
       # Entries' values updated to 75
       entries =
-        Repo.all(
-          Ecto.Query.from(e in Entry, where: e.transaction_id == ^tx.id, order_by: e.id)
-        )
+        Repo.all(Ecto.Query.from(e in Entry, where: e.transaction_id == ^tx.id, order_by: e.id))
 
       assert length(entries) == 2
       assert Enum.all?(entries, &(&1.value == Money.new(75, :EUR)))
@@ -966,7 +964,9 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       {create_success, current_accounts} =
         seed_pending_transaction(ctx, [{a1.id, :debit, 50}, {a2.id, :credit, 50}])
 
-      lookup_before = Repo.get_by!(PendingTransactionLookup, command_id: create_success.command.id)
+      lookup_before =
+        Repo.get_by!(PendingTransactionLookup, command_id: create_success.command.id)
+
       lookup_count_before = count(PendingTransactionLookup)
 
       # Update command uses the SAME source/source_idempk as the create.

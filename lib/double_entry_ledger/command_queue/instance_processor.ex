@@ -102,10 +102,12 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   @impl true
   def handle_info(:process_next, %{pending_ids: [_ | _], batch_enabled: true} = state) do
     # Batch mode: try to take up to batch_size ids and dispatch them as
-    # a single BatchProcessor.run_batch/2 call, but only when ALL the
-    # claimed commands are :create_transaction. Mixed batches fall back
-    # to processing one command at a time through the legacy path; the
-    # next round may then re-evaluate as all-create and batch.
+    # a single BatchProcessor.run_batch/2 call, but only when every
+    # claimed command's action is batchable (`:create_transaction` or
+    # `:update_transaction`, see `all_batchable?/1`). Batches that mix
+    # in non-batchable actions (e.g. account commands) fall back to
+    # processing one command at a time through the legacy path; the
+    # next round may then re-evaluate as all-batchable and batch.
     dispatch_batch_or_legacy(state)
   end
 
@@ -212,11 +214,13 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # path. Loads up to `batch_size/0` commands (preloading queue items),
   # and:
   #
-  #   * if every command's action is :create_transaction → spawn a Task
-  #     that calls `state.batch_processor.run_batch/2`.
-  #   * if any non-create action is present → fall back to processing a
-  #     single command via the legacy single-cmd Task path. Remaining
-  #     ids stay in pending_ids and the next round may batch them.
+  #   * if every command's action is batchable per `all_batchable?/1`
+  #     (currently `:create_transaction` or `:update_transaction`) →
+  #     spawn a Task that calls `state.batch_processor.run_batch/2`.
+  #   * if any non-batchable action is present (e.g. account commands)
+  #     → fall back to processing a single command via the legacy
+  #     single-cmd Task path. Remaining ids stay in pending_ids and
+  #     the next round may batch them.
   #   * if the load returns nothing (e.g. ids vanished from the DB) →
   #     drop them and trigger another :process_next cycle.
   defp dispatch_batch_or_legacy(%{pending_ids: ids} = state) do

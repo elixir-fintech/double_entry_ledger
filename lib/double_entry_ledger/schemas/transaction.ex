@@ -195,6 +195,18 @@ defmodule DoubleEntryLedger.Transaction do
   @spec states() :: states()
   def states, do: @states
 
+  @terminal_states [:posted, :archived]
+
+  @doc """
+  True when `status` is a terminal state — i.e. the transaction has
+  left `:pending` and any associated `pending_transaction_lookup` row
+  should be deleted. Both the legacy and batched writers use this to
+  decide whether to drop the lookup on an update.
+  """
+  @spec terminal?(:pending | :posted | :archived) :: boolean()
+  def terminal?(status) when status in @terminal_states, do: true
+  def terminal?(status) when status in @states, do: false
+
   @doc """
   Pure invariant: sum of debit amounts equals sum of credit amounts per currency.
 

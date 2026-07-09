@@ -160,7 +160,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     cmd
   end
 
-
   describe "successful processing" do
     test "processes command and shuts down", %{instance: instance, command: command} do
       # Mimic the real worker's side effect: mark the command as :processed.

@@ -133,6 +133,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     test ":pending_to_posted DELETEs the pending_transaction_lookup row",
          %{instance: inst} = ctx do
       %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+
       {:ok, _tx, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_command)
 
@@ -155,6 +156,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     test ":pending_to_archived DELETEs the pending_transaction_lookup row",
          %{instance: inst} = ctx do
       %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+
       {:ok, _tx, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_command)
 
@@ -171,6 +173,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
     test ":pending_to_pending leaves the pending_transaction_lookup row intact",
          %{instance: inst, accounts: [a1, a2, _, _]} = ctx do
       %{command: pending_command} = new_create_transaction_command(ctx, :pending)
+
       {:ok, _tx, %{command_map: %{source: s, source_idempk: s_id}}} =
         CreateTransactionCommand.process(pending_command)
 

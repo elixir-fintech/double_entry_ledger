@@ -24,6 +24,7 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures}
 
   alias DoubleEntryLedger.{
+    BalanceHistoryEntry,
     BatchProcessor,
     Command,
     CommandQueueItem,
@@ -35,6 +36,8 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
   alias DoubleEntryLedger.Command.TransactionData
   alias DoubleEntryLedger.Stores.CommandStore
+
+  import Ecto.Query, only: [from: 2]
 
   # ── helpers ──────────────────────────────────────────────────────
 
@@ -658,6 +661,67 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       assert failure.command_id == update2.id
       assert failure.reason == {:duplicate_update_in_batch, update1.id}
     end
+
+    test "mixed batch [create, update, create] preserves claim order in the BHE snapshot for the update",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      # Seed a pending T1 of 100 on (a1: debit, a2: credit). Its entries
+      # will be re-used by the update; we capture the a1-side entry id so
+      # we can find the BHE row the update produces.
+      {create_t1, t1_id} = seed_pending_tx(inst, a1, a2, 100)
+
+      t1_entry_a1 =
+        Repo.one!(
+          from(e in Entry,
+            where: e.transaction_id == ^t1_id and e.account_id == ^a1.id
+          )
+        )
+
+      # Interleaved batch — claim order is [create_a, update_t1, create_c].
+      # All three touch a1, so the post-update intermediate snapshot
+      # diverges between claim order and creates-first reordering.
+      create_a = insert_balanced_command(inst, a1, a2, :pending, 7)
+
+      update_t1 =
+        insert_update_command(
+          inst,
+          create_t1.command_map.source,
+          create_t1.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 200, currency: "EUR"},
+            %{account_address: a2.address, amount: 200, currency: "EUR"}
+          ]
+        )
+
+      create_c = insert_balanced_command(inst, a1, a2, :pending, 3)
+
+      assert {:ok, %{successes: [_, _, _], failures: []}} =
+               BatchProcessor.run_batch([create_a, update_t1, create_c])
+
+      # Two BHE rows now exist for `(t1_entry_a1.id, a1.id)`: the one
+      # written when T1 was seeded, and the one written by update_t1.
+      # Order by inserted_at to pull the update's BHE (later timestamp).
+      [_seed_bhe, update_bhe] =
+        Repo.all(
+          from(b in BalanceHistoryEntry,
+            where: b.entry_id == ^t1_entry_a1.id and b.account_id == ^a1.id,
+            order_by: [asc: b.inserted_at]
+          )
+        )
+
+      # Claim-order a1.pending.debit evolution:
+      #   pre-batch (after seeding T1) ........ 100
+      #   after create_a (+7, :pending) ....... 107
+      #   after update_t1 (-100 reverse,        7  ← BHE snapshot for the update
+      #     +200 posted)
+      #   after create_c (+3, :pending) ....... 10
+      #
+      # If enrichment reordered to creates-first, the update would see
+      # 110 first and reverse to 10 — so a snapshot of 10 would mean
+      # the regression is back. Assert 7 to lock in claim order.
+      assert update_bhe.pending.amount == 7
+      assert update_bhe.posted.amount == 200
+    end
   end
 
   # ── retry-path tests via MockRepo ───────────────────────────────────
@@ -872,5 +936,4 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
   def forward_telemetry(event, measurements, metadata, %{test_pid: pid, ref: ref}) do
     send(pid, {:telemetry_event, ref, event, measurements, metadata})
   end
-
 end

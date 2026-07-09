@@ -457,6 +457,7 @@ BatchEquivalence.truncate!(truncate_tables, schema_prefix)
 instance_address_a = "instance:eq:a"
 {instance_a, accounts_a} = BatchEquivalence.seed_instance_and_accounts(instance_address_a)
 :rand.seed(:exsplus, seed)
+
 %{creates: create_attrs_a, updates: update_attrs_a} =
   BatchEquivalence.generate_command_attrs(n, instance_a, accounts_a)
 
@@ -468,9 +469,7 @@ update_ids_a = Enum.map(update_cmds_a, & &1.id)
 Application.put_env(:double_entry_ledger, :insert_path, :insert_all)
 
 IO.puts("=== Path A (insert_all) ===")
-IO.puts(
-  "N creates: #{length(create_attrs_a)}, N updates: #{length(update_attrs_a)}"
-)
+IO.puts("N creates: #{length(create_attrs_a)}, N updates: #{length(update_attrs_a)}")
 
 t0_a = System.monotonic_time()
 {ok_creates_a, err_creates_a} = BatchEquivalence.run_path_a_creates(create_ids_a)
@@ -490,6 +489,7 @@ BatchEquivalence.truncate!(truncate_tables, schema_prefix)
 instance_address_b = "instance:eq:b"
 {instance_b, accounts_b} = BatchEquivalence.seed_instance_and_accounts(instance_address_b)
 :rand.seed(:exsplus, seed)
+
 %{creates: create_attrs_b, updates: update_attrs_b} =
   BatchEquivalence.generate_command_attrs(n, instance_b, accounts_b)
 
@@ -497,9 +497,7 @@ create_cmds_b = BatchEquivalence.insert_commands(create_attrs_b)
 update_cmds_b = BatchEquivalence.insert_commands(update_attrs_b)
 
 IO.puts("\n=== Path B (run_batch) ===")
-IO.puts(
-  "N creates: #{length(create_attrs_b)}, N updates: #{length(update_attrs_b)}"
-)
+IO.puts("N creates: #{length(create_attrs_b)}, N updates: #{length(update_attrs_b)}")
 
 t0_b = System.monotonic_time()
 create_result_b = BatchEquivalence.run_path_b(create_cmds_b)
@@ -514,7 +512,10 @@ case {create_result_b, update_result_b} do
     IO.puts("Path B updates: successes=#{ok_u}, failures=#{err_u}")
 
   {_, _} ->
-    IO.puts("Path B errored: creates=#{inspect(create_result_b)} updates=#{inspect(update_result_b)}")
+    IO.puts(
+      "Path B errored: creates=#{inspect(create_result_b)} updates=#{inspect(update_result_b)}"
+    )
+
     Application.put_env(:double_entry_ledger, :insert_path, prior_insert_path)
     Logger.configure(level: prior_log_level)
     System.halt(1)

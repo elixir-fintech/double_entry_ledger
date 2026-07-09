@@ -17,6 +17,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Multi
+
   alias DoubleEntryLedger.{
     Account,
     BalanceHistoryEntry,
@@ -25,6 +26,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
     Transaction,
     Types
   }
+
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
@@ -102,16 +104,15 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
     account_ids = Enum.map(entries, & &1.account_id)
 
     accounts =
-      repo.all(
-        from(a in Account, prefix: ^@schema_prefix, where: a.id in ^account_ids)
-      )
+      repo.all(from(a in Account, prefix: ^@schema_prefix, where: a.id in ^account_ids))
 
     accounts_by_id = Map.new(accounts, &{&1.id, &1})
 
     with :ok <- assert_min_entries(transaction_map, entries),
          :ok <- assert_accounts_on_ledger(transaction_map, accounts_by_id, entries, instance_id),
          :ok <- assert_balanced(transaction_map, entries),
-         {:ok, account_updates} <- compute_account_updates(transaction_map, accounts_by_id, entries, status) do
+         {:ok, account_updates} <-
+           compute_account_updates(transaction_map, accounts_by_id, entries, status) do
       now = DateTime.utc_now()
 
       with {:ok, transaction} <-
@@ -124,7 +125,8 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
         # (we computed it). Build the Entry/Account structs locally so
         # the downstream BHE step gets `entry.account` populated
         # without two extra SELECTs per command.
-        transaction_with_entries = attach_entries_locally(transaction, entry_rows, account_updates, accounts_by_id, now)
+        transaction_with_entries =
+          attach_entries_locally(transaction, entry_rows, account_updates, accounts_by_id, now)
 
         {:ok, transaction_with_entries}
       end
@@ -220,8 +222,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
 
         :error ->
           {:halt,
-           {:error,
-            validation_error_changeset(transaction_map, :account_id, "account not found")}}
+           {:error, validation_error_changeset(transaction_map, :account_id, "account not found")}}
       end
     end)
   end
@@ -229,7 +230,9 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
   defp assert_min_entries(_transaction_map, entries) when length(entries) >= 2, do: :ok
 
   defp assert_min_entries(transaction_map, _entries),
-    do: {:error, validation_error_changeset(transaction_map, :entry_count, "must have at least 2 entries")}
+    do:
+      {:error,
+       validation_error_changeset(transaction_map, :entry_count, "must have at least 2 entries")}
 
   defp assert_accounts_on_ledger(transaction_map, accounts_by_id, entries, instance_id) do
     if Enum.all?(entries, fn %{account_id: id} ->
@@ -318,7 +321,7 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
     Multi.run(multi, step_name, fn _repo, changes ->
       tx = Map.fetch!(changes, tx_step)
 
-      if tx.status in [:posted, :archived] do
+      if Transaction.terminal?(tx.status) do
         {count, _} =
           from(ptl in PendingTransactionLookup,
             prefix: ^@schema_prefix,

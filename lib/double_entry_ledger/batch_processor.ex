@@ -56,6 +56,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     Repo,
     Transaction
   }
+
   alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
@@ -84,8 +85,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
           required(:entries) => [entry()],
           optional(:transaction_id) => Ecto.UUID.t(),
           optional(:journal_event_id) => Ecto.UUID.t(),
-          optional(:transition) =>
-            :pending_to_posted | :pending_to_pending | :pending_to_archived
+          optional(:transition) => :pending_to_posted | :pending_to_pending | :pending_to_archived
         }
 
   @typedoc """
@@ -124,8 +124,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
           required(:transaction_id) => Ecto.UUID.t(),
           required(:status) => :posted | :pending | :archived,
           required(:entries) => [entry_with_snapshot()],
-          optional(:transition) =>
-            :pending_to_posted | :pending_to_pending | :pending_to_archived
+          optional(:transition) => :pending_to_posted | :pending_to_pending | :pending_to_archived
         }
 
   @typedoc """
@@ -317,12 +316,12 @@ defmodule DoubleEntryLedger.BatchProcessor do
         }
 
   @doc """
-  Orchestrates a batch of `:create_transaction` commands end-to-end:
-  filters/extracts entries, runs same-batch dep detection, preloads
-  accounts, enriches update inputs from the existing transactions,
-  simulates the fold, writes the success CTE + failure UPDATE inside
-  one `Repo.transaction/1`, and retries-with-split on
-  `Ecto.StaleEntryError`.
+  Orchestrates a batch of `:create_transaction` and
+  `:update_transaction` commands end-to-end: filters/extracts entries,
+  runs same-batch dep detection, preloads accounts, enriches update
+  inputs from the existing transactions, simulates the fold, writes
+  the success CTE + failure UPDATE inside one `Repo.transaction/1`,
+  and retries-with-split on `Ecto.StaleEntryError`.
 
   ## Behaviour summary
 
@@ -694,40 +693,67 @@ defmodule DoubleEntryLedger.BatchProcessor do
   @spec enrich_updates_with_existing([command_input()], Ecto.Repo.t()) ::
           {[command_input()], [failure_record()]}
   defp enrich_updates_with_existing(command_inputs, repo) do
-    {updates, creates} =
-      Enum.split_with(command_inputs, &(Map.get(&1, :action) == :update_transaction))
+    updates = Enum.filter(command_inputs, &(Map.get(&1, :action) == :update_transaction))
 
     case updates do
       [] ->
         {command_inputs, []}
 
       _ ->
-        lookups_by_triple = load_lookups_batched(updates, repo)
-
-        {enriched_rev, failures_rev} =
-          Enum.reduce(updates, {[], []}, fn input, {enr, fails} ->
-            cmd = input.command
-
-            case Map.fetch(lookups_by_triple, triple_for(cmd)) do
-              :error ->
-                {enr, [failure(cmd, :create_command_not_found) | fails]}
-
-              {:ok, lookup} ->
-                case validate_and_enrich(input, lookup) do
-                  {:ok, enriched} -> {[enriched | enr], fails}
-                  {:error, reason} -> {enr, [failure(cmd, reason) | fails]}
-                end
-            end
-          end)
-
-        # Preserve original ordering: creates first (in their original
-        # order), then enriched updates (also in original order). This
-        # matches the partition order produced by `Enum.split_with/2`
-        # above (which is reverse-by-claim because of cons-prepending in
-        # the reducer, but `split_with` builds two reversed lists then
-        # reverses each).
-        {creates ++ Enum.reverse(enriched_rev), Enum.reverse(failures_rev)}
+        {enriched_by_cmd_id, failures} = build_enriched_map(updates, repo)
+        {merge_enriched_into_inputs(command_inputs, enriched_by_cmd_id), failures}
     end
+  end
+
+  # Load every update target's lookup row in one SELECT, then reduce
+  # over the updates to produce a `cmd.id => enriched_input` map plus a
+  # list of per-update failures (lookup-not-found, validation errors).
+  @spec build_enriched_map([command_input()], Ecto.Repo.t()) ::
+          {%{Ecto.UUID.t() => command_input()}, [failure_record()]}
+  defp build_enriched_map(updates, repo) do
+    lookups_by_triple = load_lookups_batched(updates, repo)
+
+    {enriched_map, fails_rev} =
+      Enum.reduce(updates, {%{}, []}, fn input, acc ->
+        enrich_one(input, lookups_by_triple, acc)
+      end)
+
+    {enriched_map, Enum.reverse(fails_rev)}
+  end
+
+  # Per-update step: look up the existing tx, pre-validate
+  # (queue-item + tx state), pair entries to existing ones, and
+  # assemble the Stage-2 input. `with` keeps the success path linear
+  # and routes both lookup misses and validation errors to the
+  # failure branch.
+  defp enrich_one(input, lookups_by_triple, {enriched_map, fails}) do
+    cmd = input.command
+
+    with {:ok, lookup} <- Map.fetch(lookups_by_triple, triple_for(cmd)),
+         {:ok, input} <- pre_validate(input, lookup),
+         {:ok, enriched} <- pair_and_build(input, lookup) do
+      {Map.put(enriched_map, cmd.id, enriched), fails}
+    else
+      :error -> {enriched_map, [failure(cmd, :create_command_not_found) | fails]}
+      {:error, reason} -> {enriched_map, [failure(cmd, reason) | fails]}
+    end
+  end
+
+  # Preserve claim order: keep creates pass-through, swap each update
+  # for its enriched version in-place, drop updates that failed
+  # enrichment (already recorded in failures). The fold and the BHE-CTE
+  # both iterate this list in order, so claim order is what serializes
+  # the per-entry `account_after` snapshots — matching legacy serial
+  # semantics for mixed batches.
+  @spec merge_enriched_into_inputs([command_input()], %{Ecto.UUID.t() => command_input()}) ::
+          [command_input()]
+  defp merge_enriched_into_inputs(command_inputs, enriched_map) do
+    Enum.flat_map(command_inputs, fn input ->
+      case Map.get(input, :action) do
+        :update_transaction -> List.wrap(Map.get(enriched_map, input.command.id))
+        _ -> [input]
+      end
+    end)
   end
 
   # Single batched SELECT loading every update target via the lookup
@@ -762,9 +788,15 @@ defmodule DoubleEntryLedger.BatchProcessor do
     end)
   end
 
-  # Run the four B4 per-update checks against the loaded lookup row,
-  # then build the Stage-2 enriched input on success.
-  defp validate_and_enrich(input, lookup) do
+  # Validate the queue-item and target-transaction state, then
+  # rehydrate the input's `:entries` from the existing transaction
+  # when the transformer stripped them. Updates with status
+  # `:archived` (or `:posted` with no payload entries) arrive with
+  # `input.entries == []` because the schema layer strips entries in
+  # those cases; `effective_entries/2` reconstructs them so the fold
+  # can apply the transition (for `:archived` the new value defaults
+  # to the existing one, which is what reverse_pending consumes).
+  defp pre_validate(input, lookup) do
     cmd_status = lookup.command.command_queue_item.status
     tx = lookup.transaction
 
@@ -779,24 +811,22 @@ defmodule DoubleEntryLedger.BatchProcessor do
         {:error, :transaction_not_pending}
 
       true ->
-        # Updates with status `:archived` (or `:posted` with no payload
-        # entries) reach us with `input.entries == []` because the
-        # legacy schema layer strips entries in those cases. Reconstruct
-        # from the existing transaction's entries so the fold can apply
-        # the transition. For `:archived` the new value defaults to the
-        # existing one, which is exactly what reverse_pending consumes.
-        effective_entries = effective_entries(input.entries, tx.entries)
-        input = %{input | entries: effective_entries}
+        {:ok, %{input | entries: effective_entries(input.entries, tx.entries)}}
+    end
+  end
 
-        cond do
-          length(effective_entries) != length(tx.entries) ->
-            {:error, :entry_count_mismatch}
+  # Match new entries to existing entries by account_id (per-pair
+  # type-equality is enforced inside `pair_entries/2`) and assemble
+  # the Stage-2 input on success.
+  defp pair_and_build(input, lookup) do
+    existing_entries = lookup.transaction.entries
 
-          true ->
-            with {:ok, paired} <- pair_entries(effective_entries, tx.entries) do
-              {:ok, build_enriched_input(input, lookup, paired)}
-            end
-        end
+    if length(input.entries) != length(existing_entries) do
+      {:error, :entry_count_mismatch}
+    else
+      with {:ok, paired} <- pair_entries(input.entries, existing_entries) do
+        {:ok, build_enriched_input(input, lookup, paired)}
+      end
     end
   end
 
@@ -887,54 +917,73 @@ defmodule DoubleEntryLedger.BatchProcessor do
       end)
 
     {keep_ids, dep_failures} =
-      Enum.reduce(by_triple, {MapSet.new(), []}, fn {_triple, group_rev}, {keep_set, fails} ->
-        group = Enum.reverse(group_rev)
-
-        case group do
-          [single] ->
-            {MapSet.put(keep_set, single.command.id), fails}
-
-          multiple ->
-            {creates, updates} =
-              Enum.split_with(multiple, &(Map.get(&1, :action) == :create_transaction))
-
-            cond do
-              creates != [] and updates != [] ->
-                first_create = hd(creates)
-
-                update_fails =
-                  Enum.map(updates, fn input ->
-                    failure(input.command, {:create_pending_in_batch, first_create.command.id})
-                  end)
-
-                keep_set =
-                  Enum.reduce(creates, keep_set, fn c, ks -> MapSet.put(ks, c.command.id) end)
-
-                {keep_set, update_fails ++ fails}
-
-              length(updates) > 1 ->
-                [first_update | rest] = updates
-
-                update_fails =
-                  Enum.map(rest, fn input ->
-                    failure(input.command, {:duplicate_update_in_batch, first_update.command.id})
-                  end)
-
-                {MapSet.put(keep_set, first_update.command.id), update_fails ++ fails}
-
-              true ->
-                # All creates with same triple (no updates). Pass through;
-                # lookup unique constraint catches it at write time.
-                keep_set =
-                  Enum.reduce(creates, keep_set, fn c, ks -> MapSet.put(ks, c.command.id) end)
-
-                {keep_set, fails}
-            end
-        end
+      Enum.reduce(by_triple, {MapSet.new(), []}, fn {_triple, group_rev}, acc ->
+        group_rev
+        |> Enum.reverse()
+        |> classify_group()
+        |> apply_group_classification(acc)
       end)
 
     kept = Enum.filter(command_inputs, &MapSet.member?(keep_ids, &1.command.id))
     {kept, Enum.reverse(dep_failures)}
+  end
+
+  # Tag a same-triple group by its shape. The handler clauses of
+  # `apply_group_classification/2` decide what to keep and which
+  # failures to record.
+  @spec classify_group([command_input(), ...]) ::
+          {:single, command_input()}
+          | {:create_collision, [command_input(), ...], [command_input(), ...]}
+          | {:duplicate_updates, [command_input(), ...]}
+          | {:creates_only, [command_input(), ...]}
+  defp classify_group([single]), do: {:single, single}
+
+  defp classify_group(group) do
+    {creates, updates} =
+      Enum.split_with(group, &(Map.get(&1, :action) == :create_transaction))
+
+    cond do
+      creates != [] and updates != [] -> {:create_collision, creates, updates}
+      length(updates) > 1 -> {:duplicate_updates, updates}
+      true -> {:creates_only, creates}
+    end
+  end
+
+  defp apply_group_classification({:single, input}, {keep_set, fails}) do
+    {MapSet.put(keep_set, input.command.id), fails}
+  end
+
+  defp apply_group_classification({:create_collision, creates, updates}, {keep_set, fails}) do
+    [first_create | _] = creates
+
+    update_fails =
+      Enum.map(updates, fn input ->
+        failure(input.command, {:create_pending_in_batch, first_create.command.id})
+      end)
+
+    {add_all_to_keep(creates, keep_set), update_fails ++ fails}
+  end
+
+  defp apply_group_classification(
+         {:duplicate_updates, [first_update | rest]},
+         {keep_set, fails}
+       ) do
+    update_fails =
+      Enum.map(rest, fn input ->
+        failure(input.command, {:duplicate_update_in_batch, first_update.command.id})
+      end)
+
+    {MapSet.put(keep_set, first_update.command.id), update_fails ++ fails}
+  end
+
+  # All creates share the same triple, no updates. Pass through;
+  # the lookup unique constraint catches it at write time.
+  defp apply_group_classification({:creates_only, creates}, {keep_set, fails}) do
+    {add_all_to_keep(creates, keep_set), fails}
+  end
+
+  defp add_all_to_keep(inputs, keep_set) do
+    Enum.reduce(inputs, keep_set, fn input, ks -> MapSet.put(ks, input.command.id) end)
   end
 
   defp failure(%Command{} = cmd, reason), do: %{command: cmd, reason: reason}

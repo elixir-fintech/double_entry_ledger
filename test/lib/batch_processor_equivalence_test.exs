@@ -77,7 +77,7 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
 
   describe "property: paths are equivalent" do
     property "random valid corpora produce identical state under both paths" do
-      check all corpus <- corpus_generator(), max_runs: 20 do
+      check all(corpus <- corpus_generator(), max_runs: 20) do
         iteration = System.unique_integer([:positive])
 
         # ── Path A ────────────────────────────────────────────────
@@ -278,10 +278,10 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
       new_amount: StreamData.integer(@amount_min..@amount_max)
     })
     |> StreamData.map(fn %{
-                          for_idempk_idx: idx,
-                          new_status: status,
-                          new_amount: amt
-                        } ->
+                           for_idempk_idx: idx,
+                           new_status: status,
+                           new_amount: amt
+                         } ->
       %{action: :update, for_idempk_idx: idx, new_status: status, new_amount: amt}
     end)
   end

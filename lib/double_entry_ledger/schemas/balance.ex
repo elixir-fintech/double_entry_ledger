@@ -413,7 +413,8 @@ defmodule DoubleEntryLedger.Balance do
       iex> DoubleEntryLedger.Balance.reverse_and_update_pending_pure(balance, 50, 75, :debit, :credit)
       {:error, :debit, "Cannot reverse more than the current debit balance"}
   """
-  @spec reverse_and_update_pending_pure(t(), integer(), integer(), atom(), atom()) :: pure_result()
+  @spec reverse_and_update_pending_pure(t(), integer(), integer(), atom(), atom()) ::
+          pure_result()
   def reverse_and_update_pending_pure(%{credit: cr}, amt, _, :credit, _) when cr < amt,
     do: {:error, :credit, "Cannot reverse more than the current credit balance"}
 
