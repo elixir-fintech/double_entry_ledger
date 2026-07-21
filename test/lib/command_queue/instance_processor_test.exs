@@ -69,6 +69,19 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     end
   end
 
+  defmodule DbErrorBatchProcessor do
+    # Simulates a non-stale DB error from the batched write (e.g. an
+    # unexpected Postgrex/constraint error). Per the plan (§8.3) the caller
+    # must roll back and fall back to per-command processing for this batch,
+    # so worst-case is no worse than the single-cmd path. With the fallback
+    # wired up this is reached exactly once — the batch's commands are then
+    # drained through the single-cmd worker path.
+    def run_batch(commands, _repo \\ DoubleEntryLedger.Repo) do
+      send(:batch_processor_test_observer, {:batch_run_received, Enum.map(commands, & &1.id)})
+      {:error, %Postgrex.Error{message: "simulated non-stale DB error"}}
+    end
+  end
+
   setup [:create_instance, :create_accounts, :verify_on_exit!]
 
   # Default: assume the legacy single-cmd path. The batch-mode describe
@@ -158,6 +171,35 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       )
 
     cmd
+  end
+
+  # Insert a :create_transaction command that IS extracted but WILL fail
+  # the batch fold: negative amounts on accounts a3/a4 whose
+  # `negative_limit: 0` make `compute_balance_changes/3` reject the entry,
+  # producing a `{:balance_change_error, :available, _}` failure. This is
+  # the same fold-failure path the real BatchProcessor persists via
+  # `write_failures` (mirrors the helper in batch_processor_run_batch_test).
+  defp insert_overdraft_command(instance, accounts) do
+    a3 = Enum.at(accounts, 2)
+    a4 = Enum.at(accounts, 3)
+
+    {:ok, cmd} =
+      CommandStore.create(
+        transaction_command_attrs(
+          instance_address: instance.address,
+          source: "src",
+          source_idempk: "idempk-overdraft-#{System.unique_integer([:positive])}",
+          payload: %TransactionData{
+            status: :posted,
+            entries: [
+              %{account_address: a3.address, amount: -100, currency: "EUR"},
+              %{account_address: a4.address, amount: -100, currency: "EUR"}
+            ]
+          }
+        )
+      )
+
+    CommandStore.get_by_id(cmd.id)
   end
 
   describe "successful processing" do
@@ -400,6 +442,196 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert Enum.any?(qi_a.errors, fn err ->
                String.contains?(err["message"] || "", "batch_crashed")
              end)
+    end
+
+    # ── Finding 1: batch path must claim so the failure lifecycle
+    #    (retry_count progression, backoff, dead-letter) matches legacy.
+    #    Driven through the REAL BatchProcessor so the actual claim +
+    #    write_failures run. `run_batch` itself must NOT bump retry_count
+    #    (that stays asserted in batch_processor_run_batch_test); the bump
+    #    must come from the InstanceProcessor claiming the batch.
+
+    test "batch validation failure claims the command so retry_count progresses",
+         %{instance: instance, command: fixture, accounts: accounts} do
+      # Exclude the auto-created fixture command so the batch is exactly
+      # the one failing command under test.
+      fixture.command_queue_item
+      |> Ecto.Changeset.change(%{status: :processed})
+      |> Repo.update!()
+
+      bad = insert_overdraft_command(instance, accounts)
+
+      # Simulate a command that already had one prior attempt and is
+      # eligible to retry now: :occ_timeout (a non-pending, re-claimable
+      # state), retry_count 1, next_retry_after in the past.
+      bad.command_queue_item
+      |> Ecto.Changeset.change(%{
+        status: :occ_timeout,
+        retry_count: 1,
+        next_retry_after: DateTime.add(DateTime.utc_now(), -60, :second)
+      })
+      |> Repo.update!()
+
+      {_pid, ref} = start_processor_with_batch(instance.id, DoubleEntryLedger.BatchProcessor)
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+
+      updated = CommandStore.get_by_id(bad.id)
+
+      # Claiming a non-pending command bumps retry_count 1 → 2 (via
+      # retry_count_by_status); the failure writer leaves it there, so the
+      # row ends :failed with retry_count 2. Today the batch path never
+      # claims, so retry_count stays 1 and this assertion fails.
+      assert updated.command_queue_item.retry_count == 2
+      assert updated.command_queue_item.status == :failed
+    end
+
+    test "batch validation failure computes backoff from the post-claim retry_count",
+         %{instance: instance, command: fixture, accounts: accounts} do
+      fixture.command_queue_item
+      |> Ecto.Changeset.change(%{status: :processed})
+      |> Repo.update!()
+
+      base = Application.get_env(:double_entry_ledger, :command_queue)[:base_retry_delay] || 30
+
+      bad = insert_overdraft_command(instance, accounts)
+
+      bad.command_queue_item
+      |> Ecto.Changeset.change(%{
+        status: :occ_timeout,
+        retry_count: 2,
+        next_retry_after: DateTime.add(DateTime.utc_now(), -60, :second)
+      })
+      |> Repo.update!()
+
+      t0 = DateTime.utc_now()
+      {_pid, ref} = start_processor_with_batch(instance.id, DoubleEntryLedger.BatchProcessor)
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+
+      updated = CommandStore.get_by_id(bad.id)
+
+      # The claim bumps retry_count 2 → 3, so the exponential backoff must
+      # be base * 2^3 (≈ base*8s), not base * 2^2 (≈ base*4s). Assert
+      # next_retry_after lands beyond the midpoint of those two delays;
+      # today (no claim) it is computed off retry_count 2 and falls short.
+      midpoint_delay = div(base * 4 + base * 8, 2)
+      threshold = DateTime.add(t0, midpoint_delay, :second)
+
+      assert DateTime.compare(updated.command_queue_item.next_retry_after, threshold) == :gt
+      assert updated.command_queue_item.retry_count == 3
+    end
+
+    test "batch validation failure dead-letters when the claim tips retry_count over the ceiling",
+         %{instance: instance, command: fixture, accounts: accounts} do
+      fixture.command_queue_item
+      |> Ecto.Changeset.change(%{status: :processed})
+      |> Repo.update!()
+
+      max_retries = Application.get_env(:double_entry_ledger, :command_queue)[:max_retries] || 5
+
+      bad = insert_overdraft_command(instance, accounts)
+
+      # One short of the ceiling: today the batch path never claims, so
+      # retry_count stays at (max - 1), the failure stays :failed, and the
+      # command can never dead-letter. With the claim, retry_count is
+      # bumped to max and the failure writer dead-letters it.
+      bad.command_queue_item
+      |> Ecto.Changeset.change(%{
+        status: :occ_timeout,
+        retry_count: max_retries - 1,
+        next_retry_after: DateTime.add(DateTime.utc_now(), -60, :second)
+      })
+      |> Repo.update!()
+
+      {_pid, ref} = start_processor_with_batch(instance.id, DoubleEntryLedger.BatchProcessor)
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+
+      updated = CommandStore.get_by_id(bad.id)
+      assert updated.command_queue_item.status == :dead_letter
+    end
+
+    test "already-:failed command that fails again is handled cleanly (no writer crash)",
+         %{instance: instance, command: fixture, accounts: accounts} do
+      # Regression for a latent crash: when a batched command is already
+      # :failed and fails again, the failure writer's compute_failure_outcome
+      # sees no :status change (:failed → :failed) and today raises a
+      # CaseClauseError, crashing the whole batch write. Claiming first moves
+      # the command to :processing, so the failure always transitions cleanly.
+      fixture.command_queue_item
+      |> Ecto.Changeset.change(%{status: :processed})
+      |> Repo.update!()
+
+      bad = insert_overdraft_command(instance, accounts)
+
+      bad.command_queue_item
+      |> Ecto.Changeset.change(%{
+        status: :failed,
+        retry_count: 1,
+        next_retry_after: DateTime.add(DateTime.utc_now(), -60, :second)
+      })
+      |> Repo.update!()
+
+      {_pid, ref} = start_processor_with_batch(instance.id, DoubleEntryLedger.BatchProcessor)
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+
+      updated = CommandStore.get_by_id(bad.id)
+
+      # Clean handling: claimed (retry_count 1 → 2), then written :failed by
+      # the failure writer with the REAL fold reason. Today the writer
+      # crashes, the batch task dies, and the :DOWN handler records a
+      # "Task crashed" error with retry_count left at 1.
+      assert updated.command_queue_item.status == :failed
+      assert updated.command_queue_item.retry_count == 2
+
+      refute Enum.any?(updated.command_queue_item.errors, fn err ->
+               String.contains?(err["message"] || "", "crashed")
+             end)
+    end
+
+    # ── Finding 2: an unexpected (non-stale) DB error from the batched
+    #    write must fall back to per-command processing for that batch,
+    #    not leave the commands stuck in the queue.
+
+    test "batch DB error falls back to per-command processing",
+         %{instance: instance, command: fixture, accounts: accounts} do
+      fixture.command_queue_item
+      |> Ecto.Changeset.change(%{status: :processed})
+      |> Repo.update!()
+
+      c1 = insert_create_command(instance, accounts, 30)
+      c2 = insert_create_command(instance, accounts, 40)
+      batch_ids = MapSet.new([c1.id, c2.id])
+
+      # The fallback runs each command through the single-cmd worker path.
+      # Report which id was handled and mark it processed so the queue
+      # drains and the GenServer shuts down.
+      DoubleEntryLedger.MockCommandWorker
+      |> stub(:process_command_with_id, fn id, _processor_name ->
+        Command
+        |> Repo.get!(id)
+        |> Repo.preload(:command_queue_item)
+        |> Scheduling.build_mark_as_processed()
+        |> Repo.update!()
+
+        send(:batch_processor_test_observer, {:worker_processed, id})
+        {:ok, nil, nil}
+      end)
+
+      {_pid, ref} = start_processor_with_batch(instance.id, DbErrorBatchProcessor)
+
+      # The batch stub is reached and returns a non-stale DB error.
+      assert_receive {:batch_run_received, received}, 5000
+      assert MapSet.new(received) == batch_ids
+
+      # Finding 2: each command must then be processed via the single-cmd
+      # path. Today the caller only logs the error, so the worker is never
+      # invoked and both of these time out.
+      assert_receive {:worker_processed, id_a}, 5000
+      assert_receive {:worker_processed, id_b}, 5000
+      assert MapSet.new([id_a, id_b]) == batch_ids
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
     end
   end
 end

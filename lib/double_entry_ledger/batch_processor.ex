@@ -610,8 +610,15 @@ defmodule DoubleEntryLedger.BatchProcessor do
     end
   end
 
-  # Wrap the writers in a Repo.transaction. Rescue StaleEntryError
-  # OUTSIDE the transaction so the rollback completes cleanly.
+  # Wrap the writers in a Repo.transaction. Rescue OUTSIDE the transaction
+  # so the rollback completes cleanly.
+  #
+  # StaleEntryError feeds the retry/split logic in `run_batch/2`. Any other
+  # DB error the writers raise (`repo.query!` surfaces unique/FK violations
+  # as `Postgrex.Error`; changeset-backed writes as `Ecto.ConstraintError`)
+  # is converted to `{:error, e}` rather than allowed to crash the batch
+  # task — the caller then falls back to per-command processing (plan §8.3),
+  # keeping worst-case behaviour no worse than the single-command path.
   @spec do_write(write_plan(), Ecto.Repo.t(), DateTime.t()) :: :ok | {:error, term()}
   defp do_write(write_plan, repo, now) do
     repo.transaction(fn ->
@@ -625,6 +632,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     end
   rescue
     e in Ecto.StaleEntryError -> {:error, e}
+    e in [Ecto.ConstraintError, Postgrex.Error] -> {:error, e}
   end
 
   # ── split-on-exhaustion ──────────────────────────────────────────

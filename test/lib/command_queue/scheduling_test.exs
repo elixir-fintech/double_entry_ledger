@@ -74,6 +74,89 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     end
   end
 
+  describe "claim_batch_for_processing/3" do
+    setup [:create_instance, :create_accounts]
+
+    test "claims each command exactly like the single-command path", %{instance: instance} do
+      # Two identically-seeded commands (a prior :occ_timeout attempt with
+      # retry_count 2). Claiming one via the single-command path and the
+      # other via the batch path must produce the same queue-item changes —
+      # this pins batch-claim ≡ single-claim so the two paths can't drift.
+      single = seed_occ_timeout_command(instance, 2)
+      batched = seed_occ_timeout_command(instance, 2)
+
+      {:ok, %Command{command_queue_item: single_qi}} =
+        Scheduling.claim_command_for_processing(single.id, "proc-1")
+
+      [%Command{command_queue_item: batch_qi}] =
+        Scheduling.claim_batch_for_processing([batched], "proc-1")
+
+      assert single_qi.status == :processing
+      assert batch_qi.status == :processing
+
+      # Re-claim of a non-:pending command bumps retry_count 2 → 3 in both.
+      assert single_qi.retry_count == 3
+      assert batch_qi.retry_count == 3
+
+      assert single_qi.processor_id == "proc-1"
+      assert batch_qi.processor_id == "proc-1"
+
+      assert single_qi.next_retry_after == nil
+      assert batch_qi.next_retry_after == nil
+
+      assert single_qi.processing_started_at != nil
+      assert batch_qi.processing_started_at != nil
+
+      assert single_qi.processing_completed_at == nil
+      assert batch_qi.processing_completed_at == nil
+
+      # processor_version advanced identically from the seeded baseline.
+      assert single_qi.processor_version == batch_qi.processor_version
+    end
+
+    test "leaves retry_count unchanged when claiming a :pending command", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      command = CommandStore.get_by_id(command.id)
+
+      [%Command{command_queue_item: qi}] =
+        Scheduling.claim_batch_for_processing([command], "proc-1")
+
+      assert qi.status == :processing
+      assert qi.retry_count == 0
+    end
+
+    test "skips commands that are not in a claimable state", %{instance: instance} do
+      claimable = seed_occ_timeout_command(instance, 0)
+      not_claimable = seed_occ_timeout_command(instance, 0)
+
+      not_claimable.command_queue_item
+      |> Changeset.change(%{status: :processed})
+      |> Repo.update!()
+
+      claimed = Scheduling.claim_batch_for_processing([claimable, not_claimable], "proc-1")
+
+      assert Enum.map(claimed, & &1.id) == [claimable.id]
+    end
+  end
+
+  defp seed_occ_timeout_command(instance, retry_count) do
+    {:ok, command} =
+      CommandStore.create(
+        transaction_command_attrs(
+          instance_address: instance.address,
+          source_idempk: "idempk-#{System.unique_integer([:positive])}"
+        )
+      )
+
+    command.command_queue_item
+    |> Changeset.change(%{status: :occ_timeout, retry_count: retry_count})
+    |> Repo.update!()
+
+    CommandStore.get_by_id(command.id)
+  end
+
   describe "build_mark_as_processed/1" do
     setup [:create_instance, :create_accounts]
 

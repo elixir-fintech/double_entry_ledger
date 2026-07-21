@@ -20,6 +20,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.Telemetry
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
+  import Ecto.Query, only: [from: 2]
 
   alias DoubleEntryLedger.Command
 
@@ -28,6 +29,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.CommandQueueItem
   alias Ecto.Changeset
+
+  @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
   @config Application.compile_env(:double_entry_ledger, :command_queue, [])
   @max_retries Keyword.get(@config, :max_retries, 5)
@@ -130,6 +133,84 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       _ ->
         {:error, :command_not_claimable}
     end
+  end
+
+  @doc """
+  Claims a batch of commands for processing — the bulk equivalent of
+  `claim_command_for_processing/2`.
+
+  Mirrors `CommandQueueItem.processing_start_changeset/3` for every command:
+  status → `:processing`, stamps `processor_id`/`processing_started_at`,
+  clears `next_retry_after`, advances `processor_version`, and bumps
+  `retry_count` per `retry_count_by_status/1` (unchanged for `:pending`,
+  `+1` otherwise). Commands are split by current status so the retry-count
+  rule matches the single-command path exactly.
+
+  The `status` guard in each UPDATE is the concurrency check (in place of
+  the single-row `optimistic_lock`): a command already claimed by another
+  processor is no longer in a claimable state and is skipped.
+
+  Returns the subset of `commands` that were actually claimed, in the same
+  order, each with a refreshed `command_queue_item`. Commands that raced
+  out of a claimable state are omitted.
+  """
+  @spec claim_batch_for_processing([Command.t()], String.t(), Ecto.Repo.t()) :: [Command.t()]
+  def claim_batch_for_processing(commands, processor_id, repo \\ Repo) do
+    now = DateTime.utc_now()
+
+    {pending, retryable} =
+      Enum.split_with(commands, &(&1.command_queue_item.status == :pending))
+
+    claimed_items =
+      claim_group(Enum.map(pending, & &1.id), [:pending], false, processor_id, now, repo) ++
+        claim_group(
+          Enum.map(retryable, & &1.id),
+          [:occ_timeout, :failed],
+          true,
+          processor_id,
+          now,
+          repo
+        )
+
+    items_by_command_id = Map.new(claimed_items, &{&1.command_id, &1})
+
+    commands
+    |> Enum.filter(&Map.has_key?(items_by_command_id, &1.id))
+    |> Enum.map(&%{&1 | command_queue_item: Map.fetch!(items_by_command_id, &1.id)})
+  end
+
+  defp claim_group([], _statuses, _bump_retry?, _processor_id, _now, _repo), do: []
+
+  defp claim_group(ids, statuses, bump_retry?, processor_id, now, repo) do
+    {_count, claimed_items} =
+      from(eqi in CommandQueueItem,
+        prefix: ^@schema_prefix,
+        where: eqi.command_id in ^ids and eqi.status in ^statuses,
+        select: eqi
+      )
+      |> repo.update_all(claim_updates(processor_id, now, bump_retry?))
+
+    claimed_items
+  end
+
+  # Shared field changes for a claim, mirroring processing_start_changeset/3.
+  # `retry_count` advances only on a re-claim (see retry_count_by_status/1).
+  defp claim_updates(processor_id, now, bump_retry?) do
+    set = [
+      status: :processing,
+      processor_id: processor_id,
+      processing_started_at: now,
+      processing_completed_at: nil,
+      next_retry_after: nil,
+      updated_at: now
+    ]
+
+    inc =
+      if bump_retry?,
+        do: [processor_version: 1, retry_count: 1],
+        else: [processor_version: 1]
+
+    [set: set, inc: inc]
   end
 
   @doc """

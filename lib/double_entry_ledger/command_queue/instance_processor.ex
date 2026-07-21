@@ -89,7 +89,13 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
        current_command_id: nil,
        task_ref: nil,
        pending_ids: [],
-       current_batch: nil
+       current_batch: nil,
+       # Command ids that must be processed one-at-a-time via the
+       # single-cmd path instead of being re-batched. Populated when a
+       # batch write hits an unexpected DB error and we fall back to
+       # per-command processing (see the {:batch_complete, {:error, _}}
+       # handler). Always a subset of `pending_ids`.
+       force_single: MapSet.new()
      }}
   end
 
@@ -108,7 +114,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     # in non-batchable actions (e.g. account commands) fall back to
     # processing one command at a time through the legacy path; the
     # next round may then re-evaluate as all-batchable and batch.
-    dispatch_batch_or_legacy(state)
+    #
+    # Commands flagged `force_single` (a batch that hit an unexpected DB
+    # error) are drained through the single-cmd path first, one per
+    # round, before any further batching resumes.
+    case take_forced_single(state) do
+      {id, new_state} -> start_processing(new_state, id)
+      :none -> dispatch_batch_or_legacy(state)
+    end
   end
 
   @impl true
@@ -160,12 +173,43 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   @impl true
-  def handle_info({:batch_complete, outcomes}, %{task_ref: ref} = state) do
+  def handle_info({:batch_complete, {:ok, _} = outcomes}, %{task_ref: ref} = state) do
     if ref, do: Process.demonitor(ref, [:flush])
     log_outcomes(outcomes)
 
     send(self(), :process_next)
     {:noreply, %{state | processing: false, task_ref: nil, current_batch: nil}}
+  end
+
+  # Unexpected (non-stale) DB error from the batched write: the whole
+  # transaction rolled back, so nothing in the batch was persisted. Per
+  # the plan (§8.3) fall back to per-command processing for this batch so
+  # a single offending command is isolated instead of poisoning the whole
+  # batch forever. Revert the claimed rows to :pending (retry_count set at
+  # claim is preserved, and re-claiming from :pending won't double-bump),
+  # then flag them `force_single` and re-queue them at the front.
+  @impl true
+  def handle_info(
+        {:batch_complete, {:error, _reason} = outcomes},
+        %{task_ref: ref, current_batch: batch} = state
+      ) do
+    if ref, do: Process.demonitor(ref, [:flush])
+    log_outcomes(outcomes)
+
+    batch_ids = batch || []
+    revert_batch_to_pending(batch_ids)
+
+    send(self(), :process_next)
+
+    {:noreply,
+     %{
+       state
+       | processing: false,
+         task_ref: nil,
+         current_batch: nil,
+         pending_ids: batch_ids ++ state.pending_ids,
+         force_single: MapSet.union(state.force_single, MapSet.new(batch_ids))
+     }}
   end
 
   # Batch task crashed — mark every command in the batch for retry.
@@ -235,7 +279,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         {:noreply, %{state | pending_ids: rest_after_batch}}
 
       all_batchable?(commands) ->
-        start_batch_processing(%{state | pending_ids: rest_after_batch}, commands, batch_ids)
+        claim_and_start_batch(%{state | pending_ids: rest_after_batch}, commands)
 
       true ->
         # Mixed batch with non-batchable action(s) (e.g. account commands):
@@ -293,6 +337,62 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     ref = Process.monitor(pid)
 
     {:noreply, %{state | processing: true, task_ref: ref, current_batch: batch_ids}}
+  end
+
+  # Claim the batch via `Scheduling.claim_batch_for_processing/3`, then run
+  # it against the freshly-claimed rows. Claiming sets status → :processing,
+  # bumps retry_count per legacy semantics, and stamps processor metadata,
+  # so the batch failure writer's retry/dead-letter decisions read a correct
+  # retry_count (the writer intentionally never bumps it itself). The claim
+  # returns the claimed commands with refreshed queue items, so there's no
+  # second load. Commands that raced out of a claimable state are skipped.
+  defp claim_and_start_batch(state, commands) do
+    case Scheduling.claim_batch_for_processing(commands, processor_name()) do
+      [] ->
+        # Everything raced out of a claimable state — nothing to run.
+        send(self(), :process_next)
+        {:noreply, state}
+
+      claimed_commands ->
+        start_batch_processing(state, claimed_commands, Enum.map(claimed_commands, & &1.id))
+    end
+  end
+
+  # Revert claimed rows back to :pending so they can be re-processed via
+  # the single-cmd path. Only touches rows we still hold (:processing);
+  # retry_count is intentionally left as-is (set at claim time) so the
+  # subsequent single-cmd re-claim from :pending won't double-count it.
+  defp revert_batch_to_pending([]), do: :ok
+
+  defp revert_batch_to_pending(ids) do
+    now = DateTime.utc_now()
+
+    from(eqi in CommandQueueItem,
+      prefix: ^@schema_prefix,
+      where: eqi.command_id in ^ids and eqi.status == :processing,
+      update: [set: [status: :pending, next_retry_after: nil, updated_at: ^now]]
+    )
+    |> Repo.update_all([])
+
+    :ok
+  end
+
+  # If any pending id is flagged for single-cmd processing, pop the first
+  # such id (removing it from both `pending_ids` and `force_single`) so it
+  # can be dispatched via `start_processing/2`. Returns `:none` otherwise.
+  defp take_forced_single(%{force_single: force_single, pending_ids: pending_ids} = state) do
+    case Enum.find(pending_ids, &MapSet.member?(force_single, &1)) do
+      nil ->
+        :none
+
+      id ->
+        {id,
+         %{
+           state
+           | pending_ids: List.delete(pending_ids, id),
+             force_single: MapSet.delete(force_single, id)
+         }}
+    end
   end
 
   # One concise log line per success and per failure. Detailed audit

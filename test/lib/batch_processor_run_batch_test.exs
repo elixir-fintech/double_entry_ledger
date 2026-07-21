@@ -796,6 +796,24 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
     defp maybe_bump(_accounts, _n, _bump_until), do: :ok
 
+    # ── Scenario 0: non-stale DB error is returned, not raised ─────
+
+    test "unexpected DB error from the write is returned as {:error}, not raised",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+
+      # Make the success-CTE write raise a non-stale DB error (as a real
+      # unique/FK violation would via repo.query!). do_write must convert
+      # it into {:error, _} rather than let the batch task crash, so the
+      # caller can fall back to per-command processing (plan §8.3).
+      stub(DoubleEntryLedger.MockRepo, :query!, fn _sql, _params ->
+        raise %Postgrex.Error{message: "simulated unique_violation"}
+      end)
+
+      assert {:error, %Postgrex.Error{}} =
+               BatchProcessor.run_batch([command], DoubleEntryLedger.MockRepo)
+    end
+
     # ── Scenario 1: stale resolved on first retry ──────────────────
 
     test "stale on first attempt, resolved on retry: batch succeeds with retry_count=1",
