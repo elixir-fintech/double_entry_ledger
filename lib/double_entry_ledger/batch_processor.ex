@@ -54,6 +54,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     Entry,
     PendingTransactionLookup,
     Repo,
+    Telemetry,
     Transaction
   }
 
@@ -389,29 +390,94 @@ defmodule DoubleEntryLedger.BatchProcessor do
     end
   end
 
-  # Emit one synthetic `[:double_entry_ledger, :command, :process, :stop]`
-  # event per successful command with `duration = batch_native / cmd_count`.
-  # This keeps the same telemetry surface that legacy
-  # `Telemetry.command_process_span/2` produces, so downstream consumers
-  # (load tests, dashboards) see consistent per-cmd latency under either
-  # path.
-  defp emit_per_command_telemetry(%{successes: []}, _batch_duration, _batch_size), do: :ok
+  # Reproduce the legacy per-command telemetry surface for the whole batch so
+  # dashboards see the same events under either path (plan: "same events as
+  # today, with :batch_size added as a tag"):
+  #
+  #   * a `[:command, :process, :start]` + `:stop` span per processed command
+  #     (successes AND failures — validation failures don't raise, so like
+  #     the single-cmd path they get :stop, not :exception), carrying the
+  #     legacy span metadata plus :batch_size. Duration is the batch wall
+  #     time split evenly across processed commands — an approximation, since
+  #     the batch is a single DB transaction.
+  #   * the matching transaction lifecycle event per success, mirroring
+  #     `Telemetry.emit_transaction/2`.
+  defp emit_per_command_telemetry(write_plan, batch_duration, batch_size) do
+    processed = write_plan.successes ++ write_plan.failures
+    emit_command_spans(processed, batch_duration, batch_size)
+    Enum.each(write_plan.successes, &emit_transaction_lifecycle/1)
+  end
 
-  defp emit_per_command_telemetry(%{successes: successes}, batch_duration, batch_size) do
-    per_cmd_duration = div(batch_duration, length(successes))
+  defp emit_command_spans([], _batch_duration, _batch_size), do: :ok
 
-    Enum.each(successes, fn success ->
-      :telemetry.execute(
-        [:double_entry_ledger, :command, :process, :stop],
-        %{duration: per_cmd_duration},
-        %{
-          command_id: success.command.id,
-          instance_id: success.command.instance_id,
-          source: :batch,
-          batch_size: batch_size
-        }
-      )
-    end)
+  defp emit_command_spans(processed, batch_duration, batch_size) do
+    per_cmd_duration = div(batch_duration, length(processed))
+    Enum.each(processed, &emit_command_span(&1.command, per_cmd_duration, batch_size))
+  end
+
+  # Synthesize the :start/:stop pair `Telemetry.command_process_span/2` emits
+  # via `:telemetry.span`, sharing one span context so consumers can pair
+  # them, and tagging the batch size.
+  defp emit_command_span(command, duration, batch_size) do
+    metadata =
+      command
+      |> span_metadata()
+      |> Map.merge(%{batch_size: batch_size, telemetry_span_context: make_ref()})
+
+    stop_monotonic = System.monotonic_time()
+
+    :telemetry.execute(
+      [:double_entry_ledger, :command, :process, :start],
+      %{monotonic_time: stop_monotonic - duration, system_time: System.system_time()},
+      metadata
+    )
+
+    :telemetry.execute(
+      [:double_entry_ledger, :command, :process, :stop],
+      %{duration: duration, monotonic_time: stop_monotonic},
+      metadata
+    )
+  end
+
+  # Same shape as CommandWorker's private span_metadata/1.
+  defp span_metadata(%Command{command_map: command_map} = command) do
+    %{
+      action: Map.get(command_map, :action) || Map.get(command_map, "action"),
+      instance_id: command.instance_id,
+      source: Map.get(command_map, :source) || Map.get(command_map, "source"),
+      trace_context: command.trace_context
+    }
+  end
+
+  # Mirror `Telemetry.emit_transaction/2`'s status → event mapping. Failures
+  # never reach here (no transaction). The catch-all keeps a future
+  # status/transition from ever crashing post-commit telemetry.
+  defp emit_transaction_lifecycle(%{action: :create_transaction} = success) do
+    Telemetry.transaction_created(Map.put(transaction_meta(success), :status, success.status))
+  end
+
+  defp emit_transaction_lifecycle(%{transition: :pending_to_posted} = success) do
+    Telemetry.transaction_posted(transaction_meta(success))
+  end
+
+  defp emit_transaction_lifecycle(%{transition: :pending_to_archived} = success) do
+    Telemetry.transaction_archived(transaction_meta(success))
+  end
+
+  defp emit_transaction_lifecycle(%{transition: :pending_to_pending} = success) do
+    # A still-pending transaction emits :created(:pending) in legacy
+    # `emit_transaction/2` regardless of create-vs-update; mirror that.
+    Telemetry.transaction_created(Map.put(transaction_meta(success), :status, :pending))
+  end
+
+  defp emit_transaction_lifecycle(_success), do: :ok
+
+  defp transaction_meta(success) do
+    %{
+      transaction_id: success.transaction_id,
+      instance_id: success.command.instance_id,
+      trace_context: success.command.trace_context
+    }
   end
 
   # ── extract: filter unsupported actions + run transformer ────────
