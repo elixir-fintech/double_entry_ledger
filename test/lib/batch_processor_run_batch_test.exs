@@ -284,6 +284,34 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       assert length(bad_qi.errors) == 1
     end
 
+    test "per-command :stop telemetry carries the :batch_size tag",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      c1 = insert_balanced_command(inst, a1, a2, :posted, 10)
+      c2 = insert_balanced_command(inst, a1, a2, :posted, 20)
+
+      ref = make_ref()
+      handler_id = "batch-size-tag-#{inspect(ref)}"
+
+      :telemetry.attach(
+        handler_id,
+        [:double_entry_ledger, :command, :process, :stop],
+        &__MODULE__.forward_telemetry/4,
+        %{test_pid: self(), ref: ref}
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      assert {:ok, %{successes: [_, _]}} = BatchProcessor.run_batch([c1, c2])
+
+      # Plan contract: "same events as today, with :batch_size added as a
+      # tag." Each successful command's per-cmd :stop must carry batch_size.
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :process, :stop],
+                      _measurements, %{source: :batch, batch_size: 2}}
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :process, :stop],
+                      _measurements, %{source: :batch, batch_size: 2}}
+    end
+
     # ── 7. unsupported action ─────────────────────────────────────
 
     test "command with unsupported action yields {:unsupported_action, action} failure; siblings still process",

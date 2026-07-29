@@ -174,9 +174,23 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
     items_by_command_id = Map.new(claimed_items, &{&1.command_id, &1})
 
-    commands
-    |> Enum.filter(&Map.has_key?(items_by_command_id, &1.id))
-    |> Enum.map(&%{&1 | command_queue_item: Map.fetch!(items_by_command_id, &1.id)})
+    claimed_commands =
+      commands
+      |> Enum.filter(&Map.has_key?(items_by_command_id, &1.id))
+      |> Enum.map(&%{&1 | command_queue_item: Map.fetch!(items_by_command_id, &1.id)})
+
+    # Emit the same `[:command, :claim]` event the single-command path
+    # emits (Telemetry.command_claim/1), one per claimed command.
+    Enum.each(claimed_commands, fn command ->
+      Telemetry.command_claim(%{
+        command_id: command.id,
+        instance_id: command.instance_id,
+        processor_id: processor_id,
+        trace_context: command.trace_context
+      })
+    end)
+
+    claimed_commands
   end
 
   defp claim_group([], _statuses, _bump_retry?, _processor_id, _now, _repo), do: []

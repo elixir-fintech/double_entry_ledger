@@ -139,6 +139,38 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       assert Enum.map(claimed, & &1.id) == [claimable.id]
     end
+
+    test "emits a command_claim telemetry event per claimed command", %{instance: instance} do
+      c1 = seed_occ_timeout_command(instance, 0)
+      c2 = seed_occ_timeout_command(instance, 0)
+
+      ref = make_ref()
+      handler_id = "batch-claim-telemetry-#{inspect(ref)}"
+
+      :telemetry.attach(
+        handler_id,
+        [:double_entry_ledger, :command, :claim],
+        &__MODULE__.forward_telemetry/4,
+        %{test_pid: self(), ref: ref}
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      Scheduling.claim_batch_for_processing([c1, c2], "proc-1")
+
+      # Same claim event the single-command path emits, one per command.
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim], _m,
+                      %{command_id: id_a, processor_id: "proc-1"}}
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim], _m,
+                      %{command_id: id_b, processor_id: "proc-1"}}
+
+      assert MapSet.new([id_a, id_b]) == MapSet.new([c1.id, c2.id])
+    end
+  end
+
+  def forward_telemetry(event, measurements, metadata, %{test_pid: pid, ref: ref}) do
+    send(pid, {:telemetry_event, ref, event, measurements, metadata})
   end
 
   defp seed_occ_timeout_command(instance, retry_count) do

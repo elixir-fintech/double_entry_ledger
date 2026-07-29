@@ -371,7 +371,12 @@ defmodule DoubleEntryLedger.BatchProcessor do
 
     case write_with_retry(command_inputs, initial_failures, commands, repo, now, 0) do
       {:ok, write_plan} ->
-        emit_per_command_telemetry(write_plan, System.monotonic_time() - started)
+        emit_per_command_telemetry(
+          write_plan,
+          System.monotonic_time() - started,
+          length(commands)
+        )
+
         {:ok, summarize(write_plan)}
 
       {:error, %Ecto.StaleEntryError{} = stale} ->
@@ -390,9 +395,9 @@ defmodule DoubleEntryLedger.BatchProcessor do
   # `Telemetry.command_process_span/2` produces, so downstream consumers
   # (load tests, dashboards) see consistent per-cmd latency under either
   # path.
-  defp emit_per_command_telemetry(%{successes: []}, _batch_duration), do: :ok
+  defp emit_per_command_telemetry(%{successes: []}, _batch_duration, _batch_size), do: :ok
 
-  defp emit_per_command_telemetry(%{successes: successes}, batch_duration) do
+  defp emit_per_command_telemetry(%{successes: successes}, batch_duration, batch_size) do
     per_cmd_duration = div(batch_duration, length(successes))
 
     Enum.each(successes, fn success ->
@@ -402,7 +407,8 @@ defmodule DoubleEntryLedger.BatchProcessor do
         %{
           command_id: success.command.id,
           instance_id: success.command.instance_id,
-          source: :batch
+          source: :batch,
+          batch_size: batch_size
         }
       )
     end)

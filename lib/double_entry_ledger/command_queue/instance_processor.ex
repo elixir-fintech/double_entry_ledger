@@ -73,9 +73,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     Logger.info("Starting command processor for instance #{instance_id}")
     Telemetry.instance_processor_start(%{instance_id: instance_id})
 
-    # Read once at init — flag changes require a restart to take effect.
-    batch_enabled = Application.get_env(:double_entry_ledger, :batch_enabled, false)
-
     # Schedule immediate processing
     send(self(), :process_next)
 
@@ -84,7 +81,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
        instance_id: instance_id,
        worker: worker,
        batch_processor: batch_processor,
-       batch_enabled: batch_enabled,
        processing: false,
        current_command_id: nil,
        task_ref: nil,
@@ -106,34 +102,15 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   @impl true
-  def handle_info(:process_next, %{pending_ids: [_ | _], batch_enabled: true} = state) do
-    # Batch mode: try to take up to batch_size ids and dispatch them as
-    # a single BatchProcessor.run_batch/2 call, but only when every
-    # claimed command's action is batchable (`:create_transaction` or
-    # `:update_transaction`, see `all_batchable?/1`). Batches that mix
-    # in non-batchable actions (e.g. account commands) fall back to
-    # processing one command at a time through the legacy path; the
-    # next round may then re-evaluate as all-batchable and batch.
-    #
-    # Commands flagged `force_single` (a batch that hit an unexpected DB
-    # error) are drained through the single-cmd path first, one per
-    # round, before any further batching resumes.
-    case take_forced_single(state) do
-      {id, new_state} -> start_processing(new_state, id)
-      :none -> dispatch_batch_or_legacy(state)
-    end
-  end
-
-  @impl true
-  def handle_info(:process_next, %{pending_ids: [head | rest]} = state) do
-    # Drain from the in-memory buffer first; only hit the DB to refill
-    # when it's empty. This amortizes the find_next SELECT cost across
-    # `claim_batch_size/0` commands per round-trip.
-    start_processing(%{state | pending_ids: rest}, head)
+  def handle_info(:process_next, %{pending_ids: [_ | _]} = state) do
+    dispatch_pending(state)
   end
 
   @impl true
   def handle_info(:process_next, %{pending_ids: []} = state) do
+    # Drain from the in-memory buffer first; only hit the DB to refill
+    # when it's empty. This amortizes the find_next SELECT cost across
+    # `claim_batch_size/0` commands per round-trip.
     case find_next_command_ids(state.instance_id, claim_batch_size()) do
       [] ->
         Logger.info(
@@ -143,13 +120,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         Telemetry.instance_processor_stop(%{instance_id: state.instance_id})
         {:stop, :normal, state}
 
-      ids when state.batch_enabled ->
-        # Re-enter via the batch dispatcher; it will split off up to
-        # batch_size, decide all-create vs mixed, and act.
-        dispatch_batch_or_legacy(%{state | pending_ids: ids})
-
-      [head | rest] ->
-        start_processing(%{state | pending_ids: rest}, head)
+      ids ->
+        dispatch_pending(%{state | pending_ids: ids})
     end
   end
 
@@ -267,6 +239,24 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   #     the next round may batch them.
   #   * if the load returns nothing (e.g. ids vanished from the DB) →
   #     drop them and trigger another :process_next cycle.
+  # Route the head of `pending_ids`. Batching is checked live, per cycle,
+  # so flipping the `:batch_enabled` flag at runtime takes effect without
+  # restarting the processor (a production safety lever). In batch mode,
+  # `force_single` ids — a batch that hit an unexpected DB error — drain
+  # through the single-cmd path first, one per round, before batching
+  # resumes; otherwise a normal batch round runs. When batching is off,
+  # every command goes through the legacy single-cmd path.
+  defp dispatch_pending(%{pending_ids: [head | rest]} = state) do
+    if batch_enabled?() do
+      case take_forced_single(state) do
+        {id, new_state} -> start_processing(new_state, id)
+        :none -> dispatch_batch_or_legacy(state)
+      end
+    else
+      start_processing(%{state | pending_ids: rest}, head)
+    end
+  end
+
   defp dispatch_batch_or_legacy(%{pending_ids: ids} = state) do
     {batch_ids, rest_after_batch} = Enum.split(ids, batch_size())
     commands = load_commands(batch_ids)
@@ -471,6 +461,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   defp claim_batch_size do
     Application.get_env(:double_entry_ledger, :command_queue, [])[:claim_batch_size] || 50
+  end
+
+  defp batch_enabled? do
+    Application.get_env(:double_entry_ledger, :batch_enabled, false)
   end
 
   defp batch_size do

@@ -82,6 +82,29 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     end
   end
 
+  defmodule ToggleOffBatchProcessor do
+    # Processes its commands as a successful batch, but first flips
+    # :batch_enabled OFF as a side effect — so the next :process_next round
+    # on the SAME running processor must fall through to the legacy
+    # single-cmd path. Proves the flag is read live (per cycle), not cached
+    # at init.
+    def run_batch(commands, _repo \\ DoubleEntryLedger.Repo) do
+      Application.put_env(:double_entry_ledger, :batch_enabled, false)
+      send(:batch_processor_test_observer, {:batch_run_received, Enum.map(commands, & &1.id)})
+
+      successes =
+        Enum.map(commands, fn cmd ->
+          cmd
+          |> Scheduling.build_mark_as_processed()
+          |> Repo.update!()
+
+          %{command_id: cmd.id, transaction_id: Ecto.UUID.generate()}
+        end)
+
+      {:ok, %{successes: successes, failures: []}}
+    end
+  end
+
   setup [:create_instance, :create_accounts, :verify_on_exit!]
 
   # Default: assume the legacy single-cmd path. The batch-mode describe
@@ -631,6 +654,54 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert_receive {:worker_processed, id_b}, 5000
       assert MapSet.new([id_a, id_b]) == batch_ids
 
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+    end
+
+    test "live-toggling :batch_enabled off is honored by a running processor (no restart)",
+         %{instance: instance, command: fixture, accounts: accounts} do
+      # Exclude the fixture command; drive exactly two batchable commands.
+      fixture.command_queue_item
+      |> Ecto.Changeset.change(%{status: :processed})
+      |> Repo.update!()
+
+      # batch_size 1 so each :process_next round handles a single command,
+      # giving a round boundary at which the flipped flag can take effect.
+      original_size = Application.get_env(:double_entry_ledger, :batch_size)
+      Application.put_env(:double_entry_ledger, :batch_size, 1)
+
+      on_exit(fn ->
+        case original_size do
+          nil -> Application.delete_env(:double_entry_ledger, :batch_size)
+          val -> Application.put_env(:double_entry_ledger, :batch_size, val)
+        end
+      end)
+
+      insert_create_command(instance, accounts, 30)
+      insert_create_command(instance, accounts, 40)
+
+      # Legacy single-cmd path for the second round (after the flag flips).
+      DoubleEntryLedger.MockCommandWorker
+      |> stub(:process_command_with_id, fn id, _processor_name ->
+        Command
+        |> Repo.get!(id)
+        |> Repo.preload(:command_queue_item)
+        |> Scheduling.build_mark_as_processed()
+        |> Repo.update!()
+
+        send(:batch_processor_test_observer, {:worker_processed, id})
+        {:ok, nil, nil}
+      end)
+
+      {_pid, ref} = start_processor_with_batch(instance.id, ToggleOffBatchProcessor)
+
+      # Round 1: batch on → one command via the batch processor, which flips
+      # the flag off. Round 2: batch off → one command via the worker. Today
+      # the flag is cached at init, so round 2 still batches and the worker
+      # is never reached.
+      assert_receive {:batch_run_received, batched}, 5000
+      assert length(batched) == 1
+
+      assert_receive {:worker_processed, _id}, 5000
       assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
     end
   end
