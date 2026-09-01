@@ -15,5 +15,3 @@ config :logger, level: :warning
 
 config :double_entry_ledger,
   start_command_queue: false
-
-config :double_entry_ledger, Oban, testing: :manual

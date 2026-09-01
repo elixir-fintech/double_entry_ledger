@@ -36,7 +36,7 @@ defmodule DoubleEntryLedger.Migration do
       serves queries filtered by `entry_id` alone).
     * Version 5 — collapse the three `journal_event_*_links` join tables into
       direct nullable FK columns on `journal_events` (`command_id`,
-      `transaction_id`, `account_id`). Removes one synchronous Oban job per
+      `transaction_id`, `account_id`). Removes one background job per
       command and three rows of write amplification. The XOR invariant
       ("a journal event is either a transaction event or an account event,
       never both") is enforced by a `transaction_xor_account` CHECK constraint
@@ -69,15 +69,12 @@ defmodule DoubleEntryLedger.Migration do
       def up, do: DoubleEntryLedger.Migration.up(from: 4)
       def down, do: DoubleEntryLedger.Migration.down(from: 7, version: 4)
 
-  ## Oban
+  ## Historical background-job migrations
 
-  This module does **not** manage Oban tables. The package does not ship an Oban
-  migration to avoid locking consumers to a specific Oban version. Consumers
-  manage Oban through their own application — see the README for setup
-  instructions.
-
-  If upgrading from v0.1.0, your existing copied `2500_add_oban_jobs_table.exs`
-  continues to work — leave it in place.
+  Version 0.5.0 no longer depends on or supervises the former job runner. If a
+  v0.1.0 consumer copied its migration, the already-applied migration and its
+  tables may remain. Applications that still need to execute or roll back that
+  historical migration must declare the original dependency themselves.
 
   ## Options
 

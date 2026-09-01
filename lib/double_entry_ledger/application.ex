@@ -14,8 +14,8 @@ defmodule DoubleEntryLedger.Application do
         # Standalone mode: library owns its repo and supervises everything.
         [DoubleEntryLedger.Repo | DoubleEntryLedger.children()]
       else
-        # BYO-repo mode: consumer's repo must be up before Oban and the
-        # command queue start, so the consumer supervises those via
+        # BYO-repo mode: the consumer's repo must be up before the command
+        # queue starts, so the consumer supervises it via
         # `DoubleEntryLedger.children/0` in their own application.
         []
       end
@@ -27,10 +27,10 @@ defmodule DoubleEntryLedger.Application do
   @doc false
   @spec managed_children() :: [Supervisor.child_spec() | {module(), term()} | module()]
   def managed_children do
-    [
-      if(@start_command_queue, do: {DoubleEntryLedger.CommandQueue.Supervisor, []}),
-      {Oban, Application.fetch_env!(:double_entry_ledger, Oban)}
-    ]
-    |> Enum.reject(&is_nil/1)
+    if @start_command_queue do
+      [{DoubleEntryLedger.CommandQueue.Supervisor, []}]
+    else
+      []
+    end
   end
 end

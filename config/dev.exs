@@ -9,5 +9,3 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
-
-config :double_entry_ledger, Oban, prefix: "double_entry_ledger"

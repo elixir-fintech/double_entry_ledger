@@ -63,7 +63,6 @@ defmodule DoubleEntryLedger.MixProject do
       {:money, "~> 1.12"},
       {:logger_json, "~> 7.0"},
       {:jason, "~> 1.4"},
-      {:oban, "~> 2.19"},
       {:flop, "~> 0.26"},
       {:telemetry_metrics, "~> 1.0", optional: true},
 
@@ -200,9 +199,6 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.CommandQueue.Scheduling,
           DoubleEntryLedger.CommandQueue.InstanceProcessor,
           DoubleEntryLedger.CommandQueue.InstanceMonitor
-        ],
-        Oban: [
-          DoubleEntryLedger.Oban
         ],
         Telemetry: [
           DoubleEntryLedger.Telemetry

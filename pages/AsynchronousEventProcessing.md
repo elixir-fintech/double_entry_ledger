@@ -88,10 +88,9 @@ config :double_entry_ledger,
 - `batch_size` – maximum number of compatible transaction commands per write batch.
 - `max_batch_retries` – stale-write retries before the batch is recursively split.
 
-The named `DoubleEntryLedger.Oban` supervisor remains part of the application
-for compatibility and consumer-attached workers, but 0.5.0 does not enqueue an
-internal journal-linking job. Oban queue concurrency does not control command
-queue throughput.
+DoubleEntryLedger 0.5.0 does not depend on or supervise a third-party job
+runner. The command queue uses its own `InstanceMonitor` and
+`InstanceProcessor` supervision tree.
 
 ## Error handling and retries
 

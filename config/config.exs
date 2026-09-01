@@ -27,13 +27,6 @@ config :double_entry_ledger, :command_queue,
   # Name prefix for processors
   processor_name: "command_queue"
 
-config :double_entry_ledger, Oban,
-  name: DoubleEntryLedger.Oban,
-  engine: Oban.Engines.Basic,
-  queues: [double_entry_ledger: 1],
-  repo: DoubleEntryLedger.Repo,
-  prefix: "public"
-
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

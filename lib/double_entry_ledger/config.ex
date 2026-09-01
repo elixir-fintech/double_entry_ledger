@@ -15,9 +15,7 @@ defmodule DoubleEntryLedger.Config do
   configure `DoubleEntryLedger.Repo` per-env themselves.
 
   `:schema_prefix` controls the Postgres schema in which DEL's tables
-  live. It defaults to `"double_entry_ledger"`. Note this is separate
-  from Oban's `:prefix` — DEL's Oban instance is configured independently
-  under `:double_entry_ledger, Oban`.
+  live. It defaults to `"double_entry_ledger"`.
   """
 
   @schema_prefix Application.compile_env(

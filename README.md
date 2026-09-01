@@ -34,12 +34,12 @@ Each transaction updates `Account` projections plus immutable `BalanceHistoryEnt
 
 ### Idempotency & Isolation
 
-Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside a dedicated Postgres schema (`double_entry_ledger` by default, overridable via `config :double_entry_ledger, schema_prefix: …`), so migrations never clash with your application schema. The schema prefix is separate from Oban's own `:prefix` option.
+Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside a dedicated Postgres schema (`double_entry_ledger` by default, overridable via `config :double_entry_ledger, schema_prefix: …`), so migrations never clash with your application schema.
 
 ## Requirements
 
 - Elixir `~> 1.15` and OTP 26.
-- PostgreSQL 14+ with permission to create the `double_entry_ledger` schema and the [Oban](https://hexdocs.pm/oban) jobs table.
+- PostgreSQL 14+ with permission to create the `double_entry_ledger` schema.
 - Access to run Mix tasks (`mix ecto.create`, `mix ecto.migrate`, `mix test`, etc.).
 - Runtime dependencies are installed automatically through Hex. Credo, Dialyzer, and other development tools are only needed when working from a source checkout.
 
@@ -86,10 +86,9 @@ config :double_entry_ledger, :command_queue,
   processor_name: "command_queue"
 ```
 
-In this "BYO-repo" mode the library does not start its own repo. Oban
-and the command queue need the consumer's repo to be running, so add
-`DoubleEntryLedger.children/0` to your supervision tree **after** your
-repo — see [step 4](#4-set-up-oban).
+In this "BYO-repo" mode the library does not start its own repo. The command
+queue needs the consumer's repo to be running, so add
+`DoubleEntryLedger.children/0` to your supervision tree **after** your repo.
 
 Set a strong `idempotency_secret` — it hashes incoming keys. Set
 `start_command_queue: false` to disable background processing (useful in
@@ -150,12 +149,16 @@ mix double_entry_ledger.install --from 1
 mix ecto.migrate
 ```
 
-This applies only the schema changes since v0.1.0 (FK constraint fixes and
-`negative_limit` replacing `allowed_negative`).
+This applies schema versions 2–7, including the FK fixes,
+`negative_limit`, trace context, query indexes, direct journal-event foreign
+keys, queue instance IDs, and widened balance columns.
 
-**Oban note:** v0.1.0 included an Oban migration (`2500_add_oban_jobs_table.exs`)
-bundled with the core migrations. Your existing copied migration continues to
-work — leave it in place.
+**Historical background-job migration:** v0.1.0 included a migration for the
+then-used job runner. An already-applied migration and its tables may remain;
+0.5.0 does not drop them because the host application may use that job runner
+independently. If you still need to execute or roll back that migration,
+declare the original dependency in your application rather than relying on DEL
+to provide it.
 
 #### Manual migration
 
@@ -173,50 +176,22 @@ end
 See `DoubleEntryLedger.Migration` docs for all options (`:version`, `:from`,
 `:prefix`).
 
-### 4. Set up Oban
+### 4. Add the command queue to your supervision tree
 
-The package retains a named Oban supervisor for compatibility and for workers
-that consumers attach to it, but 0.5.0 no longer enqueues an internal
-journal-event linking job. It does **not** ship its own Oban migration — this
-avoids locking you to a specific Oban version. Install and migrate Oban in your
-application
-([Oban installation guide](https://hexdocs.pm/oban/installation.html)),
-then configure DoubleEntryLedger's **named** Oban instance:
-
-```elixir
-# config/runtime.exs (runtime so deps are compiled when the module
-# reference below is evaluated)
-config :double_entry_ledger, Oban,
-  name: DoubleEntryLedger.Oban,
-  engine: Oban.Engines.Basic,
-  queues: [double_entry_ledger: 10],
-  repo: MyApp.Repo
-```
-
-The `name: DoubleEntryLedger.Oban` line is required. It lets DEL's Oban coexist
-with any Oban your own app runs for unrelated work, since each Oban needs a
-unique name.
-
-In BYO-repo mode, add `DoubleEntryLedger.children/0` to your
-supervision tree so DEL's Oban and command queue start after your repo:
+In BYO-repo mode, add `DoubleEntryLedger.children/0` to your supervision tree
+so DEL's command queue starts after your repo:
 
 ```elixir
 # lib/my_app/application.ex
 children =
   [
     MyApp.Repo,
-    # …your own Oban, if any (with a different :name), other children…
+    # …other children…
   ] ++ DoubleEntryLedger.children()
 ```
 
-In standalone mode the library supervises the named Oban itself and
+In standalone mode the library supervises the command queue itself and
 consumers do not need to call `DoubleEntryLedger.children/0`.
-
-**Already running Oban for your own jobs?** Keep your existing
-`{Oban, Application.fetch_env!(:my_app, Oban)}` child as-is (with its
-own `:name` such as `MyApp.Oban`, or the default unnamed `Oban`).
-DEL's instance is strictly separate and won't interfere — the two run
-side by side, each processing its own queues against its own config.
 
 ## Quickstart
 
@@ -344,7 +319,7 @@ still balances, or `PendingTransactionLookup` to inspect open holds.
 - `InstanceProcessor` claims work via `CommandQueue.Scheduling.claim_command_for_processing/2`, runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`. Each worker task is monitored via `Process.monitor/1`; if the task crashes, the processor schedules a retry automatically.
 - OCC is handled inside the workers (see `lib/double_entry_ledger/occ`). Retries use exponential backoff until `max_retries` is reached, after which commands are marked as `:dead_letter`.
 - Errors and retry metadata live on the `command_queue_item`, so you can inspect processing attempts via `CommandStore` or SQL views.
-- Journal-event relationships are persisted synchronously through direct foreign keys; the command path no longer enqueues an internal Oban linking job.
+- Journal-event relationships are persisted synchronously through direct foreign keys; the command path no longer enqueues an internal linking job.
 
 ## Documentation & Further Reading
 
@@ -394,9 +369,12 @@ The migration performs these changes:
    A later downgrade can fail if stored values exceed the old integer range.
 
 The `JournalEventAccountLink`, `JournalEventCommandLink`,
-`JournalEventTransactionLink`, and `Workers.Oban.JournalEventLinks` modules,
-along with the `insert/3` helper on `DoubleEntryLedger.Oban`, have been removed.
-Journal-event relationships are now written synchronously.
+`JournalEventTransactionLink`, and legacy journal-event link worker have been
+removed. DEL no longer depends on or supervises a third-party job runner, and
+journal-event relationships are now written synchronously. Remove the obsolete
+DEL job-runner configuration; applications using a job runner for their own
+work must declare, migrate, configure, and supervise it independently. Existing
+job-runner tables are intentionally left untouched.
 
 Batching remains opt-in. Configure `insert_path`, `batch_enabled`, and
 `batch_size` in the consuming application; this dependency's
@@ -406,8 +384,8 @@ Batching remains opt-in. Configure `insert_path`, `batch_enabled`, and
 
 > ⚠️ **0.4.0 contains breaking changes.** Read this whole section before
 > bumping the dependency — at minimum you'll update store call sites and
-> the Oban config. See [CHANGELOG.md](CHANGELOG.md) for the canonical
-> migration notes per item.
+> supervision. See [CHANGELOG.md](CHANGELOG.md) for the canonical migration
+> notes per item.
 
 ### Breaking changes at a glance
 
@@ -421,13 +399,9 @@ Batching remains opt-in. Configure `insert_path`, `batch_enabled`, and
    `(id, page, per_page)` → `(id, flop_params_map)`. No consumer
    `config :flop, repo: …` required — DEL ships its own backend.
 
-3. **Oban instance is named `DoubleEntryLedger.Oban`.** Add
-   `name: DoubleEntryLedger.Oban` to your `config :double_entry_ledger,
-   Oban, …` block or boot will fail. See [Oban setup](#4-set-up-oban).
-
-4. **Supervision shift in BYO-repo mode.** If you opt into BYO-repo
+3. **Supervision shift in BYO-repo mode.** If you opt into BYO-repo
    via `config :double_entry_ledger, repo: MyApp.Repo`, DEL no longer
-   supervises Oban or the command queue from its own tree. Add
+   supervises the command queue from its own tree. Add
    `DoubleEntryLedger.children/0` to your app's supervisor. Standalone
    consumers (no `:repo` set) are unaffected.
 
@@ -437,8 +411,7 @@ Batching remains opt-in. Configure `insert_path`, `batch_enabled`, and
 shares the host's connection pool (and one Ecto sandbox in tests)
 instead of shipping its own `DoubleEntryLedger.Repo`. When `:repo` is
 omitted, the library runs in standalone mode as before. See
-[Configuration](#2-configure-the-application) and
-[Oban](#4-set-up-oban) for the full setup.
+[Configuration](#2-configure-the-application) for the full setup.
 
 ### Before (0.3.x)
 

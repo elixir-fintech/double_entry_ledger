@@ -17,8 +17,10 @@ project follows [Semantic Versioning](https://semver.org/).
   queue-item `instance_id`. Stop command processing during migration and deploy
   0.5.0 before resuming it.
 - Removed the `JournalEventAccountLink`, `JournalEventCommandLink`,
-  `JournalEventTransactionLink`, and `Workers.Oban.JournalEventLinks` modules,
-  plus the `insert/3` helper on `DoubleEntryLedger.Oban`.
+  `JournalEventTransactionLink`, and legacy journal-event link worker modules,
+  plus the unused job-runner dependency and supervisor. Applications using the
+  job runner for other work must declare and supervise it themselves. Existing
+  job-runner tables are not dropped.
 - `JournalEvent` now exposes direct `command`, `transaction`, and `account`
   associations. Custom queries and preloads using link associations must be
   updated.
@@ -40,7 +42,8 @@ project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Journal-event relationships are written synchronously using direct foreign
-  keys; the library no longer enqueues an internal Oban linking job.
+  keys; the library no longer enqueues an internal linking job or starts an
+  external job supervisor.
 - Queue claiming, balance-history writes, and transaction persistence have new
   optimized paths. Batching and `insert_all` remain opt-in.
 - Package consumers must configure `:insert_path`, `:batch_enabled`, and
@@ -76,24 +79,9 @@ includes the migration step.
    **Migrate:** translate `page`/`per_page` to Flop's `:first` + `:after`.
    See the Before/After examples in the README.
 
-3. **Oban instance is now named `DoubleEntryLedger.Oban`.** Every DEL
-   enqueue targets this named instance. Upgrading without updating the
-   config will crash at boot (Oban registers under the default name and
-   collides with any other Oban you run).
-
-   **Migrate:** add `name: DoubleEntryLedger.Oban` to the config:
-
-   ```elixir
-   config :double_entry_ledger, Oban,
-     name: DoubleEntryLedger.Oban,
-     engine: Oban.Engines.Basic,
-     queues: [double_entry_ledger: 10],
-     repo: MyApp.Repo
-   ```
-
-4. **Supervision shift in BYO-repo mode.** When `:repo` is configured
-   (pointing DEL at the host's repo), DEL no longer supervises Oban or
-   the command queue from its own tree — the consumer must. Leaving this
+3. **Supervision shift in BYO-repo mode.** When `:repo` is configured
+   (pointing DEL at the host's repo), DEL no longer supervises the command
+   queue from its own tree — the consumer must. Leaving this
    out means background work silently never runs.
 
    **Migrate (BYO-repo only; skip if `:repo` is unset):**
@@ -112,7 +100,7 @@ includes the migration step.
   host application's repo (BYO-repo mode). When unset DEL falls back to
   the shipped `DoubleEntryLedger.Repo`.
 - `DoubleEntryLedger.children/0` — child specs for consumer supervisors
-  in BYO-repo mode (command queue + named Oban instance).
+  in BYO-repo mode (command queue).
 - `DoubleEntryLedger.Telemetry.dashboard_metrics/0` — recommended
   `Telemetry.Metrics` list for Phoenix LiveDashboard.
 
@@ -124,8 +112,6 @@ includes the migration step.
 - `DoubleEntryLedger.Repo` is automatically supervised **only** in
   standalone mode (no `:repo` configured). In BYO-repo mode supervision
   is the consumer's responsibility via `DoubleEntryLedger.children/0`.
-- `DoubleEntryLedger.Oban` is registered as a named Oban instance so it
-  coexists with any Oban the host app runs.
 
 ### Removed
 

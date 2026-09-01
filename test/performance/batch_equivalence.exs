@@ -60,7 +60,6 @@ end
 
 # `mix run --no-start` skipped starting the app. First make sure the
 # DB exists and is migrated, THEN start the app — this avoids Repo and
-# Oban's noisy connect-failure logs on the first run.
 Mix.Task.run("ecto.create", ["--quiet"])
 Mix.Task.run("ecto.migrate", ["--quiet"])
 Mix.Task.run("app.start", [])

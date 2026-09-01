@@ -21,6 +21,4 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   port: "5432",
   stacktrace: true
 
-config :double_entry_ledger, Oban, testing: :manual, prefix: "double_entry_ledger"
-
 config :logger, level: :warning
