@@ -8,7 +8,7 @@ Commands are the write-ahead log of DoubleEntryLedger. Each call to `DoubleEntry
 - Idempotency keys (`source`, `source_idempk`, optional `update_idempk`)
 - A `CommandQueueItem` that tracks processing attempts and outcomes
 
-Commands are never updated; only the queue item changes as work progresses. When a worker finishes successfully it emits a `JournalEvent` plus the necessary projections (transactions, entries, balance history, updated accounts) and links them together for auditing. JournalEvents are immutable and act as the event source for the ledger. Commands on the other hand could potentially be removed once they are processed.
+Commands are never updated; only the queue item changes as work progresses. When a worker finishes successfully it emits a `JournalEvent` plus the necessary projections (transactions, entries, balance history, updated accounts). Direct foreign keys on the journal event connect the command to its transaction or account for auditing. JournalEvents are immutable and act as the event source for the ledger. Commands on the other hand could potentially be removed once they are processed.
 
 ## Processing and replay
 
@@ -27,7 +27,7 @@ Commands are never updated; only the queue item changes as work progresses. When
 - **Auditability:** Immutable commands, journal events, and balance history entries make it trivial to trace any change back to the originating API call.
 - **Rebuildability:** Replay journal events to reconstruct accounts, transactions, and balances if you need to recover from a bug or rebuild analytics projections.
 - **Resilience:** Command queue retries isolate transient failures while keeping the authoritative log append-only.
-- **Transparency:** `JournalEventTransactionLink` and `JournalEventAccountLink` tables capture every relationship so you can answer “which command touched this transaction/account?” instantly.
+- **Transparency:** Direct command, transaction, and account foreign keys on each `JournalEvent` capture every relationship so you can answer “which command touched this transaction/account?” instantly.
 
 ## Immutability considerations
 

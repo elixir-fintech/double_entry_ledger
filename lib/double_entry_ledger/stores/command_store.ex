@@ -20,25 +20,27 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   If the command is processed immediately, it will create the associated transaction
   and update the command status. If processing fails, it will be queued and retried.
 
-      event_params = %{
-        "instance_id" => instance.id,
+      command_params = %{
+        "instance_address" => instance.address,
         "action" => "create_transaction",
         "source" => "payment_system",
         "source_idempk" => "txn_123",
         "payload" => %{
-          "status" => "pending",
+          status: :pending,
           "entries" => [
-            %{"account_id" => cash_account.id, "amount" => 100_00, "currency" => "USD"},
-            %{"account_id" => revenue_account.id, "amount" => 100_00, "currency" => "USD"}
+            %{"account_address" => cash_account.address, "amount" => 100_00, "currency" => :USD},
+            %{"account_address" => revenue_account.address, "amount" => 100_00, "currency" => :USD}
           ]
         }
       }
 
       # create and process the command immediately
-      {:ok, transaction, event} = DoubleEntryLedger.Apis.CommandApi.process_from_params(event_params)
+      {:ok, transaction, command} =
+        DoubleEntryLedger.Apis.CommandApi.process_from_params(command_params)
 
       # create command for asynchronous processing later
-      {:ok, event} = DoubleEntryLedger.Stores.CommandStore.create(event_params)
+      {:ok, command} =
+        DoubleEntryLedger.Apis.CommandApi.create_from_params(command_params)
 
   ### Retrieving commands for an instance
 
@@ -48,21 +50,18 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
       {:ok, {commands, meta}} = DoubleEntryLedger.Stores.CommandStore.list_for_transaction(transaction.id)
 
-  ### Retrieving commands for an account
-
-      events = DoubleEntryLedger.Stores.CommandStore.list_all_for_account(account.id)
-
   ### Process command without saving it in the CommandStore on error
   If you want more control over error handling, you can process a command without saving it
   in the CommandStore on error. This allows you to handle the command processing logic
   without automatically persisting the command, which can be useful for debugging or custom error handling.
 
-      {:ok, transaction, event} = DoubleEntryLedger.Apis.CommandApi.process_from_params(event_params, [on_error: :fail])
+      {:ok, transaction, command} =
+        DoubleEntryLedger.Apis.CommandApi.process_from_params(command_params, on_error: :fail)
 
   ## Implementation Notes
 
-  - The module implements optimistic concurrency control for command claiming and processing,
-    ensuring that commands are processed exactly once even in high-concurrency environments.
+  - Command claiming uses concurrency checks, and idempotency keys make retries safe while
+    preventing duplicate business operations.
   - All queries are paginated and ordered by insertion time descending for efficient retrieval.
   - Error handling is explicit, with clear return values for all failure modes.
   """

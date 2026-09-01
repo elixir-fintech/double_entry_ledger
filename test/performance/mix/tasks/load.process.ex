@@ -27,7 +27,8 @@ defmodule Mix.Tasks.Load.Process do
   ## Setup
 
   Drops the perf DB, creates a fresh one, migrates, starts the app.
-  Requires `MIX_ENV=perf`.
+  Requires `MIX_ENV=perf` and `start_command_queue: false`. This repository
+  supplies those database and queue settings in `config/perf.exs`.
 
   ## Usage
 

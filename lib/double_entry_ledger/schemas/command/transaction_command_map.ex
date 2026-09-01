@@ -92,8 +92,8 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
         payload: %{
           status: "pending",
           entries: [
-            %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
-            %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
+            %{account_address: "assets:cash", amount: 100, currency: "USD"},
+            %{account_address: "revenue:sales", amount: 100, currency: "USD"}
           ]
         }
       })

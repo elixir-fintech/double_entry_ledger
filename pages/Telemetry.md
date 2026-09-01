@@ -28,6 +28,13 @@ Wraps the command processing lifecycle in `CommandWorker`.
 | `source` | Source system identifier |
 | `trace_context` | Consumer-supplied tracing context (map or nil) |
 
+When the batch path processes a command, it emits the same start/stop span
+shape and metadata, plus `batch_size`. The reported per-command duration is an
+even share of the batch wall time because all commands are written in one
+database transaction. Validation failures emit `:stop`, matching the
+single-command path; unexpected batch database errors fall back to individual
+processing.
+
 ### Point Events
 
 Point events use `:telemetry.execute/3` with `%{system_time: ...}` measurements.
@@ -161,6 +168,16 @@ Emitted from `AccountCommandResponseHandler` and `AccountCommandMapResponseHandl
 | `instance_id` | Instance UUID |
 
 #### Command Queue Infrastructure
+
+**`[:double_entry_ledger, :batch, :processed]`** — emitted after a batch write
+succeeds. It has no metadata and carries these measurements:
+
+| Measurement | Description |
+|---|---|
+| `batch_size` | Commands submitted to this batch attempt |
+| `success_count` | Commands persisted successfully |
+| `failure_count` | Commands persisted with a terminal or retry outcome |
+| `retry_count` | Stale-write retry attempt used for the successful write |
 
 **`[:double_entry_ledger, :instance_processor, :start]`** — emitted from `InstanceProcessor.init/1`.
 

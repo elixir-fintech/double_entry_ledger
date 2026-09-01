@@ -10,9 +10,9 @@ defmodule Mix.Tasks.Load.Enqueue do
     2. Hashes the idempotency key (`Command.IdempotencyKey`).
     3. Inserts the `Command` + `CommandQueueItem` rows in one txn.
 
-  No transaction processing is exercised here — the queue is
-  configured off via `start_command_queue: false` in
-  `config/perf.exs`, so claimed work doesn't drain in the background.
+  No transaction processing is exercised here. Set
+  `start_command_queue: false` so work doesn't drain in the background. This
+  repository does so in `config/perf.exs`.
 
   Use this task to measure how fast the **producer** side can push
   commands into the queue, in isolation from the consumer.

@@ -72,9 +72,9 @@ defmodule DoubleEntryLedger.LoadTesting do
   `CommandApi.create_from_params/1`, which validates the payload shape,
   hashes the idempotency key, and inserts the `Command` +
   `CommandQueueItem` rows. Subsequent processing through the queue is
-  not measured here. The queue is configured off via
-  `start_command_queue: false` in `config/perf.exs`, so claimed work
-  doesn't drain in the background.
+  not measured here. The queue must be configured off via
+  `start_command_queue: false` so claimed work doesn't drain in the
+  background. This repository sets that in `config/perf.exs`.
 
   This isolates the throughput cost of just *getting commands into the
   queue* — i.e. the production producer path.
@@ -169,9 +169,9 @@ defmodule DoubleEntryLedger.LoadTesting do
   `InstanceProcessor` can claim, process, and mark commands processed
   one at a time.
 
-  Requires `start_command_queue: false` in `config/perf.exs` (the
-  default for `:perf`) so the queue's normal supervision isn't
-  competing for the same instance.
+  Requires `start_command_queue: false` so the queue's normal supervision isn't
+  competing for the same instance. This repository sets it in
+  `config/perf.exs`.
 
   ## Parameters
 

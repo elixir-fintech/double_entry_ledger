@@ -30,6 +30,7 @@ defmodule DoubleEntryLedger.Telemetry do
   | `[:double_entry_ledger, :account, :created]` | Account created |
   | `[:double_entry_ledger, :account, :updated]` | Account updated |
   | `[:double_entry_ledger, :instance, :created]` | Instance created |
+  | `[:double_entry_ledger, :batch, :processed]` | Batch write completed |
   | `[:double_entry_ledger, :instance_processor, :start]` | Instance processor started |
   | `[:double_entry_ledger, :instance_processor, :stop]` | Instance processor stopped |
 
@@ -52,7 +53,8 @@ defmodule DoubleEntryLedger.Telemetry do
 
   ## Parameters
 
-    - `metadata` - Map with `:action`, `:instance_id`, `:source`, `:trace_context`
+    - `metadata` - Map with `:action`, `:instance_id`, `:source`, `:trace_context`.
+      Batch-generated spans also include `:batch_size`.
     - `fun` - Zero-arity function to execute within the span
 
   ## Returns

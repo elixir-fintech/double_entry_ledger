@@ -17,15 +17,18 @@ defmodule Mix.Tasks.DoubleEntryLedger.Install do
       # Fresh install (all versions)
       mix double_entry_ledger.install
 
-      # Upgrade from v0.1.0 (apply only version 2 changes)
+      # Upgrade from v0.1.0 (apply all changes after version 1)
       mix double_entry_ledger.install --from 1
+
+      # Upgrade from v0.4.x (apply versions 5 through 7)
+      mix double_entry_ledger.install --from 4
 
   ## Oban
 
-  This task does not generate an Oban migration. The package uses your
-  application's existing Oban setup. Ensure Oban is installed and configured
-  in your application, and add the `double_entry_ledger` queue to your Oban
-  config. See the README for details.
+  This task does not generate an Oban migration. Configure the named
+  `DoubleEntryLedger.Oban` instance described in the README. Version 0.5.0 no
+  longer enqueues an internal journal-event linking job, but retains the named
+  supervisor for compatibility and consumer-attached workers.
   """
 
   use Mix.Task
@@ -59,7 +62,7 @@ defmodule Mix.Tasks.DoubleEntryLedger.Install do
     DoubleEntryLedger migration generated. Next steps:
 
       1. Configure :double_entry_ledger in your config/config.exs
-      2. Ensure Oban is set up and add the :double_entry_ledger queue
+      2. Configure the named DoubleEntryLedger.Oban instance
       3. Run: mix ecto.migrate
     """)
   end

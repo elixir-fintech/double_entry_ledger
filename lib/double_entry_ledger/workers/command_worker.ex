@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   The CommandWorker supports multiple processing approaches:
 
   1. **New Command Maps** (`process_new_command/1`) - Direct processing of command maps from external systems. Command is saved for retry later if it fails.
-  2. **No-Save-On-Error** (`process_new_command_no_save_on_error/1`) -Events Processing as above without saving the Command when processing fails.
+  2. **No-Save-On-Error** (`process_new_command_no_save_on_error/1`) - Processing as above without saving the Command when processing fails.
   3. **Stored Commands** (`process_command_with_id/2`) - Processing commands already in the database using atomic claiming
 
   ## Supported Command Types and Actions
@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ### Stored command
   ```
-  EventQueue → Command → CommandWorker → Specialized Handler → Transaction/Account
+  CommandQueue → Command → CommandWorker → Specialized Handler → Transaction/Account
                           ↓
                       CommandQueueItem → Final State
                           ↓
@@ -88,26 +88,26 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       # Process a new transaction command
       command_map = %TransactionCommandMap{
         action: :create_transaction,
-        instance_id: instance_id,
+        instance_address: instance.address,
         source: "payment_system",
         source_idempk: "txn_123",
         payload: %{
           status: :pending,
           entries: [
-            %{account_id: cash_account.id, amount: 100, currency: "USD"},
-            %{account_id: revenue_account.id, amount: -100, currency: "USD"}
+            %{account_address: cash_account.address, amount: 100, currency: "USD"},
+            %{account_address: revenue_account.address, amount: 100, currency: "USD"}
           ]
         }
       }
 
-      {:ok, transaction, event} = CommandWorker.process_new_command(command_map)
-      # event.command_queue_item.status == :processed
+      {:ok, transaction, command} = CommandWorker.process_new_command(command_map)
+      # command.command_queue_item.status == :processed
 
       # Process an existing command by ID
-      {:ok, transaction, event} = CommandWorker.process_command_with_id(event_uuid)
+      {:ok, transaction, command} = CommandWorker.process_command_with_id(command_uuid)
 
       # Process without saving errors to CommandQueueItem
-      {:ok, transaction, event} = CommandWorker.process_new_command_no_save_on_error(command_map)
+      {:ok, transaction, command} = CommandWorker.process_new_command_no_save_on_error(command_map)
 
   ## Architecture Notes
 
@@ -211,43 +211,43 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   @type error_tuple :: {:error, Command.t() | Changeset.t() | String.t() | atom()}
 
   @doc """
-  Processes a new event map by dispatching to the appropriate specialized handler.
+  Processes a new command map by dispatching to the appropriate specialized handler.
 
-  This is the primary entry point for processing events received from external systems.
-  The function examines the event map's action and type to route it to the correct
+  This is the primary entry point for processing commands received from external systems.
+  The function examines the command map's action and type to route it to the correct
   processing module. Each handler is responsible for validation, transformation, and
-  persistence of the event and its resulting domain entities.
+  persistence of the command and its resulting domain entities.
 
   ## Command Processing Flow
 
   1. **Command Creation** - Creates Command record and associated CommandQueueItem with status `:pending`
   2. **Status Update** - Updates CommandQueueItem to `:processing` during processing
-  3. **Validation** - Ensures event map structure and data integrity
-  4. **Transformation** - Converts event data into domain entities
+  3. **Validation** - Ensures command map structure and data integrity
+  4. **Transformation** - Converts command data into domain entities
   5. **Persistence** - Saves entities and updates CommandQueueItem to `:processed`
   6. **Error Handling** - Updates CommandQueueItem to appropriate error status (`:failed`, `:occ_timeout`, `:dead_letter`)
 
   ## Parameters
 
-  - `command_map` - A validated event map struct with the following key fields:
+  - `command_map` - A validated command map struct with the following key fields:
     - `:action` - The operation type (`:create_transaction`, `:update_transaction`, `:create_account`, `:update_account`)
-    - `:instance_id` - UUID of the ledger instance
+    - `:instance_address` - Address of the ledger instance
     - `:source` - External system identifier
-    - `:source_idempk` - Idempotency key from source system
+    - `:source_idempk` - Idempotency key from the source system (transaction commands)
     - `:payload` - Command-specific data for processing
 
   ## Returns
 
-  - `success_tuple()` - Processing succeeded, returns the created entity and event with CommandQueueItem status `:processed`
+  - `success_tuple()` - Processing succeeded, returns the created entity and command with CommandQueueItem status `:processed`
   - `error_tuple()` - Processing failed, returns error details and CommandQueueItem in appropriate error state
 
   ## Supported Actions
 
-  ### Transaction Events
+  ### Transaction Commands
   - `:create_transaction` - Creates new double-entry transactions with balanced entries
   - `:update_transaction` - Modifies existing transactions (status, metadata, etc.)
 
-  ### Account Events
+  ### Account Commands
   - `:create_account` - Creates new ledger accounts with specified types and currencies
   - `:update_account` - Updates existing account properties
 
@@ -273,8 +273,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>     ]
       ...>   }
       ...> }
-      iex> {:ok, transaction, event} = CommandWorker.process_new_command(command_map)
-      iex> { transaction.status, event.command_queue_item.status }
+      iex> {:ok, transaction, command} = CommandWorker.process_new_command(command_map)
+      iex> {transaction.status, command.command_queue_item.status}
       {:pending, :processed}
 
       # Unsupported action
@@ -287,7 +287,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       # Validation failure (returns changeset)
       {:error, %Changeset{errors: [amount: {"must be positive", []}]}}
 
-      # Business rule violation (returns event with error in CommandQueueItem)
+      # Business rule violation (returns command with error in CommandQueueItem)
       {:error, %Command{command_queue_item: %{status: :failed, errors: [%{message: "Debit and credit amounts must balance"}]}}}
 
       # Optimistic concurrency timeout
@@ -313,14 +313,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   def process_new_command(_command_map), do: {:error, :action_not_supported}
 
   @doc """
-  Processes an event map without persisting processing errors to the CommandQueueItem.
+  Processes a command map without persisting processing errors to the CommandQueueItem.
 
   This function provides an alternative processing strategy for scenarios where you want
-  to validate and process events but avoid storing error states in the CommandQueueItem records.
+  to validate and process commands but avoid storing error states in the CommandQueueItem records.
   This is useful for:
 
-  - **Validation Testing** - Check if an event would process successfully without side effects
-  - **Batch Processing** - Process multiple events and handle errors in memory
+  - **Validation Testing** - Check if a command would process successfully without side effects
+  - **Batch Processing** - Process multiple commands and handle errors in memory
   - **Preview Mode** - Show users what would happen without committing changes
   - **Error Recovery** - Retry processing without accumulating error history in CommandQueueItem
 
@@ -343,19 +343,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Returns
 
-  - `success_tuple()` - Processing succeeded, entity and event are created normally with CommandQueueItem status `:processed`
+  - `success_tuple()` - Processing succeeded, entity and command are created normally with CommandQueueItem status `:processed`
   - `error_tuple()` - Processing failed, returns validation changeset or error atom without CommandQueueItem persistence
 
   ## Examples
 
-      iex> # Valid event processes successfully
+      iex> # Valid command processes successfully
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Command.{TransactionCommandMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> {:ok, revenue_account} = AccountStore.create(instance.address, %{address: "account:revenue", type: :liability, currency: :USD}, "unique_id_123")
       iex> {:ok, cash_account} = AccountStore.create(instance.address, %{address: "account:cash", type: :asset, currency: :USD}, "unique_id_456")
-      iex> valid_event = %TransactionCommandMap{action: :create_transaction,
+      iex> valid_command = %TransactionCommandMap{action: :create_transaction,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
       ...>   source_idempk: "acc_create_456",
@@ -366,8 +366,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>        %{account_address: cash_account.address, amount: 100, currency: :USD}
       ...>      ]
       ...>   }}
-      iex> {:ok, _transaction, event} = CommandWorker.process_new_command_no_save_on_error(valid_event)
-      iex> event.command_queue_item.status
+      iex> {:ok, _transaction, command} = CommandWorker.process_new_command_no_save_on_error(valid_command)
+      iex> command.command_queue_item.status
       :processed
 
       # Create a new account
@@ -384,10 +384,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>     currency: "USD"
       ...>   }
       ...> }
-      iex> {:ok, account, event} = CommandWorker.process_new_command_no_save_on_error(command_map)
+      iex> {:ok, account, command} = CommandWorker.process_new_command_no_save_on_error(command_map)
       iex> account.name
       "Petty Cash"
-      iex> event.command_queue_item.status
+      iex> command.command_queue_item.status
       :processed
 
       iex> # Unsupported action
@@ -445,12 +445,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   def process_new_command_no_save_on_error(_command_map), do: {:error, :action_not_supported}
 
   @doc """
-  Retrieves and processes an existing event by its UUID using atomic CommandQueueItem claiming.
+  Retrieves and processes an existing command by its UUID using atomic CommandQueueItem claiming.
 
-  This function enables processing of events that were previously stored in the database
+  This function enables processing of commands that were previously stored in the database
   but not yet processed. It implements an atomic claim-and-process pattern through the
-  CommandQueueItem to ensure that only one processor can work on an event at a time,
-  preventing race conditions and duplicate processing in concurrent environments.
+  CommandQueueItem to ensure that only one processor can work on a command at a time,
+  preventing concurrent workers from claiming the same command.
 
   ## CommandQueueItem Claiming Process
 
@@ -462,14 +462,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Use Cases
 
-  - **Retry Processing** - Reprocess events that failed previously (CommandQueueItem status `:failed` or `:occ_timeout`)
-  - **Manual Processing** - Admin tools for processing specific events
-  - **Batch Processing** - Process queued events in background jobs
-  - **Command Replay** - Reprocess events for audit or recovery scenarios
+  - **Retry Processing** - Reprocess commands that failed previously (CommandQueueItem status `:failed` or `:occ_timeout`)
+  - **Manual Processing** - Admin tools for processing specific commands
+  - **Batch Processing** - Process queued commands in background jobs
 
   ## Parameters
 
-  - `uuid` - String UUID of the event to process
+  - `uuid` - String UUID of the command to process
   - `processor_id` - Optional identifier for the processor (defaults to "manual")
     Recorded in CommandQueueItem for tracking which system/user initiated the processing
 

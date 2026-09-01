@@ -26,13 +26,13 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   Creating a new account:
 
       {:ok, instance} = DoubleEntryLedger.Stores.InstanceStore.create(%{address: "Business:Ledger"})
-      {:ok, account} = DoubleEntryLedger.Stores.AccountStore.create(%{
-        name: "Cash Account",
-        address: "cash:main",
-        instance_address: instance.address,
-        currency: :USD,
-        type: :asset
-      })
+      {:ok, account} =
+        DoubleEntryLedger.Stores.AccountStore.create(instance.address, %{
+          name: "Cash Account",
+          address: "cash:main",
+          currency: :USD,
+          type: :asset
+        })
 
   Retrieving accounts for an instance:
 
@@ -86,7 +86,7 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
           description: String.t() | nil,
           context: map() | nil,
           normal_balance: Types.credit_or_debit() | nil,
-          allow_negative: boolean() | nil
+          negative_limit: non_neg_integer() | nil
         }
 
   @type update_map() :: %{
@@ -173,15 +173,14 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
     - `attrs` (map): A map of attributes for the account containing:
       - `:name` (String.t(), optional) - Human-readable account name
       - `:address` (String.t(), required) - Unique address within the instance
-      - `:instance_address` (String.t(), required) - Address of the owning instance
       - `:currency` (atom, required) - Currency code (e.g., :USD, :EUR)
-      - `:type` (atom, required) - Account type (:asset, :liability, :equity, :income, :expense)
+      - `:type` (atom, required) - Account type (:asset, :liability, :equity, :revenue, :expense)
       - `:description` (String.t(), optional) - Account description
       - `:context` (map, optional) - Additional context information
       - `:normal_balance` (atom, optional) - Normal balance (:debit or :credit) if different from type default
-      - `:allow_negative` (boolean, optional) - Whether negative balances are allowed (default: false)
+      - `:negative_limit` (non-negative integer, optional) - How far below zero `available` may fall (default: 0)
 
-    - `source` (String.t(), optional): Source identifier for the operation (defaults to "AccountStore.create/1")
+    - `source` (String.t(), optional): Source identifier for the operation (defaults to "account_store-create")
 
   ## Returns
 
@@ -228,9 +227,9 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
   @doc """
   Updates an account with the given attributes.
 
-  Updates an existing account through the event sourcing system. Only allows changes
+  Updates an existing account through the command-sourcing system. Only allows changes
   to specific fields (description and context) to maintain data integrity. The update
-  creates a new event linking to the original creation event.
+  creates a journal event with a direct association to the account.
 
   ## Parameters
 

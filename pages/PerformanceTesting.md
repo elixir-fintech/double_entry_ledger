@@ -3,6 +3,11 @@
 Reference for the perf tooling that grew out of the throughput
 investigation and the multi-command batching work.
 
+This is source-checkout development tooling. The `mix load.*` tasks, their
+runtime support, this guide, the equivalence script, and the performance ExUnit
+suites are not included in the Hex package. Run the tasks from this repository
+with `MIX_ENV=perf` so `config/perf.exs` and `test/performance/` are compiled.
+
 ## At a glance
 
 | Tool | Lives in | Invocation | Purpose |
@@ -79,8 +84,8 @@ distribution.
 Honors:
 - `INSERT_PATH=insert_all` — flips `CreateTransactionCommand` to the
   insert_all path (Layer 1 of the perf work, committed earlier).
-- `BATCH=on` — enables `BatchProcessor.run_batch/2` for runs of pure
-  `:create_transaction` commands. Mixed batches fall back per-cmd.
+- `BATCH=on` — enables `BatchProcessor.run_batch/2` for compatible transaction
+  commands. Account commands remain on the single-command path.
 - `BATCH_SIZE=N` — overrides the default batch size of 8 when
   `BATCH=on`. Useful for M-sweep characterizations.
 
@@ -166,9 +171,9 @@ Stream_data is a test-only dep (also available in `:equiv`).
 
 | Variable | Effect |
 |---|---|
-| `INSERT_PATH=insert_all` | Switches `CreateTransactionCommand.build_transaction/4` from the legacy cascade to the `Repo.insert_all`-based path. Honored in all envs via `config/runtime.exs`. |
+| `INSERT_PATH=insert_all` | Switches `CreateTransactionCommand.build_transaction/4` from the legacy cascade to the `Repo.insert_all`-based path for the run. |
 | `BATCH=on` | Enables `BatchProcessor.run_batch/2` in the `InstanceProcessor`. Default `false`. |
-| `BATCH_SIZE=N` | Overrides the `InstanceProcessor`'s `batch_size` for ad-hoc M sweeps. Defaults to 8 if unset. |
+| `BATCH_SIZE=N` | Overrides the `InstanceProcessor` batch size for repository-local runs. Defaults to 8 if unset. |
 | `BATCH_EQ_N=N` | Number of commands the equivalence script generates per path. Default 200. |
 | `PROFILE=1` | (Currently commented-out in `load.ex`.) When uncommented, wraps the drain phase in an `:eprof` profiling session. |
 
@@ -211,7 +216,7 @@ Several migrations were driven by perf findings:
 | Version | Change | Why |
 |---|---|---|
 | v4 | Compound `(entry_id, inserted_at)` index on `balance_history_entries` | Removed sequential scans on entry lookups |
-| v5 | (see migration history) | — |
+| v5 | Replaced three journal-event link tables and the linking job with direct foreign keys | Removed link-table and Oban-job write amplification |
 | v6 | Denormalized `instance_id` onto `command_queue_items` + partial in-flight index | Fixed O(N²) drain in `find_next_command_ids` |
 | v7 | Widened `accounts.{available, negative_limit}` + `balance_history_entries.available` from `int4` to `bigint` | Original `int4` capped balances at ~2.1B; load tests at N≥30000 hit overflow, and real ledgers would too |
 
@@ -230,9 +235,7 @@ is available.
 
 ## See also
 
-- `docs/superpowers/specs/2026-04-30-perf-throughput-investigation.md`
-  — the original investigation that started this workstream
-- `docs/superpowers/plans/2026-04-30-phase-a-batched-consumer.md` —
-  Phase A plan (batched consumer)
-- `docs/superpowers/plans/2026-05-06-multi-command-batching.md` —
-  detailed batching design and step plan
+- [Asynchronous processing](AsynchronousEventProcessing.md) for production
+  queue and batching configuration
+- [Telemetry](Telemetry.md) for batch measurements and per-command span parity
+- `DoubleEntryLedger.Migration` for the schema-version history

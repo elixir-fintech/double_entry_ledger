@@ -10,7 +10,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStoreHelper do
 
   * **Journal Event Lookup**: Find journal events by action and source identifiers
   * **Command Relationships**: Look up related journal events for commands
-  * **Transaction Linking**: Find transactions and accounts associated with journal events
+  * **Direct Relationships**: Find transactions and accounts associated with journal events
   * **Query Building**: Compose queries for journal events by account or transaction
 
   ## Implementation Notes

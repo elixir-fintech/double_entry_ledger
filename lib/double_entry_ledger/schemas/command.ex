@@ -3,8 +3,8 @@ defmodule DoubleEntryLedger.Command do
   Defines and manages commands in the Double Entry Ledger system.
 
   The Command schema represents a request to create or update ledger data. Commands drive the
-  asynchronous processing pipeline (queueing, retries, idempotency) and link to journal events
-  once they have been processed.
+  asynchronous processing pipeline (queueing, retries, idempotency) and are associated directly
+  with journal events once they have been processed.
   """
 
   use DoubleEntryLedger.BaseSchema

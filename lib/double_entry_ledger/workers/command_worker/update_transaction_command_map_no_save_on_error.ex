@@ -20,7 +20,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
     * `handle_transaction_map_error/3` — Returns a changeset with error details, does not persist.
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion, does not persist.
 
-  This module ensures that update commands are processed exactly once, even in high-concurrency environments, and that all error and retry scenarios are handled transparently and returned to the caller for further handling.
+  Atomic writes, OCC, and idempotency checks make concurrent retries safe. Error and retry
+  outcomes are returned to the caller for further handling rather than being persisted.
   """
 
   use DoubleEntryLedger.Occ.Processor

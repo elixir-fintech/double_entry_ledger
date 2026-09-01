@@ -55,7 +55,7 @@ defmodule DoubleEntryLedger.Command.EntryData do
 
   ## Fields
 
-  * `account_address`: The UUID of the account affected by this entry
+  * `account_address`: The stable address of the account affected by this entry
   * `amount`: Integer amount in the smallest currency unit (e.g., cents)
   * `currency`: Atom representing the currency (e.g., :USD, :EUR)
   """

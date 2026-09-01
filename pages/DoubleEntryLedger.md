@@ -186,8 +186,8 @@ params = %{
 ```elixir
 alias DoubleEntryLedger.Stores.AccountStore
 
-{:ok, cash_balance} = AccountStore.get_balance_history(cash.id)
-{:ok, equity_balance} = AccountStore.get_balance_history(equity.id)
+{:ok, {cash_history, _meta}} = AccountStore.list_balance_history(cash)
+{:ok, {equity_history, _meta}} = AccountStore.list_balance_history(equity)
 ```
 
 ### 5. Move Value Between Accounts

@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.Stores.JournalEventStore do
     - `id`: The UUID of the event to retrieve
 
   ## Returns
-    - `Command.t()`: The found event
+    - `JournalEvent.t()`: The found event
     - `nil`: If no event with the given ID exists
   """
   @spec get_by_id(Ecto.UUID.t()) :: JournalEvent.t() | nil

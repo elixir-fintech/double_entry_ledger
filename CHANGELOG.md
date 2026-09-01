@@ -4,6 +4,49 @@ All notable changes to DoubleEntryLedger are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.0]
+
+### ⚠️ Breaking changes
+
+- Schema migrations 5–7 replace the three `journal_event_*_links` tables with
+  direct foreign keys, add a required `command_queue_items.instance_id`, and
+  widen balance/limit columns to `bigint`. Upgrades from 0.4.x must use
+  `DoubleEntryLedger.Migration.up(from: 4)`.
+- A mixed 0.4.x/0.5.0 rolling deployment is not supported because old code
+  requires the link tables while new code requires the direct foreign keys and
+  queue-item `instance_id`. Stop command processing during migration and deploy
+  0.5.0 before resuming it.
+- Removed the `JournalEventAccountLink`, `JournalEventCommandLink`,
+  `JournalEventTransactionLink`, and `Workers.Oban.JournalEventLinks` modules,
+  plus the `insert/3` helper on `DoubleEntryLedger.Oban`.
+- `JournalEvent` now exposes direct `command`, `transaction`, and `account`
+  associations. Custom queries and preloads using link associations must be
+  updated.
+- `CommandQueueItem.changeset/2` now requires `instance_id`.
+- Removed `mix load_test`. Source checkouts provide purpose-specific
+  `mix load.*` tasks under `MIX_ENV=perf`; these development tasks are not
+  included in the Hex package.
+
+### Added
+
+- Opt-in batched command processing for compatible create/update workloads,
+  including retry-and-split fallback and per-command telemetry parity.
+- Equivalence, stress, mixed-workload, and load-testing coverage for the batched
+  and `insert_all` transaction paths.
+- Repository-only performance documentation and configurable load-test tasks.
+- Batch completion telemetry with per-command span and transaction-lifecycle
+  parity.
+
+### Changed
+
+- Journal-event relationships are written synchronously using direct foreign
+  keys; the library no longer enqueues an internal Oban linking job.
+- Queue claiming, balance-history writes, and transaction persistence have new
+  optimized paths. Batching and `insert_all` remain opt-in.
+- Package consumers must configure `:insert_path`, `:batch_enabled`, and
+  `:batch_size` in their own application. This repository's runtime config is
+  not loaded as dependency configuration.
+
 ## [0.4.0]
 
 ### ⚠️ Breaking changes

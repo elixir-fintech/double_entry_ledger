@@ -4,12 +4,26 @@ defmodule DoubleEntryLedger.MixProject do
   def project do
     [
       app: :double_entry_ledger,
-      version: "0.4.0",
+      version: "0.5.0",
       description: """
         DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engine for Elixir and PostgreSQL.
       """,
       elixir: "~> 1.15",
       package: [
+        files: [
+          "lib",
+          "priv",
+          ".formatter.exs",
+          "mix.exs",
+          "README.md",
+          "CHANGELOG.md",
+          "LICENSE",
+          "pages/DoubleEntryLedger.md",
+          "pages/AsynchronousEventProcessing.md",
+          "pages/HandlingPendingTransactions.md",
+          "pages/EventSourcing.md",
+          "pages/Telemetry.md"
+        ],
         licenses: ["MIT"],
         links: %{"GitHub" => "https://github.com/elixir-fintech/double_entry_ledger"}
       ],
@@ -105,12 +119,12 @@ defmodule DoubleEntryLedger.MixProject do
       main: "readme",
       extras: [
         "README.md",
+        "CHANGELOG.md",
         "pages/DoubleEntryLedger.md",
         "pages/AsynchronousEventProcessing.md",
         "pages/HandlingPendingTransactions.md",
         "pages/EventSourcing.md",
         "pages/Telemetry.md",
-        "pages/PerformanceTesting.md",
         "LICENSE"
       ],
       groups_for_modules: [
@@ -132,13 +146,11 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Transaction,
           DoubleEntryLedger.PendingTransactionLookup,
           DoubleEntryLedger.Stores.TransactionStore,
-          DoubleEntryLedger.Stores.TransactionStoreHelper
+          DoubleEntryLedger.Stores.TransactionStoreHelper,
+          DoubleEntryLedger.Stores.BatchTransactionStoreHelper
         ],
         JournalEvent: [
           DoubleEntryLedger.JournalEvent,
-          DoubleEntryLedger.JournalEventAccountLink,
-          DoubleEntryLedger.JournalEventCommandLink,
-          DoubleEntryLedger.JournalEventTransactionLink,
           DoubleEntryLedger.Stores.JournalEventStore,
           DoubleEntryLedger.Stores.JournalEventStoreHelper
         ],
@@ -182,13 +194,15 @@ defmodule DoubleEntryLedger.MixProject do
         ],
         CommandQueue: [
           DoubleEntryLedger.CommandQueueItem,
+          DoubleEntryLedger.BatchProcessor,
+          DoubleEntryLedger.BatchSerializer,
           DoubleEntryLedger.CommandQueue.Supervisor,
           DoubleEntryLedger.CommandQueue.Scheduling,
           DoubleEntryLedger.CommandQueue.InstanceProcessor,
           DoubleEntryLedger.CommandQueue.InstanceMonitor
         ],
         Oban: [
-          DoubleEntryLedger.Workers.Oban.JournalEventLinks
+          DoubleEntryLedger.Oban
         ],
         Telemetry: [
           DoubleEntryLedger.Telemetry

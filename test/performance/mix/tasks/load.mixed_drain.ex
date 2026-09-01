@@ -13,7 +13,8 @@ defmodule Mix.Tasks.Load.MixedDrain do
   ## Setup
 
   Drops the perf DB, creates fresh, migrates, starts the app.
-  Requires `MIX_ENV=perf`.
+  Requires `MIX_ENV=perf` and `start_command_queue: false`. This repository
+  supplies those database and queue settings in `config/perf.exs`.
 
   ## Usage
 

@@ -21,8 +21,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
     * `build_transaction/3` — Constructs Ecto.Multi operations for create or update actions.
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
 
-  This module ensures that events are processed exactly once, even in high-concurrency
-  environments, and that all error and retry scenarios are handled transparently.
+  This module combines atomic writes, OCC, and idempotency checks so concurrent retries do not
+  duplicate the underlying business operation.
   """
   use DoubleEntryLedger.Occ.Processor
   use DoubleEntryLedger.Logger

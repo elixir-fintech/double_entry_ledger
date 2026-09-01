@@ -14,9 +14,9 @@ defmodule Mix.Tasks.Load.Drain do
   Pre-fill is parallelized via `Task.async_stream` but **not**
   included in the measurement. Only the drain phase is timed.
 
-  Requires `start_command_queue: false` in `config/perf.exs` (the
-  perf default) so the library's own queue supervision isn't
-  competing for the same instance.
+  Requires `start_command_queue: false` so the library's own queue supervision
+  isn't competing for the same instance. The repository's `config/perf.exs`
+  provides this setting.
 
   ## Setup
 
