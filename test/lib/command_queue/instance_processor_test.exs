@@ -247,6 +247,54 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       # Processor finds command → task succeeds → no more commands → shuts down
       assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
     end
+
+    test "pending_fetch_limit bounds the in-memory ID buffer", %{
+      instance: instance,
+      accounts: accounts
+    } do
+      insert_create_command(instance, accounts, 10)
+
+      original = Application.get_env(:double_entry_ledger, :command_queue)
+
+      Application.put_env(
+        :double_entry_ledger,
+        :command_queue,
+        Keyword.put(original || [], :pending_fetch_limit, 1)
+      )
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:double_entry_ledger, :command_queue)
+          value -> Application.put_env(:double_entry_ledger, :command_queue, value)
+        end
+      end)
+
+      test_pid = self()
+
+      DoubleEntryLedger.MockCommandWorker
+      |> stub(:process_command_with_id, fn id, _processor_name ->
+        send(test_pid, {:worker_started, self()})
+        assert_receive :continue, 5000
+
+        id
+        |> CommandStore.get_by_id()
+        |> Scheduling.build_mark_as_processed()
+        |> Repo.update!()
+
+        {:ok, nil, nil}
+      end)
+
+      {pid, ref} = start_processor(instance.id)
+
+      assert_receive {:worker_started, first_worker}, 5000
+      assert %{pending_ids: []} = :sys.get_state(pid)
+      send(first_worker, :continue)
+
+      assert_receive {:worker_started, second_worker}, 5000
+      send(second_worker, :continue)
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+    end
   end
 
   describe "error processing" do

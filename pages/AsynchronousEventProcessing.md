@@ -68,7 +68,7 @@ Tuning happens under the `:command_queue` config namespace (kept for backwards c
 ```elixir
 config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
-  claim_batch_size: 50,
+  pending_fetch_limit: 64,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
@@ -81,7 +81,7 @@ config :double_entry_ledger,
 ```
 
 - `poll_interval` – how often `InstanceMonitor` looks for pending work.
-- `claim_batch_size` – how many queue IDs a processor fetches per database read.
+- `pending_fetch_limit` – how many queue IDs a processor fetches per database read. When batching is enabled, use a value at least as large as, and preferably a multiple of, `batch_size`.
 - `max_retries`, `base_retry_delay`, `max_retry_delay` – queue retry/backoff behaviour. These values are compiled into `CommandQueue.Scheduling`; change them before compiling the dependency.
 - `processor_name` – used in queue item metadata to identify workers.
 - `batch_enabled` – live switch for batched transaction processing; account commands remain on the single-command path.

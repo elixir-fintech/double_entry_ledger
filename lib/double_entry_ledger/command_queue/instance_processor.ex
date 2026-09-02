@@ -110,8 +110,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   def handle_info(:process_next, %{pending_ids: []} = state) do
     # Drain from the in-memory buffer first; only hit the DB to refill
     # when it's empty. This amortizes the find_next SELECT cost across
-    # `claim_batch_size/0` commands per round-trip.
-    case find_next_command_ids(state.instance_id, claim_batch_size()) do
+    # `pending_fetch_limit/0` commands per round-trip.
+    case find_next_command_ids(state.instance_id, pending_fetch_limit()) do
       [] ->
         Logger.info(
           "No more commands to process for instance #{state.instance_id}, shutting down"
@@ -294,8 +294,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end)
   end
 
-  # Loads commands by id with command_queue_item preloaded, in claim
-  # order (matching the order of `ids`). One round-trip.
+  # Loads commands with their command_queue_item preloaded, preserving
+  # the order of `ids`. Commands that no longer exist are omitted.
   defp load_commands(ids) do
     rows =
       from(c in Command,
@@ -459,8 +459,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     |> Repo.all()
   end
 
-  defp claim_batch_size do
-    Application.get_env(:double_entry_ledger, :command_queue, [])[:claim_batch_size] || 50
+  defp pending_fetch_limit do
+    Application.get_env(:double_entry_ledger, :command_queue, [])[:pending_fetch_limit] || 64
   end
 
   defp batch_enabled? do

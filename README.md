@@ -79,7 +79,7 @@ config :double_entry_ledger,
 
 config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
-  claim_batch_size: 50,
+  pending_fetch_limit: 64,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
@@ -102,8 +102,10 @@ defaults. To opt into the new paths, set `insert_path: :insert_all` and/or
 `batch_size` to control how many compatible transaction commands are processed
 together and `max_batch_retries` to control retries after a stale account
 write. Account commands continue through the single-command path.
-`claim_batch_size` controls how many queue IDs an instance processor fetches per
-database read; it is independent of `batch_size`.
+`pending_fetch_limit` controls how many queue IDs an instance processor fetches
+per database read; it is independent of `batch_size`. When batching is enabled,
+set it to at least `batch_size` and preferably to a multiple of `batch_size` so
+each database fetch can be divided into full batches.
 Dependency configuration files are not loaded by a host application, so the
 `INSERT_PATH`, `BATCH`, and `BATCH_SIZE` environment-variable helpers in this
 repository's `config/runtime.exs` only apply when running this repository
