@@ -226,19 +226,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     {:noreply, state}
   end
 
-  # Decides whether to batch the next round or fall back to the per-cmd
-  # path. Loads up to `batch_size/0` commands (preloading queue items),
-  # and:
-  #
-  #   * if every command's action is batchable per `all_batchable?/1`
-  #     (currently `:create_transaction` or `:update_transaction`) →
-  #     spawn a Task that calls `state.batch_processor.run_batch/2`.
-  #   * if any non-batchable action is present (e.g. account commands)
-  #     → fall back to processing a single command via the legacy
-  #     single-cmd Task path. Remaining ids stay in pending_ids and
-  #     the next round may batch them.
-  #   * if the load returns nothing (e.g. ids vanished from the DB) →
-  #     drop them and trigger another :process_next cycle.
   # Route the head of `pending_ids`. Batching is checked live, per cycle,
   # so flipping the `:batch_enabled` flag at runtime takes effect without
   # restarting the processor (a production safety lever). In batch mode,
@@ -257,42 +244,36 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end
   end
 
+  # Loads up to `batch_size/0` commands and batches the longest contiguous
+  # batchable prefix. The first non-batchable command remains at the head of
+  # `pending_ids`, so it is processed singly on the next cycle before any
+  # later commands. If the first command is non-batchable, process it singly
+  # immediately. IDs whose commands disappeared are dropped.
   defp dispatch_batch_or_legacy(%{pending_ids: ids} = state) do
-    {batch_ids, rest_after_batch} = Enum.split(ids, batch_size())
-    commands = load_commands(batch_ids)
+    {candidate_ids, ids_after_window} = Enum.split(ids, batch_size())
+    commands = load_commands(candidate_ids)
+    {batchable_prefix, remaining_commands} = Enum.split_while(commands, &batchable?/1)
+    remaining_ids = Enum.map(remaining_commands, & &1.id) ++ ids_after_window
 
-    cond do
-      commands == [] ->
-        # IDs disappeared from the DB (race or already processed). Drop
-        # them and continue.
+    case {batchable_prefix, remaining_commands} do
+      {[], []} ->
         send(self(), :process_next)
-        {:noreply, %{state | pending_ids: rest_after_batch}}
+        {:noreply, %{state | pending_ids: ids_after_window}}
 
-      all_batchable?(commands) ->
-        claim_and_start_batch(%{state | pending_ids: rest_after_batch}, commands)
+      {[], [single | rest]} ->
+        pending_ids = Enum.map(rest, & &1.id) ++ ids_after_window
+        start_processing(%{state | pending_ids: pending_ids}, single.id)
 
-      true ->
-        # Mixed batch with non-batchable action(s) (e.g. account commands):
-        # process exactly one command via the legacy path. The remaining
-        # ids stay pending; on the next cycle they'll be re-evaluated
-        # and may now form an all-batchable round.
-        [head | rest] = ids
-        start_processing(%{state | pending_ids: rest}, head)
+      {prefix, _remainder} ->
+        claim_and_start_batch(%{state | pending_ids: remaining_ids}, prefix)
     end
   end
 
-  # A batch is dispatched to `BatchProcessor.run_batch/2` when every
-  # command's action is supported by the batched path. Currently that's
-  # `:create_transaction` (Phase A) and `:update_transaction` (Phase B,
-  # via `enrich_updates_with_existing/2`). Account commands stay on the
-  # legacy single-cmd path.
-  defp all_batchable?(commands) do
-    Enum.all?(commands, fn
-      %Command{command_map: %{action: :create_transaction}} -> true
-      %Command{command_map: %{action: :update_transaction}} -> true
-      _ -> false
-    end)
-  end
+  defp batchable?(%Command{command_map: %{action: action}})
+       when action in [:create_transaction, :update_transaction],
+       do: true
+
+  defp batchable?(_command), do: false
 
   # Loads commands with their command_queue_item preloaded, preserving
   # the order of `ids`. Commands that no longer exist are omitted.

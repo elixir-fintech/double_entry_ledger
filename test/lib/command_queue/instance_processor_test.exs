@@ -36,6 +36,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     def run_batch(commands, _repo \\ DoubleEntryLedger.Repo) do
       send(:batch_processor_test_observer, {:batch_run_received, Enum.map(commands, & &1.id)})
 
+      complete(commands)
+    end
+
+    def complete(commands) do
       successes =
         Enum.map(commands, fn cmd ->
           %{command_id: cmd.id, transaction_id: Ecto.UUID.generate()}
@@ -53,19 +57,26 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     end
   end
 
+  defmodule BlockingSuccessBatchProcessor do
+    def run_batch(commands, _repo \\ DoubleEntryLedger.Repo) do
+      send(
+        :batch_processor_test_observer,
+        {:blocking_batch_started, self(), Enum.map(commands, & &1.id)}
+      )
+
+      receive do
+        :continue -> SuccessBatchProcessor.complete(commands)
+      after
+        5_000 -> raise "timed out waiting to continue batch"
+      end
+    end
+  end
+
   defmodule CrashBatchProcessor do
     # Always raises — exercises the InstanceProcessor batch :DOWN handler.
     def run_batch(commands, _repo \\ DoubleEntryLedger.Repo) do
       send(:batch_processor_test_observer, {:batch_run_received, Enum.map(commands, & &1.id)})
       raise "batch crash boom"
-    end
-  end
-
-  defmodule UnreachableBatchProcessor do
-    # A stub used by the mixed-batch fall-back test. Must never be
-    # called; raises if it is.
-    def run_batch(_commands, _repo \\ DoubleEntryLedger.Repo) do
-      raise "should not be reached: mixed batch must fall back to legacy path"
     end
   end
 
@@ -166,8 +177,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
         }
       )
 
-    # Some batch tests still go through the legacy worker path (mixed
-    # batch fall-back). Allow the mock for those.
+    # Some batch tests include non-batchable commands that still use the
+    # legacy worker path. Allow the mock for those.
     Mox.allow(DoubleEntryLedger.MockCommandWorker, self(), fn -> pid end)
 
     ref = Process.monitor(pid)
@@ -417,20 +428,15 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert Enum.all?(qi_statuses, &(&1 == :processed))
     end
 
-    test "mixed batch with non-batchable action falls back to legacy single-cmd path; no batch run dispatched",
-         %{instance: instance, command: create_cmd} do
-      # Insert a :create_account command alongside the existing
-      # :create_transaction. `:create_account` is intentionally NOT in
-      # `all_batchable?/1` (account commands stay on the legacy single-cmd
-      # path), so a batch containing one must fall back to the legacy
-      # per-cmd path for at least one round.
-      # (B5 made `:update_transaction` itself batchable, so a
-      # create+update mix is now an all-batchable batch.)
+    test "batches the prefix before a non-batchable command and resumes batching after it",
+         %{instance: instance, command: first_create, accounts: accounts} do
+      second_create = insert_create_command(instance, accounts, 20)
+
       {:ok, account_cmd} =
         CommandStore.create(account_command_attrs(%{instance_address: instance.address}))
 
-      # Legacy worker path: mark each command processed when invoked,
-      # so the GenServer drains and shuts down naturally.
+      final_create = insert_create_command(instance, accounts, 30)
+
       DoubleEntryLedger.MockCommandWorker
       |> stub(:process_command_with_id, fn id, _processor_name ->
         cmd =
@@ -442,31 +448,55 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
         |> Scheduling.build_mark_as_processed()
         |> Repo.update!()
 
+        send(:batch_processor_test_observer, {:worker_processed, id})
         {:ok, nil, nil}
       end)
 
-      # Stub batch processor that should NEVER be called in the mixed
-      # round (we still pass it so init/1 has something to store).
-      {_pid, ref} = start_processor_with_batch(instance.id, UnreachableBatchProcessor)
+      {_pid, ref} = start_processor_with_batch(instance.id, SuccessBatchProcessor)
 
+      first_id = first_create.id
+      second_id = second_create.id
+      account_id = account_cmd.id
+      final_id = final_create.id
+
+      assert_receive {:batch_run_received, [^first_id, ^second_id]}, 5000
+      assert_receive {:worker_processed, ^account_id}, 5000
+      assert_receive {:batch_run_received, [^final_id]}, 5000
       assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
 
-      # Both commands ended up :processed via the legacy path.
-      [cqi_create, cqi_account] =
-        Repo.all(
-          from(q in CommandQueueItem,
-            where: q.command_id in ^[create_cmd.id, account_cmd.id],
-            order_by: q.command_id,
-            select: q
-          )
-        )
-        |> Enum.sort_by(& &1.command_id)
+      refute_received {:worker_processed, _}
+    end
 
-      assert cqi_create.status == :processed
-      assert cqi_account.status == :processed
+    test "drops a disappeared command ID without disrupting the following batch",
+         %{instance: instance, command: first_create, accounts: accounts} do
+      second_create = insert_create_command(instance, accounts, 20)
 
-      # Sanity: no batch dispatch message arrived.
-      refute_received {:batch_run_received, _}
+      {:ok, account_cmd} =
+        CommandStore.create(account_command_attrs(%{instance_address: instance.address}))
+
+      final_create = insert_create_command(instance, accounts, 30)
+
+      DoubleEntryLedger.MockCommandWorker
+      |> stub(:process_command_with_id, fn id, _processor_name ->
+        send(:batch_processor_test_observer, {:worker_processed, id})
+        {:error, :unexpected_single_processing}
+      end)
+
+      {_pid, ref} = start_processor_with_batch(instance.id, BlockingSuccessBatchProcessor)
+
+      first_id = first_create.id
+      second_id = second_create.id
+      final_id = final_create.id
+
+      assert_receive {:blocking_batch_started, first_task, [^first_id, ^second_id]}, 5000
+      assert {:ok, _deleted} = Repo.delete(account_cmd)
+      send(first_task, :continue)
+
+      assert_receive {:blocking_batch_started, final_task, [^final_id]}, 5000
+      send(final_task, :continue)
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+      refute_received {:worker_processed, _}
     end
 
     test "batch task crash schedules retry for every command in the batch and processor stays alive",
