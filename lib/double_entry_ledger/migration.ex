@@ -52,6 +52,9 @@ defmodule DoubleEntryLedger.Migration do
     * Version 7 — widen `accounts.available`, `accounts.negative_limit`, and
       `balance_history_entries.available` from `integer` to `bigint` so
       balances stored in minor units are not limited to 32-bit values.
+    * Version 8 — generate `commands.inserted_at` plus
+      `command_queue_items.inserted_at` and `updated_at` from the PostgreSQL
+      clock instead of application-node clocks.
 
   New consumers add a single migration calling `up()` / `down()` — all versions
   apply in order. Existing consumers upgrading to a new library release add a
@@ -67,7 +70,7 @@ defmodule DoubleEntryLedger.Migration do
 
       # Upgrade from 0.4.x to 0.5.0 (versions 1-4 already applied)
       def up, do: DoubleEntryLedger.Migration.up(from: 4)
-      def down, do: DoubleEntryLedger.Migration.down(from: 7, version: 4)
+      def down, do: DoubleEntryLedger.Migration.down(from: 8, version: 4)
 
   ## Historical background-job migrations
 
@@ -87,7 +90,7 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  @latest_version 7
+  @latest_version 8
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -138,7 +141,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 7 and version >= 7, do: v7_up(prefix)
+    if from < 7 and version >= 7 do
+      v7_up(prefix)
+      flush()
+    end
+
+    if from < 8 and version >= 8, do: v8_up(prefix)
 
     :ok
   end
@@ -157,6 +165,11 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 8 and version < 8 do
+      v8_down(prefix)
+      flush()
+    end
 
     if from >= 7 and version < 7 do
       v7_down(prefix)
@@ -552,6 +565,59 @@ defmodule DoubleEntryLedger.Migration do
       modify(:negative_limit, :integer, from: :bigint)
       modify(:available, :integer, from: :bigint)
     end
+  end
+
+  # ── Version 8: database-generated command insertion timestamps ────
+
+  defp v8_up(prefix) do
+    execute(
+      "ALTER TABLE #{prefix}.commands " <>
+        "ALTER COLUMN inserted_at SET DEFAULT timezone('UTC', statement_timestamp())"
+    )
+
+    execute(
+      "ALTER TABLE #{prefix}.command_queue_items " <>
+        "ALTER COLUMN inserted_at SET DEFAULT timezone('UTC', statement_timestamp())"
+    )
+
+    execute(
+      "ALTER TABLE #{prefix}.command_queue_items " <>
+        "ALTER COLUMN updated_at SET DEFAULT timezone('UTC', statement_timestamp())"
+    )
+
+    execute("""
+    CREATE FUNCTION #{prefix}.set_command_queue_item_updated_at()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      NEW.updated_at = timezone('UTC', statement_timestamp());
+      RETURN NEW;
+    END;
+    $$
+    """)
+
+    execute("""
+    CREATE TRIGGER command_queue_items_set_updated_at
+    BEFORE UPDATE ON #{prefix}.command_queue_items
+    FOR EACH ROW
+    EXECUTE FUNCTION #{prefix}.set_command_queue_item_updated_at()
+    """)
+  end
+
+  defp v8_down(prefix) do
+    execute(
+      "DROP TRIGGER command_queue_items_set_updated_at " <>
+        "ON #{prefix}.command_queue_items"
+    )
+
+    execute("DROP FUNCTION #{prefix}.set_command_queue_item_updated_at()")
+
+    execute("ALTER TABLE #{prefix}.command_queue_items ALTER COLUMN updated_at DROP DEFAULT")
+
+    execute("ALTER TABLE #{prefix}.command_queue_items ALTER COLUMN inserted_at DROP DEFAULT")
+
+    execute("ALTER TABLE #{prefix}.commands ALTER COLUMN inserted_at DROP DEFAULT")
   end
 
   # ── V1 table definitions ───────────────────────────────────────────

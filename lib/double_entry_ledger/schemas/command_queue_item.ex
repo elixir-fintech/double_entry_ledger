@@ -25,7 +25,9 @@ defmodule DoubleEntryLedger.CommandQueueItem do
           occ_retry_count: integer() | nil,
           errors: list(map()) | nil,
           command_id: Ecto.UUID.t() | nil,
-          instance_id: Ecto.UUID.t() | nil
+          instance_id: Ecto.UUID.t() | nil,
+          inserted_at: DateTime.t() | nil,
+          updated_at: DateTime.t() | nil
         }
 
   @states [:pending, :processed, :failed, :occ_timeout, :processing, :dead_letter]
@@ -48,7 +50,8 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     field(:occ_retry_count, :integer, default: 0)
     field(:errors, {:array, :map}, default: [])
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec, read_after_writes: true)
+    field(:updated_at, :utc_datetime_usec, read_after_writes: true)
 
     belongs_to(:command, Command, type: Ecto.UUID)
     # Denormalized from `commands.instance_id` (migration v6) so the

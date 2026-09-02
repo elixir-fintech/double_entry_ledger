@@ -6,8 +6,8 @@ defmodule DoubleEntryLedger.MigrationTest do
   @prefix Application.compile_env(:double_entry_ledger, :schema_prefix, "double_entry_ledger")
 
   describe "latest_version/0" do
-    test "returns 7" do
-      assert Migration.latest_version() == 7
+    test "returns 8" do
+      assert Migration.latest_version() == 8
     end
   end
 
@@ -28,6 +28,18 @@ defmodule DoubleEntryLedger.MigrationTest do
     end
   end
 
+  describe "v8 migration — database-generated command queue timestamps" do
+    test "commands and command_queue_items use the PostgreSQL clock for inserted_at" do
+      assert column_default("commands", "inserted_at") =~ "statement_timestamp()"
+      assert column_default("command_queue_items", "inserted_at") =~ "statement_timestamp()"
+    end
+
+    test "command_queue_items use the PostgreSQL clock for updated_at" do
+      assert column_default("command_queue_items", "updated_at") =~ "statement_timestamp()"
+      assert trigger_exists?("command_queue_items_set_updated_at")
+    end
+  end
+
   defp column_data_type(table, column) do
     result =
       Ecto.Adapters.SQL.query!(
@@ -42,6 +54,37 @@ defmodule DoubleEntryLedger.MigrationTest do
 
     [[type]] = result.rows
     type
+  end
+
+  defp column_default(table, column) do
+    result =
+      Ecto.Adapters.SQL.query!(
+        Repo,
+        """
+        SELECT column_default
+        FROM information_schema.columns
+        WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+        """,
+        [@prefix, table, column]
+      )
+
+    [[default]] = result.rows
+    default || ""
+  end
+
+  defp trigger_exists?(trigger) do
+    result =
+      Ecto.Adapters.SQL.query!(
+        Repo,
+        """
+        SELECT 1
+        FROM information_schema.triggers
+        WHERE trigger_schema = $1 AND trigger_name = $2
+        """,
+        [@prefix, trigger]
+      )
+
+    result.rows != []
   end
 
   defp compound_index_exists? do

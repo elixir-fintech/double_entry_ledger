@@ -78,7 +78,8 @@ defmodule DoubleEntryLedger.Command do
     has_one(:account, through: [:journal_event, :account])
     has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec, read_after_writes: true)
+    timestamps(type: :utc_datetime_usec, inserted_at: false)
   end
 
   @doc """
