@@ -127,6 +127,41 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert qi.retry_count == 0
     end
 
+    test "claims pending and retryable commands with their respective retry counts", %{
+      instance: instance
+    } do
+      {:ok, pending} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      retryable = seed_occ_timeout_command(instance, 2)
+
+      claimed = Scheduling.claim_batch_for_processing([retryable, pending], "proc-1")
+
+      assert Enum.map(claimed, & &1.id) == [retryable.id, pending.id]
+      assert Enum.map(claimed, & &1.command_queue_item.retry_count) == [3, 0]
+      assert Enum.all?(claimed, &(&1.command_queue_item.status == :processing))
+    end
+
+    test "does not claim a retry that has been rescheduled for the future", %{
+      instance: instance
+    } do
+      command = seed_occ_timeout_command(instance, 2)
+      next_retry_after = DateTime.add(DateTime.utc_now(), 3_600, :second)
+
+      command.command_queue_item
+      |> Changeset.change(%{next_retry_after: next_retry_after})
+      |> Repo.update!()
+
+      command = CommandStore.get_by_id(command.id)
+
+      assert [] = Scheduling.claim_batch_for_processing([command], "proc-1")
+
+      queue_item = CommandStore.get_by_id(command.id).command_queue_item
+      assert queue_item.status == :occ_timeout
+      assert queue_item.retry_count == 2
+      assert queue_item.next_retry_after == next_retry_after
+    end
+
     test "skips commands that are not in a claimable state", %{instance: instance} do
       claimable = seed_occ_timeout_command(instance, 0)
       not_claimable = seed_occ_timeout_command(instance, 0)

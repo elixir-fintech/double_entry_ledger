@@ -143,34 +143,53 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   status → `:processing`, stamps `processor_id`/`processing_started_at`,
   clears `next_retry_after`, advances `processor_version`, and bumps
   `retry_count` per `retry_count_by_status/1` (unchanged for `:pending`,
-  `+1` otherwise). Commands are split by current status so the retry-count
-  rule matches the single-command path exactly.
+  `+1` otherwise). A single conditional bulk update applies the appropriate
+  retry-count rule to each row.
 
-  The `status` guard in each UPDATE is the concurrency check (in place of
-  the single-row `optimistic_lock`): a command already claimed by another
-  processor is no longer in a claimable state and is skipped.
+  The status and retry-time guards in the UPDATE are the concurrency check
+  (in place of the single-row `optimistic_lock`): a command already claimed
+  by another processor, or rescheduled for a future retry, is skipped.
 
   Returns the subset of `commands` that were actually claimed, in the same
   order, each with a refreshed `command_queue_item`. Commands that raced
   out of a claimable state are omitted.
   """
   @spec claim_batch_for_processing([Command.t()], String.t(), Ecto.Repo.t()) :: [Command.t()]
-  def claim_batch_for_processing(commands, processor_id, repo \\ Repo) do
+  def claim_batch_for_processing(commands, processor_id, repo \\ Repo)
+
+  def claim_batch_for_processing([], _processor_id, _repo), do: []
+
+  def claim_batch_for_processing(commands, processor_id, repo) do
     now = DateTime.utc_now()
+    ids = Enum.map(commands, & &1.id)
 
-    {pending, retryable} =
-      Enum.split_with(commands, &(&1.command_queue_item.status == :pending))
-
-    claimed_items =
-      claim_group(Enum.map(pending, & &1.id), [:pending], false, processor_id, now, repo) ++
-        claim_group(
-          Enum.map(retryable, & &1.id),
-          [:occ_timeout, :failed],
-          true,
-          processor_id,
-          now,
-          repo
-        )
+    {_count, claimed_items} =
+      from(eqi in CommandQueueItem,
+        prefix: ^@schema_prefix,
+        where:
+          eqi.command_id in ^ids and eqi.status in ^@processable_states and
+            (eqi.status == :pending or is_nil(eqi.next_retry_after) or
+               eqi.next_retry_after <= ^now),
+        update: [
+          set: [
+            status: :processing,
+            processor_id: ^processor_id,
+            processing_started_at: ^now,
+            processing_completed_at: nil,
+            next_retry_after: nil,
+            updated_at: ^now,
+            retry_count:
+              fragment(
+                "? + CASE WHEN ? IN ('occ_timeout', 'failed') THEN 1 ELSE 0 END",
+                eqi.retry_count,
+                eqi.status
+              )
+          ],
+          inc: [processor_version: 1]
+        ],
+        select: eqi
+      )
+      |> repo.update_all([])
 
     items_by_command_id = Map.new(claimed_items, &{&1.command_id, &1})
 
@@ -191,40 +210,6 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     end)
 
     claimed_commands
-  end
-
-  defp claim_group([], _statuses, _bump_retry?, _processor_id, _now, _repo), do: []
-
-  defp claim_group(ids, statuses, bump_retry?, processor_id, now, repo) do
-    {_count, claimed_items} =
-      from(eqi in CommandQueueItem,
-        prefix: ^@schema_prefix,
-        where: eqi.command_id in ^ids and eqi.status in ^statuses,
-        select: eqi
-      )
-      |> repo.update_all(claim_updates(processor_id, now, bump_retry?))
-
-    claimed_items
-  end
-
-  # Shared field changes for a claim, mirroring processing_start_changeset/3.
-  # `retry_count` advances only on a re-claim (see retry_count_by_status/1).
-  defp claim_updates(processor_id, now, bump_retry?) do
-    set = [
-      status: :processing,
-      processor_id: processor_id,
-      processing_started_at: now,
-      processing_completed_at: nil,
-      next_retry_after: nil,
-      updated_at: now
-    ]
-
-    inc =
-      if bump_retry?,
-        do: [processor_version: 1, retry_count: 1],
-        else: [processor_version: 1]
-
-    [set: set, inc: inc]
   end
 
   @doc """
