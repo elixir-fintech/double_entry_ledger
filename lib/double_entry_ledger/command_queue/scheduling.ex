@@ -140,11 +140,12 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   `claim_command_for_processing/2`.
 
   Mirrors `CommandQueueItem.processing_start_changeset/3` for every command:
-  status → `:processing`, stamps `processor_id`/`processing_started_at`,
-  clears `next_retry_after`, advances `processor_version`, and bumps
+  status → `:processing`, stamps `processor_id`, clears `next_retry_after`,
+  advances `processor_version`, and bumps
   `retry_count` per `retry_count_by_status/1` (unchanged for `:pending`,
   `+1` otherwise). A single conditional bulk update applies the appropriate
-  retry-count rule to each row.
+  retry-count rule to each row. The queue trigger stamps
+  `processing_started_at`.
 
   The status and retry-time guards in the UPDATE are the concurrency check
   (in place of the single-row `optimistic_lock`): a command already claimed
@@ -174,10 +175,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
           set: [
             status: :processing,
             processor_id: ^processor_id,
-            processing_started_at: ^now,
-            processing_completed_at: nil,
             next_retry_after: nil,
-            updated_at: ^now,
             retry_count:
               fragment(
                 "? + CASE WHEN ? IN ('occ_timeout', 'failed') THEN 1 ELSE 0 END",
@@ -215,7 +213,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   @doc """
   Builds a changeset to mark a command as processed.
 
-  This function updates the queue item's status to `:processed` and records completion metadata.
+  This function updates the queue item's status to `:processed` and clears its
+  retry timestamp. The queue trigger stamps `processing_completed_at`.
 
   ## Parameters
     - `command` - The Command struct to update

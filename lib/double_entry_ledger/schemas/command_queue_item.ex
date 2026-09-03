@@ -2,6 +2,12 @@ defmodule DoubleEntryLedger.CommandQueueItem do
   @moduledoc """
   Schema for the command queue table, used for worker-based queue management.
   This schema tracks commands that need to be processed by workers.
+
+  ## Database-managed columns
+
+  PostgreSQL owns `inserted_at`, `updated_at`, `processing_started_at`, and
+  `processing_completed_at`. The timestamp fields are read back after writes;
+  `changeset/2` does not cast application-supplied processing timestamps.
   """
 
   use DoubleEntryLedger.BaseSchema
@@ -30,6 +36,8 @@ defmodule DoubleEntryLedger.CommandQueueItem do
           updated_at: DateTime.t() | nil
         }
 
+  # Keep lifecycle changes in the command-queue timestamp trigger in sync with
+  # these states.
   @states [:pending, :processed, :failed, :occ_timeout, :processing, :dead_letter]
   @type state ::
           unquote(
@@ -43,8 +51,8 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     field(:status, Ecto.Enum, values: @states, default: :pending)
     field(:processor_id, :string)
     field(:processor_version, :integer, default: 1)
-    field(:processing_started_at, :utc_datetime_usec)
-    field(:processing_completed_at, :utc_datetime_usec)
+    field(:processing_started_at, :utc_datetime_usec, read_after_writes: true)
+    field(:processing_completed_at, :utc_datetime_usec, read_after_writes: true)
     field(:retry_count, :integer, default: 0)
     field(:next_retry_after, :utc_datetime_usec)
     field(:occ_retry_count, :integer, default: 0)
@@ -67,8 +75,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       :status,
       :processor_id,
       :processor_version,
-      :processing_started_at,
-      :processing_completed_at,
       :retry_count,
       :next_retry_after,
       :occ_retry_count,
@@ -87,8 +93,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     |> change(%{
       status: :processing,
       processor_id: processor_id,
-      processing_started_at: DateTime.utc_now(),
-      processing_completed_at: nil,
       retry_count: retry_count,
       next_retry_after: nil
     })
@@ -100,7 +104,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     command_queue_item
     |> change(%{
       status: :processed,
-      processing_completed_at: DateTime.utc_now(),
       next_retry_after: nil
     })
   end
@@ -119,7 +122,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     command_queue_item
     |> change(%{
       status: :dead_letter,
-      processing_completed_at: DateTime.utc_now(),
       errors: build_errors(command_queue_item, error),
       next_retry_after: nil
     })
@@ -139,7 +141,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       status: state,
       next_retry_after: DateTime.add(now, delay, :second),
       processor_id: nil,
-      processing_completed_at: now,
       errors: build_errors(command_queue_item, error)
     })
   end
@@ -168,7 +169,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     |> change(
       status: :failed,
       processor_id: nil,
-      processing_completed_at: now,
       next_retry_after: next_retry_after,
       errors: build_errors(command_queue_item, message)
     )

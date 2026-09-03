@@ -52,9 +52,9 @@ defmodule DoubleEntryLedger.Migration do
     * Version 7 — widen `accounts.available`, `accounts.negative_limit`, and
       `balance_history_entries.available` from `integer` to `bigint` so
       balances stored in minor units are not limited to 32-bit values.
-    * Version 8 — generate `commands.inserted_at` plus
-      `command_queue_items.inserted_at` and `updated_at` from the PostgreSQL
-      clock instead of application-node clocks.
+    * Version 8 — generate command insertion plus command-queue insertion,
+      update, and processing timestamps from the PostgreSQL clock instead of
+      application-node clocks.
 
   New consumers add a single migration calling `up()` / `down()` — all versions
   apply in order. Existing consumers upgrading to a new library release add a
@@ -567,7 +567,7 @@ defmodule DoubleEntryLedger.Migration do
     end
   end
 
-  # ── Version 8: database-generated command insertion timestamps ────
+  # ── Version 8: database-generated command queue timestamps ────────
 
   defp v8_up(prefix) do
     execute(
@@ -586,32 +586,44 @@ defmodule DoubleEntryLedger.Migration do
     )
 
     execute("""
-    CREATE FUNCTION #{prefix}.set_command_queue_item_updated_at()
+    CREATE FUNCTION #{prefix}.set_command_queue_item_timestamps()
     RETURNS trigger
     LANGUAGE plpgsql
     AS $$
+    DECLARE
+      database_now timestamp without time zone := timezone('UTC', statement_timestamp());
     BEGIN
-      NEW.updated_at = timezone('UTC', statement_timestamp());
+      NEW.updated_at = database_now;
+
+      IF NEW.status IS DISTINCT FROM OLD.status THEN
+        IF NEW.status = 'processing' THEN
+          NEW.processing_started_at = database_now;
+          NEW.processing_completed_at = NULL;
+        ELSIF NEW.status IN ('processed', 'failed', 'occ_timeout', 'dead_letter') THEN
+          NEW.processing_completed_at = database_now;
+        END IF;
+      END IF;
+
       RETURN NEW;
     END;
     $$
     """)
 
     execute("""
-    CREATE TRIGGER command_queue_items_set_updated_at
+    CREATE TRIGGER command_queue_items_set_timestamps
     BEFORE UPDATE ON #{prefix}.command_queue_items
     FOR EACH ROW
-    EXECUTE FUNCTION #{prefix}.set_command_queue_item_updated_at()
+    EXECUTE FUNCTION #{prefix}.set_command_queue_item_timestamps()
     """)
   end
 
   defp v8_down(prefix) do
     execute(
-      "DROP TRIGGER command_queue_items_set_updated_at " <>
+      "DROP TRIGGER command_queue_items_set_timestamps " <>
         "ON #{prefix}.command_queue_items"
     )
 
-    execute("DROP FUNCTION #{prefix}.set_command_queue_item_updated_at()")
+    execute("DROP FUNCTION #{prefix}.set_command_queue_item_timestamps()")
 
     execute("ALTER TABLE #{prefix}.command_queue_items ALTER COLUMN updated_at DROP DEFAULT")
 

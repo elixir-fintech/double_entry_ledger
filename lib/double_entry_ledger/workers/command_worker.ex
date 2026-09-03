@@ -455,7 +455,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   ## CommandQueueItem Claiming Process
 
   1. **Atomic Claim** - Updates CommandQueueItem status from `:pending` or claimable error states to `:processing`
-  2. **Processor Assignment** - Records processor_id and processing_started_at timestamp in CommandQueueItem
+  2. **Processor Assignment** - Records `processor_id`; the queue trigger stamps `processing_started_at`
   3. **Optimistic Locking** - Uses processor_version for concurrent update protection
   4. **Processing** - Delegates to appropriate handler based on action
   5. **Completion** - Updates CommandQueueItem status to `:processed` or appropriate error state

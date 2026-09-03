@@ -1,8 +1,14 @@
 defmodule DoubleEntryLedger.MigrationTest do
   use DoubleEntryLedger.RepoCase, async: false
 
-  alias DoubleEntryLedger.{Migration, Repo}
+  import DoubleEntryLedger.AccountFixtures
+  import DoubleEntryLedger.CommandFixtures
+  import DoubleEntryLedger.InstanceFixtures
 
+  alias DoubleEntryLedger.{Migration, Repo}
+  alias DoubleEntryLedger.Stores.CommandStore
+
+  @discarded_timestamp ~U[2000-01-01 00:00:00.000000Z]
   @prefix Application.compile_env(:double_entry_ledger, :schema_prefix, "double_entry_ledger")
 
   describe "latest_version/0" do
@@ -36,8 +42,67 @@ defmodule DoubleEntryLedger.MigrationTest do
 
     test "command_queue_items use the PostgreSQL clock for updated_at" do
       assert column_default("command_queue_items", "updated_at") =~ "statement_timestamp()"
-      assert trigger_exists?("command_queue_items_set_updated_at")
+      assert trigger_exists?("command_queue_items_set_timestamps")
     end
+  end
+
+  describe "processing timestamp trigger" do
+    setup [:create_instance, :create_accounts]
+
+    test "stamps processing_started_at when processing starts", %{instance: instance} do
+      queue_item = create_queue_item(instance)
+
+      processing_queue_item =
+        queue_item
+        |> Ecto.Changeset.change(
+          status: :processing,
+          processing_started_at: @discarded_timestamp
+        )
+        |> Repo.update!()
+
+      assert processing_queue_item.processing_started_at == processing_queue_item.updated_at
+      assert processing_queue_item.processing_completed_at == nil
+    end
+
+    test "stamps processing_completed_at when processing succeeds", %{instance: instance} do
+      assert_completion_timestamp(instance, :processed)
+    end
+
+    test "stamps processing_completed_at when processing fails", %{instance: instance} do
+      assert_completion_timestamp(instance, :failed)
+    end
+
+    test "stamps processing_completed_at after an OCC timeout", %{instance: instance} do
+      assert_completion_timestamp(instance, :occ_timeout)
+    end
+
+    test "stamps processing_completed_at when a command is dead-lettered", %{
+      instance: instance
+    } do
+      assert_completion_timestamp(instance, :dead_letter)
+    end
+  end
+
+  defp create_queue_item(instance) do
+    assert {:ok, command} =
+             CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+    command.command_queue_item
+  end
+
+  defp assert_completion_timestamp(instance, status) do
+    completed_queue_item =
+      instance
+      |> create_queue_item()
+      |> Ecto.Changeset.change(status: :processing)
+      |> Repo.update!()
+      |> Ecto.Changeset.change(
+        status: status,
+        processing_completed_at: @discarded_timestamp
+      )
+      |> Repo.update!()
+
+    assert completed_queue_item.processing_completed_at == completed_queue_item.updated_at
   end
 
   defp column_data_type(table, column) do

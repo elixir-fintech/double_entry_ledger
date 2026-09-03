@@ -142,7 +142,7 @@ defmodule DoubleEntryLedger.Command do
   Creates a changeset for marking a command as being processed.
 
   This function prepares a changeset that updates a command to the :processing state, assigns a
-  processor, and updates processing metadata such as start time and retry count.
+  processor, and updates processing metadata such as retry count.
 
   ## Parameters
 
@@ -157,8 +157,8 @@ defmodule DoubleEntryLedger.Command do
 
   * `status`: Set to :processing
   * `processor_id`: Set to the provided processor_id
-  * `processing_started_at`: Set to current UTC datetime
-  * `processing_completed_at`: Set to nil
+  * `processing_started_at`: Set from the PostgreSQL clock by the queue trigger
+  * `processing_completed_at`: Cleared by the queue trigger
   * `retry_count`: Incremented by 1
   * `next_retry_after`: Set to nil
   * `processor_version`: Used for optimistic locking

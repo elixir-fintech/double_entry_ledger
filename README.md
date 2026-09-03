@@ -369,9 +369,10 @@ The migration performs these changes:
    Custom code building queue-item changesets must provide `instance_id`.
 3. Widens account and balance-history integer balance/limit columns to `bigint`.
    A later downgrade can fail if stored values exceed the old integer range.
-4. Moves `commands.inserted_at`, `command_queue_items.inserted_at`, and
-   `command_queue_items.updated_at` generation to PostgreSQL so queue ordering
-   and queue-item modification times do not depend on application-node clocks.
+4. Moves `commands.inserted_at` plus command-queue insertion, update,
+   processing-start, and processing-completion timestamp generation to
+   PostgreSQL so queue ordering and processing times do not depend on
+   application-node clocks.
 
 The `JournalEventAccountLink`, `JournalEventCommandLink`,
 `JournalEventTransactionLink`, and legacy journal-event link worker have been

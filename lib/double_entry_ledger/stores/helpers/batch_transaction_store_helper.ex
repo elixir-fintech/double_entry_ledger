@@ -85,9 +85,9 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
     * `write_plan` - output of `BatchProcessor.simulate_batch/2`
     * `repo` - the Ecto repo module
-    * `now` - DateTime to use for `inserted_at`/`updated_at`/`posted_at`/
-      `processing_completed_at`. Caller supplies it so all rows in the
-      batch share the same timestamp.
+    * `now` - DateTime used for transaction, entry, journal-event, and
+      balance-history timestamps. Queue processing timestamps come from
+      PostgreSQL.
 
   Returns `:ok`. Raises `Ecto.StaleEntryError` if any account's
   `lock_version` advanced between fold and write.
@@ -144,8 +144,9 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
     * `failures` - list of `t:BatchProcessor.failure_record/0`
     * `repo` - the Ecto repo module
-    * `now` - DateTime to use for `processing_completed_at`/`updated_at`
-      and as the `inserted_at` timestamp inside each error payload.
+    * `now` - DateTime used for retry calculation and as the `inserted_at`
+      timestamp inside each error payload. Queue completion time comes from
+      PostgreSQL.
 
   Returns `:ok` immediately (no SQL) when `failures == []`.
   """
@@ -178,7 +179,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     {journal_sql, state} = build_journals_cte(successes, now, state)
     {lookup_sql, state} = build_lookups_cte(inserted_successes, now, state)
     {accounts_sql, state} = build_accounts_cte(merged_accounts, now, state)
-    {queue_sql, state} = build_queue_items_cte(successes, now, state)
+    {queue_sql, state} = build_queue_items_cte(successes, state)
     {updated_tx_sql, state} = build_updated_transactions_cte(updated_successes, now, state)
     {updated_entries_sql, state} = build_updated_entries_cte(updated_successes, now, state)
     {deleted_lookups_sql, state} = build_deleted_lookups_cte(updated_successes, state)
@@ -599,18 +600,16 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   end
 
   # ── command_queue_items UPDATE CTE ───────────────────────────────
-  defp build_queue_items_cte(successes, now, state) do
+  defp build_queue_items_cte(successes, state) do
     queue_item_ids = Enum.map(successes, &uuid(&1.command.command_queue_item.id))
 
-    {placeholders, state} = push_params(state, [queue_item_ids, now])
+    {placeholders, state} = push_params(state, [queue_item_ids])
 
     sql = """
     processed_queue_items AS (
       UPDATE #{table("command_queue_items")}
       SET status = 'processed',
-          processing_completed_at = #{p(placeholders, 1)}::timestamptz,
-          next_retry_after = NULL,
-          updated_at = #{p(placeholders, 1)}::timestamptz
+          next_retry_after = NULL
       WHERE id = ANY(#{p(placeholders, 0)}::uuid[])
       RETURNING id
     )
@@ -626,8 +625,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   # `next_retry_after` or `:dead_letter` with `next_retry_after = NULL`
   # (per `compute_failure_outcome/3`). In both cases the new error
   # payload is appended to the existing `errors` JSONB array (using
-  # Postgres's `jsonb || jsonb_build_array(...)` pattern) and
-  # `retry_count`/`processor_version` are incremented.
+  # Postgres's `jsonb || jsonb_build_array(...)` pattern).
   @spec build_failure_query([BatchProcessor.failure_record()], DateTime.t()) ::
           {String.t(), [term()]}
   defp build_failure_query(failures, now) do
@@ -667,16 +665,12 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         {[cast | rows], st}
       end)
 
-    {now_placeholder, state} = push_param(state, now)
-
     sql = """
     UPDATE #{table("command_queue_items")} AS c
     SET status = u.status,
         errors = c.errors || jsonb_build_array(u.new_error),
         next_retry_after = u.next_retry_after,
-        processing_completed_at = #{now_placeholder}::timestamptz,
-        processor_id = u.processor_id_after,
-        updated_at = #{now_placeholder}::timestamptz
+        processor_id = u.processor_id_after
     FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
       AS u(id, status, processor_id_after, new_error, next_retry_after)
     WHERE c.id = u.id
@@ -824,7 +818,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   # params via `push_params/2`. Caller wraps the result in its CTE-
   # specific SQL template. Shared scaffolding for ~9 row-style CTE
   # builders (INSERT VALUES and UPDATE FROM VALUES).
-  @spec accumulate_value_rows([term()], map(), (term(), map() -> {String.t(), map()})) ::
+  @spec accumulate_value_rows(Enumerable.t(), map(), (term(), map() -> {String.t(), map()})) ::
           {String.t(), map()}
   defp accumulate_value_rows(items, state, build_row_fn) do
     {rows, state} =

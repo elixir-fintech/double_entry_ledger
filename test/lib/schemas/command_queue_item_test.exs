@@ -31,6 +31,28 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
       assert %Changeset{errors: [status: {"is invalid", _}]} =
                CommandQueueItem.changeset(%CommandQueueItem{}, attrs)
     end
+
+    test "does not cast database-managed processing timestamps" do
+      attrs = %{
+        instance_id: Ecto.UUID.generate(),
+        processing_started_at: ~U[2000-01-01 00:00:00.000000Z],
+        processing_completed_at: ~U[2000-01-02 00:00:00.000000Z]
+      }
+
+      changeset = CommandQueueItem.changeset(%CommandQueueItem{}, attrs)
+
+      refute Changeset.changed?(changeset, :processing_started_at)
+      refute Changeset.changed?(changeset, :processing_completed_at)
+    end
+
+    test "configures database-managed timestamps to be read after writes" do
+      assert :inserted_at in CommandQueueItem.__schema__(:read_after_writes)
+      refute :inserted_at in CommandQueueItem.__schema__(:autogenerate_fields)
+      assert :updated_at in CommandQueueItem.__schema__(:read_after_writes)
+      refute :updated_at in CommandQueueItem.__schema__(:autogenerate_fields)
+      assert :processing_started_at in CommandQueueItem.__schema__(:read_after_writes)
+      assert :processing_completed_at in CommandQueueItem.__schema__(:read_after_writes)
+    end
   end
 
   describe "processing_start_changeset/2" do
@@ -43,7 +65,7 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
       assert changeset.changes.status == :processing
       assert changeset.changes.processor_id == processor_id
       assert changeset.changes.retry_count == 1
-      assert changeset.changes.processing_started_at
+      refute Changeset.changed?(changeset, :processing_started_at)
       assert changeset.errors == []
     end
   end

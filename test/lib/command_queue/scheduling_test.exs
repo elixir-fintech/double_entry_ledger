@@ -236,7 +236,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == :processed
-      assert command_queue_item.changes.processing_completed_at != nil
+      refute Changeset.changed?(command_queue_item, :processing_completed_at)
       assert Ecto.Changeset.get_field(command_queue_item, :next_retry_after) == nil
     end
   end
@@ -255,7 +255,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == :dead_letter
-      assert command_queue_item.changes.processing_completed_at != nil
+      refute Changeset.changed?(command_queue_item, :processing_completed_at)
       assert Ecto.Changeset.get_field(command_queue_item, :next_retry_after) == nil
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
     end
@@ -309,6 +309,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == reason
       assert command_queue_item.changes.next_retry_after != nil
+      refute Changeset.changed?(command_queue_item, :processing_completed_at)
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
     end
   end
@@ -343,6 +344,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == :failed
       assert command_queue_item.changes.next_retry_after != nil
+      refute Changeset.changed?(command_queue_item, :processing_completed_at)
       assert Changeset.get_field(command_queue_item, :retry_count) == 0
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == test_message end)
     end

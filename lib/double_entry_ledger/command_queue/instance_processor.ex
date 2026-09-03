@@ -336,12 +336,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   defp revert_batch_to_pending([]), do: :ok
 
   defp revert_batch_to_pending(ids) do
-    now = DateTime.utc_now()
-
     from(eqi in CommandQueueItem,
       prefix: ^@schema_prefix,
       where: eqi.command_id in ^ids and eqi.status == :processing,
-      update: [set: [status: :pending, next_retry_after: nil, updated_at: ^now]]
+      update: [set: [status: :pending, next_retry_after: nil]]
     )
     |> Repo.update_all([])
 
