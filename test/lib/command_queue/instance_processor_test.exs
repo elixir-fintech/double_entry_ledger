@@ -400,16 +400,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       c2 = insert_create_command(instance, accounts, 50)
       c3 = insert_create_command(instance, accounts, 75)
 
-      expected_ids = MapSet.new([existing.id, c2.id, c3.id])
+      expected_ids = [existing.id, c2.id, c3.id]
 
       {_pid, ref} = start_processor_with_batch(instance.id, SuccessBatchProcessor)
 
-      # Wait for the batch task to receive the commands. Order is
-      # claim-order (oldest inserted first), but for this assertion
-      # we only need the set of ids the stub saw.
+      # Wait for the batch task to receive the commands in their stable,
+      # database-assigned queue order.
       assert_receive {:batch_run_received, received_ids}, 5000
-      assert MapSet.new(received_ids) == expected_ids
-      assert length(received_ids) == 3
+      assert received_ids == expected_ids
 
       # GenServer should drain and shut down :normal (queue rows were
       # marked :processed by the stub).
@@ -419,13 +417,28 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       qi_statuses =
         Repo.all(
           from(q in CommandQueueItem,
-            where: q.command_id in ^MapSet.to_list(expected_ids),
+            where: q.command_id in ^expected_ids,
             select: q.status
           )
         )
 
       assert length(qi_statuses) == 3
       assert Enum.all?(qi_statuses, &(&1 == :processed))
+    end
+
+    test "selects commands in queue-position order regardless of inserted_at",
+         %{instance: instance, command: existing, accounts: accounts} do
+      c2 = insert_create_command(instance, accounts, 50)
+      c3 = insert_create_command(instance, accounts, 75)
+
+      from(q in CommandQueueItem, where: q.command_id == ^existing.id)
+      |> Repo.update_all(set: [inserted_at: DateTime.add(DateTime.utc_now(), 3_600)])
+
+      {_pid, ref} = start_processor_with_batch(instance.id, SuccessBatchProcessor)
+
+      assert_receive {:batch_run_received, received_ids}, 5000
+      assert received_ids == [existing.id, c2.id, c3.id]
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
     end
 
     test "batches the prefix before a non-batchable command and resumes batching after it",

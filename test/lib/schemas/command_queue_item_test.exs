@@ -53,6 +53,11 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
       assert :processing_started_at in CommandQueueItem.__schema__(:read_after_writes)
       assert :processing_completed_at in CommandQueueItem.__schema__(:read_after_writes)
     end
+
+    test "configures queue_position to be read after writes" do
+      assert :queue_position in CommandQueueItem.__schema__(:read_after_writes)
+      refute :queue_position in CommandQueueItem.__schema__(:autogenerate_fields)
+    end
   end
 
   describe "processing_start_changeset/2" do

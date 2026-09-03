@@ -12,8 +12,27 @@ defmodule DoubleEntryLedger.MigrationTest do
   @prefix Application.compile_env(:double_entry_ledger, :schema_prefix, "double_entry_ledger")
 
   describe "latest_version/0" do
-    test "returns 8" do
-      assert Migration.latest_version() == 8
+    test "returns 9" do
+      assert Migration.latest_version() == 9
+    end
+  end
+
+  describe "v9 migration — stable queue positions" do
+    test "adds a required database-generated bigint queue position" do
+      assert column_data_type("command_queue_items", "queue_position") == "bigint"
+      refute column_nullable?("command_queue_items", "queue_position")
+
+      assert column_default("command_queue_items", "queue_position") =~
+               "command_queue_items_queue_position_seq"
+    end
+
+    test "orders the in-flight index by queue position" do
+      definition = index_definition("idx_command_queue_items_in_flight")
+
+      assert definition =~ "(instance_id, queue_position)"
+      assert definition =~ "pending"
+      assert definition =~ "occ_timeout"
+      assert definition =~ "failed"
     end
   end
 
@@ -106,83 +125,92 @@ defmodule DoubleEntryLedger.MigrationTest do
   end
 
   defp column_data_type(table, column) do
-    result =
-      Ecto.Adapters.SQL.query!(
-        Repo,
-        """
-        SELECT data_type
-        FROM information_schema.columns
-        WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
-        """,
-        [@prefix, table, column]
-      )
-
-    [[type]] = result.rows
-    type
+    single_value(
+      """
+      SELECT data_type
+      FROM information_schema.columns
+      WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+      """,
+      [@prefix, table, column]
+    )
   end
 
   defp column_default(table, column) do
-    result =
-      Ecto.Adapters.SQL.query!(
-        Repo,
-        """
-        SELECT column_default
-        FROM information_schema.columns
-        WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
-        """,
-        [@prefix, table, column]
-      )
+    single_value(
+      """
+      SELECT column_default
+      FROM information_schema.columns
+      WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+      """,
+      [@prefix, table, column]
+    ) || ""
+  end
 
-    [[default]] = result.rows
-    default || ""
+  defp column_nullable?(table, column) do
+    single_value(
+      """
+      SELECT is_nullable = 'YES'
+      FROM information_schema.columns
+      WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+      """,
+      [@prefix, table, column]
+    )
+  end
+
+  defp index_definition(index) do
+    single_value(
+      """
+      SELECT indexdef
+      FROM pg_indexes
+      WHERE schemaname = $1 AND indexname = $2
+      """,
+      [@prefix, index]
+    )
   end
 
   defp trigger_exists?(trigger) do
-    result =
-      Ecto.Adapters.SQL.query!(
-        Repo,
-        """
-        SELECT 1
-        FROM information_schema.triggers
-        WHERE trigger_schema = $1 AND trigger_name = $2
-        """,
-        [@prefix, trigger]
-      )
-
-    result.rows != []
+    exists?(
+      """
+      SELECT 1
+      FROM information_schema.triggers
+      WHERE trigger_schema = $1 AND trigger_name = $2
+      """,
+      [@prefix, trigger]
+    )
   end
 
   defp compound_index_exists? do
-    result =
-      Ecto.Adapters.SQL.query!(
-        Repo,
-        """
-        SELECT 1
-        FROM pg_indexes
-        WHERE schemaname = $1
-          AND tablename = 'balance_history_entries'
-          AND indexdef LIKE '%(entry_id, inserted_at)%'
-        """,
-        [@prefix]
-      )
-
-    result.rows != []
+    exists?(
+      """
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = $1
+        AND tablename = 'balance_history_entries'
+        AND indexdef LIKE '%(entry_id, inserted_at)%'
+      """,
+      [@prefix]
+    )
   end
 
   defp single_column_entry_id_index_exists? do
-    result =
-      Ecto.Adapters.SQL.query!(
-        Repo,
-        """
-        SELECT 1
-        FROM pg_indexes
-        WHERE schemaname = $1
-          AND tablename = 'balance_history_entries'
-          AND indexname = 'balance_history_entries_entry_id_index'
-        """,
-        [@prefix]
-      )
+    exists?(
+      """
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = $1
+        AND tablename = 'balance_history_entries'
+        AND indexname = 'balance_history_entries_entry_id_index'
+      """,
+      [@prefix]
+    )
+  end
 
-    result.rows != []
+  defp single_value(sql, args) do
+    %{rows: [[value]]} = Ecto.Adapters.SQL.query!(Repo, sql, args)
+    value
+  end
+
+  defp exists?(sql, args) do
+    Ecto.Adapters.SQL.query!(Repo, sql, args).num_rows > 0
   end
 end

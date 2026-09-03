@@ -371,8 +371,9 @@ The migration performs these changes:
    A later downgrade can fail if stored values exceed the old integer range.
 4. Moves `commands.inserted_at` plus command-queue insertion, update,
    processing-start, and processing-completion timestamp generation to
-   PostgreSQL so queue ordering and processing times do not depend on
-   application-node clocks.
+   PostgreSQL so processing times do not depend on application-node clocks.
+5. Adds and backfills `command_queue_items.queue_position` from a PostgreSQL
+   sequence, then uses it as the stable queue-processing order.
 
 The `JournalEventAccountLink`, `JournalEventCommandLink`,
 `JournalEventTransactionLink`, and legacy journal-event link worker have been

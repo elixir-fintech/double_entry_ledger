@@ -55,6 +55,8 @@ defmodule DoubleEntryLedger.Migration do
     * Version 8 — generate command insertion plus command-queue insertion,
       update, and processing timestamps from the PostgreSQL clock instead of
       application-node clocks.
+    * Version 9 — add a database-generated queue position and use it for stable
+      command ordering.
 
   New consumers add a single migration calling `up()` / `down()` — all versions
   apply in order. Existing consumers upgrading to a new library release add a
@@ -70,7 +72,7 @@ defmodule DoubleEntryLedger.Migration do
 
       # Upgrade from 0.4.x to 0.5.0 (versions 1-4 already applied)
       def up, do: DoubleEntryLedger.Migration.up(from: 4)
-      def down, do: DoubleEntryLedger.Migration.down(from: 8, version: 4)
+      def down, do: DoubleEntryLedger.Migration.down(from: 9, version: 4)
 
   ## Historical background-job migrations
 
@@ -90,7 +92,7 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  @latest_version 8
+  @latest_version 9
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -146,7 +148,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 8 and version >= 8, do: v8_up(prefix)
+    if from < 8 and version >= 8 do
+      v8_up(prefix)
+      flush()
+    end
+
+    if from < 9 and version >= 9, do: v9_up(prefix)
 
     :ok
   end
@@ -165,6 +172,11 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 9 and version < 9 do
+      v9_down(prefix)
+      flush()
+    end
 
     if from >= 8 and version < 8 do
       v8_down(prefix)
@@ -630,6 +642,90 @@ defmodule DoubleEntryLedger.Migration do
     execute("ALTER TABLE #{prefix}.command_queue_items ALTER COLUMN inserted_at DROP DEFAULT")
 
     execute("ALTER TABLE #{prefix}.commands ALTER COLUMN inserted_at DROP DEFAULT")
+  end
+
+  # ── Version 9: stable database-generated queue positions ──────────
+
+  defp v9_up(prefix) do
+    sequence = "#{prefix}.command_queue_items_queue_position_seq"
+
+    execute("CREATE SEQUENCE #{sequence} AS bigint")
+
+    alter table(:command_queue_items, prefix: prefix) do
+      add(:queue_position, :bigint)
+    end
+
+    flush()
+
+    execute(
+      "ALTER SEQUENCE #{sequence} " <>
+        "OWNED BY #{prefix}.command_queue_items.queue_position"
+    )
+
+    execute("""
+    WITH ordered AS (
+      SELECT id, row_number() OVER (ORDER BY inserted_at, command_id) AS queue_position
+      FROM #{prefix}.command_queue_items
+    )
+    UPDATE #{prefix}.command_queue_items AS queue_item
+    SET queue_position = ordered.queue_position
+    FROM ordered
+    WHERE queue_item.id = ordered.id
+    """)
+
+    execute("""
+    SELECT setval(
+      '#{sequence}',
+      COALESCE((SELECT MAX(queue_position) FROM #{prefix}.command_queue_items), 0) + 1,
+      false
+    )
+    """)
+
+    execute(
+      "ALTER TABLE #{prefix}.command_queue_items " <>
+        "ALTER COLUMN queue_position SET DEFAULT nextval('#{sequence}')"
+    )
+
+    execute(
+      "ALTER TABLE #{prefix}.command_queue_items " <>
+        "ALTER COLUMN queue_position SET NOT NULL"
+    )
+
+    drop(
+      index(:command_queue_items, [:instance_id, :inserted_at],
+        prefix: prefix,
+        name: "idx_command_queue_items_in_flight"
+      )
+    )
+
+    create(
+      index(:command_queue_items, [:instance_id, :queue_position],
+        prefix: prefix,
+        where: "status IN ('pending', 'occ_timeout', 'failed')",
+        name: "idx_command_queue_items_in_flight"
+      )
+    )
+  end
+
+  defp v9_down(prefix) do
+    drop(
+      index(:command_queue_items, [:instance_id, :queue_position],
+        prefix: prefix,
+        name: "idx_command_queue_items_in_flight"
+      )
+    )
+
+    create(
+      index(:command_queue_items, [:instance_id, :inserted_at],
+        prefix: prefix,
+        where: "status IN ('pending', 'occ_timeout', 'failed')",
+        name: "idx_command_queue_items_in_flight"
+      )
+    )
+
+    alter table(:command_queue_items, prefix: prefix) do
+      remove(:queue_position)
+    end
   end
 
   # ── V1 table definitions ───────────────────────────────────────────

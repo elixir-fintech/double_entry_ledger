@@ -5,9 +5,10 @@ defmodule DoubleEntryLedger.CommandQueueItem do
 
   ## Database-managed columns
 
-  PostgreSQL owns `inserted_at`, `updated_at`, `processing_started_at`, and
-  `processing_completed_at`. The timestamp fields are read back after writes;
-  `changeset/2` does not cast application-supplied processing timestamps.
+  PostgreSQL assigns `queue_position` once and owns `inserted_at`,
+  `updated_at`, `processing_started_at`, and `processing_completed_at`. These
+  fields are read back after writes; `changeset/2` does not cast an
+  application-supplied queue position or processing timestamps.
   """
 
   use DoubleEntryLedger.BaseSchema
@@ -30,6 +31,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
           next_retry_after: DateTime.t() | nil,
           occ_retry_count: integer() | nil,
           errors: list(map()) | nil,
+          queue_position: integer() | nil,
           command_id: Ecto.UUID.t() | nil,
           instance_id: Ecto.UUID.t() | nil,
           inserted_at: DateTime.t() | nil,
@@ -57,6 +59,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     field(:next_retry_after, :utc_datetime_usec)
     field(:occ_retry_count, :integer, default: 0)
     field(:errors, {:array, :map}, default: [])
+    field(:queue_position, :integer, read_after_writes: true)
 
     field(:inserted_at, :utc_datetime_usec, read_after_writes: true)
     field(:updated_at, :utc_datetime_usec, read_after_writes: true)

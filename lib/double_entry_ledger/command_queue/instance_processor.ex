@@ -418,10 +418,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   # Returns up to `limit` ids of the next in-flight commands for this
   # instance, oldest first. Drives off the partial index
-  # `idx_command_queue_items_in_flight` added in migration v6:
-  # (instance_id, inserted_at) WHERE status IN ('pending', 'occ_timeout',
-  # 'failed'). Before v6 this query started from `commands` and walked
-  # every row in inserted_at order — O(N²) drain behaviour.
+  # `idx_command_queue_items_in_flight`, updated in migration v9:
+  # (instance_id, queue_position) WHERE status IN ('pending', 'occ_timeout',
+  # 'failed'). Before v6 this query started from `commands` and walked every
+  # row in timestamp order — O(N²) drain behaviour.
   defp find_next_command_ids(instance_id, limit) do
     now = DateTime.utc_now()
 
@@ -431,7 +431,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         eqi.instance_id == ^instance_id and
           eqi.status in [:pending, :occ_timeout, :failed] and
           (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
-      order_by: [asc: eqi.inserted_at],
+      order_by: [asc: eqi.queue_position],
       limit: ^limit,
       select: eqi.command_id
     )
