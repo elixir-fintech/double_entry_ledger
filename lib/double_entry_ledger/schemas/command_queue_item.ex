@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     belongs_to(:command, Command, type: Ecto.UUID)
     # Denormalized from `commands.instance_id` (migration v6) so the
     # `find_next_command` partial index can be keyed on
-    # (instance_id, inserted_at) without a JOIN.
+    # (instance_id, queue_position) without a JOIN.
     belongs_to(:instance, Instance, type: Ecto.UUID)
   end
 

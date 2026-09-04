@@ -662,6 +662,15 @@ defmodule DoubleEntryLedger.Migration do
         "OWNED BY #{prefix}.command_queue_items.queue_position"
     )
 
+    drop(
+      index(:command_queue_items, [:instance_id, :inserted_at],
+        prefix: prefix,
+        name: "idx_command_queue_items_in_flight"
+      )
+    )
+
+    flush()
+
     execute("""
     WITH ordered AS (
       SELECT id, row_number() OVER (ORDER BY inserted_at, command_id) AS queue_position
@@ -689,13 +698,6 @@ defmodule DoubleEntryLedger.Migration do
     execute(
       "ALTER TABLE #{prefix}.command_queue_items " <>
         "ALTER COLUMN queue_position SET NOT NULL"
-    )
-
-    drop(
-      index(:command_queue_items, [:instance_id, :inserted_at],
-        prefix: prefix,
-        name: "idx_command_queue_items_in_flight"
-      )
     )
 
     create(

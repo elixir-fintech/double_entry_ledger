@@ -373,7 +373,14 @@ The migration performs these changes:
    processing-start, and processing-completion timestamp generation to
    PostgreSQL so processing times do not depend on application-node clocks.
 5. Adds and backfills `command_queue_items.queue_position` from a PostgreSQL
-   sequence, then uses it as the stable queue-processing order.
+   sequence, then uses it as the stable queue-processing order. Existing rows
+   receive dense positions in `(inserted_at, command_id)` order; PostgreSQL uses
+   the sequence for rows inserted after the backfill.
+
+Migration v9 rewrites every `command_queue_items` row, including processed and
+dead-letter history, while holding an `ACCESS EXCLUSIVE` table lock. Its runtime
+therefore scales with total queue history, not only currently processable work.
+Plan an appropriate maintenance window before applying it to a large table.
 
 The `JournalEventAccountLink`, `JournalEventCommandLink`,
 `JournalEventTransactionLink`, and legacy journal-event link worker have been

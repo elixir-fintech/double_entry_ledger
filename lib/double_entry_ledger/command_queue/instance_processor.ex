@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   This module is typically supervised under the `InstanceSupervisor` as a dynamic child.
   """
-  use GenServer
+  use GenServer, restart: :temporary
   require Logger
 
   alias DoubleEntryLedger.{BatchProcessor, Command, CommandQueueItem, Telemetry}
@@ -417,7 +417,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   # Returns up to `limit` ids of the next in-flight commands for this
-  # instance, oldest first. Drives off the partial index
+  # instance, lowest queue position first. Drives off the partial index
   # `idx_command_queue_items_in_flight`, updated in migration v9:
   # (instance_id, queue_position) WHERE status IN ('pending', 'occ_timeout',
   # 'failed'). Before v6 this query started from `commands` and walked every
