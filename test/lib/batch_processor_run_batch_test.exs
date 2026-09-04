@@ -43,6 +43,9 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
   defp count(schema), do: Repo.aggregate(schema, :count)
 
+  defp restore_env(key, nil), do: Application.delete_env(:double_entry_ledger, key)
+  defp restore_env(key, value), do: Application.put_env(:double_entry_ledger, key, value)
+
   defp reload_command_with_qi(id) do
     Command
     |> Repo.get!(id)
@@ -547,6 +550,33 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
       assert failure.command_id == update_cmd.id
       assert failure.reason == :create_command_not_found
+      assert Repo.get!(CommandQueueItem, update_cmd.command_queue_item.id).status == :dead_letter
+    end
+
+    test "update with a lookup whose create command was deleted yields :create_command_not_found",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      {create_cmd, _tx_id} = seed_pending_tx(inst, a1, a2)
+
+      update_cmd =
+        insert_update_command(
+          inst,
+          create_cmd.command_map.source,
+          create_cmd.command_map.source_idempk,
+          :posted,
+          [
+            %{account_address: a1.address, amount: 100, currency: "EUR"},
+            %{account_address: a2.address, amount: 100, currency: "EUR"}
+          ]
+        )
+
+      Repo.delete!(create_cmd)
+
+      assert {:ok, %{successes: [], failures: [failure]}} =
+               BatchProcessor.run_batch([update_cmd])
+
+      assert failure.command_id == update_cmd.id
+      assert failure.reason == :create_command_not_found
+      assert Repo.get!(CommandQueueItem, update_cmd.command_queue_item.id).status == :dead_letter
     end
 
     test "update against a dead-letter create yields :create_command_in_dead_letter",
@@ -574,16 +604,18 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
                BatchProcessor.run_batch([update_cmd])
 
       assert failure.reason == :create_command_in_dead_letter
+      assert Repo.get!(CommandQueueItem, update_cmd.command_queue_item.id).status == :dead_letter
     end
 
     test "update against a non-:processed create yields :create_command_not_processed",
          %{instance: inst, accounts: [a1, a2, _, _]} do
       {create_cmd, _tx_id} = seed_pending_tx(inst, a1, a2)
+      create_retry_after = DateTime.add(DateTime.utc_now(), 8, :minute)
 
       # Simulate corrupted state: lookup exists but qi status got
       # flipped to :failed externally.
       create_cmd.command_queue_item
-      |> Ecto.Changeset.change(status: :failed)
+      |> Ecto.Changeset.change(status: :failed, next_retry_after: create_retry_after)
       |> Repo.update!()
 
       update_cmd =
@@ -602,6 +634,11 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
                BatchProcessor.run_batch([update_cmd])
 
       assert failure.reason == :create_command_not_processed
+
+      queue_item = Repo.get!(CommandQueueItem, update_cmd.command_queue_item.id)
+      assert queue_item.status == :pending
+      assert queue_item.retry_count == update_cmd.command_queue_item.retry_count
+      assert queue_item.next_retry_after == create_retry_after
     end
 
     test "update against a transaction already in :posted yields :transaction_not_pending",
@@ -625,10 +662,16 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
           ]
         )
 
+      from(queue_item in CommandQueueItem,
+        where: queue_item.id == ^update_cmd.command_queue_item.id
+      )
+      |> Repo.update_all(set: [errors: nil])
+
       assert {:ok, %{successes: [], failures: [failure]}} =
                BatchProcessor.run_batch([update_cmd])
 
       assert failure.reason == :transaction_not_pending
+      assert [_error] = Repo.get!(CommandQueueItem, update_cmd.command_queue_item.id).errors
     end
 
     test "update with mismatched entry count yields :entry_count_mismatch",
@@ -735,6 +778,11 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       # Create persisted normally.
       tx = Repo.get!(Transaction, create_success.transaction_id)
       assert tx.status == :pending
+
+      queue_item = Repo.get!(CommandQueueItem, update_cmd.command_queue_item.id)
+      assert queue_item.status == :pending
+      assert queue_item.retry_count == update_cmd.command_queue_item.retry_count
+      assert DateTime.compare(queue_item.next_retry_after, DateTime.utc_now()) == :gt
     end
 
     test "two updates on the same target in one batch: first kept, rest :duplicate_update_in_batch",
@@ -770,6 +818,11 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       assert success.command_id == update1.id
       assert failure.command_id == update2.id
       assert failure.reason == {:duplicate_update_in_batch, update1.id}
+
+      queue_item = Repo.get!(CommandQueueItem, update2.command_queue_item.id)
+      assert queue_item.status == :pending
+      assert queue_item.retry_count == update2.command_queue_item.retry_count
+      assert DateTime.compare(queue_item.next_retry_after, DateTime.utc_now()) == :gt
     end
 
     test "mixed batch [create, update, create] preserves claim order in the BHE snapshot for the update",
@@ -907,6 +960,19 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
     defp maybe_bump(_accounts, _n, _bump_until), do: :ok
 
     # ── Scenario 0: non-stale DB error is returned, not raised ─────
+
+    test "run_batch/1 resolves the consumer-configured repo at runtime",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+      original_repo = Application.get_env(:double_entry_ledger, :repo)
+      Application.put_env(:double_entry_ledger, :repo, DoubleEntryLedger.MockRepo)
+
+      on_exit(fn -> restore_env(:repo, original_repo) end)
+
+      expect(DoubleEntryLedger.MockRepo, :transaction, fn fun -> Repo.transaction(fun) end)
+
+      assert {:ok, %{successes: [_], failures: []}} = BatchProcessor.run_batch([command])
+    end
 
     test "unexpected DB error from the write is returned as {:error}, not raised",
          %{instance: inst, accounts: [a1, a2, _, _]} do

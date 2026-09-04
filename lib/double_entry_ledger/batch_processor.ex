@@ -53,7 +53,6 @@ defmodule DoubleEntryLedger.BatchProcessor do
     Command,
     Entry,
     PendingTransactionLookup,
-    Repo,
     Telemetry,
     Transaction
   }
@@ -137,7 +136,11 @@ defmodule DoubleEntryLedger.BatchProcessor do
           | {:account_not_found, Ecto.UUID.t()}
           | {:balance_change_error, atom(), String.t()}
 
-  @type failure_record :: %{command: Command.t(), reason: failure_reason()}
+  @type failure_record :: %{
+          required(:command) => Command.t(),
+          required(:reason) => failure_reason(),
+          optional(:next_retry_after) => DateTime.t() | nil
+        }
 
   @type merged_account_state :: %{
           posted: Balance.t(),
@@ -358,7 +361,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
   """
   @spec run_batch([Command.t()], Ecto.Repo.t()) ::
           {:ok, run_batch_result()} | {:error, term()}
-  def run_batch(commands, repo \\ Repo)
+  def run_batch(commands, repo \\ DoubleEntryLedger.Config.repo())
 
   def run_batch([], _repo), do: {:ok, %{successes: [], failures: []}}
 
@@ -814,8 +817,14 @@ defmodule DoubleEntryLedger.BatchProcessor do
          {:ok, enriched} <- pair_and_build(input, lookup) do
       {Map.put(enriched_map, cmd.id, enriched), fails}
     else
-      :error -> {enriched_map, [failure(cmd, :create_command_not_found) | fails]}
-      {:error, reason} -> {enriched_map, [failure(cmd, reason) | fails]}
+      :error ->
+        {enriched_map, [failure(cmd, :create_command_not_found) | fails]}
+
+      {:error, reason} ->
+        {enriched_map, [failure(cmd, reason) | fails]}
+
+      {:error, reason, next_retry_after} ->
+        {enriched_map, [failure(cmd, reason, next_retry_after) | fails]}
     end
   end
 
@@ -877,15 +886,18 @@ defmodule DoubleEntryLedger.BatchProcessor do
   # can apply the transition (for `:archived` the new value defaults
   # to the existing one, which is what reverse_pending consumes).
   defp pre_validate(input, lookup) do
-    cmd_status = lookup.command.command_queue_item.status
     tx = lookup.transaction
 
     cond do
-      cmd_status == :dead_letter ->
+      is_nil(lookup.command) ->
+        {:error, :create_command_not_found}
+
+      lookup.command.command_queue_item.status == :dead_letter ->
         {:error, :create_command_in_dead_letter}
 
-      cmd_status != :processed ->
-        {:error, :create_command_not_processed}
+      lookup.command.command_queue_item.status != :processed ->
+        {:error, :create_command_not_processed,
+         lookup.command.command_queue_item.next_retry_after}
 
       is_nil(tx) or tx.status != :pending ->
         {:error, :transaction_not_pending}
@@ -1067,6 +1079,10 @@ defmodule DoubleEntryLedger.BatchProcessor do
   end
 
   defp failure(%Command{} = cmd, reason), do: %{command: cmd, reason: reason}
+
+  defp failure(%Command{} = cmd, reason, next_retry_after) do
+    %{command: cmd, reason: reason, next_retry_after: next_retry_after}
+  end
 
   # The unique key the lookup table is indexed by — used wherever B4
   # groups, looks up, or compares commands by their idempotency identity.

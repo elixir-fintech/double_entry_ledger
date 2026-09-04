@@ -750,6 +750,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
         merged_accounts: merged_accounts(current_accounts, advanced)
       }
 
+      Repo.query!("SET LOCAL TIME ZONE 'Pacific/Auckland'")
       :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
 
       tx = Repo.get!(Transaction, create_success.transaction_id)
@@ -1313,6 +1314,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       messages = Enum.map(qi2.errors, & &1["message"])
       assert pre_existing_message in messages
       assert Enum.any?(messages, &String.contains?(&1, "available"))
+      assert String.contains?(hd(messages), "available")
+      assert List.last(messages) == pre_existing_message
 
       # Correct error content per row.
       [%{"message" => m1}] = qi1.errors

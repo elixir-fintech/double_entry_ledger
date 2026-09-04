@@ -122,16 +122,20 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   @doc """
   Executes the failure half of a batched write in one round-trip.
 
-  For each failed command, asks `CommandQueue.Scheduling.build_schedule_retry_with_reason/3`
-  whether the command should be retried or dead-lettered. The legacy helper
-  branches on `retry_count >= max_retries`:
+  Dependency waits return to `:pending` with a retry timestamp without consuming
+  retry budget. Missing or dead-lettered create dependencies immediately
+  dead-letter the update. Other failures ask
+  `CommandQueue.Scheduling.build_schedule_retry_with_reason/3` whether the
+  command should be retried or dead-lettered based on `retry_count`:
 
+    * Dependency-wait branch → queue row marked `:pending`,
+      `next_retry_after` set without changing `retry_count`.
     * Retry branch → queue row marked `:failed`, `next_retry_after` set to
       the exponential-backoff timestamp.
     * Dead-letter branch → queue row marked `:dead_letter`,
       `next_retry_after` cleared (`NULL`).
 
-  In either case the new error payload is appended to the `errors` JSONB
+  In every case the new error payload is prepended to the `errors` JSONB
   array. `retry_count` and `processor_version` are NOT touched here — to
   match legacy semantics, `retry_count` is bumped at claim time by
   `Scheduling.retry_count_by_status/1` (via `processing_start_changeset/3`)
@@ -235,8 +239,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
         cast =
           "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}, " <>
-            "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}::timestamptz, " <>
-            "#{p(placeholders, 4)}::timestamptz, #{p(placeholders, 5)}::timestamptz)"
+            "#{p(placeholders, 2)}::uuid, #{timestamp(p(placeholders, 3))}, " <>
+            "#{timestamp(p(placeholders, 4))}, #{timestamp(p(placeholders, 5))})"
 
         {cast, st}
       end)
@@ -276,8 +280,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         cast =
           "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::uuid, " <>
             "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}, " <>
-            "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::timestamptz, " <>
-            "#{p(placeholders, 6)}::timestamptz)"
+            "#{p(placeholders, 4)}::jsonb, #{timestamp(p(placeholders, 5))}, " <>
+            "#{timestamp(p(placeholders, 6))})"
 
         {cast, st}
       end)
@@ -318,7 +322,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
           "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::uuid, " <>
             "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}::jsonb, " <>
             "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::bigint, " <>
-            "#{p(placeholders, 6)}::timestamptz, #{p(placeholders, 7)}::timestamptz)"
+            "#{timestamp(p(placeholders, 6))}, #{timestamp(p(placeholders, 7))})"
 
         {cast, st}
       end)
@@ -353,8 +357,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         cast =
           "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::uuid, " <>
             "#{p(placeholders, 2)}::uuid, #{p(placeholders, 3)}::uuid, " <>
-            "#{p(placeholders, 4)}::jsonb, #{p(placeholders, 5)}::timestamptz, " <>
-            "#{p(placeholders, 6)}::timestamptz)"
+            "#{p(placeholders, 4)}::jsonb, #{timestamp(p(placeholders, 5))}, " <>
+            "#{timestamp(p(placeholders, 6))})"
 
         {cast, st}
       end)
@@ -400,7 +404,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
               "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::text, " <>
                 "#{p(placeholders, 2)}::text, #{p(placeholders, 3)}::uuid, " <>
                 "#{p(placeholders, 4)}::uuid, #{p(placeholders, 5)}::uuid, " <>
-                "#{p(placeholders, 6)}::timestamptz, #{p(placeholders, 7)}::timestamptz)"
+                "#{timestamp(p(placeholders, 6))}, #{timestamp(p(placeholders, 7))})"
 
             {cast, st}
           end)
@@ -467,7 +471,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
           pending = u.pending,
           available = u.available,
           lock_version = u.new_lv,
-          updated_at = #{now_placeholder}::timestamptz
+          updated_at = #{timestamp(now_placeholder)}
       FROM (VALUES #{values_sql})
         AS u(id, posted, pending, available, old_lv, new_lv)
       WHERE a.id = u.id AND a.lock_version = u.old_lv
@@ -501,7 +505,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
         cast =
           "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}, " <>
-            "#{p(placeholders, 2)}::timestamptz)"
+            "#{timestamp(p(placeholders, 2))})"
 
         {[cast | rows], st}
       end)
@@ -513,7 +517,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
       UPDATE #{table("transactions")} AS t
       SET status = u.status,
           posted_at = u.posted_at,
-          updated_at = #{now_placeholder}::timestamptz
+          updated_at = #{timestamp(now_placeholder)}
       FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
         AS u(id, status, posted_at)
       WHERE t.id = u.id AND t.status = 'pending'
@@ -557,7 +561,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     updated_entries AS (
       UPDATE #{table("entries")} AS e
       SET value = u.value,
-          updated_at = #{now_placeholder}::timestamptz
+          updated_at = #{timestamp(now_placeholder)}
       FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
         AS u(id, value)
       WHERE e.id = u.id
@@ -621,11 +625,9 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   # ── failure UPDATE builder ───────────────────────────────────────
 
   # Builds a single batched UPDATE statement that, for each failed
-  # command, either marks the queue row `:failed` with a fresh
-  # `next_retry_after` or `:dead_letter` with `next_retry_after = NULL`
-  # (per `compute_failure_outcome/3`). In both cases the new error
-  # payload is appended to the existing `errors` JSONB array (using
-  # Postgres's `jsonb || jsonb_build_array(...)` pattern).
+  # command, marks the queue row `:pending`, `:failed`, or `:dead_letter`
+  # (per `compute_failure_outcome/3`). The new error payload is prepended,
+  # matching `CommandQueueItem.build_errors/2`'s latest-error-first contract.
   @spec build_failure_query([BatchProcessor.failure_record()], DateTime.t()) ::
           {String.t(), [term()]}
   defp build_failure_query(failures, now) do
@@ -634,7 +636,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     {rows, state} =
       Enum.reduce(failures, {[], state}, fn failure, {rows, st} ->
         qi_id = failure.command.command_queue_item.id
-        {status, next_retry_after} = compute_failure_outcome(failure.command, failure.reason, now)
+        {status, next_retry_after} = compute_failure_outcome(failure, now)
         error_map = error_payload(failure.reason, now)
 
         # Mirror legacy:
@@ -642,6 +644,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         #   * `dead_letter_changeset/2` does NOT touch `processor_id` (→ preserve)
         processor_id_after =
           case status do
+            :pending -> failure.command.command_queue_item.processor_id
             :failed -> nil
             :dead_letter -> failure.command.command_queue_item.processor_id
           end
@@ -660,7 +663,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
             "#{p(placeholders, 1)}::text, " <>
             "#{p(placeholders, 2)}::text, " <>
             "#{p(placeholders, 3)}::jsonb, " <>
-            "#{p(placeholders, 4)}::timestamptz)"
+            "#{timestamp(p(placeholders, 4))})"
 
         {[cast | rows], st}
       end)
@@ -668,7 +671,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     sql = """
     UPDATE #{table("command_queue_items")} AS c
     SET status = u.status,
-        errors = c.errors || jsonb_build_array(u.new_error),
+        errors = jsonb_build_array(u.new_error) || COALESCE(c.errors, '[]'::jsonb),
         next_retry_after = u.next_retry_after,
         processor_id = u.processor_id_after
     FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
@@ -679,12 +682,11 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     {sql, Enum.reverse(state.params)}
   end
 
-  # Use the legacy `Scheduling.build_schedule_retry_with_reason/3` as
-  # the source-of-truth for the per-row failure decision. We never
-  # apply the changeset (the orchestrator owns the DB write); we only
-  # inspect it to decide whether the row should be retried (`:failed`
-  # with a backoff timestamp) or dead-lettered (`:dead_letter` with
-  # `next_retry_after = NULL`).
+  # Dependency waits and ordinary failures use Scheduling as the source of
+  # truth for retry limits. Same-batch ordering waits remain pending because
+  # their prerequisite is committed by this batch. Terminal dependency
+  # failures are dead-lettered immediately. Other failures use the legacy
+  # `Scheduling.build_schedule_retry_with_reason/3` as the source of truth.
   #
   # The legacy helper produces:
   #   * `schedule_retry_changeset` (status = `:failed`, next_retry_after set)
@@ -694,13 +696,25 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   #
   # Both branches `put_assoc(:command_queue_item, ...)`, so we always
   # reach the inner changeset and dispatch on its `:status` change.
-  @spec compute_failure_outcome(
-          DoubleEntryLedger.Command.t(),
-          BatchProcessor.failure_reason(),
-          DateTime.t()
-        ) :: {:failed, DateTime.t()} | {:dead_letter, nil}
-  defp compute_failure_outcome(command, reason, _now) do
+  @spec compute_failure_outcome(BatchProcessor.failure_record(), DateTime.t()) ::
+          {:pending, DateTime.t()} | {:failed, DateTime.t()} | {:dead_letter, nil}
+  defp compute_failure_outcome(%{reason: reason} = failure, now)
+       when reason == :create_command_not_processed or
+              (is_tuple(reason) and
+                 elem(reason, 0) in [:create_pending_in_batch, :duplicate_update_in_batch]) do
+    {:pending, Map.get(failure, :next_retry_after) || DateTime.add(now, 1, :second)}
+  end
+
+  defp compute_failure_outcome(%{reason: reason}, _now)
+       when reason in [:create_command_not_found, :create_command_in_dead_letter],
+       do: {:dead_letter, nil}
+
+  defp compute_failure_outcome(%{command: command, reason: reason}, _now) do
     cs = Scheduling.build_schedule_retry_with_reason(command, reason_to_message(reason), :failed)
+    retry_outcome(cs, command, reason)
+  end
+
+  defp retry_outcome(cs, command, reason) do
     qi_cs = Ecto.Changeset.get_change(cs, :command_queue_item)
 
     case Ecto.Changeset.get_change(qi_cs, :status) do
@@ -780,6 +794,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   defp reason_to_message(:entry_type_changed),
     do: "update: payload entry changes the debit/credit type of an existing entry"
+
+  defp timestamp(placeholder), do: "#{placeholder}::timestamp"
 
   # Intentional no catch-all: an unmatched reason raises FunctionClauseError
   # at the call site, which surfaces the new reason in production logs and

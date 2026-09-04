@@ -19,10 +19,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   require Logger
 
   alias DoubleEntryLedger.{BatchProcessor, Command, CommandQueueItem, Telemetry}
-  alias DoubleEntryLedger.Repo.Proxy, as: Repo
-  alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.CommandQueue.Scheduling
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.CommandStore
+  alias DoubleEntryLedger.Workers.CommandWorker
   import Ecto.Query
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
@@ -169,22 +169,12 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     log_outcomes(outcomes)
 
     batch_ids = batch || []
-    revert_batch_to_pending(batch_ids)
-
-    send(self(), :process_next)
-
-    {:noreply,
-     %{
-       state
-       | processing: false,
-         task_ref: nil,
-         current_batch: nil,
-         pending_ids: batch_ids ++ state.pending_ids,
-         force_single: MapSet.union(state.force_single, MapSet.new(batch_ids))
-     }}
+    fall_back_to_single(state, batch_ids)
   end
 
-  # Batch task crashed — mark every command in the batch for retry.
+  # Batch task crashed — fall back to the single-command path so one
+  # deterministically crashing command cannot consume the retry budget of
+  # otherwise healthy neighbours.
   # Must come BEFORE the per-command :DOWN clause so pattern-matching
   # picks this up when current_batch is set.
   @impl true
@@ -197,12 +187,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
       "Batch task crashed for instance #{instance_id} (#{length(batch)} cmds): #{inspect(reason)}"
     )
 
-    Enum.each(batch, fn cmd_id ->
-      schedule_retry_for_crashed_command(cmd_id, {:batch_crashed, reason})
-    end)
-
-    send(self(), :process_next)
-    {:noreply, %{state | processing: false, task_ref: nil, current_batch: nil}}
+    fall_back_to_single(state, batch)
   end
 
   @impl true
@@ -240,7 +225,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         :none -> dispatch_batch_or_legacy(state)
       end
     else
-      start_processing(%{state | pending_ids: rest}, head)
+      start_processing(
+        %{state | pending_ids: rest, force_single: MapSet.delete(state.force_single, head)},
+        head
+      )
     end
   end
 
@@ -333,17 +321,39 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # the single-cmd path. Only touches rows we still hold (:processing);
   # retry_count is intentionally left as-is (set at claim time) so the
   # subsequent single-cmd re-claim from :pending won't double-count it.
-  defp revert_batch_to_pending([]), do: :ok
+  defp revert_batch_to_pending([]), do: []
 
   defp revert_batch_to_pending(ids) do
-    from(eqi in CommandQueueItem,
-      prefix: ^@schema_prefix,
-      where: eqi.command_id in ^ids and eqi.status == :processing,
-      update: [set: [status: :pending, next_retry_after: nil]]
-    )
-    |> Repo.update_all([])
+    {_count, reverted_ids} =
+      from(eqi in CommandQueueItem,
+        prefix: ^@schema_prefix,
+        where: eqi.command_id in ^ids and eqi.status == :processing,
+        update: [
+          set: [
+            status: :pending,
+            next_retry_after: nil
+          ]
+        ],
+        select: eqi.command_id
+      )
+      |> Repo.update_all([])
 
-    :ok
+    Enum.filter(ids, &(&1 in reverted_ids))
+  end
+
+  defp fall_back_to_single(state, batch_ids) do
+    reverted_ids = revert_batch_to_pending(batch_ids)
+    send(self(), :process_next)
+
+    {:noreply,
+     %{
+       state
+       | processing: false,
+         task_ref: nil,
+         current_batch: nil,
+         pending_ids: reverted_ids ++ state.pending_ids,
+         force_single: MapSet.union(state.force_single, MapSet.new(reverted_ids))
+     }}
   end
 
   # If any pending id is flagged for single-cmd processing, pop the first
@@ -447,9 +457,18 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   defp batch_size do
-    Application.get_env(:double_entry_ledger, :batch_size) ||
-      Application.get_env(:double_entry_ledger, :command_queue, [])[:batch_size] ||
-      8
+    configured_size =
+      Application.get_env(:double_entry_ledger, :batch_size) ||
+        Application.get_env(:double_entry_ledger, :command_queue, [])[:batch_size] ||
+        8
+
+    normalize_batch_size(configured_size)
+  end
+
+  defp normalize_batch_size(size) when is_integer(size), do: max(size, 1)
+
+  defp normalize_batch_size(size) do
+    raise ArgumentError, "expected :batch_size to be an integer, got: #{inspect(size)}"
   end
 
   defp processor_name do

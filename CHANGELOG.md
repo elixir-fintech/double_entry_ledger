@@ -58,9 +58,13 @@ project follows [Semantic Versioning](https://semver.org/).
   back after writes, avoiding application-node clock skew.
 - Commands are selected using a stable, database-generated queue position
   instead of potentially tied insertion timestamps.
-- Instance command processors are temporary dynamic children. Normal completion
-  and abnormal failure both leave restart timing to `InstanceMonitor`, avoiding
-  restart-intensity failures that could terminate processors for other instances.
+- Instance command processors are temporary dynamic children, so their exits do
+  not consume the shared supervisor's restart budget or terminate processors for
+  other instances. `InstanceMonitor` continues to discover claimable work.
+- Batched processing now uses the configured consumer repository, preserves
+  dependency-wait semantics without hot loops, isolates crashing commands,
+  handles partial completion safely, and writes timestamps and error history
+  consistently with the legacy path.
 - Package consumers must configure `:insert_path`, `:batch_enabled`, and
   `:batch_size` in their own application. This repository's runtime config is
   not loaded as dependency configuration.

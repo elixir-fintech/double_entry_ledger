@@ -35,6 +35,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
   """
 
   use DoubleEntryLedger.Occ.Processor
+  require Logger
 
   alias Ecto.Multi
   alias DoubleEntryLedger.{Command, JournalEvent, PendingTransactionLookup}
@@ -155,7 +156,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
 
       _ ->
         :persistent_term.put({__MODULE__, :path_logged}, path)
-        IO.puts("[CreateTransactionCommand] active build path = #{inspect(path)}")
+        Logger.debug("[CreateTransactionCommand] active build path = #{inspect(path)}")
     end
   end
 

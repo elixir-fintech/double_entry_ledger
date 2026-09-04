@@ -80,6 +80,21 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     end
   end
 
+  defmodule PartialCommitCrashBatchProcessor do
+    def run_batch([committed | _] = commands, _repo \\ DoubleEntryLedger.Repo) do
+      committed
+      |> Scheduling.build_mark_as_processed()
+      |> Repo.update!()
+
+      send(
+        :batch_processor_test_observer,
+        {:partial_batch_crashed, committed.id, Enum.map(commands, & &1.id)}
+      )
+
+      raise "crash after partial commit"
+    end
+  end
+
   defmodule DbErrorBatchProcessor do
     # Simulates a non-stale DB error from the batched write (e.g. an
     # unexpected Postgrex/constraint error). Per the plan (§8.3) the caller
@@ -127,12 +142,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     original = Application.get_env(:double_entry_ledger, :batch_enabled)
     Application.put_env(:double_entry_ledger, :batch_enabled, false)
 
-    on_exit(fn ->
-      case original do
-        nil -> Application.delete_env(:double_entry_ledger, :batch_enabled)
-        val -> Application.put_env(:double_entry_ledger, :batch_enabled, val)
-      end
-    end)
+    on_exit(fn -> restore_env(:batch_enabled, original) end)
 
     :ok
   end
@@ -184,6 +194,9 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     ref = Process.monitor(pid)
     {pid, ref}
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:double_entry_ledger, key)
+  defp restore_env(key, value), do: Application.put_env(:double_entry_ledger, key, value)
 
   # Inserts an additional balanced :create_transaction command for
   # the given instance + accounts. Returns the command struct.
@@ -273,12 +286,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
         Keyword.put(original || [], :pending_fetch_limit, 1)
       )
 
-      on_exit(fn ->
-        case original do
-          nil -> Application.delete_env(:double_entry_ledger, :command_queue)
-          value -> Application.put_env(:double_entry_ledger, :command_queue, value)
-        end
-      end)
+      on_exit(fn -> restore_env(:command_queue, original) end)
 
       test_pid = self()
 
@@ -382,12 +390,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       original = Application.get_env(:double_entry_ledger, :batch_enabled)
       Application.put_env(:double_entry_ledger, :batch_enabled, true)
 
-      on_exit(fn ->
-        case original do
-          nil -> Application.delete_env(:double_entry_ledger, :batch_enabled)
-          val -> Application.put_env(:double_entry_ledger, :batch_enabled, val)
-        end
-      end)
+      on_exit(fn -> restore_env(:batch_enabled, original) end)
 
       :ok
     end
@@ -424,6 +427,22 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
 
       assert length(qi_statuses) == 3
       assert Enum.all?(qi_statuses, &(&1 == :processed))
+    end
+
+    test "a configured batch size of zero is clamped to one", %{
+      instance: instance,
+      command: command
+    } do
+      original = Application.get_env(:double_entry_ledger, :batch_size)
+      Application.put_env(:double_entry_ledger, :batch_size, 0)
+
+      on_exit(fn -> restore_env(:batch_size, original) end)
+
+      {_pid, ref} = start_processor_with_batch(instance.id, SuccessBatchProcessor)
+
+      assert_receive {:batch_run_received, [command_id]}, 5000
+      assert command_id == command.id
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
     end
 
     test "selects commands in queue-position order regardless of inserted_at",
@@ -512,20 +531,29 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       refute_received {:worker_processed, _}
     end
 
-    test "batch task crash schedules retry for every command in the batch and processor stays alive",
+    test "batch task crash falls back to isolated single-command processing",
          %{instance: instance, command: existing, accounts: accounts} do
       c2 = insert_create_command(instance, accounts, 50)
 
       expected_ids = MapSet.new([existing.id, c2.id])
+      crashing_id = existing.id
+      healthy_id = c2.id
 
-      # Both pre-set to max retries so that after crash they will be
-      # dead-lettered and the GenServer can drain → shutdown :normal.
-      max_retries = Application.get_env(:double_entry_ledger, :command_queue)[:max_retries] || 5
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn ^crashing_id, _processor_name ->
+        raise "deterministic command crash"
+      end)
 
-      Enum.each([existing, c2], fn cmd ->
-        cmd.command_queue_item
-        |> Ecto.Changeset.change(%{retry_count: max_retries})
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn ^healthy_id, _processor_name ->
+        command = CommandStore.get_by_id(healthy_id)
+
+        command
+        |> Scheduling.build_mark_as_processed()
         |> Repo.update!()
+
+        send(:batch_processor_test_observer, {:worker_processed, healthy_id})
+        {:ok, nil, command}
       end)
 
       {_pid, ref} = start_processor_with_batch(instance.id, CrashBatchProcessor)
@@ -534,28 +562,41 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert_receive {:batch_run_received, received_ids}, 5000
       assert MapSet.new(received_ids) == expected_ids
 
-      # Processor must NOT crash — it should drain to :normal after
-      # marking every batch member's queue row.
+      assert_receive {:worker_processed, ^healthy_id}, 5000
+
       assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
 
-      # Each batch member should now be :dead_letter (max retries had
-      # already been hit, so the crash scheduling tipped them over).
-      [qi_a, qi_b] =
-        Repo.all(
-          from(q in CommandQueueItem,
-            where: q.command_id in ^MapSet.to_list(expected_ids),
-            select: q
-          )
-        )
-        |> Enum.sort_by(& &1.command_id)
+      crashing_queue_item = Repo.get_by!(CommandQueueItem, command_id: crashing_id)
+      healthy_queue_item = Repo.get_by!(CommandQueueItem, command_id: healthy_id)
 
-      assert qi_a.status == :dead_letter
-      assert qi_b.status == :dead_letter
+      assert crashing_queue_item.status == :failed
+      assert healthy_queue_item.status == :processed
+      assert healthy_queue_item.errors == []
+    end
 
-      # And the error trail shows the batch_crashed reason.
-      assert Enum.any?(qi_a.errors, fn err ->
-               String.contains?(err["message"] || "", "batch_crashed")
-             end)
+    test "batch crash requeues only claims that were actually reverted",
+         %{instance: instance, command: committed, accounts: accounts} do
+      remaining = insert_create_command(instance, accounts, 50)
+      committed_id = committed.id
+      remaining_id = remaining.id
+
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn ^remaining_id, _processor_name ->
+        command = CommandStore.get_by_id(remaining_id)
+
+        command
+        |> Scheduling.build_mark_as_processed()
+        |> Repo.update!()
+
+        {:ok, nil, command}
+      end)
+
+      {_pid, ref} = start_processor_with_batch(instance.id, PartialCommitCrashBatchProcessor)
+
+      assert_receive {:partial_batch_crashed, ^committed_id, [^committed_id, ^remaining_id]}, 5000
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+      assert Repo.get_by!(CommandQueueItem, command_id: committed_id).status == :processed
+      assert Repo.get_by!(CommandQueueItem, command_id: remaining_id).status == :processed
     end
 
     # ── Finding 1: batch path must claim so the failure lifecycle
@@ -760,12 +801,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       original_size = Application.get_env(:double_entry_ledger, :batch_size)
       Application.put_env(:double_entry_ledger, :batch_size, 1)
 
-      on_exit(fn ->
-        case original_size do
-          nil -> Application.delete_env(:double_entry_ledger, :batch_size)
-          val -> Application.put_env(:double_entry_ledger, :batch_size, val)
-        end
-      end)
+      on_exit(fn -> restore_env(:batch_size, original_size) end)
 
       insert_create_command(instance, accounts, 30)
       insert_create_command(instance, accounts, 40)
