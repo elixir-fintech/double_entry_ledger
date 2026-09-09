@@ -179,17 +179,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       c1 = seed_occ_timeout_command(instance, 0)
       c2 = seed_occ_timeout_command(instance, 0)
 
-      ref = make_ref()
-      handler_id = "batch-claim-telemetry-#{inspect(ref)}"
-
-      :telemetry.attach(
-        handler_id,
-        [:double_entry_ledger, :command, :claim],
-        &__MODULE__.forward_telemetry/4,
-        %{test_pid: self(), ref: ref}
-      )
-
-      on_exit(fn -> :telemetry.detach(handler_id) end)
+      ref = attach_telemetry([:double_entry_ledger, :command, :claim])
 
       Scheduling.claim_batch_for_processing([c1, c2], "proc-1")
 
@@ -202,10 +192,6 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       assert MapSet.new([id_a, id_b]) == MapSet.new([c1.id, c2.id])
     end
-  end
-
-  def forward_telemetry(event, measurements, metadata, %{test_pid: pid, ref: ref}) do
-    send(pid, {:telemetry_event, ref, event, measurements, metadata})
   end
 
   defp seed_occ_timeout_command(instance, retry_count) do

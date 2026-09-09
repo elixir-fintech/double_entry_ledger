@@ -16,35 +16,11 @@ defmodule DoubleEntryLedger.TelemetryTest do
   alias DoubleEntryLedger.Stores.{CommandStore, InstanceStore}
   alias DoubleEntryLedger.Apis.CommandApi
 
-  defp attach(event_name) do
-    test_pid = self()
-    ref = make_ref()
-    handler_id = "test-#{inspect(ref)}"
-
-    # Pass test_pid + ref via the config arg so the handler itself can be a
-    # module function (MFA capture). Anonymous-closure handlers trigger a
-    # runtime warning from :telemetry.attach/4 about a performance penalty.
-    :telemetry.attach(
-      handler_id,
-      event_name,
-      &__MODULE__.forward_event/4,
-      %{test_pid: test_pid, ref: ref}
-    )
-
-    on_exit(fn -> :telemetry.detach(handler_id) end)
-    ref
-  end
-
-  @doc false
-  def forward_event(event, measurements, metadata, %{test_pid: pid, ref: ref}) do
-    send(pid, {:telemetry_event, ref, event, measurements, metadata})
-  end
-
   describe "command_enqueue" do
     setup [:create_instance, :create_accounts]
 
     test "emits [:double_entry_ledger, :command, :enqueue]", %{instance: instance} do
-      ref = attach([:double_entry_ledger, :command, :enqueue])
+      ref = attach_telemetry([:double_entry_ledger, :command, :enqueue])
 
       {:ok, _command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
@@ -58,7 +34,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
     setup [:create_instance, :create_accounts]
 
     test "emits [:double_entry_ledger, :command, :claim]", %{instance: instance} do
-      ref = attach([:double_entry_ledger, :command, :claim])
+      ref = attach_telemetry([:double_entry_ledger, :command, :claim])
 
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
@@ -79,7 +55,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
     setup [:create_instance, :create_accounts]
 
     test "emits [:double_entry_ledger, :command, :retry]", %{instance: instance} do
-      ref = attach([:double_entry_ledger, :command, :retry])
+      ref = attach_telemetry([:double_entry_ledger, :command, :retry])
 
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
@@ -100,7 +76,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
     setup [:create_instance, :create_accounts]
 
     test "emits [:double_entry_ledger, :command, :dead_letter]", %{instance: instance} do
-      ref = attach([:double_entry_ledger, :command, :dead_letter])
+      ref = attach_telemetry([:double_entry_ledger, :command, :dead_letter])
 
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
@@ -118,7 +94,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   describe "occ_retry" do
     test "emits [:double_entry_ledger, :occ, :retry]" do
-      ref = attach([:double_entry_ledger, :occ, :retry])
+      ref = attach_telemetry([:double_entry_ledger, :occ, :retry])
 
       LedgerTelemetry.occ_retry(%{
         module: SomeModule,
@@ -137,7 +113,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   describe "transaction lifecycle" do
     test "emits [:double_entry_ledger, :transaction, :created]" do
-      ref = attach([:double_entry_ledger, :transaction, :created])
+      ref = attach_telemetry([:double_entry_ledger, :transaction, :created])
 
       LedgerTelemetry.transaction_created(%{
         transaction_id: Ecto.UUID.generate(),
@@ -150,7 +126,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
     end
 
     test "emits [:double_entry_ledger, :transaction, :posted]" do
-      ref = attach([:double_entry_ledger, :transaction, :posted])
+      ref = attach_telemetry([:double_entry_ledger, :transaction, :posted])
 
       LedgerTelemetry.transaction_posted(%{
         transaction_id: Ecto.UUID.generate(),
@@ -162,7 +138,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
     end
 
     test "emits [:double_entry_ledger, :transaction, :archived]" do
-      ref = attach([:double_entry_ledger, :transaction, :archived])
+      ref = attach_telemetry([:double_entry_ledger, :transaction, :archived])
 
       LedgerTelemetry.transaction_archived(%{
         transaction_id: Ecto.UUID.generate(),
@@ -176,7 +152,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   describe "account lifecycle" do
     test "emits [:double_entry_ledger, :account, :created]" do
-      ref = attach([:double_entry_ledger, :account, :created])
+      ref = attach_telemetry([:double_entry_ledger, :account, :created])
 
       LedgerTelemetry.account_created(%{
         account_address: "cash:main",
@@ -191,7 +167,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
     end
 
     test "emits [:double_entry_ledger, :account, :updated]" do
-      ref = attach([:double_entry_ledger, :account, :updated])
+      ref = attach_telemetry([:double_entry_ledger, :account, :updated])
 
       LedgerTelemetry.account_updated(%{
         account_address: "cash:main",
@@ -205,7 +181,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   describe "instance lifecycle" do
     test "emits [:double_entry_ledger, :instance, :created]" do
-      ref = attach([:double_entry_ledger, :instance, :created])
+      ref = attach_telemetry([:double_entry_ledger, :instance, :created])
 
       {:ok, instance} = InstanceStore.create(%{address: "telemetry:test:instance"})
       instance_id = instance.id
@@ -217,7 +193,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   describe "instance_processor lifecycle" do
     test "emits [:double_entry_ledger, :instance_processor, :start]" do
-      ref = attach([:double_entry_ledger, :instance_processor, :start])
+      ref = attach_telemetry([:double_entry_ledger, :instance_processor, :start])
 
       instance_id = Ecto.UUID.generate()
       LedgerTelemetry.instance_processor_start(%{instance_id: instance_id})
@@ -227,7 +203,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
     end
 
     test "emits [:double_entry_ledger, :instance_processor, :stop]" do
-      ref = attach([:double_entry_ledger, :instance_processor, :stop])
+      ref = attach_telemetry([:double_entry_ledger, :instance_processor, :stop])
 
       instance_id = Ecto.UUID.generate()
       LedgerTelemetry.instance_processor_stop(%{instance_id: instance_id})
@@ -241,8 +217,8 @@ defmodule DoubleEntryLedger.TelemetryTest do
     setup [:create_instance, :create_accounts]
 
     test "emits span events when processing a command", %{instance: instance} do
-      start_ref = attach([:double_entry_ledger, :command, :process, :start])
-      stop_ref = attach([:double_entry_ledger, :command, :process, :stop])
+      start_ref = attach_telemetry([:double_entry_ledger, :command, :process, :start])
+      stop_ref = attach_telemetry([:double_entry_ledger, :command, :process, :stop])
 
       CommandApi.process_from_params(
         %{
@@ -271,8 +247,8 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   describe "command_process span" do
     test "emits start and stop events" do
-      start_ref = attach([:double_entry_ledger, :command, :process, :start])
-      stop_ref = attach([:double_entry_ledger, :command, :process, :stop])
+      start_ref = attach_telemetry([:double_entry_ledger, :command, :process, :start])
+      stop_ref = attach_telemetry([:double_entry_ledger, :command, :process, :stop])
 
       metadata = %{
         action: :create_transaction,
@@ -295,8 +271,8 @@ defmodule DoubleEntryLedger.TelemetryTest do
     end
 
     test "emits start and exception events on raise" do
-      start_ref = attach([:double_entry_ledger, :command, :process, :start])
-      exception_ref = attach([:double_entry_ledger, :command, :process, :exception])
+      start_ref = attach_telemetry([:double_entry_ledger, :command, :process, :start])
+      exception_ref = attach_telemetry([:double_entry_ledger, :command, :process, :exception])
 
       metadata = %{
         action: :create_transaction,
@@ -320,7 +296,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   describe "command_idempotency_hit" do
     test "emits [:double_entry_ledger, :command, :idempotency_hit]" do
-      ref = attach([:double_entry_ledger, :command, :idempotency_hit])
+      ref = attach_telemetry([:double_entry_ledger, :command, :idempotency_hit])
 
       LedgerTelemetry.command_idempotency_hit(%{
         action: :create_transaction,

@@ -292,36 +292,16 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       c1 = insert_balanced_command(inst, a1, a2, :posted, 10)
       c2 = insert_balanced_command(inst, a1, a2, :posted, 20)
 
-      ref = make_ref()
-      start_handler = "batch-span-start-#{inspect(ref)}"
-      stop_handler = "batch-span-stop-#{inspect(ref)}"
-
-      :telemetry.attach(
-        start_handler,
-        [:double_entry_ledger, :command, :process, :start],
-        &__MODULE__.forward_telemetry/4,
-        %{test_pid: self(), ref: ref}
-      )
-
-      :telemetry.attach(
-        stop_handler,
-        [:double_entry_ledger, :command, :process, :stop],
-        &__MODULE__.forward_telemetry/4,
-        %{test_pid: self(), ref: ref}
-      )
-
-      on_exit(fn ->
-        :telemetry.detach(start_handler)
-        :telemetry.detach(stop_handler)
-      end)
+      start_ref = attach_telemetry([:double_entry_ledger, :command, :process, :start])
+      stop_ref = attach_telemetry([:double_entry_ledger, :command, :process, :stop])
 
       assert {:ok, %{successes: [_, _]}} = BatchProcessor.run_batch([c1, c2])
 
       # Full span parity: each processed command emits the same :start/:stop
       # pair the single-cmd path does, carrying the legacy span metadata
       # (action/source/instance_id/trace_context) plus a :batch_size tag.
-      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :process, :start],
-                      %{system_time: _},
+      assert_receive {:telemetry_event, ^start_ref,
+                      [:double_entry_ledger, :command, :process, :start], %{system_time: _},
                       %{
                         action: :create_transaction,
                         source: "src",
@@ -329,8 +309,8 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
                         telemetry_span_context: _
                       }}
 
-      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :process, :stop],
-                      %{duration: _},
+      assert_receive {:telemetry_event, ^stop_ref,
+                      [:double_entry_ledger, :command, :process, :stop], %{duration: _},
                       %{
                         action: :create_transaction,
                         source: "src",
@@ -343,17 +323,7 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
          %{instance: inst, accounts: [a1, a2, _, _]} do
       command = insert_balanced_command(inst, a1, a2, :posted)
 
-      ref = make_ref()
-      handler_id = "tx-created-#{inspect(ref)}"
-
-      :telemetry.attach(
-        handler_id,
-        [:double_entry_ledger, :transaction, :created],
-        &__MODULE__.forward_telemetry/4,
-        %{test_pid: self(), ref: ref}
-      )
-
-      on_exit(fn -> :telemetry.detach(handler_id) end)
+      ref = attach_telemetry([:double_entry_ledger, :transaction, :created])
 
       assert {:ok, %{successes: [success]}} = BatchProcessor.run_batch([command])
 
@@ -379,17 +349,7 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
           ]
         )
 
-      ref = make_ref()
-      handler_id = "tx-posted-#{inspect(ref)}"
-
-      :telemetry.attach(
-        handler_id,
-        [:double_entry_ledger, :transaction, :posted],
-        &__MODULE__.forward_telemetry/4,
-        %{test_pid: self(), ref: ref}
-      )
-
-      on_exit(fn -> :telemetry.detach(handler_id) end)
+      ref = attach_telemetry([:double_entry_ledger, :transaction, :posted])
 
       assert {:ok, %{successes: [_]}} = BatchProcessor.run_batch([update_cmd])
 
@@ -1004,17 +964,7 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       stub_all_with_bumps(agent, 1)
 
       # Capture the [:double_entry_ledger, :batch, :processed] event.
-      ref = make_ref()
-      handler_id = "stale-first-retry-#{inspect(ref)}"
-
-      :telemetry.attach(
-        handler_id,
-        [:double_entry_ledger, :batch, :processed],
-        &__MODULE__.forward_telemetry/4,
-        %{test_pid: self(), ref: ref}
-      )
-
-      on_exit(fn -> :telemetry.detach(handler_id) end)
+      ref = attach_telemetry([:double_entry_ledger, :batch, :processed])
 
       assert {:ok, %{successes: [success], failures: []}} =
                BatchProcessor.run_batch([command], DoubleEntryLedger.MockRepo)
@@ -1122,12 +1072,5 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       qi = Repo.get!(CommandQueueItem, command.command_queue_item.id)
       assert qi.status == :pending
     end
-  end
-
-  # Telemetry forwarder — module function (not anonymous) to avoid the
-  # `:telemetry.attach/4` performance-penalty warning.
-  @doc false
-  def forward_telemetry(event, measurements, metadata, %{test_pid: pid, ref: ref}) do
-    send(pid, {:telemetry_event, ref, event, measurements, metadata})
   end
 end
