@@ -60,11 +60,12 @@ defmodule DoubleEntryLedger.TelemetryTest do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      DoubleEntryLedger.CommandQueue.Scheduling.build_schedule_retry_with_reason(
-        command,
-        "test error",
-        :failed
-      )
+      assert {:error, _updated_command} =
+               DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
+                 command,
+                 "test error",
+                 :failed
+               )
 
       assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :retry],
                       %{system_time: _},
@@ -81,10 +82,11 @@ defmodule DoubleEntryLedger.TelemetryTest do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      DoubleEntryLedger.CommandQueue.Scheduling.build_mark_as_dead_letter(
-        command,
-        "terminal error"
-      )
+      assert {:error, _updated_command} =
+               DoubleEntryLedger.CommandQueue.Scheduling.mark_as_dead_letter(
+                 command,
+                 "terminal error"
+               )
 
       assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :dead_letter],
                       %{system_time: _},

@@ -44,6 +44,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
   alias DoubleEntryLedger.Occ.Occable
 
   alias DoubleEntryLedger.{Command, Telemetry}
+  alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @doc """
@@ -67,10 +68,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
 
         {:ok, transaction, event}
 
-      {:ok, %{command_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
-        warn("#{last_error.message}", event)
-
-        {:error, event}
+      {:ok, %{command_failure: event}} ->
+        Scheduling.persisted_failure(event)
 
       {:error, :transaction, changeset, _} ->
         {:ok, message} = warn("Transaction changeset failed", original_event, changeset)

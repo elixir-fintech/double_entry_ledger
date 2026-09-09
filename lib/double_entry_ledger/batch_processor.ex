@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     Transaction
   }
 
-  alias DoubleEntryLedger.CommandQueue.OwnershipError
+  alias DoubleEntryLedger.CommandQueue.{OwnershipError, Scheduling}
   alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
@@ -661,7 +661,11 @@ defmodule DoubleEntryLedger.BatchProcessor do
     }
 
     case do_write(write_plan, repo, now) do
-      :ok ->
+      {:ok, persisted_failures} ->
+        Enum.each(persisted_failures, fn plan ->
+          Scheduling.emit_persisted_failure(plan.command, plan.status, plan.error.message)
+        end)
+
         emit_telemetry(commands, write_plan, attempt)
         {:ok, write_plan}
 
@@ -697,15 +701,15 @@ defmodule DoubleEntryLedger.BatchProcessor do
   # is converted to `{:error, e}` rather than allowed to crash the batch
   # task — the caller then falls back to per-command processing (plan §8.3),
   # keeping worst-case behaviour no worse than the single-command path.
-  @spec do_write(write_plan(), Ecto.Repo.t(), DateTime.t()) :: :ok | {:error, term()}
+  @spec do_write(write_plan(), Ecto.Repo.t(), DateTime.t()) ::
+          {:ok, [BatchTransactionStoreHelper.planned_failure()]} | {:error, term()}
   defp do_write(write_plan, repo, now) do
     repo.transaction(fn ->
       BatchTransactionStoreHelper.write_successes(write_plan, repo, now)
       BatchTransactionStoreHelper.write_failures(write_plan.failures, repo, now)
-      :ok
     end)
     |> case do
-      {:ok, :ok} -> :ok
+      {:ok, persisted_failures} -> {:ok, persisted_failures}
       {:error, reason} -> {:error, reason}
     end
   rescue

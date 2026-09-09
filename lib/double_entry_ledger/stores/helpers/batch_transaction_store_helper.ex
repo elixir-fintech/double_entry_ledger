@@ -179,10 +179,12 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
       timestamp inside each error payload. Queue completion time comes from
       PostgreSQL.
 
-  Returns `:ok` immediately (no SQL) when `failures == []`.
+  Returns the persisted failure plans, or `[]` immediately without SQL when
+  `failures == []`. The caller emits telemetry after its transaction commits.
   """
-  @spec write_failures([BatchProcessor.failure_record()], Ecto.Repo.t(), DateTime.t()) :: :ok
-  def write_failures([], _repo, _now), do: :ok
+  @spec write_failures([BatchProcessor.failure_record()], Ecto.Repo.t(), DateTime.t()) ::
+          [planned_failure()]
+  def write_failures([], _repo, _now), do: []
 
   def write_failures(failures, repo, now) when is_list(failures) do
     plans = plan_failures(failures, now)
@@ -190,7 +192,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     %Postgrex.Result{num_rows: updated} = repo.query!(sql, params)
 
     if updated == length(failures) do
-      :ok
+      plans
     else
       raise OwnershipError, batch_command_ids: Enum.map(failures, & &1.command.id)
     end

@@ -269,13 +269,14 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
     end
 
-    test "logs at error level when dead-lettering", %{instance: instance} do
+    test "logs at error level after dead-lettering is persisted", %{instance: instance} do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       log =
         capture_log([level: :error], fn ->
-          Scheduling.build_mark_as_dead_letter(command, "Terminal failure")
+          assert {:error, %{command_queue_item: %{status: :dead_letter}}} =
+                   Scheduling.mark_as_dead_letter(command, "Terminal failure")
         end)
 
       assert log =~ "dead-lettering command #{command.id}"
@@ -320,6 +321,20 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert command_queue_item.changes.next_retry_after != nil
       refute Changeset.changed?(command_queue_item, :processing_completed_at)
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
+    end
+
+    test "logs the reason after a retry is persisted", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      log =
+        capture_log([level: :warning], fn ->
+          assert {:error, %{command_queue_item: %{status: :failed}}} =
+                   Scheduling.schedule_retry_with_reason(command, "retry reason", :failed)
+        end)
+
+      assert log =~ "command #{command.id} persisted with failed status"
+      assert log =~ "retry reason"
     end
   end
 

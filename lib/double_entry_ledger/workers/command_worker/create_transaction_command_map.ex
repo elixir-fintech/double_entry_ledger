@@ -107,9 +107,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
   def process(%{action: :create_transaction} = command_map, repo \\ Repo) do
     case process_with_retry(command_map, repo) do
-      {:ok, %{command_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
-        warn("#{last_error.message}", event)
-        {:error, event}
+      {:ok, %{command_failure: event}} ->
+        persisted_failure(event)
 
       response ->
         default_response_handler(response, command_map)

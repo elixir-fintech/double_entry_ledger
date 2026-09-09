@@ -57,6 +57,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
     end
 
     test "dead letter when create command does not exist", ctx do
+      telemetry_ref = attach_telemetry([:double_entry_ledger, :command, :dead_letter])
       command_map = create_transaction_command_map(ctx, :pending)
 
       update_transaction_command_map = %{
@@ -65,11 +66,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
           action: :update_transaction
       }
 
-      {:error, %{command_queue_item: %{status: status, errors: [error | _]}}} =
+      {:error, %{id: command_id, command_queue_item: %{status: status, errors: [error | _]}}} =
         UpdateTransactionCommandMap.process(update_transaction_command_map)
 
       assert status == :dead_letter
       assert error.message =~ "create Command not found for Update Command (id:"
+
+      assert_receive {:telemetry_event, ^telemetry_ref,
+                      [:double_entry_ledger, :command, :dead_letter], _measurements,
+                      %{command_id: ^command_id}}
     end
 
     test "update command for command_map, when create command not yet processed", ctx do

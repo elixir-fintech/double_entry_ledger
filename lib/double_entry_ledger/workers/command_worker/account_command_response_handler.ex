@@ -36,6 +36,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler 
 
   alias Ecto.Changeset
   alias DoubleEntryLedger.{Command, Account, Telemetry}
+  alias DoubleEntryLedger.CommandQueue.Scheduling
 
   @typedoc """
   Success response tuple containing the processed account and associated event.
@@ -69,10 +70,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler 
 
         {:ok, account, event}
 
-      {:ok, %{command_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
-        warn(last_error.message, event)
-
-        {:error, event}
+      {:ok, %{command_failure: event}} ->
+        Scheduling.persisted_failure(event)
 
       {:error, :account, changeset, _changes} ->
         {:ok, message} = error("Account changeset failed:", event, changeset)

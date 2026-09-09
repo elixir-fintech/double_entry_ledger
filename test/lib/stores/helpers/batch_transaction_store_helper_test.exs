@@ -1197,6 +1197,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
     test "rejects a failure written by a stale batch owner", ctx do
       [command] = insert_commands(ctx, 1, :posted)
+      telemetry_ref = attach_telemetry([:double_entry_ledger, :command, :retry])
 
       [claimed_by_old_owner] =
         Scheduling.claim_batch_for_processing([command], "old-batch-owner")
@@ -1215,6 +1216,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       current = reload_qi(command.command_queue_item.id)
       assert current.status == :processing
       assert current.processor_id == "new-batch-owner"
+      refute_received {:telemetry_event, ^telemetry_ref, _event, _measurements, _metadata}
     end
 
     # ── 1. empty failures returns :ok with no SQL ─────────────────────
@@ -1223,7 +1225,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       now = DateTime.utc_now()
       qi_before = count(CommandQueueItem)
 
-      assert :ok == BatchTransactionStoreHelper.write_failures([], Repo, now)
+      assert [] == BatchTransactionStoreHelper.write_failures([], Repo, now)
 
       assert count(CommandQueueItem) == qi_before
     end
@@ -1237,7 +1239,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
       failure = %{command: command, reason: {:unbalanced}}
 
-      :ok = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
+      [_plan] = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
 
       qi = reload_qi(command.command_queue_item.id)
 
@@ -1268,7 +1270,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
         reason: {:balance_change_error, :available, "amount can't be negative"}
       }
 
-      :ok = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
+      [_plan] = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
 
       qi = reload_qi(command.command_queue_item.id)
 
@@ -1302,7 +1304,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
       failure = %{command: command, reason: {:unbalanced}}
 
-      :ok = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
+      [_plan] = BatchTransactionStoreHelper.write_failures([failure], Repo, now)
 
       qi = reload_qi(command.command_queue_item.id)
 
@@ -1340,7 +1342,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
         %{command: c3, reason: {:account_not_found, Ecto.UUID.generate()}}
       ]
 
-      :ok =
+      [_plan1, _plan2, _plan3] =
         BatchTransactionStoreHelper.write_failures(failures, Repo, now)
 
       qi1 = reload_qi(c1.command_queue_item.id)
@@ -1390,7 +1392,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
       version_before = command.command_queue_item.processor_version
 
-      :ok =
+      [_plan] =
         BatchTransactionStoreHelper.write_failures(
           [%{command: command, reason: {:unbalanced}}],
           Repo,
@@ -1416,7 +1418,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       command = reload_command_with_qi(command.id)
       assert command.command_queue_item.processor_id == "test-processor"
 
-      :ok =
+      [_plan] =
         BatchTransactionStoreHelper.write_failures(
           [%{command: command, reason: {:unbalanced}}],
           Repo,
@@ -1447,7 +1449,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       assert command.command_queue_item.processor_id == "test-processor"
       assert command.command_queue_item.retry_count == max_retries
 
-      :ok =
+      [_plan] =
         BatchTransactionStoreHelper.write_failures(
           [%{command: command, reason: {:unbalanced}}],
           Repo,

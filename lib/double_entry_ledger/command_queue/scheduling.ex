@@ -60,8 +60,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
           {:error, Command.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(command, reason, status, repo \\ Repo) do
     case build_schedule_retry_with_reason(command, reason, status) |> repo.update() do
-      {:ok, command} ->
-        {:error, command}
+      {:ok, updated_command} ->
+        persisted_failure(updated_command)
 
       {:error, changeset} ->
         {:error, changeset}
@@ -72,8 +72,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
           {:error, Command.t()} | {:error, Changeset.t()}
   def mark_as_dead_letter(command, error, repo \\ Repo) do
     case build_mark_as_dead_letter(command, error) |> repo.update() do
-      {:ok, command} ->
-        {:error, command}
+      {:ok, updated_command} ->
+        persisted_failure(updated_command)
 
       {:error, changeset} ->
         {:error, changeset}
@@ -289,14 +289,6 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         "Max retry count (#{@max_retries}) exceeded: #{error || status}"
       )
     else
-      Telemetry.command_retry(%{
-        command_id: command.id,
-        instance_id: command.instance_id,
-        status: status,
-        retry_count: retry_count,
-        trace_context: command.trace_context
-      })
-
       # Calculate next retry time with exponential backoff
       retry_delay = calculate_retry_delay(retry_count)
 
@@ -358,15 +350,6 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   """
   @spec build_mark_as_dead_letter(Command.t(), String.t()) :: Changeset.t()
   def build_mark_as_dead_letter(%{command_queue_item: command_queue_item} = command, error) do
-    Logger.error("dead-lettering command #{command.id}: #{error}")
-
-    Telemetry.command_dead_letter(%{
-      command_id: command.id,
-      instance_id: command.instance_id,
-      error: error,
-      trace_context: command.trace_context
-    })
-
     command_queue_changeset =
       command_queue_item
       |> CommandQueueItem.dead_letter_changeset(error)
@@ -375,6 +358,43 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     |> change(%{})
     |> put_assoc(:command_queue_item, command_queue_changeset)
   end
+
+  @doc "Emits telemetry for a persisted command failure and returns its worker error tuple."
+  @spec persisted_failure(Command.t()) :: {:error, Command.t()}
+  def persisted_failure(
+        %Command{command_queue_item: %{errors: [%{message: message} | _], status: status}} =
+          command
+      ) do
+    emit_persisted_failure(command, status, message)
+    {:error, command}
+  end
+
+  @doc "Emits retry or dead-letter telemetry after a failure transition is persisted."
+  @spec emit_persisted_failure(Command.t(), CommandQueueItem.state(), String.t()) :: :ok
+  def emit_persisted_failure(command, :dead_letter, message) do
+    Logger.error("dead-lettering command #{command.id}: #{message}")
+
+    Telemetry.command_dead_letter(%{
+      command_id: command.id,
+      instance_id: command.instance_id,
+      error: message,
+      trace_context: command.trace_context
+    })
+  end
+
+  def emit_persisted_failure(command, status, message) when status in [:failed, :occ_timeout] do
+    Logger.warning("command #{command.id} persisted with #{status} status: #{message}")
+
+    Telemetry.command_retry(%{
+      command_id: command.id,
+      instance_id: command.instance_id,
+      status: status,
+      retry_count: command.command_queue_item.retry_count || 0,
+      trace_context: command.trace_context
+    })
+  end
+
+  def emit_persisted_failure(_command, _status, _message), do: :ok
 
   # Private function to calculate retry delay
   @spec calculate_retry_delay(non_neg_integer()) :: non_neg_integer()
