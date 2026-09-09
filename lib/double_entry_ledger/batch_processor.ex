@@ -57,6 +57,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     Transaction
   }
 
+  alias DoubleEntryLedger.CommandQueue.OwnershipError
   alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
@@ -107,7 +108,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
   An entry plus the post-this-entry account snapshot, used by callers
   to write balance_history_entries. `account_after` reflects the state
   immediately after **this** entry was applied — not the post-batch
-  state. This is essential for BHE per-entry granularity.
+  state. This is essential for BalanceHistoryEntry per-entry granularity.
   """
   @type entry_with_snapshot :: %{
           required(:account_id) => Ecto.UUID.t(),
@@ -342,6 +343,8 @@ defmodule DoubleEntryLedger.BatchProcessor do
     * On `Ecto.StaleEntryError`: re-preloads accounts, re-runs fold,
       retries up to `:max_batch_retries` times (default 3, configurable
       via `:double_entry_ledger, :max_batch_retries`).
+    * On command ownership loss: returns `{:error, :command_ownership_lost}`
+      immediately without retrying or splitting the stale command structs.
     * On retry exhaustion AND `length(commands) > 1`: splits the batch
       in half and recurses on each half. Combines results.
     * On retry exhaustion with `length(commands) <= 1`: propagates
@@ -706,6 +709,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
       {:error, reason} -> {:error, reason}
     end
   rescue
+    _error in OwnershipError -> {:error, :command_ownership_lost}
     e in Ecto.StaleEntryError -> {:error, e}
     e in [Ecto.ConstraintError, Postgrex.Error] -> {:error, e}
   end

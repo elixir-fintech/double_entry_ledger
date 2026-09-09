@@ -124,6 +124,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   alias DoubleEntryLedger.{
     Command,
+    CommandQueueItem,
     Transaction,
     Account,
     Telemetry
@@ -543,12 +544,22 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     case claim_command_for_processing(uuid, processor_id) do
       {:ok, command} ->
         Telemetry.command_process_span(span_metadata(command), fn ->
-          process_command(command)
+          process_claimed_command(command)
         end)
 
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  defp process_claimed_command(command) do
+    process_command(command)
+  rescue
+    error in Ecto.StaleEntryError ->
+      case error.changeset.data do
+        %CommandQueueItem{} -> {:error, :command_ownership_lost}
+        _other -> reraise error, __STACKTRACE__
+      end
   end
 
   # Private function - processes a claimed command based on its action type

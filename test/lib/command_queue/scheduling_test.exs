@@ -213,6 +213,29 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   describe "build_mark_as_processed/1" do
     setup [:create_instance, :create_accounts]
 
+    test "rejects completion from an owner whose claim version is stale", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      {:ok, claimed_by_old_owner} =
+        Scheduling.claim_command_for_processing(command.id, "old-owner")
+
+      claimed_by_old_owner.command_queue_item
+      |> Changeset.change(processor_id: "new-owner")
+      |> Changeset.optimistic_lock(:processor_version)
+      |> Repo.update!()
+
+      assert_raise Ecto.StaleEntryError, fn ->
+        claimed_by_old_owner
+        |> Scheduling.build_mark_as_processed()
+        |> Repo.update!()
+      end
+
+      current = CommandStore.get_by_id(command.id).command_queue_item
+      assert current.status == :processing
+      assert current.processor_id == "new-owner"
+    end
+
     test "builds changeset to mark command as processed", %{instance: instance} do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))

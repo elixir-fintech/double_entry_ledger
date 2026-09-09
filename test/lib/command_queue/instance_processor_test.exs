@@ -95,6 +95,22 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     end
   end
 
+  defmodule OwnershipLostCrashBatchProcessor do
+    def run_batch([stolen | _] = commands, _repo \\ DoubleEntryLedger.Repo) do
+      stolen.command_queue_item
+      |> Ecto.Changeset.change(processor_id: "replacement-owner")
+      |> Ecto.Changeset.optimistic_lock(:processor_version)
+      |> Repo.update!()
+
+      send(
+        :batch_processor_test_observer,
+        {:batch_ownership_lost, stolen.id, Enum.map(commands, & &1.id)}
+      )
+
+      raise "crash after ownership changed"
+    end
+  end
+
   defmodule DbErrorBatchProcessor do
     # Simulates a non-stale DB error from the batched write (e.g. an
     # unexpected Postgrex/constraint error). Per the plan (§8.3) the caller
@@ -336,6 +352,33 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
   end
 
   describe "task crash recovery" do
+    test "does not schedule a retry after command ownership has changed", %{
+      instance: instance,
+      command: command
+    } do
+      command_id = command.id
+
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn ^command_id, processor_id ->
+        {:ok, claimed} = Scheduling.claim_command_for_processing(command_id, processor_id)
+
+        claimed.command_queue_item
+        |> Ecto.Changeset.change(processor_id: "replacement-owner")
+        |> Ecto.Changeset.optimistic_lock(:processor_version)
+        |> Repo.update!()
+
+        raise "crash after ownership changed"
+      end)
+
+      {_pid, ref} = start_processor(instance.id)
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+
+      current = Repo.get_by!(CommandQueueItem, command_id: command_id)
+      assert current.status == :processing
+      assert current.processor_id == "replacement-owner"
+    end
+
     test "schedules retry when worker crashes", %{instance: instance, command: command} do
       # `stub` (not `expect`) — the InstanceProcessor's retry loop may invoke
       # the mock more than once before the command is dead-lettered, depending
@@ -343,7 +386,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       # `Mox.UnexpectedCallError` on a second invocation, polluting the
       # output and triggering further retry cycles before final shutdown.
       DoubleEntryLedger.MockCommandWorker
-      |> stub(:process_command_with_id, fn _id, _processor_name ->
+      |> stub(:process_command_with_id, fn id, processor_id ->
+        {:ok, _claimed} = Scheduling.claim_command_for_processing(id, processor_id)
         raise "intentional crash"
       end)
 
@@ -367,7 +411,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       |> Repo.update!()
 
       DoubleEntryLedger.MockCommandWorker
-      |> stub(:process_command_with_id, fn _id, _processor_name ->
+      |> stub(:process_command_with_id, fn id, processor_id ->
+        {:ok, _claimed} = Scheduling.claim_command_for_processing(id, processor_id)
         raise "crash after max retries"
       end)
 
@@ -540,13 +585,16 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       healthy_id = c2.id
 
       DoubleEntryLedger.MockCommandWorker
-      |> expect(:process_command_with_id, fn ^crashing_id, _processor_name ->
+      |> expect(:process_command_with_id, fn ^crashing_id, processor_id ->
+        {:ok, _claimed} =
+          Scheduling.claim_command_for_processing(crashing_id, processor_id)
+
         raise "deterministic command crash"
       end)
 
       DoubleEntryLedger.MockCommandWorker
-      |> expect(:process_command_with_id, fn ^healthy_id, _processor_name ->
-        command = CommandStore.get_by_id(healthy_id)
+      |> expect(:process_command_with_id, fn ^healthy_id, processor_id ->
+        {:ok, command} = Scheduling.claim_command_for_processing(healthy_id, processor_id)
 
         command
         |> Scheduling.build_mark_as_processed()
@@ -596,6 +644,35 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert_receive {:partial_batch_crashed, ^committed_id, [^committed_id, ^remaining_id]}, 5000
       assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
       assert Repo.get_by!(CommandQueueItem, command_id: committed_id).status == :processed
+      assert Repo.get_by!(CommandQueueItem, command_id: remaining_id).status == :processed
+    end
+
+    test "batch crash does not revert a claim now owned by another processor",
+         %{instance: instance, command: stolen, accounts: accounts} do
+      remaining = insert_create_command(instance, accounts, 50)
+      stolen_id = stolen.id
+      remaining_id = remaining.id
+
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn ^remaining_id, _processor_name ->
+        command = CommandStore.get_by_id(remaining_id)
+
+        command
+        |> Scheduling.build_mark_as_processed()
+        |> Repo.update!()
+
+        {:ok, nil, command}
+      end)
+
+      {_pid, ref} =
+        start_processor_with_batch(instance.id, OwnershipLostCrashBatchProcessor)
+
+      assert_receive {:batch_ownership_lost, ^stolen_id, [^stolen_id, ^remaining_id]}, 5000
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
+
+      current = Repo.get_by!(CommandQueueItem, command_id: stolen_id)
+      assert current.status == :processing
+      assert current.processor_id == "replacement-owner"
       assert Repo.get_by!(CommandQueueItem, command_id: remaining_id).status == :processed
     end
 

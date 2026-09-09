@@ -83,6 +83,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
        batch_processor: batch_processor,
        processing: false,
        current_command_id: nil,
+       current_processor_id: nil,
        task_ref: nil,
        pending_ids: [],
        current_batch: nil,
@@ -141,7 +142,15 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
     # Command processing completed, check for more commands
     send(self(), :process_next)
-    {:noreply, %{state | processing: false, current_command_id: nil, task_ref: nil}}
+
+    {:noreply,
+     %{
+       state
+       | processing: false,
+         current_command_id: nil,
+         current_processor_id: nil,
+         task_ref: nil
+     }}
   end
 
   @impl true
@@ -168,8 +177,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     if ref, do: Process.demonitor(ref, [:flush])
     log_outcomes(outcomes)
 
-    batch_ids = batch || []
-    fall_back_to_single(state, batch_ids)
+    fall_back_to_single(state, batch || [])
   end
 
   # Batch task crashed — fall back to the single-command path so one
@@ -193,16 +201,29 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   @impl true
   def handle_info(
         {:DOWN, ref, :process, _pid, reason},
-        %{task_ref: ref, current_command_id: command_id, instance_id: instance_id} = state
+        %{
+          task_ref: ref,
+          current_command_id: command_id,
+          current_processor_id: processor_id,
+          instance_id: instance_id
+        } = state
       ) do
     Logger.error(
       "Command task crashed for command #{command_id} on instance #{instance_id}: #{inspect(reason)}"
     )
 
-    schedule_retry_for_crashed_command(command_id, reason)
+    schedule_retry_for_crashed_command(command_id, processor_id, reason)
 
     send(self(), :process_next)
-    {:noreply, %{state | processing: false, current_command_id: nil, task_ref: nil}}
+
+    {:noreply,
+     %{
+       state
+       | processing: false,
+         current_command_id: nil,
+         current_processor_id: nil,
+         task_ref: nil
+     }}
   end
 
   @impl true
@@ -280,8 +301,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   defp start_batch_processing(
          %{batch_processor: bp, instance_id: instance_id} = state,
-         commands,
-         batch_ids
+         commands
        ) do
     Logger.info("Processing batch of #{length(commands)} commands for instance #{instance_id}")
 
@@ -295,7 +315,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
     ref = Process.monitor(pid)
 
-    {:noreply, %{state | processing: true, task_ref: ref, current_batch: batch_ids}}
+    {:noreply, %{state | processing: true, task_ref: ref, current_batch: commands}}
   end
 
   # Claim the batch via `Scheduling.claim_batch_for_processing/3`, then run
@@ -313,36 +333,33 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         {:noreply, state}
 
       claimed_commands ->
-        start_batch_processing(state, claimed_commands, Enum.map(claimed_commands, & &1.id))
+        start_batch_processing(state, claimed_commands)
     end
   end
 
   # Revert claimed rows back to :pending so they can be re-processed via
-  # the single-cmd path. Only touches rows we still hold (:processing);
+  # the single-cmd path. The claim's processor_version fences each write,
+  # so rows already completed or transferred to another owner are skipped;
   # retry_count is intentionally left as-is (set at claim time) so the
   # subsequent single-cmd re-claim from :pending won't double-count it.
   defp revert_batch_to_pending([]), do: []
 
-  defp revert_batch_to_pending(ids) do
-    {_count, reverted_ids} =
-      from(eqi in CommandQueueItem,
-        prefix: ^@schema_prefix,
-        where: eqi.command_id in ^ids and eqi.status == :processing,
-        update: [
-          set: [
-            status: :pending,
-            next_retry_after: nil
-          ]
-        ],
-        select: eqi.command_id
-      )
-      |> Repo.update_all([])
+  defp revert_batch_to_pending(commands) do
+    Enum.flat_map(commands, fn command ->
+      try do
+        command
+        |> Scheduling.build_revert_to_pending(nil)
+        |> Repo.update!()
 
-    Enum.filter(ids, &(&1 in reverted_ids))
+        [command.id]
+      rescue
+        Ecto.StaleEntryError -> []
+      end
+    end)
   end
 
-  defp fall_back_to_single(state, batch_ids) do
-    reverted_ids = revert_batch_to_pending(batch_ids)
+  defp fall_back_to_single(state, batch) do
+    reverted_ids = revert_batch_to_pending(batch)
     send(self(), :process_next)
 
     {:noreply,
@@ -392,19 +409,30 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     )
   end
 
-  defp schedule_retry_for_crashed_command(command_id, reason) do
+  defp schedule_retry_for_crashed_command(command_id, processor_id, reason) do
     case CommandStore.get_by_id(command_id) do
       nil ->
         Logger.error("Could not find command #{command_id} to schedule retry after crash")
 
-      command ->
-        Scheduling.build_schedule_retry_with_reason(
-          command,
-          "Task crashed: #{inspect(reason)}",
-          :failed
-        )
-        |> Repo.update()
+      %{command_queue_item: %{status: :processing, processor_id: ^processor_id}} = command ->
+        try do
+          Scheduling.schedule_retry_with_reason(
+            command,
+            "Task crashed: #{inspect(reason)}",
+            :failed
+          )
+        rescue
+          Ecto.StaleEntryError ->
+            log_ownership_changed(command_id)
+        end
+
+      _command ->
+        log_ownership_changed(command_id)
     end
+  end
+
+  defp log_ownership_changed(command_id) do
+    Logger.warning("Skipped crash retry for command #{command_id} because ownership changed")
   end
 
   # Spawns a Task to run the worker for a single command id, monitors it,
@@ -414,16 +442,24 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     Logger.info("Processing command #{command_id} for instance #{instance_id}")
 
     parent = self()
+    processor_id = processor_name()
 
     {:ok, pid} =
       Task.start(fn ->
-        process_result = worker.process_command_with_id(command_id, processor_name())
+        process_result = worker.process_command_with_id(command_id, processor_id)
         send(parent, {:processing_complete, command_id, process_result})
       end)
 
     ref = Process.monitor(pid)
 
-    {:noreply, %{state | processing: true, current_command_id: command_id, task_ref: ref}}
+    {:noreply,
+     %{
+       state
+       | processing: true,
+         current_command_id: command_id,
+         current_processor_id: processor_id,
+         task_ref: ref
+     }}
   end
 
   # Returns up to `limit` ids of the next in-flight commands for this

@@ -36,6 +36,7 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
   alias DoubleEntryLedger.Command.TransactionData
   alias DoubleEntryLedger.Stores.CommandStore
+  alias DoubleEntryLedger.CommandQueue.Scheduling
 
   import Ecto.Query, only: [from: 2]
 
@@ -948,6 +949,36 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
 
       assert {:error, %Postgrex.Error{}} =
                BatchProcessor.run_batch([command], DoubleEntryLedger.MockRepo)
+    end
+
+    test "ownership loss returns immediately without OCC retry or split",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+
+      [claimed_by_old_owner] =
+        Scheduling.claim_batch_for_processing([command], "old-batch-owner")
+
+      claimed_by_old_owner.command_queue_item
+      |> Ecto.Changeset.change(processor_id: "replacement-owner")
+      |> Ecto.Changeset.optimistic_lock(:processor_version)
+      |> Repo.update!()
+
+      {:ok, transaction_count} = Agent.start(fn -> 0 end)
+      on_exit(fn -> Agent.stop(transaction_count) end)
+
+      stub(DoubleEntryLedger.MockRepo, :transaction, fn fun ->
+        Agent.update(transaction_count, &(&1 + 1))
+        Repo.transaction(fun)
+      end)
+
+      assert {:error, :command_ownership_lost} =
+               BatchProcessor.run_batch([claimed_by_old_owner], DoubleEntryLedger.MockRepo)
+
+      assert Agent.get(transaction_count, & &1) == 1
+
+      current = Repo.get!(CommandQueueItem, command.command_queue_item.id)
+      assert current.status == :processing
+      assert current.processor_id == "replacement-owner"
     end
 
     # ── Scenario 1: stale resolved on first retry ──────────────────

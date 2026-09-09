@@ -109,6 +109,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       status: :processed,
       next_retry_after: nil
     })
+    |> optimistic_lock(:processor_version)
   end
 
   @spec revert_to_pending_changeset(CommandQueueItem.t(), any()) :: Ecto.Changeset.t()
@@ -118,6 +119,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       status: :pending,
       errors: build_errors(command_queue_item, error)
     })
+    |> optimistic_lock(:processor_version)
   end
 
   @spec dead_letter_changeset(CommandQueueItem.t(), any()) :: Ecto.Changeset.t()
@@ -128,6 +130,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       errors: build_errors(command_queue_item, error),
       next_retry_after: nil
     })
+    |> optimistic_lock(:processor_version)
   end
 
   @spec schedule_retry_changeset(
@@ -146,6 +149,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       processor_id: nil,
       errors: build_errors(command_queue_item, error)
     })
+    |> optimistic_lock(:processor_version)
   end
 
   @spec schedule_update_retry_changeset(
@@ -175,6 +179,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       next_retry_after: next_retry_after,
       errors: build_errors(command_queue_item, message)
     )
+    |> optimistic_lock(:processor_version)
   end
 
   @spec build_errors(CommandQueueItem.t(), any()) :: list(ErrorMap.error())

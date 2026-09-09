@@ -66,17 +66,38 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
       direct-API write transitioned it to `:posted` / `:archived`). Stronger
       than legacy, which has only a read-time `validate_state_transition/1`
       check and no write-time guard.
+    * Queue-item updates match both `processor_id` and `processor_version`,
+      and their updated row count must equal the expected command count.
+      Otherwise a replacement processor owns at least one command.
 
-  Either mismatch raises `Ecto.StaleEntryError` with `action: :update`.
+  Account or transaction mismatches raise `Ecto.StaleEntryError` with
+  `action: :update`. Queue ownership mismatches raise
+  `CommandQueue.OwnershipError`.
   The orchestrator (Step 5) wraps us in `Repo.transaction/1`, so the
   raise rolls back the whole batch.
   """
 
-  alias DoubleEntryLedger.{Account, BatchProcessor, BatchSerializer, Transaction}
+  alias DoubleEntryLedger.{
+    Account,
+    BatchProcessor,
+    BatchSerializer,
+    Command,
+    CommandQueueItem,
+    Transaction
+  }
+
   alias DoubleEntryLedger.Command.TransactionCommandMap
-  alias DoubleEntryLedger.CommandQueue.Scheduling
+  alias DoubleEntryLedger.CommandQueue.{OwnershipError, Scheduling}
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
+
+  @type planned_failure :: %{
+          required(:command) => Command.t(),
+          required(:status) => CommandQueueItem.state(),
+          required(:next_retry_after) => DateTime.t() | nil,
+          required(:error) => map(),
+          required(:processor_id_after) => String.t() | nil
+        }
 
   @doc """
   Executes the success half of a batched write in one round-trip.
@@ -89,8 +110,9 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
       balance-history timestamps. Queue processing timestamps come from
       PostgreSQL.
 
-  Returns `:ok`. Raises `Ecto.StaleEntryError` if any account's
-  `lock_version` advanced between fold and write.
+  Returns `:ok`. Raises `Ecto.StaleEntryError` if an account or transaction
+  changed between fold and write, or `CommandQueue.OwnershipError` if command
+  ownership changed.
 
   Returns `:ok` immediately (no SQL) when `write_plan.successes == []`.
   """
@@ -104,18 +126,24 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     {sql, params} =
       build_query(successes, inserted_successes, updated_successes, merged_accounts, now)
 
-    %Postgrex.Result{rows: [[accounts_updated, transactions_updated]]} =
+    %Postgrex.Result{rows: [[accounts_updated, transactions_updated, queue_items_updated]]} =
       repo.query!(sql, params)
 
     expected_accounts = map_size(merged_accounts)
     expected_tx_updates = length(updated_successes)
+    expected_queue_updates = length(successes)
 
-    if accounts_updated == expected_accounts and transactions_updated == expected_tx_updates do
-      :ok
-    else
-      raise Ecto.StaleEntryError,
-        action: :update,
-        changeset: Ecto.Changeset.change(%Account{})
+    cond do
+      queue_items_updated != expected_queue_updates ->
+        raise OwnershipError, batch_command_ids: Enum.map(successes, & &1.command.id)
+
+      accounts_updated != expected_accounts or transactions_updated != expected_tx_updates ->
+        raise Ecto.StaleEntryError,
+          action: :update,
+          changeset: Ecto.Changeset.change(%Account{})
+
+      true ->
+        :ok
     end
   end
 
@@ -136,11 +164,10 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
       `next_retry_after` cleared (`NULL`).
 
   In every case the new error payload is prepended to the `errors` JSONB
-  array. `retry_count` and `processor_version` are NOT touched here — to
-  match legacy semantics, `retry_count` is bumped at claim time by
-  `Scheduling.retry_count_by_status/1` (via `processing_start_changeset/3`)
-  and `processor_version` is only advanced by the optimistic_lock in the
-  same claim changeset. On the `:failed` branch we additionally clear
+  array. `retry_count` is not touched here; it is bumped at claim time by
+  `Scheduling.retry_count_by_status/1` (via `processing_start_changeset/3`).
+  `processor_version` fences the write against a replacement owner and is
+  advanced by a successful transition. On the `:failed` branch we additionally clear
   `processor_id` (mirroring `schedule_retry_changeset/4`); on the
   `:dead_letter` branch we preserve it (mirroring `dead_letter_changeset/2`).
 
@@ -158,9 +185,15 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   def write_failures([], _repo, _now), do: :ok
 
   def write_failures(failures, repo, now) when is_list(failures) do
-    {sql, params} = build_failure_query(failures, now)
-    repo.query!(sql, params)
-    :ok
+    plans = plan_failures(failures, now)
+    {sql, params} = build_failure_query(plans)
+    %Postgrex.Result{num_rows: updated} = repo.query!(sql, params)
+
+    if updated == length(failures) do
+      :ok
+    else
+      raise OwnershipError, batch_command_ids: Enum.map(failures, & &1.command.id)
+    end
   end
 
   # ── SQL building ─────────────────────────────────────────────────
@@ -216,7 +249,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         Enum.join(ctes, ",\n") <>
         "\nSELECT " <>
         "(SELECT count(*) FROM updated_accounts) AS accounts_updated, " <>
-        "#{transactions_updated_expr} AS transactions_updated"
+        "#{transactions_updated_expr} AS transactions_updated, " <>
+        "(SELECT count(*) FROM processed_queue_items) AS queue_items_updated"
 
     {sql, Enum.reverse(state.params)}
   end
@@ -605,17 +639,36 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   # ── command_queue_items UPDATE CTE ───────────────────────────────
   defp build_queue_items_cte(successes, state) do
-    queue_item_ids = Enum.map(successes, &uuid(&1.command.command_queue_item.id))
+    {rows, state} =
+      Enum.reduce(successes, {[], state}, fn success, {rows, st} ->
+        queue_item = success.command.command_queue_item
 
-    {placeholders, state} = push_params(state, [queue_item_ids])
+        {placeholders, st} =
+          push_params(st, [
+            uuid(queue_item.id),
+            queue_item.processor_id,
+            queue_item.processor_version
+          ])
+
+        cast =
+          "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::text, " <>
+            "#{p(placeholders, 2)}::integer)"
+
+        {[cast | rows], st}
+      end)
 
     sql = """
     processed_queue_items AS (
-      UPDATE #{table("command_queue_items")}
+      UPDATE #{table("command_queue_items")} AS c
       SET status = 'processed',
-          next_retry_after = NULL
-      WHERE id = ANY(#{p(placeholders, 0)}::uuid[])
-      RETURNING id
+          next_retry_after = NULL,
+          processor_version = c.processor_version + 1
+      FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
+        AS u(id, processor_id, processor_version)
+      WHERE c.id = u.id
+        AND c.processor_id IS NOT DISTINCT FROM u.processor_id
+        AND c.processor_version = u.processor_version
+      RETURNING c.id
     )
     """
 
@@ -628,34 +681,47 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   # command, marks the queue row `:pending`, `:failed`, or `:dead_letter`
   # (per `compute_failure_outcome/3`). The new error payload is prepended,
   # matching `CommandQueueItem.build_errors/2`'s latest-error-first contract.
-  @spec build_failure_query([BatchProcessor.failure_record()], DateTime.t()) ::
-          {String.t(), [term()]}
-  defp build_failure_query(failures, now) do
+  defp plan_failures(failures, now) do
+    Enum.map(failures, fn failure ->
+      command = failure.command
+      {status, next_retry_after} = compute_failure_outcome(failure, now)
+
+      # Mirror the legacy changesets: retries release their claim, while
+      # terminal dead-letter transitions retain the processor identifier.
+      processor_id_after =
+        case status do
+          :pending -> command.command_queue_item.processor_id
+          :failed -> nil
+          :dead_letter -> command.command_queue_item.processor_id
+        end
+
+      %{
+        command: command,
+        status: status,
+        next_retry_after: next_retry_after,
+        error: error_payload(failure.reason, now),
+        processor_id_after: processor_id_after
+      }
+    end)
+  end
+
+  @spec build_failure_query([planned_failure()]) :: {String.t(), [term()]}
+  defp build_failure_query(plans) do
     state = %{params: [], idx: 0}
 
     {rows, state} =
-      Enum.reduce(failures, {[], state}, fn failure, {rows, st} ->
-        qi_id = failure.command.command_queue_item.id
-        {status, next_retry_after} = compute_failure_outcome(failure, now)
-        error_map = error_payload(failure.reason, now)
-
-        # Mirror legacy:
-        #   * `schedule_retry_changeset/4` clears `processor_id` (→ nil) on `:failed`
-        #   * `dead_letter_changeset/2` does NOT touch `processor_id` (→ preserve)
-        processor_id_after =
-          case status do
-            :pending -> failure.command.command_queue_item.processor_id
-            :failed -> nil
-            :dead_letter -> failure.command.command_queue_item.processor_id
-          end
+      Enum.reduce(plans, {[], state}, fn plan, {rows, st} ->
+        queue_item = plan.command.command_queue_item
 
         {placeholders, st} =
           push_params(st, [
-            uuid(qi_id),
-            Atom.to_string(status),
-            processor_id_after,
-            error_map,
-            next_retry_after
+            uuid(queue_item.id),
+            Atom.to_string(plan.status),
+            plan.processor_id_after,
+            plan.error,
+            plan.next_retry_after,
+            queue_item.processor_id,
+            queue_item.processor_version
           ])
 
         cast =
@@ -663,7 +729,9 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
             "#{p(placeholders, 1)}::text, " <>
             "#{p(placeholders, 2)}::text, " <>
             "#{p(placeholders, 3)}::jsonb, " <>
-            "#{timestamp(p(placeholders, 4))})"
+            "#{timestamp(p(placeholders, 4))}, " <>
+            "#{p(placeholders, 5)}::text, " <>
+            "#{p(placeholders, 6)}::integer)"
 
         {[cast | rows], st}
       end)
@@ -673,10 +741,21 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
     SET status = u.status,
         errors = jsonb_build_array(u.new_error) || COALESCE(c.errors, '[]'::jsonb),
         next_retry_after = u.next_retry_after,
-        processor_id = u.processor_id_after
+        processor_id = u.processor_id_after,
+        processor_version = c.processor_version + 1
     FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
-      AS u(id, status, processor_id_after, new_error, next_retry_after)
+      AS u(
+        id,
+        status,
+        processor_id_after,
+        new_error,
+        next_retry_after,
+        expected_processor_id,
+        processor_version
+      )
     WHERE c.id = u.id
+      AND c.processor_id IS NOT DISTINCT FROM u.expected_processor_id
+      AND c.processor_version = u.processor_version
     """
 
     {sql, Enum.reverse(state.params)}

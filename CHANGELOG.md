@@ -65,6 +65,10 @@ project follows [Semantic Versioning](https://semver.org/).
   dependency-wait semantics without hot loops, isolates crashing commands,
   handles partial completion safely, and writes timestamps and error history
   consistently with the legacy path.
+- Command completion, retry, dead-letter, and batch-fallback writes are fenced
+  by `processor_version`, preventing a stale processor from overwriting work
+  after ownership moves to another processor. Ownership loss is returned as an
+  expected error without account-OCC retries or task-crash logging.
 - Package consumers must configure `:insert_path`, `:batch_enabled`, and
   `:batch_size` in their own application. This repository's runtime config is
   not loaded as dependency configuration.
