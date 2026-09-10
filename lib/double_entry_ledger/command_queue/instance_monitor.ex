@@ -30,14 +30,9 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   use GenServer
   require Logger
 
-  alias DoubleEntryLedger.{Command, CommandQueueItem}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
-  alias DoubleEntryLedger.CommandQueue.InstanceProcessor
-
-  import Ecto.Query
-
-  @schema_prefix DoubleEntryLedger.Config.schema_prefix()
+  alias DoubleEntryLedger.CommandQueue.{InstanceProcessor, Scheduling}
 
   # Client API
 
@@ -81,20 +76,9 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   end
 
   defp find_instances_with_commands do
-    now = DateTime.utc_now()
-
-    # Find distinct instance IDs with pending commands
-    from(c in Command,
-      join: cqi in CommandQueueItem,
-      prefix: ^@schema_prefix,
-      on: c.id == cqi.command_id,
-      where:
-        cqi.status in [:pending, :occ_timeout, :failed] and
-          (is_nil(cqi.next_retry_after) or cqi.next_retry_after <= ^now),
-      select: c.instance_id,
-      distinct: true
-    )
-    |> Repo.all()
+    # Distinct instance IDs with processable commands, evaluated on the
+    # database clock.
+    Repo.all(Scheduling.instances_with_processable_commands_query())
   end
 
   defp ensure_processor(instance_id) do

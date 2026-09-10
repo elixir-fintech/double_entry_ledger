@@ -10,10 +10,26 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
-  alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.{Command, CommandQueueItem}
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
+
+  # `Scheduling.calculate_retry_delay/1` for retry_count 0: base delay plus a
+  # jitter of 1..(base/10 + 1) seconds.
+  @base_retry_delay Application.compile_env(:double_entry_ledger, :command_queue, [])
+                    |> Keyword.get(:base_retry_delay, 30)
+  @first_retry_delay_range @base_retry_delay..(@base_retry_delay + div(@base_retry_delay, 10) + 1)
+
+  defmodule QueryCapturingRepo do
+    @moduledoc false
+    # Stands in for the repo passed to `claim_batch_for_processing/3` so a test
+    # can inspect the UPDATE query it builds instead of executing it.
+    def update_all(query, _updates) do
+      send(self(), {:update_all_query, query})
+      {0, []}
+    end
+  end
 
   describe "claim_command_for_processing/2" do
     setup [:create_instance, :create_accounts]
@@ -160,6 +176,48 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert queue_item.status == :occ_timeout
       assert queue_item.retry_count == 2
       assert queue_item.next_retry_after == next_retry_after
+    end
+
+    test "claims a retry whose next_retry_after is in the database's past", %{
+      instance: instance
+    } do
+      command = seed_occ_timeout_command(instance, 2)
+      reschedule_retry_relative_to_db_clock(command.id, -1)
+      command = CommandStore.get_by_id(command.id)
+
+      [%Command{command_queue_item: qi}] =
+        Scheduling.claim_batch_for_processing([command], "proc-1")
+
+      assert qi.status == :processing
+      assert qi.retry_count == 3
+      assert qi.next_retry_after == nil
+    end
+
+    test "does not claim a retry whose next_retry_after is in the database's future", %{
+      instance: instance
+    } do
+      command = seed_occ_timeout_command(instance, 2)
+      reschedule_retry_relative_to_db_clock(command.id, 1)
+      command = CommandStore.get_by_id(command.id)
+
+      assert [] = Scheduling.claim_batch_for_processing([command], "proc-1")
+      assert CommandStore.get_by_id(command.id).command_queue_item.status == :occ_timeout
+    end
+
+    test "evaluates retry eligibility on the database clock, not an application timestamp", %{
+      instance: instance
+    } do
+      command = seed_occ_timeout_command(instance, 0)
+
+      assert [] = Scheduling.claim_batch_for_processing([command], "proc-1", QueryCapturingRepo)
+      assert_receive {:update_all_query, query}
+
+      {sql, params} = Ecto.Adapters.SQL.to_sql(:update_all, Repo, query)
+
+      # The comparison happens in SQL; no BEAM-side timestamp is bound.
+      assert sql =~ "timezone('UTC', statement_timestamp())"
+      refute Enum.any?(params, &match?(%DateTime{}, &1))
+      refute Enum.any?(params, &match?(%NaiveDateTime{}, &1))
     end
 
     test "skips commands that are not in a claimable state", %{instance: instance} do
@@ -318,9 +376,33 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       assert command_queue_item.valid?
       assert command_queue_item.changes.status == reason
-      assert command_queue_item.changes.next_retry_after != nil
+      assert is_integer(command_queue_item.changes.retry_delay_seconds)
+      assert command_queue_item.changes.retry_delay_seconds > 0
+      refute Map.has_key?(command_queue_item.changes, :next_retry_after)
       refute Changeset.changed?(command_queue_item, :processing_completed_at)
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
+    end
+
+    test "persists a next_retry_after computed by the database from the delay", %{
+      instance: instance
+    } do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      {:error, %{command_queue_item: returned}} =
+        Scheduling.schedule_retry_with_reason(command, "retry reason", :failed)
+
+      reloaded = Repo.get!(CommandQueueItem, command.command_queue_item.id)
+
+      # The delay is a transient instruction to the trigger, never persisted.
+      assert returned.retry_delay_seconds == nil
+      assert reloaded.retry_delay_seconds == nil
+
+      # Both timestamps are stamped by the trigger from the same database
+      # clock reading, so they differ by exactly the delay.
+      assert returned.next_retry_after == reloaded.next_retry_after
+      delay = DateTime.diff(reloaded.next_retry_after, reloaded.processing_completed_at, :second)
+      assert delay in @first_retry_delay_range
     end
 
     test "logs the reason after a retry is persisted", %{instance: instance} do
@@ -371,6 +453,84 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       refute Changeset.changed?(command_queue_item, :processing_completed_at)
       assert Changeset.get_field(command_queue_item, :retry_count) == 0
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == test_message end)
+    end
+
+    test "derives next_retry_after from the create command's database-written retry time",
+         %{instance: instance} = ctx do
+      %{command: %{command_map: %{source: s, source_idempk: s_id}} = pending_command} =
+        new_create_transaction_command(ctx, :pending)
+
+      {:error, failed_create_command} =
+        Scheduling.schedule_retry_with_reason(pending_command, "some reason", :failed)
+
+      create_next_retry_after = failed_create_command.command_queue_item.next_retry_after
+      assert %DateTime{} = create_next_retry_after
+
+      {:ok, command} = new_update_transaction_command(s, s_id, instance.address, :posted)
+
+      error = %UpdateCommandError{
+        create_command: failed_create_command,
+        update_command: command,
+        message: "Test error",
+        reason: :create_command_not_processed
+      }
+
+      %{changes: %{command_queue_item: command_queue_item}} =
+        Scheduling.build_schedule_update_retry(command, error)
+
+      # The base is a database-produced timestamp, so the changeset carries
+      # the derived timestamp and no delay instruction.
+      refute Map.has_key?(command_queue_item.changes, :retry_delay_seconds)
+      derived = command_queue_item.changes.next_retry_after
+      assert DateTime.diff(derived, create_next_retry_after, :second) in @first_retry_delay_range
+    end
+
+    test "supplies only a delay when the create command has no retry time",
+         %{instance: instance} = ctx do
+      %{command: %{command_map: %{source: s, source_idempk: s_id}} = pending_command} =
+        new_create_transaction_command(ctx, :pending)
+
+      assert pending_command.command_queue_item.next_retry_after == nil
+
+      {:ok, command} = new_update_transaction_command(s, s_id, instance.address, :posted)
+
+      error = %UpdateCommandError{
+        create_command: pending_command,
+        update_command: command,
+        message: "Test error",
+        reason: :create_command_not_processed
+      }
+
+      %{changes: %{command_queue_item: command_queue_item}} =
+        Scheduling.build_schedule_update_retry(command, error)
+
+      # No application clock involved: the trigger computes next_retry_after.
+      refute Map.has_key?(command_queue_item.changes, :next_retry_after)
+      assert command_queue_item.changes.retry_delay_seconds in @first_retry_delay_range
+    end
+  end
+
+  describe "next_command_ids_query/2" do
+    test "evaluates retry eligibility on the database clock" do
+      query = Scheduling.next_command_ids_query(Ecto.UUID.generate(), 10)
+
+      {sql, params} = Ecto.Adapters.SQL.to_sql(:all, Repo, query)
+
+      assert sql =~ "timezone('UTC', statement_timestamp())"
+      refute Enum.any?(params, &match?(%DateTime{}, &1))
+      refute Enum.any?(params, &match?(%NaiveDateTime{}, &1))
+    end
+  end
+
+  describe "instances_with_processable_commands_query/0" do
+    test "evaluates retry eligibility on the database clock" do
+      query = Scheduling.instances_with_processable_commands_query()
+
+      {sql, params} = Ecto.Adapters.SQL.to_sql(:all, Repo, query)
+
+      assert sql =~ "timezone('UTC', statement_timestamp())"
+      refute Enum.any?(params, &match?(%DateTime{}, &1))
+      refute Enum.any?(params, &match?(%NaiveDateTime{}, &1))
     end
   end
 end

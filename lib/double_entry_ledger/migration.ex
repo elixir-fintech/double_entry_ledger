@@ -57,6 +57,9 @@ defmodule DoubleEntryLedger.Migration do
       application-node clocks.
     * Version 9 — add a database-generated queue position and use it for stable
       command ordering.
+    * Version 10 — compute `command_queue_items.next_retry_after` in PostgreSQL.
+      The application writes a transient `retry_delay_seconds` instruction and
+      the queue trigger converts it into a deadline on the database clock.
 
   New consumers add a single migration calling `up()` / `down()` — all versions
   apply in order. Existing consumers upgrading to a new library release add a
@@ -72,7 +75,7 @@ defmodule DoubleEntryLedger.Migration do
 
       # Upgrade from 0.4.x to 0.5.0 (versions 1-4 already applied)
       def up, do: DoubleEntryLedger.Migration.up(from: 4)
-      def down, do: DoubleEntryLedger.Migration.down(from: 9, version: 4)
+      def down, do: DoubleEntryLedger.Migration.down(from: 10, version: 4)
 
   ## Historical background-job migrations
 
@@ -92,7 +95,7 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  @latest_version 9
+  @latest_version 10
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -153,7 +156,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 9 and version >= 9, do: v9_up(prefix)
+    if from < 9 and version >= 9 do
+      v9_up(prefix)
+      flush()
+    end
+
+    if from < 10 and version >= 10, do: v10_up(prefix)
 
     :ok
   end
@@ -172,6 +180,11 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 10 and version < 10 do
+      v10_down(prefix)
+      flush()
+    end
 
     if from >= 9 and version < 9 do
       v9_down(prefix)
@@ -727,6 +740,104 @@ defmodule DoubleEntryLedger.Migration do
 
     alter table(:command_queue_items, prefix: prefix) do
       remove(:queue_position)
+    end
+  end
+
+  # ── Version 10: database-computed retry deadlines ─────────────────
+  #
+  # `retry_delay_seconds` is a transient instruction to the queue trigger,
+  # not persisted state: a writer sets it instead of computing
+  # `next_retry_after` on the application clock, the BEFORE UPDATE trigger
+  # turns it into `database_now + delay` and resets the column to NULL in
+  # the same row write. Because the trigger is FOR EACH ROW it applies to
+  # single-row changesets and bulk UPDATEs alike. The trigger only fires on
+  # UPDATE, so a CHECK constraint enforces the invariant for inserts as well:
+  # CHECK constraints are evaluated after BEFORE ROW triggers, which lets the
+  # UPDATE path pass (the trigger has already cleared the column) while a
+  # direct INSERT that supplies a delay is rejected. The column is therefore
+  # always NULL at rest.
+
+  defp v10_up(prefix) do
+    alter table(:command_queue_items, prefix: prefix) do
+      add(:retry_delay_seconds, :integer)
+    end
+
+    create(
+      constraint(:command_queue_items, :command_queue_items_retry_delay_seconds_transient,
+        check: "retry_delay_seconds IS NULL",
+        prefix: prefix
+      )
+    )
+
+    flush()
+
+    execute("""
+    CREATE OR REPLACE FUNCTION #{prefix}.set_command_queue_item_timestamps()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+      database_now timestamp without time zone := timezone('UTC', statement_timestamp());
+    BEGIN
+      NEW.updated_at = database_now;
+
+      IF NEW.status IS DISTINCT FROM OLD.status THEN
+        IF NEW.status = 'processing' THEN
+          NEW.processing_started_at = database_now;
+          NEW.processing_completed_at = NULL;
+        ELSIF NEW.status IN ('processed', 'failed', 'occ_timeout', 'dead_letter') THEN
+          NEW.processing_completed_at = database_now;
+        END IF;
+      END IF;
+
+      -- retry_delay_seconds is a transient instruction: convert it into a
+      -- deadline on the database clock and clear it so it is never stored.
+      IF NEW.retry_delay_seconds IS NOT NULL THEN
+        NEW.next_retry_after = database_now + make_interval(secs => NEW.retry_delay_seconds);
+        NEW.retry_delay_seconds = NULL;
+      END IF;
+
+      RETURN NEW;
+    END;
+    $$
+    """)
+  end
+
+  defp v10_down(prefix) do
+    # Restore the exact v8 function body before dropping the column it
+    # references.
+    execute("""
+    CREATE OR REPLACE FUNCTION #{prefix}.set_command_queue_item_timestamps()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+      database_now timestamp without time zone := timezone('UTC', statement_timestamp());
+    BEGIN
+      NEW.updated_at = database_now;
+
+      IF NEW.status IS DISTINCT FROM OLD.status THEN
+        IF NEW.status = 'processing' THEN
+          NEW.processing_started_at = database_now;
+          NEW.processing_completed_at = NULL;
+        ELSIF NEW.status IN ('processed', 'failed', 'occ_timeout', 'dead_letter') THEN
+          NEW.processing_completed_at = database_now;
+        END IF;
+      END IF;
+
+      RETURN NEW;
+    END;
+    $$
+    """)
+
+    drop(
+      constraint(:command_queue_items, :command_queue_items_retry_delay_seconds_transient,
+        prefix: prefix
+      )
+    )
+
+    alter table(:command_queue_items, prefix: prefix) do
+      remove(:retry_delay_seconds)
     end
   end
 

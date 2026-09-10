@@ -58,6 +58,21 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
       assert :queue_position in CommandQueueItem.__schema__(:read_after_writes)
       refute :queue_position in CommandQueueItem.__schema__(:autogenerate_fields)
     end
+
+    test "configures the trigger-managed retry columns to be read after writes" do
+      assert :next_retry_after in CommandQueueItem.__schema__(:read_after_writes)
+      assert :retry_delay_seconds in CommandQueueItem.__schema__(:read_after_writes)
+    end
+
+    test "does not cast the transient retry_delay_seconds instruction" do
+      changeset =
+        CommandQueueItem.changeset(%CommandQueueItem{}, %{
+          instance_id: Ecto.UUID.generate(),
+          retry_delay_seconds: 30
+        })
+
+      refute Changeset.changed?(changeset, :retry_delay_seconds)
+    end
   end
 
   describe "processing_start_changeset/2" do

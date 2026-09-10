@@ -21,8 +21,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
   import Ecto.Query, only: [from: 2]
+  import DoubleEntryLedger.CommandQueue.QueryHelpers, only: [retry_eligible: 1]
 
   alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.CommandQueue.QueryHelpers
 
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
@@ -37,7 +39,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   @base_delay Keyword.get(@config, :base_retry_delay, 30)
   @max_delay Keyword.get(@config, :max_retry_delay, 3600)
 
-  @processable_states [:pending, :occ_timeout, :failed]
+  @processable_states QueryHelpers.processable_states()
 
   @doc """
   Sets the next retry time for a failed command using exponential backoff.
@@ -161,16 +163,12 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   def claim_batch_for_processing([], _processor_id, _repo), do: []
 
   def claim_batch_for_processing(commands, processor_id, repo) do
-    now = DateTime.utc_now()
     ids = Enum.map(commands, & &1.id)
 
     {_count, claimed_items} =
       from(eqi in CommandQueueItem,
         prefix: ^@schema_prefix,
-        where:
-          eqi.command_id in ^ids and eqi.status in ^@processable_states and
-            (eqi.status == :pending or is_nil(eqi.next_retry_after) or
-               eqi.next_retry_after <= ^now),
+        where: eqi.command_id in ^ids and retry_eligible(eqi),
         update: [
           set: [
             status: :processing,
@@ -208,6 +206,44 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     end)
 
     claimed_commands
+  end
+
+  @doc """
+  Query for up to `limit` ids of the next processable commands for
+  `instance_id`, lowest queue position first.
+
+  Retry eligibility is evaluated on the database clock
+  (`QueryHelpers.retry_eligible/1`). Drives off the partial index
+  `idx_command_queue_items_in_flight` (migration v9):
+  `(instance_id, queue_position) WHERE status IN ('pending', 'occ_timeout',
+  'failed')`. `InstanceProcessor` runs it to refill its in-memory buffer.
+  """
+  @spec next_command_ids_query(Ecto.UUID.t(), pos_integer()) :: Ecto.Query.t()
+  def next_command_ids_query(instance_id, limit) do
+    from(eqi in CommandQueueItem,
+      prefix: ^@schema_prefix,
+      where: eqi.instance_id == ^instance_id and retry_eligible(eqi),
+      order_by: [asc: eqi.queue_position],
+      limit: ^limit,
+      select: eqi.command_id
+    )
+  end
+
+  @doc """
+  Query for the distinct instance ids that have at least one processable
+  command, evaluating retry eligibility on the database clock
+  (`QueryHelpers.retry_eligible/1`). `InstanceMonitor` runs it on every poll.
+  """
+  @spec instances_with_processable_commands_query() :: Ecto.Query.t()
+  def instances_with_processable_commands_query do
+    from(c in Command,
+      join: cqi in CommandQueueItem,
+      prefix: ^@schema_prefix,
+      on: c.id == cqi.command_id,
+      where: retry_eligible(cqi),
+      select: c.instance_id,
+      distinct: true
+    )
   end
 
   @doc """
@@ -262,7 +298,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   Handles both normal retries and terminal failures (dead letter):
   - If the retry count exceeds the configured maximum, marks as dead letter
-  - Otherwise, calculates the next retry time using exponential backoff
+  - Otherwise, calculates the retry delay using exponential backoff and writes
+    it as `retry_delay_seconds`; PostgreSQL computes `next_retry_after` from
+    it on the database clock when the changeset is persisted
   - Sets the appropriate command status, clears processor reference, and adds the error
 
   ## Parameters
@@ -289,7 +327,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         "Max retry count (#{@max_retries}) exceeded: #{error || status}"
       )
     else
-      # Calculate next retry time with exponential backoff
+      # Exponential-backoff delay; the database turns it into next_retry_after.
       retry_delay = calculate_retry_delay(retry_count)
 
       command_queue_item_changeset =
@@ -311,7 +349,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   on a failed create command.
 
   Ensures that update commands don't retry before their prerequisite create commands
-  by scheduling them after the create command's next retry time.
+  by scheduling them after the create command's next retry time. When the create
+  command has no retry time, only the delay is written and PostgreSQL computes
+  `next_retry_after` on the database clock.
 
   ## Parameters
     - `command` - The update command that needs to be retried

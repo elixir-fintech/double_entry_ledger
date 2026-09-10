@@ -14,6 +14,31 @@ defmodule DoubleEntryLedger.CommandFixtures do
 
   import DoubleEntryLedger.Command.TransactionDataFixtures
   import DoubleEntryLedger.Command.AccountDataFixtures
+  import Ecto.Query, only: [from: 2]
+
+  alias DoubleEntryLedger.{CommandQueueItem, Repo}
+
+  @doc """
+  Moves the command's queue item to `:occ_timeout` and sets `next_retry_after`
+  to `hours` hours from the PostgreSQL clock, bypassing the application clock
+  entirely. Negative hours place the retry in the database's past.
+  """
+  def reschedule_retry_relative_to_db_clock(command_id, hours) do
+    {1, _} =
+      from(eqi in CommandQueueItem,
+        where: eqi.command_id == ^command_id,
+        update: [
+          set: [
+            status: :occ_timeout,
+            next_retry_after:
+              fragment("timezone('UTC', statement_timestamp()) + (? * interval '1 hour')", ^hours)
+          ]
+        ]
+      )
+      |> Repo.update_all([])
+
+    :ok
+  end
 
   def transaction_command_attrs(attrs \\ %{}) do
     attrs

@@ -20,6 +20,12 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures}
 
+  # `Scheduling.calculate_retry_delay/1` for retry_count 0: base delay plus a
+  # jitter of 1..(base/10 + 1) seconds.
+  @base_retry_delay Application.compile_env(:double_entry_ledger, :command_queue, [])
+                    |> Keyword.get(:base_retry_delay, 30)
+  @first_retry_delay_range @base_retry_delay..(@base_retry_delay + div(@base_retry_delay, 10) + 1)
+
   alias DoubleEntryLedger.{
     Account,
     BalanceHistoryEntry,
@@ -1256,6 +1262,72 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       [%{"message" => message, "inserted_at" => _}] = qi.errors
       assert is_binary(message)
       assert String.contains?(message, "balance")
+    end
+
+    test "retry branch lets the database compute next_retry_after from the delay", ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+
+      failure = %{command: command, reason: {:unbalanced}}
+
+      [plan] = BatchTransactionStoreHelper.write_failures([failure], Repo, DateTime.utc_now())
+
+      # The plan carries a delay instruction, not an application timestamp.
+      assert plan.status == :failed
+      assert plan.next_retry_after == nil
+      assert plan.retry_delay_seconds in @first_retry_delay_range
+
+      qi = reload_qi(command.command_queue_item.id)
+
+      # The trigger consumed the delay and stamped both timestamps from the
+      # same database clock reading.
+      assert qi.retry_delay_seconds == nil
+
+      assert DateTime.diff(qi.next_retry_after, qi.processing_completed_at, :second) ==
+               plan.retry_delay_seconds
+    end
+
+    test "dependency wait without a create retry time is retried one database second later",
+         ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+
+      failure = %{command: command, reason: :create_command_not_processed}
+
+      [plan] = BatchTransactionStoreHelper.write_failures([failure], Repo, DateTime.utc_now())
+
+      assert plan.status == :pending
+      assert plan.next_retry_after == nil
+      assert plan.retry_delay_seconds == 1
+
+      qi = reload_qi(command.command_queue_item.id)
+
+      assert qi.status == :pending
+      assert qi.retry_delay_seconds == nil
+      # `:pending` is not a completion state, so `updated_at` is the trigger's
+      # clock reading for this write.
+      assert DateTime.diff(qi.next_retry_after, qi.updated_at, :second) == 1
+    end
+
+    test "dependency wait keeps the create command's explicit retry time", ctx do
+      [command] = insert_commands(ctx, 1, :posted)
+      create_next_retry_after = ~U[2030-01-01 12:00:00.000000Z]
+
+      failure = %{
+        command: command,
+        reason: :create_command_not_processed,
+        next_retry_after: create_next_retry_after
+      }
+
+      [plan] = BatchTransactionStoreHelper.write_failures([failure], Repo, DateTime.utc_now())
+
+      assert plan.status == :pending
+      assert plan.next_retry_after == create_next_retry_after
+      assert plan.retry_delay_seconds == nil
+
+      qi = reload_qi(command.command_queue_item.id)
+
+      assert qi.status == :pending
+      assert qi.retry_delay_seconds == nil
+      assert qi.next_retry_after == create_next_retry_after
     end
 
     # ── 3. single :balance_change_error failure ──────────────────────

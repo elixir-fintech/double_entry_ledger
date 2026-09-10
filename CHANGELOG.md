@@ -58,6 +58,12 @@ project follows [Semantic Versioning](https://semver.org/).
   back after writes, avoiding application-node clock skew.
 - Commands are selected using a stable, database-generated queue position
   instead of potentially tied insertion timestamps.
+- Retry deadlines are computed by PostgreSQL. Migration v10 adds a transient
+  `command_queue_items.retry_delay_seconds` instruction that the queue trigger
+  converts into `next_retry_after` on the database clock, and retry eligibility
+  reads (`InstanceProcessor`, `InstanceMonitor`, batch claims) compare against
+  the database clock as well, so application-node clock skew no longer affects
+  retry timing. Consumers must run migration v10.
 - Instance command processors are temporary dynamic children, so their exits do
   not consume the shared supervisor's restart budget or terminate processors for
   other instances. `InstanceMonitor` continues to discover claimable work.

@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   use GenServer, restart: :temporary
   require Logger
 
-  alias DoubleEntryLedger.{BatchProcessor, Command, CommandQueueItem, Telemetry}
+  alias DoubleEntryLedger.{BatchProcessor, Command, Telemetry}
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.CommandStore
@@ -463,24 +463,13 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   # Returns up to `limit` ids of the next in-flight commands for this
-  # instance, lowest queue position first. Drives off the partial index
-  # `idx_command_queue_items_in_flight`, updated in migration v9:
-  # (instance_id, queue_position) WHERE status IN ('pending', 'occ_timeout',
-  # 'failed'). Before v6 this query started from `commands` and walked every
-  # row in timestamp order — O(N²) drain behaviour.
+  # instance, lowest queue position first. See
+  # `Scheduling.next_command_ids_query/2` for the index it drives off.
+  # Before v6 this query started from `commands` and walked every row in
+  # timestamp order — O(N²) drain behaviour.
   defp find_next_command_ids(instance_id, limit) do
-    now = DateTime.utc_now()
-
-    from(eqi in CommandQueueItem,
-      prefix: ^@schema_prefix,
-      where:
-        eqi.instance_id == ^instance_id and
-          eqi.status in [:pending, :occ_timeout, :failed] and
-          (is_nil(eqi.next_retry_after) or eqi.next_retry_after <= ^now),
-      order_by: [asc: eqi.queue_position],
-      limit: ^limit,
-      select: eqi.command_id
-    )
+    instance_id
+    |> Scheduling.next_command_ids_query(limit)
     |> Repo.all()
   end
 

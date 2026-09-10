@@ -91,10 +91,15 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
+  # `next_retry_after` is only set for a dependency wait that carries the
+  # create command's database-written retry time; every other retry supplies
+  # `retry_delay_seconds` and lets the queue trigger compute the deadline on
+  # the database clock. Dead letters set both to nil.
   @type planned_failure :: %{
           required(:command) => Command.t(),
           required(:status) => CommandQueueItem.state(),
           required(:next_retry_after) => DateTime.t() | nil,
+          required(:retry_delay_seconds) => pos_integer() | nil,
           required(:error) => map(),
           required(:processor_id_after) => String.t() | nil
         }
@@ -150,18 +155,26 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   @doc """
   Executes the failure half of a batched write in one round-trip.
 
-  Dependency waits return to `:pending` with a retry timestamp without consuming
+  Dependency waits return to `:pending` with a retry deadline without consuming
   retry budget. Missing or dead-lettered create dependencies immediately
   dead-letter the update. Other failures ask
   `CommandQueue.Scheduling.build_schedule_retry_with_reason/3` whether the
   command should be retried or dead-lettered based on `retry_count`:
 
-    * Dependency-wait branch → queue row marked `:pending`,
-      `next_retry_after` set without changing `retry_count`.
-    * Retry branch → queue row marked `:failed`, `next_retry_after` set to
-      the exponential-backoff timestamp.
+    * Dependency-wait branch → queue row marked `:pending` without changing
+      `retry_count`. When the create command already has a database-written
+      `next_retry_after` the update inherits it; otherwise
+      `retry_delay_seconds = 1`.
+    * Retry branch → queue row marked `:failed`, `retry_delay_seconds` set to
+      the exponential-backoff delay.
     * Dead-letter branch → queue row marked `:dead_letter`,
-      `next_retry_after` cleared (`NULL`).
+      `next_retry_after` and `retry_delay_seconds` cleared (`NULL`).
+
+  Retry deadlines are computed by PostgreSQL: the UPDATE writes both
+  `next_retry_after` and `retry_delay_seconds`, and the queue trigger
+  (migration v10) turns a non-`NULL` delay into
+  `next_retry_after = database_now + delay`, clearing the delay in the same
+  write. No application clock is involved in retry timing.
 
   In every case the new error payload is prepended to the `errors` JSONB
   array. `retry_count` is not touched here; it is bumped at claim time by
@@ -175,8 +188,8 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
     * `failures` - list of `t:BatchProcessor.failure_record/0`
     * `repo` - the Ecto repo module
-    * `now` - DateTime used for retry calculation and as the `inserted_at`
-      timestamp inside each error payload. Queue completion time comes from
+    * `now` - DateTime used as the `inserted_at` timestamp inside each error
+      payload. Queue completion time and retry deadlines come from
       PostgreSQL.
 
   Returns the persisted failure plans, or `[]` immediately without SQL when
@@ -681,12 +694,12 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   # Builds a single batched UPDATE statement that, for each failed
   # command, marks the queue row `:pending`, `:failed`, or `:dead_letter`
-  # (per `compute_failure_outcome/3`). The new error payload is prepended,
+  # (per `compute_failure_outcome/1`). The new error payload is prepended,
   # matching `CommandQueueItem.build_errors/2`'s latest-error-first contract.
   defp plan_failures(failures, now) do
     Enum.map(failures, fn failure ->
       command = failure.command
-      {status, next_retry_after} = compute_failure_outcome(failure, now)
+      {status, next_retry_after, retry_delay_seconds} = compute_failure_outcome(failure)
 
       # Mirror the legacy changesets: retries release their claim, while
       # terminal dead-letter transitions retain the processor identifier.
@@ -701,6 +714,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         command: command,
         status: status,
         next_retry_after: next_retry_after,
+        retry_delay_seconds: retry_delay_seconds,
         error: error_payload(failure.reason, now),
         processor_id_after: processor_id_after
       }
@@ -722,6 +736,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
             plan.processor_id_after,
             plan.error,
             plan.next_retry_after,
+            plan.retry_delay_seconds,
             queue_item.processor_id,
             queue_item.processor_version
           ])
@@ -732,17 +747,21 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
             "#{p(placeholders, 2)}::text, " <>
             "#{p(placeholders, 3)}::jsonb, " <>
             "#{timestamp(p(placeholders, 4))}, " <>
-            "#{p(placeholders, 5)}::text, " <>
-            "#{p(placeholders, 6)}::integer)"
+            "#{p(placeholders, 5)}::integer, " <>
+            "#{p(placeholders, 6)}::text, " <>
+            "#{p(placeholders, 7)}::integer)"
 
         {[cast | rows], st}
       end)
 
+    # The queue trigger converts a non-NULL retry_delay_seconds into
+    # next_retry_after on the database clock and clears the delay.
     sql = """
     UPDATE #{table("command_queue_items")} AS c
     SET status = u.status,
         errors = jsonb_build_array(u.new_error) || COALESCE(c.errors, '[]'::jsonb),
         next_retry_after = u.next_retry_after,
+        retry_delay_seconds = u.retry_delay_seconds,
         processor_id = u.processor_id_after,
         processor_version = c.processor_version + 1
     FROM (VALUES #{Enum.join(Enum.reverse(rows), ", ")})
@@ -752,6 +771,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         processor_id_after,
         new_error,
         next_retry_after,
+        retry_delay_seconds,
         expected_processor_id,
         processor_version
       )
@@ -770,53 +790,69 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   # `Scheduling.build_schedule_retry_with_reason/3` as the source of truth.
   #
   # The legacy helper produces:
-  #   * `schedule_retry_changeset` (status = `:failed`, next_retry_after set)
-  #     when `retry_count < max_retries`
-  #   * `dead_letter_changeset` (status = `:dead_letter`, next_retry_after nil)
-  #     when `retry_count >= max_retries`
+  #   * `schedule_retry_changeset` (status = `:failed`, retry_delay_seconds
+  #     set) when `retry_count < max_retries`
+  #   * `dead_letter_changeset` (status = `:dead_letter`, next_retry_after
+  #     nil) when `retry_count >= max_retries`
   #
   # Both branches `put_assoc(:command_queue_item, ...)`, so we always
   # reach the inner changeset and dispatch on its `:status` change.
-  @spec compute_failure_outcome(BatchProcessor.failure_record(), DateTime.t()) ::
-          {:pending, DateTime.t()} | {:failed, DateTime.t()} | {:dead_letter, nil}
-  defp compute_failure_outcome(%{reason: reason} = failure, now)
+  #
+  # Returns `{status, next_retry_after, retry_delay_seconds}`; exactly one of
+  # the two timing values is non-nil for a retry, both are nil for a dead
+  # letter.
+  @spec compute_failure_outcome(BatchProcessor.failure_record()) ::
+          {:pending, DateTime.t(), nil}
+          | {:pending, nil, 1}
+          | {:failed, nil, pos_integer()}
+          | {:dead_letter, nil, nil}
+  defp compute_failure_outcome(%{reason: reason} = failure)
        when reason == :create_command_not_processed or
               (is_tuple(reason) and
                  elem(reason, 0) in [:create_pending_in_batch, :duplicate_update_in_batch]) do
-    {:pending, Map.get(failure, :next_retry_after) || DateTime.add(now, 1, :second)}
+    dependency_wait_outcome(Map.get(failure, :next_retry_after))
   end
 
-  defp compute_failure_outcome(%{reason: reason}, _now)
+  defp compute_failure_outcome(%{reason: reason})
        when reason in [:create_command_not_found, :create_command_in_dead_letter],
-       do: {:dead_letter, nil}
+       do: {:dead_letter, nil, nil}
 
-  defp compute_failure_outcome(%{command: command, reason: reason}, _now) do
+  defp compute_failure_outcome(%{command: command, reason: reason}) do
     cs = Scheduling.build_schedule_retry_with_reason(command, reason_to_message(reason), :failed)
     retry_outcome(cs, command, reason)
   end
+
+  # A dependency wait inherits the create command's database-written retry
+  # time when it has one; otherwise it is retried one database second later.
+  @spec dependency_wait_outcome(DateTime.t() | nil) ::
+          {:pending, DateTime.t(), nil} | {:pending, nil, 1}
+  defp dependency_wait_outcome(%DateTime{} = create_next_retry_after),
+    do: {:pending, create_next_retry_after, nil}
+
+  defp dependency_wait_outcome(nil), do: {:pending, nil, 1}
 
   defp retry_outcome(cs, command, reason) do
     qi_cs = Ecto.Changeset.get_change(cs, :command_queue_item)
 
     case Ecto.Changeset.get_change(qi_cs, :status) do
       :dead_letter ->
-        {:dead_letter, nil}
+        {:dead_letter, nil, nil}
 
       :failed ->
-        next = Ecto.Changeset.get_change(qi_cs, :next_retry_after)
+        delay = Ecto.Changeset.get_change(qi_cs, :retry_delay_seconds)
 
-        if match?(%DateTime{}, next) do
-          {:failed, next}
+        if is_integer(delay) and delay > 0 do
+          {:failed, nil, delay}
         else
           # If the legacy helper produced a `:failed` retry without a
-          # `next_retry_after`, surface it loudly with full context
-          # rather than crash with an opaque MatchError.
+          # positive `retry_delay_seconds`, surface it loudly with full
+          # context rather than crash with an opaque MatchError.
           raise """
-          compute_failure_outcome: legacy scheduler returned :failed with non-DateTime next_retry_after
+          compute_failure_outcome: legacy scheduler returned :failed without a positive retry_delay_seconds
             command_id=#{command.id}
             instance_id=#{command.instance_id}
             reason=#{inspect(reason)}
-            next_retry_after=#{inspect(next)}
+            retry_delay_seconds=#{inspect(delay)}
           """
         end
     end
