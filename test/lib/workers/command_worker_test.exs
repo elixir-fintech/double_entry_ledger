@@ -105,6 +105,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
       assert {:error, :command_not_claimable} =
                CommandWorker.process_command_with_id(command.id)
     end
+
+    test "does not process a command whose retry deadline is still in the future", ctx do
+      %{command: command} = new_create_transaction_command(ctx)
+      reschedule_retry_relative_to_db_clock(command.id, 1)
+
+      assert {:error, :command_not_claimable} =
+               CommandWorker.process_command_with_id(command.id)
+
+      current = CommandStore.get_by_id(command.id).command_queue_item
+      assert current.status == :occ_timeout
+      assert current.processor_id == nil
+      assert current.processing_started_at == nil
+    end
   end
 
   def replace_claim_owner(_event, _measurements, %{command_id: command_id}, _config) do

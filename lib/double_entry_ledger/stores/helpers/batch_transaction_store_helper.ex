@@ -178,7 +178,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   In every case the new error payload is prepended to the `errors` JSONB
   array. `retry_count` is not touched here; it is bumped at claim time by
-  `Scheduling.retry_count_by_status/1` (via `processing_start_changeset/3`).
+  `Scheduling.claim_batch_for_processing/3`.
   `processor_version` fences the write against a replacement owner and is
   advanced by a successful transition. On the `:failed` branch we additionally clear
   `processor_id` (mirroring `schedule_retry_changeset/4`); on the

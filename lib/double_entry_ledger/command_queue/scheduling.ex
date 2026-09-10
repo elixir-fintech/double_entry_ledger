@@ -83,21 +83,33 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   end
 
   @doc """
-  Claims a command for processing by marking it as being processed by a specific processor.
+  Claims a single command for processing by marking it as being processed by a
+  specific processor.
 
-  This function implements optimistic concurrency control to ensure that only one processor
-  can claim a command at a time. It only allows claiming commands with status :pending or :occ_timeout.
+  The claim itself is `claim_batch_for_processing/3` applied to one command, so
+  status and retry deadline are enforced together inside one atomic UPDATE
+  (`QueryHelpers.retry_eligible/1`, evaluated on the database clock). A command
+  whose `next_retry_after` has not elapsed is therefore never claimed early,
+  and no separate check-then-claim window exists.
+
+  The status load before the claim only short-circuits the obvious cases; the
+  reload after a zero-row UPDATE distinguishes "someone else claimed it" from
+  "not claimable".
 
   ## Parameters
     - `id`: The UUID of the command to claim
-    - `processor_id`: A string identifier for the processor claiming the command (defaults to "manual")
+    - `processor_id`: A string identifier for the processor claiming the command
     - `repo`: The Ecto repository to use (defaults to Repo)
 
   ## Returns
-    - `{:ok, command}`: If the command was successfully claimed
+    - `{:ok, command}`: Claimed, carrying the refreshed `command_queue_item`
+      (`:processing`, `processor_id` stamped, `processor_version` advanced,
+      `retry_count` bumped for a retry, `next_retry_after` cleared)
     - `{:error, :command_not_found}`: If no command with the given ID exists
-    - `{:error, :command_already_claimed}`: If the command was claimed by another processor
-    - `{:error, :command_not_claimable}`: If the command is not in a claimable state (not pending or occ_timeout)
+    - `{:error, :command_already_claimed}`: If another processor claimed the
+      command between the load and the UPDATE
+    - `{:error, :command_not_claimable}`: If the command is not in a claimable
+      state, or its retry deadline is still in the database's future
   """
   @spec claim_command_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
           {:ok, Command.t()} | {:error, atom()}
@@ -106,30 +118,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       nil ->
         {:error, :command_not_found}
 
-      %{command_queue_item: %{status: state} = eqi} = command when state in @processable_states ->
-        try do
-          case Command.processing_start_changeset(
-                 command,
-                 processor_id,
-                 retry_count_by_status(eqi)
-               )
-               |> repo.update() do
-            {:ok, claimed} = result ->
-              Telemetry.command_claim(%{
-                command_id: claimed.id,
-                instance_id: claimed.instance_id,
-                processor_id: processor_id,
-                trace_context: claimed.trace_context
-              })
-
-              result
-
-            error ->
-              error
-          end
-        rescue
-          Ecto.StaleEntryError ->
-            {:error, :command_already_claimed}
+      %{command_queue_item: %{status: state}} = command when state in @processable_states ->
+        case claim_batch_for_processing([command], processor_id, repo) do
+          [claimed] -> {:ok, claimed}
+          [] -> classify_unclaimed(id)
         end
 
       _ ->
@@ -137,17 +129,25 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     end
   end
 
-  @doc """
-  Claims a batch of commands for processing — the bulk equivalent of
-  `claim_command_for_processing/2`.
+  # The UPDATE matched no row: either a competing processor claimed it, or its
+  # retry deadline had not elapsed on the database clock.
+  @spec classify_unclaimed(Ecto.UUID.t()) :: {:error, atom()}
+  defp classify_unclaimed(id) do
+    case CommandStore.get_by_id(id) do
+      %{command_queue_item: %{status: :processing}} -> {:error, :command_already_claimed}
+      _ -> {:error, :command_not_claimable}
+    end
+  end
 
-  Mirrors `CommandQueueItem.processing_start_changeset/3` for every command:
-  status → `:processing`, stamps `processor_id`, clears `next_retry_after`,
-  advances `processor_version`, and bumps
-  `retry_count` per `retry_count_by_status/1` (unchanged for `:pending`,
-  `+1` otherwise). A single conditional bulk update applies the appropriate
-  retry-count rule to each row. The queue trigger stamps
-  `processing_started_at`.
+  @doc """
+  Claims a batch of commands for processing. This is the only claim
+  statement: `claim_command_for_processing/3` runs it with a single command.
+
+  For every command: status → `:processing`, stamps `processor_id`, clears
+  `next_retry_after`, advances `processor_version`, and bumps `retry_count`
+  (unchanged for `:pending`, `+1` otherwise). A single conditional bulk
+  update applies the appropriate retry-count rule to each row. The queue
+  trigger stamps `processing_started_at`.
 
   The status and retry-time guards in the UPDATE are the concurrency check
   (in place of the single-row `optimistic_lock`): a command already claimed
@@ -194,8 +194,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       |> Enum.filter(&Map.has_key?(items_by_command_id, &1.id))
       |> Enum.map(&%{&1 | command_queue_item: Map.fetch!(items_by_command_id, &1.id)})
 
-    # Emit the same `[:command, :claim]` event the single-command path
-    # emits (Telemetry.command_claim/1), one per claimed command.
+    # One `[:command, :claim]` event per claimed command
+    # (Telemetry.command_claim/1), single-command claims included.
     Enum.each(claimed_commands, fn command ->
       Telemetry.command_claim(%{
         command_id: command.id,
@@ -447,8 +447,4 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
     trunc(delay + jitter)
   end
-
-  @spec retry_count_by_status(CommandQueueItem.t()) :: non_neg_integer()
-  defp retry_count_by_status(%{status: :pending, retry_count: retry_count}), do: retry_count
-  defp retry_count_by_status(%{status: _, retry_count: retry_count}), do: retry_count + 1
 end

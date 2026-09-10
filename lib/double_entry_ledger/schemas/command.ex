@@ -138,48 +138,6 @@ defmodule DoubleEntryLedger.Command do
     |> base_changeset(attrs)
   end
 
-  @doc """
-  Creates a changeset for marking a command as being processed.
-
-  This function prepares a changeset that updates a command to the :processing state, assigns a
-  processor, and updates processing metadata such as retry count.
-
-  ## Parameters
-
-  * `command` - The Command struct to update
-  * `processor_id` - String identifier for the processor handling the command
-
-  ## Returns
-
-  * An Ecto.Changeset with processing status updates and optimistic locking
-
-  ## Fields Updated
-
-  * `status`: Set to :processing
-  * `processor_id`: Set to the provided processor_id
-  * `processing_started_at`: Set from the PostgreSQL clock by the queue trigger
-  * `processing_completed_at`: Cleared by the queue trigger
-  * `retry_count`: Incremented by 1
-  * `next_retry_after`: Set to nil
-  * `processor_version`: Used for optimistic locking
-
-  """
-  @spec processing_start_changeset(Command.t(), String.t(), non_neg_integer()) ::
-          Ecto.Changeset.t()
-  def processing_start_changeset(
-        %{command_queue_item: command_queue_item} = command,
-        processor_id,
-        retry_count
-      ) do
-    queue_changeset =
-      command_queue_item
-      |> CommandQueueItem.processing_start_changeset(processor_id, retry_count)
-
-    command
-    |> change(%{})
-    |> put_assoc(:command_queue_item, queue_changeset)
-  end
-
   @spec base_changeset(Command.t() | Ecto.Changeset.t(Command.t()), map()) :: Ecto.Changeset.t()
   defp base_changeset(command, attrs) do
     attrs = ensure_queue_item_instance_id(attrs)

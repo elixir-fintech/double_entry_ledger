@@ -102,19 +102,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     |> validate_inclusion(:status, @states)
   end
 
-  @spec processing_start_changeset(CommandQueueItem.t(), String.t(), non_neg_integer()) ::
-          Ecto.Changeset.t()
-  def processing_start_changeset(command_queue_item, processor_id, retry_count) do
-    command_queue_item
-    |> change(%{
-      status: :processing,
-      processor_id: processor_id,
-      retry_count: retry_count,
-      next_retry_after: nil
-    })
-    |> optimistic_lock(:processor_version)
-  end
-
   @spec processing_complete_changeset(CommandQueueItem.t()) :: Ecto.Changeset.t()
   def processing_complete_changeset(command_queue_item) do
     command_queue_item

@@ -8,11 +8,13 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### ⚠️ Breaking changes
 
-- Schema migrations 5–9 replace the three `journal_event_*_links` tables with
+- Schema migrations 5–10 replace the three `journal_event_*_links` tables with
   direct foreign keys, add a required `command_queue_items.instance_id`, and
   widen balance/limit columns to `bigint`. They also move command and queue-item
-  timestamps to the PostgreSQL clock and add a database-generated queue
-  position for stable processing order. Upgrades from 0.4.x must use
+  timestamps to the PostgreSQL clock, add a database-generated queue position
+  for stable processing order, and add the transient
+  `command_queue_items.retry_delay_seconds` column and queue-trigger rule that
+  compute retry deadlines on the database clock. Upgrades from 0.4.x must use
   `DoubleEntryLedger.Migration.up(from: 4)`.
 - A mixed 0.4.x/0.5.0 rolling deployment is not supported because old code
   requires the link tables while new code requires the direct foreign keys and
@@ -32,6 +34,13 @@ project follows [Semantic Versioning](https://semver.org/).
   application-supplied values when queue status changes. Consumers that build
   queue-item changesets or issue raw status updates must use the timestamps
   returned by the database.
+- Removed `Command.processing_start_changeset/3` and
+  `CommandQueueItem.processing_start_changeset/3`. Claiming a command goes
+  through `CommandQueue.Scheduling.claim_command_for_processing/3` or
+  `claim_batch_for_processing/3`, which enforce queue status and the retry
+  deadline together in one atomic UPDATE. The removed changesets checked
+  neither, so a direct caller could claim a command before its retry deadline
+  had elapsed.
 - Removed `mix load_test`. Source checkouts provide purpose-specific
   `mix load.*` tasks under `MIX_ENV=perf`; these development tasks are not
   included in the Hex package.
@@ -75,6 +84,9 @@ project follows [Semantic Versioning](https://semver.org/).
   by `processor_version`, preventing a stale processor from overwriting work
   after ownership moves to another processor. Ownership loss is returned as an
   expected error without account-OCC retries or task-crash logging.
+- Single-command claims enforce queue status and the retry deadline
+  atomically in one UPDATE, sharing the batch claim statement, so a command
+  whose `next_retry_after` has not elapsed can no longer be claimed early.
 - Package consumers must configure `:insert_path`, `:batch_enabled`, and
   `:batch_size` in their own application. This repository's runtime config is
   not loaded as dependency configuration.

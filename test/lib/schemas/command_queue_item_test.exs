@@ -74,19 +74,4 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
       refute Changeset.changed?(changeset, :retry_delay_seconds)
     end
   end
-
-  describe "processing_start_changeset/2" do
-    test "creates a changeset for processing start" do
-      command_queue_item = %CommandQueueItem{id: Ecto.UUID.generate()}
-      processor_id = "processor_1"
-
-      changeset = CommandQueueItem.processing_start_changeset(command_queue_item, processor_id, 1)
-      assert changeset.valid?
-      assert changeset.changes.status == :processing
-      assert changeset.changes.processor_id == processor_id
-      assert changeset.changes.retry_count == 1
-      refute Changeset.changed?(changeset, :processing_started_at)
-      assert changeset.errors == []
-    end
-  end
 end

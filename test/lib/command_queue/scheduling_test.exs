@@ -3,7 +3,6 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   Tests for the scheduling of commands in the command queue.
   """
   use ExUnit.Case, async: true
-  import Mox
   import ExUnit.CaptureLog
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
@@ -27,6 +26,20 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     # can inspect the UPDATE query it builds instead of executing it.
     def update_all(query, _updates) do
       send(self(), {:update_all_query, query})
+      {0, []}
+    end
+  end
+
+  defmodule LostClaimRaceRepo do
+    @moduledoc false
+    # Reproduces the race `claim_command_for_processing/3` cannot stage from
+    # the outside: the claim UPDATE really lands (the row becomes
+    # `:processing`) but the caller is told zero rows matched, exactly as it
+    # would be if a competing processor had claimed the row between the load
+    # and the claim. Only `update_all/2` is stubbed — the classification
+    # reload goes through `CommandStore`, which uses the real repo.
+    def update_all(query, updates) do
+      DoubleEntryLedger.Repo.update_all(query, updates)
       {0, []}
     end
   end
@@ -72,21 +85,80 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert eqm.next_retry_after == nil
     end
 
-    test "returns an error when stale entry error occurs", %{instance: instance} do
+    test "does not claim a retry whose next_retry_after is in the database's future", %{
+      instance: instance
+    } do
+      command = seed_occ_timeout_command(instance, 2)
+      reschedule_retry_relative_to_db_clock(command.id, 1)
+      before_claim = CommandStore.get_by_id(command.id).command_queue_item
+
+      assert {:error, :command_not_claimable} =
+               Scheduling.claim_command_for_processing(command.id, "manual")
+
+      current = CommandStore.get_by_id(command.id).command_queue_item
+      assert current.status == :occ_timeout
+      assert current.processor_id == nil
+      assert current.retry_count == 2
+      assert current.processor_version == before_claim.processor_version
+    end
+
+    test "claims a retry whose next_retry_after is in the database's past", %{instance: instance} do
+      command = seed_occ_timeout_command(instance, 2)
+      reschedule_retry_relative_to_db_clock(command.id, -1)
+
+      assert {:ok, %Command{command_queue_item: qi}} =
+               Scheduling.claim_command_for_processing(command.id, "manual")
+
+      assert qi.status == :processing
+      assert qi.retry_count == 3
+      assert qi.next_retry_after == nil
+      assert qi.processor_id == "manual"
+    end
+
+    test "does not claim a :pending command whose dependency wait has not elapsed", %{
+      instance: instance
+    } do
+      command = seed_occ_timeout_command(instance, 0)
+      reschedule_retry_relative_to_db_clock(command.id, 1)
+
+      command.command_queue_item
+      |> Changeset.change(%{status: :pending})
+      |> Repo.update!()
+
+      assert {:error, :command_not_claimable} =
+               Scheduling.claim_command_for_processing(command.id, "manual")
+
+      current = CommandStore.get_by_id(command.id).command_queue_item
+      assert current.status == :pending
+      assert current.processor_id == nil
+    end
+
+    test "returns already claimed when the claim update matches no rows and the row is :processing",
+         %{instance: instance} do
+      command = seed_occ_timeout_command(instance, 0)
+      reschedule_retry_relative_to_db_clock(command.id, -1)
+
+      assert {:error, :command_already_claimed} =
+               Scheduling.claim_command_for_processing(command.id, "proc-b", LostClaimRaceRepo)
+
+      assert CommandStore.get_by_id(command.id).command_queue_item.status == :processing
+    end
+
+    test "emits exactly one claim telemetry event for a successful claim", %{instance: instance} do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      DoubleEntryLedger.MockRepo
-      |> expect(:update, fn _changeset ->
-        raise Ecto.StaleEntryError, action: :update_transaction, changeset: %Ecto.Changeset{}
-      end)
+      command_id = command.id
+      ref = attach_telemetry([:double_entry_ledger, :command, :claim])
 
-      assert {:error, :command_already_claimed} =
-               Scheduling.claim_command_for_processing(
-                 command.id,
-                 "manual",
-                 DoubleEntryLedger.MockRepo
-               )
+      assert {:ok, _claimed} = Scheduling.claim_command_for_processing(command.id, "manual")
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim], _m,
+                      %{command_id: ^command_id, processor_id: "manual"}}
+
+      refute_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim], _m2,
+                      %{command_id: ^command_id}},
+                     50
     end
   end
 
