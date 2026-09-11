@@ -28,7 +28,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
   ## Main Functions
 
     * `process/2` — Entry point for processing a create event.
-    * `build_transaction/3` — Constructs the Ecto.Multi for transaction creation.
+    * `build_transaction/4` — Constructs the Ecto.Multi for transaction creation.
     * `handle_build_transaction/3` — Adds event update step to the Multi.
     * `handle_transaction_map_error/3` — Handles errors in transaction map conversion.
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion.
@@ -121,6 +121,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand do
 
     - `event`: The event to process.
     - `transaction_map`: The transaction data map derived from the event.
+    - `instance_id`: UUID of the ledger instance.
     - `repo`: The Ecto repository.
 
   ## Returns

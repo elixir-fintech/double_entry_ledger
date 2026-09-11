@@ -20,7 +20,7 @@ Commands are never updated; only the queue item changes as work progresses. When
 
 - **Account state:** The `Account` schema stores embedded `Balance` structs for `posted` and `pending` values plus an `available` integer — the real calculated balance (`posted.amount - pending opposite-side`). A configurable `negative_limit` (default 0) controls how far below zero `available` may go.
 - **Balance history:** `BalanceHistoryEntry` rows are appended for every entry mutation so you can audit how each command changed an account’s posted or pending amounts. Each history row links to the originating `Entry`, which links back to the `Transaction`, `JournalEvent`, and `Command`.
-- **Consistency checks:** `InstanceStore.validate_account_balances/1` recalculates sums across accounts, ensuring debits and credits match per currency for both posted and pending projections.
+- **Consistency checks:** `Instance.validate_account_balances/1` recalculates sums across accounts, ensuring debits and credits match per currency for both posted and pending projections.
 
 ## Benefits
 

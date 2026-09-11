@@ -24,7 +24,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
   ## Main Functions
 
     * `process/2` — Entry point for processing an update event.
-    * `build_transaction/3` — Constructs the Ecto.Multi for transaction update.
+    * `build_transaction/4` — Constructs the Ecto.Multi for transaction update.
     * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
     * `handle_transaction_map_error/3` — Handles errors in transaction map conversion.
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion.
@@ -136,6 +136,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommand do
 
     - `event`: The update event being processed.
     - `attr`: The attributes to apply to the transaction.
+    - `instance_id`: UUID of the ledger instance.
     - `repo`: The Ecto repo to use for database operations.
 
   ## Returns

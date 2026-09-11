@@ -30,7 +30,7 @@ The command queue (`lib/double_entry_ledger/command_queue`) polls for pending co
 
 ### Balances & Audit Trails
 
-Each transaction updates `Account` projections plus immutable `BalanceHistoryEntry` snapshots, enabling temporal queries and reconciliation. Instances can be validated with `InstanceStore.validate_account_balances/1`, ensuring posted and pending debits/credits remain equal. Direct `command_id`, `transaction_id`, and `account_id` foreign keys on journal events provide traceability from the original request to the final projection.
+Each transaction updates `Account` projections plus immutable `BalanceHistoryEntry` snapshots, enabling temporal queries and reconciliation. Instances can be validated with `Instance.validate_account_balances/1`, ensuring posted and pending debits/credits remain equal. Direct `command_id`, `transaction_id`, and `account_id` foreign keys on journal events provide traceability from the original request to the final projection.
 
 ### Idempotency & Isolation
 
@@ -83,6 +83,7 @@ config :double_entry_ledger, :command_queue,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
+  stale_processing_after: 300,  # seconds a command may sit in :processing before recovery
   processor_name: "command_queue"
 ```
 
@@ -92,9 +93,11 @@ queue needs the consumer's repo to be running, so add
 
 Set a strong `idempotency_secret` — it hashes incoming keys. Set
 `start_command_queue: false` to disable background processing (useful in
-tests or when embedding the ledger without the queue). `max_retries` and
-`retry_interval` are read at runtime, so they can be changed without
-recompilation.
+tests or when embedding the ledger without the queue). `retry_interval` is read
+at runtime; `max_retries` is captured into each OCC worker at compile time
+(`Occ.Processor.__using__/1`), so changing it needs a recompile. The
+`:command_queue` list is read with `Application.compile_env/3` and is likewise
+compile-time.
 
 `insert_path: :legacy` and `batch_enabled: false` are the conservative
 defaults. To opt into the new paths, set `insert_path: :insert_all` and/or
@@ -151,7 +154,7 @@ mix double_entry_ledger.install --from 1
 mix ecto.migrate
 ```
 
-This applies schema versions 2–7, including the FK fixes,
+This applies schema versions 2–5, including the FK fixes,
 `negative_limit`, trace context, query indexes, direct journal-event foreign
 keys, queue instance IDs, and widened balance columns.
 
@@ -318,10 +321,11 @@ still balances, or `PendingTransactionLookup` to inspect open holds.
 ## Background Processing
 
 - `DoubleEntryLedger.CommandQueue.InstanceMonitor` polls for commands in `:pending`, `:occ_timeout`, or `:failed` status and ensures each instance has an `InstanceProcessor`.
-- `InstanceProcessor` claims work via `CommandQueue.Scheduling.claim_command_for_processing/2`, runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`. Each worker task is monitored via `Process.monitor/1`; if the task crashes, the processor schedules a retry automatically.
+- `InstanceProcessor` claims work through an atomic scheduling claim — `CommandQueue.Scheduling.claim_command_for_processing/3` for a single command, `claim_batch_for_processing/3` in batch mode — runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`. Each worker task is monitored via `Process.monitor/1`; if the task crashes, the processor schedules a retry automatically.
 - OCC is handled inside the workers (see `lib/double_entry_ledger/occ`). Retries use exponential backoff until `max_retries` is reached, after which commands are marked as `:dead_letter`.
 - Errors and retry metadata live on the `command_queue_item`, so you can inspect processing attempts via `CommandStore` or SQL views.
 - Journal-event relationships are persisted synchronously through direct foreign keys; the command path no longer enqueues an internal linking job.
+- Commands left in `:processing` by a node that died are recovered by `InstanceMonitor` once they are older than `stale_processing_after` and are sent back through the normal retry or dead-letter path. A successful enqueue also wakes the monitor when the queue is supervised locally, so an idle queue starts draining immediately instead of waiting a full `poll_interval`; otherwise the command waits for the next poll on a node that runs the queue.
 
 ### Deployment scope: one node per ledger
 
@@ -360,6 +364,7 @@ owner may claim work for that ledger. That is not implemented.
 - [Asynchronous processing details](pages/AsynchronousEventProcessing.md)
 - [Handling pending transactions and available balances](pages/HandlingPendingTransactions.md)
 - [Event sourcing architecture notes](pages/EventSourcing.md)
+- [Telemetry events and metrics](pages/Telemetry.md)
 
 Generate fresh API docs locally with:
 
@@ -407,12 +412,20 @@ The migration performs these changes:
    sequence, then uses it as the stable queue-processing order. Existing rows
    receive dense positions in `(inserted_at, command_id)` order; PostgreSQL uses
    the sequence for rows inserted after the backfill.
+6. Adds the transient `command_queue_items.retry_delay_seconds` column and the
+   queue-trigger rule that turns it into `next_retry_after` on the PostgreSQL
+   clock, so retry timing no longer depends on application-node clocks.
 
 The queue-position backfill rewrites every `command_queue_items` row, including
 processed and dead-letter history, while holding an `ACCESS EXCLUSIVE` table
 lock. Its runtime
 therefore scales with total queue history, not only currently processable work.
 Plan an appropriate maintenance window before applying it to a large table.
+
+`Command.processing_start_changeset/3` and
+`CommandQueueItem.processing_start_changeset/3` were removed; callers must claim
+through `CommandQueue.Scheduling.claim_command_for_processing/3`, which enforces
+queue status and the retry deadline in one atomic UPDATE.
 
 The `JournalEventAccountLink`, `JournalEventCommandLink`,
 `JournalEventTransactionLink`, and legacy journal-event link worker have been

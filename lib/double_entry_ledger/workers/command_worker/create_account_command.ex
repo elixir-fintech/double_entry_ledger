@@ -1,6 +1,7 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
   @moduledoc """
-   Processes :create_account actions
+  Processes a stored `:create_account` command: inserts the account, writes the
+  journal event, and marks the command processed in one transaction.
   """
   use DoubleEntryLedger.Logger
 
@@ -18,6 +19,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 
+  @doc "Runs the create-account command and returns the handler response."
   @spec process(Command.t()) :: AccountCommandResponseHandler.response()
   def process(%Command{command_map: %{action: :create_account}} = event) do
     build_create_account(event)

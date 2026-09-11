@@ -52,6 +52,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - Equivalence, stress, mixed-workload, and load-testing coverage for the batched
   and `insert_all` transaction paths.
 - Repository-only performance documentation and configurable load-test tasks.
+- `:command_queue` option `pending_fetch_limit` (default 64), controlling how
+  many queue IDs a processor fetches per database read, and top-level
+  `max_batch_retries` (default 3), the number of stale-write retries before a
+  batch is split.
 - Batch completion telemetry with per-command span and transaction-lifecycle
   parity.
 - Recovery of commands stranded in `:processing` by a node that died after
@@ -88,8 +92,10 @@ project follows [Semantic Versioning](https://semver.org/).
   consistently with the legacy path.
 - Command completion, retry, dead-letter, and batch-fallback writes are fenced
   by `processor_version`, preventing a stale processor from overwriting work
-  after ownership moves to another processor. Ownership loss is returned as an
-  expected error without account-OCC retries or task-crash logging.
+  after ownership moves to another processor. Ownership loss is returned as the
+  expected error `{:error, :command_ownership_lost}` from
+  `CommandWorker.process_command_with_id/2`, without account-OCC retries or
+  task-crash logging.
 - Single-command claims enforce queue status and the retry deadline
   atomically in one UPDATE, sharing the batch claim statement, so a command
   whose `next_retry_after` has not elapsed can no longer be claimed early.
@@ -104,7 +110,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Security
 
-- `decimal` 2.3.0 ships transitively through Ecto and Money and carries a
+- `decimal` 2.4.1 ships transitively through Ecto and Money and carries a
   moderate advisory: an unbounded exponent in `Decimal.new/1` allows an
   unauthenticated denial of service
   ([GHSA-rhv4-8758-jx7v](https://github.com/advisories/GHSA-rhv4-8758-jx7v)).
@@ -112,9 +118,17 @@ project follows [Semantic Versioning](https://semver.org/).
   requires `~> 2.0`, so this release cannot take the fix. Applications that
   build `Decimal` values from untrusted input should bound the exponent before
   parsing. The constraint will be revisited once Ecto supports `decimal` 3.0.
-  Every other advisory reported by `mix deps.audit` is against a development
-  dependency (`bandit`, `plug`, `mint`) that is not part of the published
-  package.
+- `postgrex` is updated to 0.22.4, clearing a high-severity channel-name SQL
+  injection in `Postgrex.Notifications.listen/3`
+  ([GHSA-r73h-97w8-m54h](https://github.com/advisories/GHSA-r73h-97w8-m54h)).
+  This library never calls that function, but its requirement was previously
+  `>= 0.0.0`, which let a consumer resolve or keep a vulnerable release. The
+  requirement is now `>= 0.22.2`, so the patched version is enforced rather
+  than merely permitted. Apart from the `decimal` advisory above, every
+  advisory reported by `mix deps.audit` reaches the tree only through
+  development tooling
+  (`bandit`, `plug`, `mint`, `req` via `tidewave`) and none of them appear in a
+  production build.
 
 ## [0.4.0]
 

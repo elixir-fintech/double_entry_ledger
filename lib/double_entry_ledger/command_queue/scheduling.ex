@@ -54,6 +54,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `{:error, updated_command}` - The command with updated retry information
     - `{:error, changeset}` - Error updating the command
+
+  Raises `Ecto.StaleEntryError` when the `processor_version` fence loses, i.e.
+  the claim has since moved to another processor. Callers are expected to
+  rescue it and skip the command.
   """
   @spec schedule_retry_with_reason(
           Command.t(),
@@ -72,6 +76,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     end
   end
 
+  @doc """
+  Marks a command as permanently failed (`:dead_letter`) and persists the change.
+  """
   @spec mark_as_dead_letter(Command.t(), String.t(), Ecto.Repo.t()) ::
           {:error, Command.t()} | {:error, Changeset.t()}
   def mark_as_dead_letter(command, error, repo \\ Repo) do

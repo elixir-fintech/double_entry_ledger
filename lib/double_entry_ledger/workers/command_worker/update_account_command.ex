@@ -1,6 +1,8 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
   @moduledoc """
-  UpdateAccountCommand
+  Processes a stored `:update_account` command: updates the account, writes the
+  journal event, and marks the command processed, or dead-letters it when the
+  account does not exist.
   """
   use DoubleEntryLedger.Logger
 
@@ -19,6 +21,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 
+  @doc "Runs the update-account command and returns the handler response."
   @spec process(Command.t()) :: AccountCommandResponseHandler.response()
   def process(%Command{command_map: %{action: :update_account}} = event) do
     build_update_account(event)

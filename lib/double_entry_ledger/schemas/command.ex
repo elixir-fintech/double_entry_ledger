@@ -37,6 +37,10 @@ defmodule DoubleEntryLedger.Command do
     access. The library never interprets the contents.
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
+  * `command_queue_item`: Association to the queue item holding the processing state
+  * `journal_event`: Association to the journal event written once processed
+  * `transaction`: Association to the resulting transaction, for transaction commands
+  * `account`: Association to the resulting account, for account commands
   * `inserted_at`: Creation timestamp
   * `updated_at`: Last update timestamp
   """

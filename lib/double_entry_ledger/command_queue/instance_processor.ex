@@ -12,6 +12,11 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     * Process each command and update its status in the database.
     * Handle retries and error cases according to command queue logic.
     * Ensure only one processor runs per instance at a time (enforced via Registry).
+    * Buffer command ids in memory (`:pending_fetch_limit`, default 64) and drain that
+      buffer before hitting the database again.
+    * When `:batch_enabled` is set, process up to `:batch_size` (default 8) commands per
+      batch; a batch that hits an unexpected database error is reverted to `:pending` and
+      its commands are flagged `force_single` so they drain one at a time.
 
   This module is typically supervised under the `InstanceSupervisor` as a dynamic child.
   """

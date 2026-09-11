@@ -69,7 +69,8 @@ defmodule DoubleEntryLedger.Migration do
 
   ## Options
 
-    * `:version` - Target migration version. Defaults to `latest_version/0`.
+    * `:version` - Target migration version. Defaults to `latest_version/0` for
+      `up/1` and `0` (full rollback) for `down/1`.
     * `:from` - Starting version (what's already applied). Defaults to `0` for
       `up/1` and `latest_version/0` for `down/1`.
     * `:prefix` - Schema prefix. Defaults to the configured `:schema_prefix`

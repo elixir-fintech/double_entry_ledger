@@ -5,9 +5,9 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   `:update_transaction` commands.
 
   Consumes the output of `BatchProcessor.simulate_batch/2`. Failure
-  handling lives in the sibling failure-UPDATE writer (Step 4).
-  Wrapping in a `Repo.transaction/1` is the orchestrator's
-  responsibility (Step 5).
+  handling lives in the sibling failure-UPDATE writer, `write_failures/3`.
+  Wrapping in a `Repo.transaction/1` is `BatchProcessor.run_batch/2`'s
+  responsibility.
 
   Behaviour-equivalent to the legacy `build_create/4` +
   `handle_build_transaction/3` path AND the legacy
@@ -73,7 +73,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
   Account or transaction mismatches raise `Ecto.StaleEntryError` with
   `action: :update`. Queue ownership mismatches raise
   `CommandQueue.OwnershipError`.
-  The orchestrator (Step 5) wraps us in `Repo.transaction/1`, so the
+  `BatchProcessor.run_batch/2` wraps us in `Repo.transaction/1`, so the
   raise rolls back the whole batch.
   """
 

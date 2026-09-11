@@ -50,7 +50,7 @@ Point events use `:telemetry.execute/3` with `%{system_time: ...}` measurements.
 | `source` | Source system identifier |
 | `trace_context` | Consumer-supplied tracing context (map or nil) |
 
-**`[:double_entry_ledger, :command, :claim]`** — emitted from `Scheduling.claim_command_for_processing/2` after a processor atomically claims a command.
+**`[:double_entry_ledger, :command, :claim]`** — emitted from `Scheduling.claim_batch_for_processing/3` after a processor atomically claims a command. Single-command claims route through the same statement.
 
 | Metadata | Description |
 |---|---|
@@ -59,7 +59,7 @@ Point events use `:telemetry.execute/3` with `%{system_time: ...}` measurements.
 | `processor_id` | Processor identifier string |
 | `trace_context` | Consumer-supplied tracing context (map or nil) |
 
-**`[:double_entry_ledger, :command, :retry]`** — emitted from `Scheduling.build_schedule_retry_with_reason/3` when a command is scheduled for retry (not when it dead-letters).
+**`[:double_entry_ledger, :command, :retry]`** — emitted from `Scheduling.emit_persisted_failure/3` once the retry write succeeds (not when it dead-letters). An enclosing transaction can still roll back afterwards.
 
 | Metadata | Description |
 |---|---|
@@ -69,13 +69,23 @@ Point events use `:telemetry.execute/3` with `%{system_time: ...}` measurements.
 | `retry_count` | Current retry count |
 | `trace_context` | Consumer-supplied tracing context (map or nil) |
 
-**`[:double_entry_ledger, :command, :dead_letter]`** — emitted from `Scheduling.build_mark_as_dead_letter/2` when a command is permanently failed.
+**`[:double_entry_ledger, :command, :dead_letter]`** — emitted from `Scheduling.emit_persisted_failure/3` once the dead-letter write succeeds. An enclosing transaction can still roll back afterwards.
 
 | Metadata | Description |
 |---|---|
 | `command_id` | Command UUID |
 | `instance_id` | Ledger instance UUID |
 | `error` | Reason for dead-lettering |
+| `trace_context` | Consumer-supplied tracing context (map or nil) |
+
+**`[:double_entry_ledger, :command, :recovered]`** — emitted from `InstanceMonitor` when a command left in `:processing` by a vanished owner is routed back through the failure path. The resulting retry or dead-letter event is emitted as well.
+
+| Metadata | Description |
+|---|---|
+| `command_id` | Command UUID |
+| `instance_id` | Ledger instance UUID |
+| `previous_processor_id` | Processor identifier that held the claim |
+| `stale_for_seconds` | Seconds the row spent in `:processing`, measured on the database clock |
 | `trace_context` | Consumer-supplied tracing context (map or nil) |
 
 **`[:double_entry_ledger, :command, :idempotency_hit]`** — emitted from `TransactionCommandMapResponseHandler` when a duplicate command is detected via idempotency key.
@@ -266,6 +276,7 @@ TelemetryMetricsPrometheus.Core.init(
 | `counter` | `command.claim` | — |
 | `counter` | `command.retry` | status |
 | `counter` | `command.dead_letter` | — |
+| `counter` | `command.recovered` | — |
 | `counter` | `command.idempotency_hit` | action, source |
 | `counter` | `occ.retry` | module |
 | `counter` | `transaction.created` | status |

@@ -114,7 +114,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
   @doc """
   Handles errors that occur during transaction map conversion.
 
-  Schedules a retry for the given occable item, marking it as failed.
+  Returns an `Ecto.Multi` containing a single `Multi.error/3` step whose changeset
+  carries the error, so the transaction rolls back and nothing is persisted.
 
   ## Parameters
 
@@ -124,7 +125,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
 
   ## Returns
 
-    - An `Ecto.Multi` that updates the event with error information.
+    - An `Ecto.Multi` carrying `Multi.error/3` with a `TransactionCommandMap` changeset.
   """
   def handle_transaction_map_error(command_map, error, _repo) do
     command_map_changeset =

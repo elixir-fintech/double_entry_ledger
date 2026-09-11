@@ -102,6 +102,10 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     |> validate_inclusion(:status, @states)
   end
 
+  @doc """
+  Marks the queue item `:processed` and clears its retry deadline, fenced on
+  `processor_version`.
+  """
   @spec processing_complete_changeset(CommandQueueItem.t()) :: Ecto.Changeset.t()
   def processing_complete_changeset(command_queue_item) do
     command_queue_item
@@ -112,6 +116,10 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     |> optimistic_lock(:processor_version)
   end
 
+  @doc """
+  Returns the queue item to `:pending` so it can be claimed again, recording
+  `error` and fenced on `processor_version`.
+  """
   @spec revert_to_pending_changeset(CommandQueueItem.t(), any()) :: Ecto.Changeset.t()
   def revert_to_pending_changeset(command_queue_item, error \\ nil) do
     command_queue_item
@@ -122,6 +130,10 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     |> optimistic_lock(:processor_version)
   end
 
+  @doc """
+  Marks the queue item `:dead_letter`, recording `error` and clearing its retry
+  deadline, fenced on `processor_version`.
+  """
   @spec dead_letter_changeset(CommandQueueItem.t(), any()) :: Ecto.Changeset.t()
   def dead_letter_changeset(command_queue_item, error) do
     command_queue_item

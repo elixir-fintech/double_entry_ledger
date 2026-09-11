@@ -9,15 +9,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
     * Transaction Processing: Handles update of transactions based on the command map's action.
     * Atomic Operations: Ensures all command and transaction changes are performed in a single database transaction.
     * Error Handling: Maps validation and dependency errors to the appropriate changeset or command state, but does not persist on error.
-    * Retry Logic: Retries OCC conflicts and schedules retries for dependency errors.
+    * Retry Logic: Retries OCC conflicts in memory. A dependency error returns a changeset
+      through `Multi.error/3` and schedules nothing, since this variant persists no state.
     * OCC Integration: Integrates with the OCC processor behavior for safe, idempotent event processing.
 
   ## Main Functions
 
     * `process/2` — Entry point for processing update command maps with error handling and OCC.
-    * `build_transaction/3` — Constructs Ecto.Multi operations for update actions.
-    * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
-    * `handle_transaction_map_error/3` — Returns a changeset with error details, does not persist.
+    * `build_transaction/4` — Constructs Ecto.Multi operations for update actions.
+    * `handle_build_transaction/3` — Adds the `:command_success` step, or a
+      `Multi.error/3` step when the create dependency is unusable.
+    * `handle_transaction_map_error/3` — Adds a `Multi.error/3` step carrying a
+      changeset, so nothing is persisted.
     * `handle_occ_final_timeout/2` — Handles OCC retry exhaustion, does not persist.
 
   Atomic writes, OCC, and idempotency checks make concurrent retries safe. Error and retry
@@ -53,7 +56,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   @doc """
   Processes a `TransactionCommandMap` by creating both a command record and its associated transaction atomically, without saving on error.
 
-  This function is designed for synchronous use, ensuring that both the command and the transaction are created or updated in one atomic operation. It handles both `:create_transaction` and `:update` action types, with appropriate transaction building logic for each case. The entire operation uses Optimistic Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively. If an error occurs, a changeset with error details is returned instead of persisting the error state.
+  This function is designed for synchronous use, ensuring that both the command and the transaction are updated in one atomic operation. It handles `:update_transaction` only; a command map carrying any other action raises `FunctionClauseError`. The entire operation uses Optimistic Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively. If an error occurs, a changeset with error details is returned instead of persisting the error state.
 
   ## Parameters
 
@@ -90,17 +93,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
   @impl true
   @doc """
-  Adds the step to update the event or handle errors after transaction processing.
+  Adds the step that marks the command processed once the transaction is written.
 
-  This function inspects the results of the previous `Ecto.Multi` steps and determines
-  the appropriate next action for the event:
-
-    * If both the transaction and event creation succeed, the event is marked as processed.
-    * If the related create event is not yet processed, the event is reverted to pending.
-    * If the related create event failed, a retry is scheduled for the update event.
-    * For all other errors, the event is marked as dead letter.
-
-  If an error occurs, a changeset with error details is returned instead of persisting the error state.
+  On success the multi gains a `:command_success` step. On a dependency failure it
+  gains `Multi.error/3` carrying a changeset, which rolls the transaction back: this
+  variant persists no failure state, so nothing is reverted, retried or dead-lettered.
 
   ## Parameters
 
@@ -110,7 +107,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
   ## Returns
 
-    - The updated `Ecto.Multi` with either an `:command_success` or `:command_failure` step, or a changeset with error details.
+    - The updated `Ecto.Multi`: a `:command_success` step on success, or a
+      `Multi.error/3` step named `:create_transaction_event_error` carrying a
+      changeset when the create command it depends on is unusable.
   """
   def handle_build_transaction(multi, command_map, _repo) do
     multi
@@ -144,10 +143,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
 
   @impl true
   @doc """
-  Returns a changeset with error details for the given event map and error, without persisting the error.
-
-  This function is used to handle errors in transaction mapping, providing a changeset that
-  describes the error without affecting the database state.
+  Returns an `Ecto.Multi` containing a single `Multi.error/3` step whose changeset
+  carries the error, so the transaction rolls back and nothing is persisted.
   """
   def handle_transaction_map_error(command_map, error, _repo) do
     command_map_changeset =

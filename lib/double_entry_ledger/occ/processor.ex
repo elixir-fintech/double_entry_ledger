@@ -5,14 +5,14 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   This module provides:
 
-    * A behaviour defining four callbacks:
-      - `build_transaction/3`
+    * A behaviour defining the processing callbacks:
+      - `build_transaction/4`
       - `handle_build_transaction/3`
       - `handle_transaction_map_error/3`
       - `handle_occ_final_timeout/2`
     * A `process_with_retry/2` implementation that:
       - Converts command data to a transaction map
-      - Builds an Ecto.Multi via `build_multi/3`
+      - Builds an Ecto.Multi
       - Retries on `Ecto.StaleEntryError` with exponential backoff
       - Calls `handle_occ_final_timeout/2` when retries are exhausted
     * Helper imports for backoff, error tracking, and scheduling.
@@ -23,7 +23,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
         use DoubleEntryLedger.Occ.Processor
 
         @impl true
-        def build_transaction(command, tx_map, repo) do
+        def build_transaction(command, tx_map, instance_id, repo) do
           Ecto.Multi.new()
           |> Ecto.Multi.insert(:transaction, Transaction.changeset(%Transaction{}, tx_map))
         end
@@ -77,6 +77,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
     - `occable_item`: A Command struct or TransactionCommandMap containing the command details to process
     - `transaction_map`: A map of transaction data derived from the command map
+    - `instance_id`: UUID of the ledger instance
     - `repo`: The Ecto repository to use for database operations
 
   ## Returns
@@ -98,7 +99,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   ## Parameters
 
-    - `multi`: The Ecto.Multi built by `build_transaction/3`
+    - `multi`: The Ecto.Multi built by `build_transaction/4`
     - `occable_item`: The command or command map being processed
     - `repo`: The Ecto repository
 
@@ -218,7 +219,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
       @impl true
       def build_transaction(_command, _transaction_map, _instance_id, _repo) do
-        raise "build_transaction/3 not implemented"
+        raise "build_transaction/4 not implemented"
       end
 
       @impl true

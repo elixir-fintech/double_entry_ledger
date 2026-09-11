@@ -116,7 +116,7 @@ alias DoubleEntryLedger.Stores.InstanceStore
 
 {:ok, instance} = InstanceStore.create(%{
   address: "main:ledger:owner:1",
-  name: "Main Ledger"
+  description: "Main Ledger"
 })
 ```
 

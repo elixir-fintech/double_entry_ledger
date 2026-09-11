@@ -8,8 +8,8 @@ DoubleEntryLedger submits work to an immutable `Command` table and processes it 
 - **Supervision:** `DoubleEntryLedger.CommandQueue.Supervisor` starts the scheduler stack (registry, dynamic supervisors, and workers). `InstanceMonitor` polls for instances with pending commands and ensures each has an `InstanceProcessor`.
 - **Processing:** An `InstanceProcessor` atomically claims commands, invokes the appropriate worker module, and writes the resulting `JournalEvent`, transactions, entries, and balance history. Journal-event relationships are stored synchronously through direct foreign keys.
 - **Optional batching:** With `batch_enabled: true`, compatible create/update transaction commands are claimed and written together. Account commands and batches that encounter unexpected database errors fall back to the single-command path.
-- **Crash recovery:** Each worker task is monitored via `Process.monitor/1`. If the task crashes unexpectedly, the `InstanceProcessor` receives a `:DOWN` message and schedules a retry for the command automatically — no manual intervention required.
-- **Retries:** Workers distinguish validation failures (marked as dead letters) from transient OCC or database errors (scheduled with exponential backoff). The synchronous OCC loop uses the top-level runtime `max_retries` and `retry_interval`; queued retry delays use the compiled `:command_queue` settings described below. Exhausted retries land in `:dead_letter` for manual inspection.
+- **Crash recovery:** Each worker task is monitored via `Process.monitor/1`. If the task crashes unexpectedly, the `InstanceProcessor` receives a `:DOWN` message and schedules a retry for the command automatically — no manual intervention required. That covers an in-process crash only; a command left in `:processing` by a node that died is recovered by `InstanceMonitor`'s sweep once it is older than `stale_processing_after`.
+- **Retries:** Workers distinguish validation failures (marked as dead letters) from transient OCC or database errors (scheduled with exponential backoff). The synchronous OCC loop uses the top-level `max_retries`, captured into each worker at compile time, and `retry_interval`, read at runtime; queued retry delays use the compiled `:command_queue` settings described below. Exhausted retries land in `:dead_letter` for manual inspection.
 
 ## Submitting commands asynchronously
 
@@ -46,6 +46,7 @@ At this point the command is durable, but the associated transaction and journal
 1. `:pending` → `:processing` when the worker claims the command.
 2. `:processing` → `:processed` when projections succeed.
 3. `:processing` → `:failed`, `:occ_timeout`, or `:dead_letter` when something goes wrong.
+4. `:processing` → `:failed` or `:dead_letter` when `InstanceMonitor` recovers a command stranded past `stale_processing_after`, for example because its node died.
 
 Use `DoubleEntryLedger.Stores.CommandStore` to inspect queue progress:
 
@@ -72,6 +73,7 @@ config :double_entry_ledger, :command_queue,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
+  stale_processing_after: 300,
   processor_name: "command_queue"
 
 config :double_entry_ledger,
@@ -80,7 +82,8 @@ config :double_entry_ledger,
   max_batch_retries: 3
 ```
 
-- `poll_interval` – how often `InstanceMonitor` looks for pending work.
+- `poll_interval` – how often `InstanceMonitor` looks for pending work. A successful enqueue also wakes the local monitor, so an idle queue does not wait a full interval.
+- `stale_processing_after` – seconds a command may sit in `:processing` before the monitor recovers it; set it above your longest command.
 - `pending_fetch_limit` – how many queue IDs a processor fetches per database read. When batching is enabled, use a value at least as large as, and preferably a multiple of, `batch_size`.
 - `max_retries`, `base_retry_delay`, `max_retry_delay` – queue retry/backoff behaviour. These values are compiled into `CommandQueue.Scheduling`; change them before compiling the dependency.
 - `processor_name` – used in queue item metadata to identify workers.
@@ -94,7 +97,8 @@ runner. The command queue uses its own `InstanceMonitor` and
 
 ## Error handling and retries
 
-- **Validation errors** (bad payloads, missing accounts, unbalanced entries) mark the command as `:dead_letter` with the reason recorded on the queue item. They are not retried.
+- **Payload validation** happens before the command is queued: `CommandApi.create_from_params/1` returns `{:error, changeset}` and no command or queue item is created.
+- **Processing failures** (missing accounts, unbalanced entries) mark an already-queued command as `:dead_letter` with the reason recorded on the queue item. They are not retried.
 - **Optimistic concurrency conflicts** (stale account/transaction rows) mark the queue item as `:occ_timeout` which is retried automatically.
 - **Unexpected exceptions** mark the queue item as `:failed` and are retried using exponential backoff until `max_retries` is reached.
 - **Manual intervention:** Inspect the recorded `errors` array on `CommandQueueItem` or the `PendingTransactionLookup` table when updates fail because the original transaction is still pending.

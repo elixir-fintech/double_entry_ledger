@@ -9,9 +9,9 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   ## Key Functionality
 
     * **Command Management**: Create, retrieve, and track commands.
-    * **Command Processing**: Claim commands for processing, mark commands as processed or failed.
     * **Command Queries**: Find commands by instance, transaction ID, account ID, or other criteria.
-    * **Error Handling**: Track and manage errors that occur during command processing.
+
+  Claiming commands for processing lives in `DoubleEntryLedger.CommandQueue.Scheduling`.
 
   ## Usage Examples
 
@@ -112,6 +112,10 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     |> Repo.one()
   end
 
+  @doc """
+  Retrieves a command by its ID, scoped to the instance with the given address.
+  Returns `nil` when no such command exists.
+  """
   @spec get_by_instance_address_and_id(String.t(), Ecto.UUID.t()) :: Command.t() | nil
   def get_by_instance_address_and_id(instance_address, id) do
     from(e in Command,
@@ -132,6 +136,8 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   ## Returns
     - `{:ok, command}`: If the command was successfully created
     - `{:error, changeset}`: If validation failed
+    - `{:error, :pending_transaction_idempotency_violation}`: If a pending create
+      transaction command already exists for the same source and idempotency key
 
   ## Examples
 
@@ -155,7 +161,8 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
       :pending
   """
   @spec create(TransactionCommandMap.t() | AccountCommandMap.t()) ::
-          {:ok, Command.t()} | {:error, Ecto.Changeset.t(Command.t()) | :instance_not_found}
+          {:ok, Command.t()}
+          | {:error, Ecto.Changeset.t(Command.t()) | :pending_transaction_idempotency_violation}
   def create(
         %TransactionCommandMap{action: :create_transaction, payload: %{status: :pending}} = attrs
       ) do
