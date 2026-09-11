@@ -102,6 +102,20 @@ project follows [Semantic Versioning](https://semver.org/).
   `:batch_size` in their own application. This repository's runtime config is
   not loaded as dependency configuration.
 
+### Security
+
+- `decimal` 2.3.0 ships transitively through Ecto and Money and carries a
+  moderate advisory: an unbounded exponent in `Decimal.new/1` allows an
+  unauthenticated denial of service
+  ([GHSA-rhv4-8758-jx7v](https://github.com/advisories/GHSA-rhv4-8758-jx7v)).
+  It is fixed in `decimal` 3.0.0, which Ecto 3.13 cannot use because it
+  requires `~> 2.0`, so this release cannot take the fix. Applications that
+  build `Decimal` values from untrusted input should bound the exponent before
+  parsing. The constraint will be revisited once Ecto supports `decimal` 3.0.
+  Every other advisory reported by `mix deps.audit` is against a development
+  dependency (`bandit`, `plug`, `mint`) that is not part of the published
+  package.
+
 ## [0.4.0]
 
 ### ⚠️ Breaking changes

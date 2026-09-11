@@ -323,6 +323,37 @@ still balances, or `PendingTransactionLookup` to inspect open holds.
 - Errors and retry metadata live on the `command_queue_item`, so you can inspect processing attempts via `CommandStore` or SQL views.
 - Journal-event relationships are persisted synchronously through direct foreign keys; the command path no longer enqueues an internal linking job.
 
+### Deployment scope: one node per ledger
+
+The command queue is designed and tested for a **single node processing a given
+ledger**. Run it that way in production.
+
+Every write that completes, retries, or dead-letters a command is fenced by
+`command_queue_items.processor_version`, so a stale processor can never
+overwrite work after ownership has moved, and commands stranded in
+`:processing` by a node that died are recovered automatically. Those guarantees
+hold under concurrency and are what make a crash or restart safe.
+
+What is **not** yet guaranteed across several nodes:
+
+- `CommandQueue.Registry` is a node-local `Registry`. It prevents duplicate
+  `InstanceProcessor`s for a ledger on one node only, so each node can run its
+  own processor for the same instance.
+- Atomic claims protect individual commands, not a ledger. Processors on
+  different nodes can claim different commands of the same instance, so those
+  commands may execute concurrently and out of order.
+- Every node runs its own `InstanceMonitor`, producing redundant polling and
+  competing processor starts.
+- `batch_enabled`, `batch_size`, `pending_fetch_limit`, and
+  `stale_processing_after` are read from each node's application environment,
+  so inconsistent deployments process the same queue with different behaviour.
+- Enqueueing wakes the local monitor only; other nodes still wait for their
+  next poll.
+
+Cluster-wide safety needs an ownership lease per ledger, held in PostgreSQL
+with a fencing token and a database-clock expiry, so that only the current
+owner may claim work for that ledger. That is not implemented.
+
 ## Documentation & Further Reading
 
 - [Ledger internals & synchronous walkthrough](pages/DoubleEntryLedger.md)
