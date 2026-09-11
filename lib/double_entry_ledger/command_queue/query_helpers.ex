@@ -30,4 +30,38 @@ defmodule DoubleEntryLedger.CommandQueue.QueryHelpers do
            unquote(queue_item).next_retry_after <= fragment(unquote(@db_now_sql)))
     end
   end
+
+  @doc """
+  Query predicate for a queue item stranded in `:processing`: it has been
+  `:processing` for at least `seconds` on the database clock.
+
+  A row whose `processing_started_at` is NULL never matches, because the SQL
+  comparison yields NULL.
+
+  `queue_item` is the query binding for `CommandQueueItem`; `seconds` is the
+  staleness threshold and must be pinned by the caller.
+  """
+  defmacro stale_processing(queue_item, seconds) do
+    stale_sql = @db_now_sql <> " - (? * interval '1 second')"
+
+    quote do
+      unquote(queue_item).status == :processing and
+        unquote(queue_item).processing_started_at <=
+          fragment(unquote(stale_sql), unquote(seconds))
+    end
+  end
+
+  @doc """
+  Query expression for how many seconds a queue item has been `:processing`,
+  measured on the database clock.
+
+  `queue_item` is the query binding for `CommandQueueItem`.
+  """
+  defmacro processing_age_seconds(queue_item) do
+    age_sql = "EXTRACT(EPOCH FROM (" <> @db_now_sql <> " - ?))::double precision"
+
+    quote do
+      fragment(unquote(age_sql), unquote(queue_item).processing_started_at)
+    end
+  end
 end

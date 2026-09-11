@@ -54,6 +54,12 @@ project follows [Semantic Versioning](https://semver.org/).
 - Repository-only performance documentation and configurable load-test tasks.
 - Batch completion telemetry with per-command span and transaction-lifecycle
   parity.
+- Recovery of commands stranded in `:processing` by a node that died after
+  claiming them. `InstanceMonitor` sweeps rows older than the new
+  `:command_queue` option `stale_processing_after` (seconds, default 300),
+  measured on the PostgreSQL clock, and sends each through the normal retry or
+  dead-letter path under the existing ownership fence, emitting
+  `[:double_entry_ledger, :command, :recovered]`.
 
 ### Changed
 

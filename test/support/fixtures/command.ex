@@ -40,6 +40,33 @@ defmodule DoubleEntryLedger.CommandFixtures do
     :ok
   end
 
+  @doc """
+  Ages the command's queue item as if its claim had happened `seconds` ago,
+  measured on the PostgreSQL clock.
+
+  `processing_started_at` is trigger-managed: the queue trigger only stamps it
+  when the status actually changes, so this UPDATE leaves a `:processing` row
+  in `:processing` and its written timestamp survives.
+  """
+  def age_processing_started_at(command_id, seconds) do
+    {1, _} =
+      from(eqi in CommandQueueItem,
+        where: eqi.command_id == ^command_id,
+        update: [
+          set: [
+            processing_started_at:
+              fragment(
+                "timezone('UTC', statement_timestamp()) - (? * interval '1 second')",
+                ^seconds
+              )
+          ]
+        ]
+      )
+      |> Repo.update_all([])
+
+    :ok
+  end
+
   def transaction_command_attrs(attrs \\ %{}) do
     attrs
     |> Enum.into(%{

@@ -21,7 +21,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
   import Ecto.Query, only: [from: 2]
-  import DoubleEntryLedger.CommandQueue.QueryHelpers, only: [retry_eligible: 1]
+
+  import DoubleEntryLedger.CommandQueue.QueryHelpers,
+    only: [retry_eligible: 1, stale_processing: 2, processing_age_seconds: 1]
 
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.CommandQueue.QueryHelpers
@@ -243,6 +245,29 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       where: retry_eligible(cqi),
       select: c.instance_id,
       distinct: true
+    )
+  end
+
+  @doc """
+  Query for up to `limit` commands stranded in `:processing`: rows claimed at
+  least `stale_after_seconds` ago on the database clock whose owner never
+  reported back (`QueryHelpers.stale_processing/2`). Oldest claim first.
+
+  Selects `{command, queue_item, seconds_in_processing}` so the caller can
+  rebuild the command with its queue item and report how long the row was
+  stuck without consulting the application clock. `InstanceMonitor` runs it on
+  every poll and routes each row through the normal failure path.
+  """
+  @spec stale_processing_commands_query(non_neg_integer(), pos_integer()) :: Ecto.Query.t()
+  def stale_processing_commands_query(stale_after_seconds, limit) do
+    from(c in Command,
+      join: cqi in CommandQueueItem,
+      prefix: ^@schema_prefix,
+      on: c.id == cqi.command_id,
+      where: stale_processing(cqi, ^stale_after_seconds),
+      order_by: [asc: cqi.processing_started_at],
+      limit: ^limit,
+      select: {c, cqi, processing_age_seconds(cqi)}
     )
   end
 

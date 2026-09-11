@@ -24,6 +24,9 @@ config :double_entry_ledger, :command_queue,
   base_retry_delay: 30,
   # Maximum delay in seconds (1 hour)
   max_retry_delay: 3600,
+  # Seconds a command may stay in :processing before InstanceMonitor treats it
+  # as stranded by a dead node and sends it back through the failure path
+  stale_processing_after: 300,
   # Name prefix for processors
   processor_name: "command_queue"
 

@@ -22,6 +22,7 @@ defmodule DoubleEntryLedger.Telemetry do
   | `[:double_entry_ledger, :command, :claim]` | Command claimed by processor |
   | `[:double_entry_ledger, :command, :retry]` | Command scheduled for retry |
   | `[:double_entry_ledger, :command, :dead_letter]` | Command permanently failed |
+  | `[:double_entry_ledger, :command, :recovered]` | Stranded `:processing` command recovered |
   | `[:double_entry_ledger, :command, :idempotency_hit]` | Duplicate command detected |
   | `[:double_entry_ledger, :occ, :retry]` | OCC retry attempt |
   | `[:double_entry_ledger, :transaction, :created]` | Transaction created |
@@ -132,6 +133,29 @@ defmodule DoubleEntryLedger.Telemetry do
   @spec command_dead_letter(map()) :: :ok
   def command_dead_letter(metadata) do
     execute([:double_entry_ledger, :command, :dead_letter], metadata)
+  end
+
+  @doc """
+  Emits a command recovery event.
+
+  Emitted by `CommandQueue.InstanceMonitor` when a queue row left in
+  `:processing` by a vanished owner is routed back through the failure path.
+  The resulting retry or dead-letter event is emitted as well, so alert on
+  this event to distinguish "commands are being recovered" from "a command
+  failed".
+
+  ## Metadata
+
+    - `:command_id` - Command UUID
+    - `:instance_id` - Ledger instance UUID
+    - `:previous_processor_id` - Processor identifier that held the claim
+    - `:stale_for_seconds` - Seconds the row spent in `:processing`, measured
+      on the database clock
+    - `:trace_context` - Consumer-supplied tracing context (map or nil)
+  """
+  @spec command_recovered(map()) :: :ok
+  def command_recovered(metadata) do
+    execute([:double_entry_ledger, :command, :recovered], metadata)
   end
 
   @doc """
@@ -388,6 +412,7 @@ defmodule DoubleEntryLedger.Telemetry do
           tags: [:status]
         ),
         counter("double_entry_ledger.command.dead_letter.system_time"),
+        counter("double_entry_ledger.command.recovered.system_time"),
         counter("double_entry_ledger.command.idempotency_hit.system_time",
           tags: [:action, :source]
         ),
