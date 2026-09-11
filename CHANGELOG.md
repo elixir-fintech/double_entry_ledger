@@ -93,6 +93,11 @@ project follows [Semantic Versioning](https://semver.org/).
 - Single-command claims enforce queue status and the retry deadline
   atomically in one UPDATE, sharing the batch claim statement, so a command
   whose `next_retry_after` has not elapsed can no longer be claimed early.
+- A successful `CommandStore.create/1` now wakes the local `InstanceMonitor`
+  when no processor is registered for the instance, so an idle queue starts
+  draining immediately instead of up to `:poll_interval` later. The wake is
+  best-effort — it is skipped when the command queue is not running — and
+  polling remains the guarantee.
 - Package consumers must configure `:insert_path`, `:batch_enabled`, and
   `:batch_size` in their own application. This repository's runtime config is
   not loaded as dependency configuration.

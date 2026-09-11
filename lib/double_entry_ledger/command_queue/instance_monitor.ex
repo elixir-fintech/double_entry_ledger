@@ -14,7 +14,19 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
     * Periodically poll the database for instances with pending, failed, or timed-out commands.
     * For each instance with processable commands, ensure an `InstanceProcessor` is started.
     * Avoid starting duplicate processors for the same instance by checking the Registry.
+    * Answer `wake/1` so a freshly enqueued command does not wait for the next poll.
     * Use application configuration for poll interval (`:poll_interval` in `:command_queue` config).
+
+  ## Waking on enqueue
+
+  On an otherwise idle queue the poll interval is pure latency: nothing runs
+  until the next `:poll`. `DoubleEntryLedger.Stores.CommandStore` therefore
+  calls `wake/1` after a successful enqueue when no processor is registered for
+  that instance, and this module ensures a processor for that one instance.
+
+  The wake is an optimization only. It runs no recovery sweep and no discovery
+  query, it is best-effort (see `wake/1`), and the poll remains the guarantee
+  that processable work is eventually picked up.
 
   ## Stale `:processing` recovery
 
@@ -86,6 +98,36 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
+  @doc """
+  Asks the monitor to ensure a processor for `instance_id` now, instead of on
+  its next poll, and returns `:ok`.
+
+  Best-effort by design and never blocks the caller:
+
+    * `GenServer.cast/2` to an unregistered name is a silent no-op, so this is
+      safe when the command queue is not supervised at all (for example
+      `start_command_queue: false`).
+    * The woken processor may find nothing to do and shut straight back down —
+      see `DoubleEntryLedger.Stores.CommandStore` for why an enqueue is not
+      necessarily visible yet — in which case the next poll picks the work up.
+
+  The Registry lookup runs in the calling process and is an ETS read, so a
+  burst of enqueues for one instance does not put one message per command into
+  this monitor's single mailbox: once a processor is registered, further wakes
+  cost a lookup and nothing more. A running processor drains the instance on
+  its own.
+  """
+  @spec wake(Ecto.UUID.t()) :: :ok
+  def wake(instance_id) do
+    case Registry.lookup(DoubleEntryLedger.CommandQueue.Registry, instance_id) do
+      [] -> GenServer.cast(__MODULE__, {:wake, instance_id})
+      [_ | _] -> :ok
+    end
+  rescue
+    # No Registry means the command queue is not supervised in this runtime.
+    ArgumentError -> :ok
+  end
+
   # Server Callbacks
 
   @impl true
@@ -118,6 +160,15 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
     |> Scheduling.stale_processing_commands_query(@stale_recovery_limit)
     |> repo.all()
     |> Enum.each(&recover_stale_command(&1, stale_after, repo))
+  end
+
+  @impl true
+  @doc false
+  def handle_cast({:wake, instance_id}, state) do
+    # Targeted wake: one instance, no recovery sweep and no discovery query.
+    # `ensure_processor/1` is Registry-guarded, so a redundant wake is a no-op.
+    ensure_processor(instance_id)
+    {:noreply, state}
   end
 
   @impl true

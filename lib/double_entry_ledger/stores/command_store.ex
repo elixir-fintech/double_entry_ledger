@@ -64,6 +64,14 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     preventing duplicate business operations.
   - All queries are paginated and ordered by insertion time descending for efficient retrieval.
   - Error handling is explicit, with clear return values for all failure modes.
+  - A successful `create/1` wakes the local command queue
+    (`DoubleEntryLedger.CommandQueue.InstanceMonitor.wake/1`) when no processor
+    is registered for the instance, so an idle queue starts draining
+    immediately instead of on its next poll. This deliberately couples the
+    store to the queue's public API; the explicitness was preferred over hooking
+    the enqueue telemetry event. Where the queue lives and whether it is running
+    stay behind `wake/1`. The wake is best-effort, and the monitor's poll
+    remains the guarantee that enqueued work is processed.
   """
   import Ecto.Query
   import DoubleEntryLedger.Stores.CommandStoreHelper
@@ -78,6 +86,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
     Transaction
   }
 
+  alias DoubleEntryLedger.CommandQueue.InstanceMonitor
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
@@ -174,6 +183,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
          |> Repo.transaction() do
       {:ok, %{command: command}} ->
         emit_enqueue(attrs, command)
+        InstanceMonitor.wake(command.instance_id)
         {:ok, command}
 
       {:error, :pending_transaction_lookup, _, _} ->
@@ -193,6 +203,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
          |> Repo.transaction() do
       {:ok, %{command: command}} ->
         emit_enqueue(attrs, command)
+        InstanceMonitor.wake(command.instance_id)
         {:ok, command}
 
       {:error, :command, changeset, _changes} ->

@@ -376,24 +376,182 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitorTest do
     end
   end
 
-  defp delete_stale_processing_after do
-    config = Application.get_env(:double_entry_ledger, :command_queue, [])
+  describe "waking the monitor on enqueue" do
+    setup [:create_instance, :create_accounts]
 
-    Application.put_env(
-      :double_entry_ledger,
-      :command_queue,
-      Keyword.delete(config, :stale_processing_after)
+    setup do
+      original = Application.get_env(:double_entry_ledger, :command_queue, [])
+      on_exit(fn -> Application.put_env(:double_entry_ledger, :command_queue, original) end)
+
+      # A poll interval far longer than the test can run: anything observed
+      # here was caused by the enqueue wake, never by the poll.
+      Application.put_env(:double_entry_ledger, :command_queue, poll_interval: 60_000)
+
+      start_supervised!({Registry, keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry})
+
+      start_supervised!(
+        {DynamicSupervisor,
+         name: DoubleEntryLedger.CommandQueue.InstanceSupervisor, strategy: :one_for_one}
+      )
+
+      :ok
+    end
+
+    test "enqueueing starts a processor without waiting for a poll", %{
+      instance: instance,
+      accounts: [a1, a2 | _]
+    } do
+      monitor = start_supervised!(InstanceMonitor)
+      assert :sys.get_state(monitor).poll_interval == 60_000
+
+      ref = attach_telemetry([:double_entry_ledger, :instance_processor, :start])
+      instance_id = instance.id
+
+      {:ok, _command} = CommandStore.create(pending_transaction_attrs(instance, a1, a2))
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :instance_processor, :start],
+                      _measurements, %{instance_id: ^instance_id}},
+                     2_000
+    end
+
+    test "enqueueing does not start a second processor for a registered instance", %{
+      instance: instance,
+      accounts: [a1, a2 | _]
+    } do
+      monitor = start_supervised!(InstanceMonitor)
+
+      {:ok, _owner} =
+        Registry.register(DoubleEntryLedger.CommandQueue.Registry, instance.id, :test_processor)
+
+      test_pid = self()
+
+      {:ok, _command} = CommandStore.create(pending_transaction_attrs(instance, a1, a2))
+
+      # A cast sent by this process before this call is handled before it, so
+      # the monitor is guaranteed to be idle by the time this returns.
+      :sys.get_state(monitor)
+
+      assert Registry.lookup(DoubleEntryLedger.CommandQueue.Registry, instance.id) ==
+               [{test_pid, :test_processor}]
+
+      assert %{active: 0} =
+               DynamicSupervisor.count_children(DoubleEntryLedger.CommandQueue.InstanceSupervisor)
+    end
+
+    test "enqueueing does not signal the monitor when a processor is registered", %{
+      instance: instance,
+      accounts: [a1, a2 | _]
+    } do
+      # Stand in for the monitor so the signal itself is observable: the
+      # Registry check exists so a burst of enqueues for one instance does not
+      # put one message per command into the monitor's single mailbox.
+      Process.register(self(), InstanceMonitor)
+
+      {:ok, _owner} =
+        Registry.register(DoubleEntryLedger.CommandQueue.Registry, instance.id, :test_processor)
+
+      {:ok, _command} = CommandStore.create(pending_transaction_attrs(instance, a1, a2))
+
+      refute_receive {:"$gen_cast", {:wake, _instance_id}}, 200
+    end
+
+    test "waking an instance with no processable commands leaves no processor running", %{
+      instance: instance
+    } do
+      monitor = start_supervised!(InstanceMonitor)
+      attach_processor_start_pid()
+
+      InstanceMonitor.wake(instance.id)
+      :sys.get_state(monitor)
+
+      # The wake is not work-aware: it starts a processor for the instance, and
+      # that processor is what discovers there is nothing to do and stops.
+      assert_receive {:processor_started, processor_pid}, 2_000
+      down_ref = Process.monitor(processor_pid)
+      assert_receive {:DOWN, ^down_ref, :process, ^processor_pid, _reason}, 2_000
+
+      refute Process.alive?(processor_pid)
+    end
+  end
+
+  describe "enqueueing without a running command queue" do
+    setup [:create_instance]
+
+    test "creating a command succeeds when the Registry and monitor are absent", %{
+      instance: instance
+    } do
+      refute Process.whereis(DoubleEntryLedger.CommandQueue.Registry)
+      refute Process.whereis(DoubleEntryLedger.CommandQueue.InstanceMonitor)
+
+      assert {:ok, command} =
+               CommandStore.create(
+                 transaction_command_attrs(
+                   instance_address: instance.address,
+                   source_idempk: "queue-absent"
+                 )
+               )
+
+      assert command.command_queue_item.status == :pending
+    end
+  end
+
+  @doc false
+  def forward_processor_pid(_event, _measurements, _metadata, %{test_pid: pid}) do
+    send(pid, {:processor_started, self()})
+  end
+
+  # Telemetry handlers run in the emitting process, so `self()` in the handler
+  # is the InstanceProcessor that just started. That pid is what lets the test
+  # wait for its exit instead of sleeping.
+  defp attach_processor_start_pid do
+    handler_id = "test-processor-start-#{inspect(make_ref())}"
+
+    :telemetry.attach(
+      handler_id,
+      [:double_entry_ledger, :instance_processor, :start],
+      &__MODULE__.forward_processor_pid/4,
+      %{test_pid: self()}
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+    :ok
+  end
+
+  defp pending_transaction_attrs(instance, account_1, account_2) do
+    transaction_command_attrs(
+      instance_address: instance.address,
+      source_idempk: "wake-#{System.unique_integer([:positive])}",
+      payload: %DoubleEntryLedger.Command.TransactionData{
+        status: :pending,
+        entries: [
+          %{account_address: account_1.address, amount: 100, currency: "EUR"},
+          %{account_address: account_2.address, amount: 100, currency: "EUR"}
+        ]
+      }
     )
   end
 
-  defp put_stale_processing_after(seconds) do
-    config = Application.get_env(:double_entry_ledger, :command_queue, [])
+  defp delete_stale_processing_after do
+    :command_queue
+    |> restore_command_queue_config_on_exit()
+    |> Keyword.delete(:stale_processing_after)
+    |> then(&Application.put_env(:double_entry_ledger, :command_queue, &1))
+  end
 
-    Application.put_env(
-      :double_entry_ledger,
-      :command_queue,
-      Keyword.put(config, :stale_processing_after, seconds)
-    )
+  # Returns the current :command_queue config and registers its restoration, so
+  # a test that sets a deliberately invalid threshold cannot leak it into
+  # whichever test the seed happens to run next.
+  defp restore_command_queue_config_on_exit(key) do
+    config = Application.get_env(:double_entry_ledger, key, [])
+    on_exit(fn -> Application.put_env(:double_entry_ledger, key, config) end)
+    config
+  end
+
+  defp put_stale_processing_after(seconds) do
+    :command_queue
+    |> restore_command_queue_config_on_exit()
+    |> Keyword.put(:stale_processing_after, seconds)
+    |> then(&Application.put_env(:double_entry_ledger, :command_queue, &1))
   end
 
   defp seed_processing_command(instance, processor_id, status \\ :pending, retry_count \\ 0) do
