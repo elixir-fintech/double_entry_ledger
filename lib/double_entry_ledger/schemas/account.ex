@@ -56,8 +56,7 @@ defmodule DoubleEntryLedger.Account do
     Entry,
     Instance,
     Types,
-    JournalEvent,
-    JournalEventAccountLink
+    JournalEvent
   }
 
   alias DoubleEntryLedger.Utils.Currency
@@ -150,9 +149,7 @@ defmodule DoubleEntryLedger.Account do
 
     has_many(:entries, Entry)
     has_many(:balance_history_entries, BalanceHistoryEntry)
-    has_many(:journal_event_account_links, JournalEventAccountLink)
-
-    many_to_many(:journal_events, JournalEvent, join_through: JournalEventAccountLink)
+    has_many(:journal_events, JournalEvent)
 
     field(:lock_version, :integer, default: 1)
     timestamps(type: :utc_datetime_usec)
@@ -310,6 +307,283 @@ defmodule DoubleEntryLedger.Account do
     |> change()
     |> no_assoc_constraint(:entries)
     |> no_assoc_constraint(:balance_history_entries)
+  end
+
+  @typedoc """
+  Plain-map result of `compute_balance_changes/3`.
+
+  All four fields are the *new* values that should be persisted to the
+  account row. `lock_version` is the *expected new* version
+  (i.e. `account.lock_version + 1`); the caller must enforce optimistic
+  concurrency by including the *old* `lock_version` in its UPDATE WHERE
+  clause.
+  """
+  @type balance_change_result :: %{
+          posted: Balance.t(),
+          pending: Balance.t(),
+          available: integer(),
+          lock_version: integer()
+        }
+
+  @doc """
+  Pure equivalent of `update_balances/2`. Computes the new balances and
+  `available` for an account given a single entry and a transition.
+
+  Performs the same validations as `update_balances/2` (account_id match,
+  currency match, negative_limit) but returns plain data — no changeset,
+  no DB. Used by the batched-write path (`BatchProcessor`); the caller is
+  responsible for issuing the UPDATE with a `lock_version` check.
+
+  ## Supported transitions
+
+    * **Create path** (`:posted`, `:pending`) — entry's `:value` is
+      applied to the corresponding balance.
+    * **Update path** (`:pending_to_posted`, `:pending_to_pending`,
+      `:pending_to_archived`) — entry's `:old_value` is reversed from
+      `pending`, then (for `:pending_to_posted`) `:value` is applied to
+      `posted`, or (for `:pending_to_pending`) `:value` is applied to
+      `pending` in the same step via
+      `Balance.reverse_and_update_pending_pure/5`. `:pending_to_archived`
+      only reverses, no apply.
+
+  ## Returns
+
+    * `{:ok, %{posted: _, pending: _, available: _, lock_version: _}}`
+    * `{:error, field, message}` — preserves the same field/message
+      surface as the changeset version, so callers can translate back to
+      changeset errors when needed.
+
+  ## Examples
+
+      # :pending_to_posted — a pending entry settles to posted
+      iex> account = %DoubleEntryLedger.Account{
+      ...>   id: "11111111-1111-1111-1111-111111111111",
+      ...>   normal_balance: :debit,
+      ...>   currency: :EUR,
+      ...>   negative_limit: 0,
+      ...>   posted: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   pending: %DoubleEntryLedger.Balance{amount: 50, debit: 50, credit: 0},
+      ...>   available: 0,
+      ...>   lock_version: 1
+      ...> }
+      iex> entry = %{
+      ...>   account_id: "11111111-1111-1111-1111-111111111111",
+      ...>   type: :debit,
+      ...>   value: %{amount: 50, currency: :EUR},
+      ...>   old_value: %{amount: 50, currency: :EUR}
+      ...> }
+      iex> {:ok, change} = DoubleEntryLedger.Account.compute_balance_changes(account, entry, :pending_to_posted)
+      iex> {change.posted.amount, change.pending.amount, change.available, change.lock_version}
+      {50, 0, 50, 2}
+
+      # :pending_to_pending — pending amount changes from 50 to 75
+      iex> account = %DoubleEntryLedger.Account{
+      ...>   id: "11111111-1111-1111-1111-111111111111",
+      ...>   normal_balance: :debit,
+      ...>   currency: :EUR,
+      ...>   negative_limit: 0,
+      ...>   posted: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   pending: %DoubleEntryLedger.Balance{amount: 50, debit: 50, credit: 0},
+      ...>   available: 0,
+      ...>   lock_version: 1
+      ...> }
+      iex> entry = %{
+      ...>   account_id: "11111111-1111-1111-1111-111111111111",
+      ...>   type: :debit,
+      ...>   value: %{amount: 75, currency: :EUR},
+      ...>   old_value: %{amount: 50, currency: :EUR}
+      ...> }
+      iex> {:ok, change} = DoubleEntryLedger.Account.compute_balance_changes(account, entry, :pending_to_pending)
+      iex> {change.posted.amount, change.pending.amount, change.available, change.lock_version}
+      {0, 75, 0, 2}
+
+      # :pending_to_archived — the pending entry is cancelled
+      iex> account = %DoubleEntryLedger.Account{
+      ...>   id: "11111111-1111-1111-1111-111111111111",
+      ...>   normal_balance: :debit,
+      ...>   currency: :EUR,
+      ...>   negative_limit: 0,
+      ...>   posted: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   pending: %DoubleEntryLedger.Balance{amount: 50, debit: 50, credit: 0},
+      ...>   available: 0,
+      ...>   lock_version: 1
+      ...> }
+      iex> entry = %{
+      ...>   account_id: "11111111-1111-1111-1111-111111111111",
+      ...>   type: :debit,
+      ...>   value: %{amount: 50, currency: :EUR},
+      ...>   old_value: %{amount: 50, currency: :EUR}
+      ...> }
+      iex> {:ok, change} = DoubleEntryLedger.Account.compute_balance_changes(account, entry, :pending_to_archived)
+      iex> {change.posted.amount, change.pending.amount, change.available, change.lock_version}
+      {0, 0, 0, 2}
+  """
+  @spec compute_balance_changes(Account.t(), map(), Types.trx_types()) ::
+          {:ok, balance_change_result()} | {:error, atom(), String.t()}
+  def compute_balance_changes(account, entry, trx)
+      when trx in [
+             :posted,
+             :pending,
+             :pending_to_posted,
+             :pending_to_pending,
+             :pending_to_archived
+           ] do
+    with :ok <- validate_entry_for_account(account, entry),
+         {:ok, %{posted: po, pending: pe}} <- compute_new_balances(account, entry, trx),
+         {:ok, available} <- compute_new_available(account, %{posted: po, pending: pe}) do
+      {:ok,
+       %{
+         posted: po,
+         pending: pe,
+         available: available,
+         lock_version: account.lock_version + 1
+       }}
+    end
+  end
+
+  def compute_balance_changes(_account, _entry, trx) do
+    {:error, :entry, "invalid transition: #{trx}"}
+  end
+
+  @doc """
+  Pure helper: bumps an in-memory `Account` struct to its post-this-entry
+  state given the result of `compute_balance_changes/3`.
+
+  Used by the batched-write fold (`DoubleEntryLedger.BatchProcessor`) to
+  chain successive entries against the same in-memory account without
+  going through Ecto changesets. The caller still holds the
+  `old_lock_version` it needs for the `WHERE lock_version = ?` clause
+  in the eventual `UPDATE`.
+
+  Pure — no DB, no IO. Mirrors the field set produced by
+  `compute_balance_changes/3`: `posted`, `pending`, `available`,
+  `lock_version`. Other fields are preserved.
+
+  ## Examples
+
+      iex> account = %DoubleEntryLedger.Account{
+      ...>   posted: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   pending: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   available: 0,
+      ...>   lock_version: 1
+      ...> }
+      iex> change = %{
+      ...>   posted: %DoubleEntryLedger.Balance{amount: 100, debit: 100, credit: 0},
+      ...>   pending: %DoubleEntryLedger.Balance{amount: 0, debit: 0, credit: 0},
+      ...>   available: 100,
+      ...>   lock_version: 2
+      ...> }
+      iex> next = DoubleEntryLedger.Account.apply_balance_change(account, change)
+      iex> {next.posted.amount, next.available, next.lock_version}
+      {100, 100, 2}
+  """
+  @spec apply_balance_change(Account.t(), balance_change_result()) :: Account.t()
+  def apply_balance_change(%Account{} = account, %{
+        posted: posted,
+        pending: pending,
+        available: available,
+        lock_version: lock_version
+      }) do
+    %Account{
+      account
+      | posted: posted,
+        pending: pending,
+        available: available,
+        lock_version: lock_version
+    }
+  end
+
+  @spec validate_entry_for_account(Account.t(), map()) :: :ok | {:error, atom(), String.t()}
+  defp validate_entry_for_account(
+         %{id: account_id, currency: account_currency},
+         %{account_id: entry_account_id, value: %{currency: entry_currency}}
+       ) do
+    cond do
+      account_id != entry_account_id ->
+        {:error, :id,
+         "entry account_id (#{entry_account_id}) must be equal to account id (#{account_id})"}
+
+      account_currency != entry_currency ->
+        {:error, :currency,
+         "entry currency (#{entry_currency}) must be equal to account currency (#{account_currency})"}
+
+      true ->
+        :ok
+    end
+  end
+
+  @spec compute_new_balances(Account.t(), map(), Types.trx_types()) ::
+          {:ok, %{posted: Balance.t(), pending: Balance.t()}} | {:error, atom(), String.t()}
+  defp compute_new_balances(
+         %{posted: po, pending: pe, normal_balance: nb},
+         %{type: e_type, value: %{amount: amount}},
+         :posted
+       ) do
+    with {:ok, new_posted} <- Balance.apply_amount_pure(po, amount, e_type, nb) do
+      {:ok, %{posted: new_posted, pending: pe}}
+    end
+  end
+
+  defp compute_new_balances(
+         %{posted: po, pending: pe, normal_balance: nb},
+         %{type: e_type, value: %{amount: amount}},
+         :pending
+       ) do
+    with {:ok, new_pending} <- Balance.apply_amount_pure(pe, amount, e_type, nb) do
+      {:ok, %{posted: po, pending: new_pending}}
+    end
+  end
+
+  defp compute_new_balances(
+         %{posted: po, pending: pe, normal_balance: nb},
+         %{type: e_type, value: %{amount: new_amount}, old_value: %{amount: old_amount}},
+         :pending_to_posted
+       ) do
+    with {:ok, new_pending} <- Balance.reverse_pending_pure(pe, old_amount, e_type, nb),
+         {:ok, new_posted} <- Balance.apply_amount_pure(po, new_amount, e_type, nb) do
+      {:ok, %{posted: new_posted, pending: new_pending}}
+    end
+  end
+
+  defp compute_new_balances(
+         %{posted: po, pending: pe, normal_balance: nb},
+         %{type: e_type, value: %{amount: new_amount}, old_value: %{amount: old_amount}},
+         :pending_to_pending
+       ) do
+    with {:ok, new_pending} <-
+           Balance.reverse_and_update_pending_pure(pe, old_amount, new_amount, e_type, nb) do
+      {:ok, %{posted: po, pending: new_pending}}
+    end
+  end
+
+  defp compute_new_balances(
+         %{posted: po, pending: pe, normal_balance: nb},
+         %{type: e_type, old_value: %{amount: old_amount}},
+         :pending_to_archived
+       ) do
+    with {:ok, new_pending} <- Balance.reverse_pending_pure(pe, old_amount, e_type, nb) do
+      {:ok, %{posted: po, pending: new_pending}}
+    end
+  end
+
+  @spec compute_new_available(Account.t(), %{posted: Balance.t(), pending: Balance.t()}) ::
+          {:ok, integer()} | {:error, atom(), String.t()}
+  defp compute_new_available(
+         %{negative_limit: limit, normal_balance: nb},
+         %{posted: %{amount: amount}, pending: pending}
+       ) do
+    available = amount - Map.get(pending, opposite_direction(nb), 0)
+
+    cond do
+      limit == 0 && available < 0 ->
+        {:error, :available, "amount can't be negative"}
+
+      limit > 0 && available < -limit ->
+        {:error, :available, "amount can't be below negative limit of -#{limit}"}
+
+      true ->
+        {:ok, available}
+    end
   end
 
   @doc """
@@ -479,7 +753,7 @@ defmodule DoubleEntryLedger.Account do
 
   defp update(%{data: %{pending: pe, normal_balance: nb}} = changeset, entry, entry_type, trx)
        when trx == :pending_to_archived do
-    entry_value = get_field(entry, :value)
+    entry_value = entry.data.value
 
     changeset
     |> put_change(:pending, Balance.reverse_pending(pe, entry_value.amount, entry_type, nb))

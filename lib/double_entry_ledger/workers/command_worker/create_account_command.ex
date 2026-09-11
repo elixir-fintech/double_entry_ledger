@@ -1,6 +1,7 @@
 defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
   @moduledoc """
-   Processes :create_account actions
+  Processes a stored `:create_account` command: inserts the account, writes the
+  journal event, and marks the command processed in one transaction.
   """
   use DoubleEntryLedger.Logger
 
@@ -13,12 +14,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
     only: [default_response_handler: 2]
 
   alias Ecto.Multi
-  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.{Command, JournalEvent}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
 
+  @doc "Runs the create-account command and returns the handler response."
   @spec process(Command.t()) :: AccountCommandResponseHandler.response()
   def process(%Command{command_map: %{action: :create_account}} = event) do
     build_create_account(event)
@@ -33,21 +34,14 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
        ) do
     Multi.new()
     |> Multi.insert(:account, AccountStoreHelper.build_create(account_data, instance_id))
-    |> Multi.insert(
-      :journal_event,
-      JournalEvent.build_create(%{command_map: command_map, instance_id: instance_id})
-    )
-    |> Multi.update(:command_success, build_mark_as_processed(event))
-    |> DoubleEntryLedger.Oban.insert(:create_account_link, fn %{
-                                              command_success: event,
-                                              account: account,
-                                              journal_event: journal_event
-                                            } ->
-      Workers.Oban.JournalEventLinks.new(%{
+    |> Multi.insert(:journal_event, fn %{account: account} ->
+      JournalEvent.build_create(%{
+        command_map: command_map,
+        instance_id: instance_id,
         command_id: event.id,
-        account_id: account.id,
-        journal_event_id: journal_event.id
+        account_id: account.id
       })
     end)
+    |> Multi.update(:command_success, build_mark_as_processed(event))
   end
 end

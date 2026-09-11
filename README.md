@@ -1,6 +1,6 @@
 # DoubleEntryLedger
 
-**[![Elixir CI](https://github.com/csommerauer/double_entry_ledger/actions/workflows/elixir.yml/badge.svg)](https://github.com/csommerauer/double_entry_ledger/actions/workflows/elixir.yml)**
+**[![Elixir CI](https://github.com/elixir-fintech/double_entry_ledger/actions/workflows/elixir.yml/badge.svg)](https://github.com/elixir-fintech/double_entry_ledger/actions/workflows/elixir.yml)**
 
 DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engine for Elixir and PostgreSQL. It provides typed accounts, signed amount APIs, pending/posting flows, an optimistic-concurrency command queue, and a fully auditable journal so you can embed reliable ledgering without rebuilding the fundamentals.
 
@@ -9,7 +9,7 @@ DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engi
 - Multi tenant ledger instances with typed accounts (asset/liability/equity/revenue/expense) and [Money](https://hexdocs.pm/money) backed multi currency support.
 - Signed amount API converts intent into the correct debit or credit entry and enforces balanced transactions per currency.
 - Immutable `Command`, `JournalEvent`, and `BalanceHistoryEntry` records plus idempotency keys give a complete audit trail.
-- Background command queue with OCC, exponential retries, per instance processors, and Oban powered linking jobs ensures exactly once processing.
+- Background command queue with OCC, exponential retries, per-instance processors, and idempotency controls makes command processing safe to retry.
 - Pending vs. posted projections with automatic `available` balances support holds, authorizations, and delayed settlements.
 - Rich stores and APIs (`InstanceStore`, `AccountStore`, `TransactionStore`, `CommandStore`, `CommandApi`, `JournalEventStore`) keep ledger interactions safe and consistent.
 - Everything lives inside the configurable `double_entry_ledger` schema so it coexists peacefully with your application tables.
@@ -22,26 +22,26 @@ DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engi
 
 ### Commands, Journal Events & Transactions
 
-External requests enter through `DoubleEntryLedger.Apis.CommandApi` (`lib/double_entry_ledger/apis/command_api.ex`). Requests are normalized into `TransactionCommandMap` or `AccountCommandMap` structs, hashed for idempotency, and saved as immutable `Command` records (`lib/double_entry_ledger/schemas/command.ex`). Successful processing creates `JournalEvent` records plus `Transaction` + `Entry` rows, and finally typed links (`journal_event_*_links`). Query stores such as `DoubleEntryLedger.Stores.TransactionStore` and `DoubleEntryLedger.Stores.JournalEventStore` expose read models by instance, account, or transaction.
+External requests enter through `DoubleEntryLedger.Apis.CommandApi` (`lib/double_entry_ledger/apis/command_api.ex`). Requests are normalized into `TransactionCommandMap` or `AccountCommandMap` structs, hashed for idempotency, and saved as immutable `Command` records (`lib/double_entry_ledger/schemas/command.ex`). Successful processing creates `JournalEvent` records plus `Transaction` + `Entry` rows. Each journal event stores direct foreign keys to its command and related transaction or account. Query stores such as `DoubleEntryLedger.Stores.TransactionStore` and `DoubleEntryLedger.Stores.JournalEventStore` expose read models by instance, account, or transaction.
 
 ### Queues, Workers & OCC
 
-The command queue (`lib/double_entry_ledger/command_queue`) polls for pending commands via `InstanceMonitor`, spins up `InstanceProcessor` processes per instance, and uses `CommandQueue.Scheduling` to claim, retry, or dead-letter work. The transaction related workers under `lib/double_entry_ledger/workers/command_worker` implement `DoubleEntryLedger.Occ.Processor`, translating event maps into `Ecto.Multi` workflows that retry on `Ecto.StaleEntryError`. When the command finishes, `DoubleEntryLedger.Workers.Oban.JournalEventLinks` runs via Oban to build any missing journal links.
+The command queue (`lib/double_entry_ledger/command_queue`) polls for pending commands via `InstanceMonitor`, spins up `InstanceProcessor` processes per instance, and uses `CommandQueue.Scheduling` to claim, retry, or dead-letter work. The transaction-related workers under `lib/double_entry_ledger/workers/command_worker` implement `DoubleEntryLedger.Occ.Processor`, translating event maps into `Ecto.Multi` workflows that retry on `Ecto.StaleEntryError`. Journal-event relationships are written synchronously with the journal event; there is no internal linking job in 0.5.0.
 
 ### Balances & Audit Trails
 
-Each transaction updates `Account` projections plus immutable `BalanceHistoryEntry` snapshots, enabling temporal queries and reconciliation. Instances can be validated with `InstanceStore.validate_account_balances/1`, ensuring posted and pending debits/credits remain equal. Journal events plus `JournalEventTransactionLink`/`JournalEventAccountLink` tables provide traceability from the original request to the final projection.
+Each transaction updates `Account` projections plus immutable `BalanceHistoryEntry` snapshots, enabling temporal queries and reconciliation. Instances can be validated with `Instance.validate_account_balances/1`, ensuring posted and pending debits/credits remain equal. Direct `command_id`, `transaction_id`, and `account_id` foreign keys on journal events provide traceability from the original request to the final projection.
 
 ### Idempotency & Isolation
 
-Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside a dedicated Postgres schema (`double_entry_ledger` by default, overridable via `config :double_entry_ledger, schema_prefix: …`), so migrations never clash with your application schema. The schema prefix is separate from Oban's own `:prefix` option.
+Every command requires a `source` and `source_idempk` (plus `update_idempk` for updates). These keys are hashed via `DoubleEntryLedger.Command.IdempotencyKey` to prevent duplicates, while `PendingTransactionLookup` enforces a single open update chain for each pending transaction. All tables live inside a dedicated Postgres schema (`double_entry_ledger` by default, overridable via `config :double_entry_ledger, schema_prefix: …`), so migrations never clash with your application schema.
 
 ## Requirements
 
 - Elixir `~> 1.15` and OTP 26.
-- PostgreSQL 14+ with permission to create the `double_entry_ledger` schema and the [Oban](https://hexdocs.pm/oban) jobs table.
+- PostgreSQL 14+ with permission to create the `double_entry_ledger` schema.
 - Access to run Mix tasks (`mix ecto.create`, `mix ecto.migrate`, `mix test`, etc.).
-- Recommended: `money`, `logger_json`, `oban`, `jason`, `credo`, and `dialyxir` (included in `mix.exs`).
+- Runtime dependencies are installed automatically through Hex. Credo, Dialyzer, and other development tools are only needed when working from a source checkout.
 
 ## Installation
 
@@ -50,7 +50,7 @@ Every command requires a `source` and `source_idempk` (plus `update_idempk` for 
 ```elixir
 def deps do
   [
-    {:double_entry_ledger, "~> 0.4.0"}
+    {:double_entry_ledger, "~> 0.5.0"}
   ]
 end
 ```
@@ -70,27 +70,50 @@ config :double_entry_ledger,
   repo: MyApp.Repo,
   idempotency_secret: System.fetch_env!("LEDGER_IDEMPOTENCY_SECRET"),
   start_command_queue: true,
+  insert_path: :legacy,
+  batch_enabled: false,
+  batch_size: 8,
+  max_batch_retries: 3,
   max_retries: 5,
   retry_interval: 200
 
 config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
+  pending_fetch_limit: 64,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
+  stale_processing_after: 300,  # seconds a command may sit in :processing before recovery
   processor_name: "command_queue"
 ```
 
-In this "BYO-repo" mode the library does not start its own repo. Oban
-and the command queue need the consumer's repo to be running, so add
-`DoubleEntryLedger.children/0` to your supervision tree **after** your
-repo — see [step 4](#4-set-up-oban).
+In this "BYO-repo" mode the library does not start its own repo. The command
+queue needs the consumer's repo to be running, so add
+`DoubleEntryLedger.children/0` to your supervision tree **after** your repo.
 
 Set a strong `idempotency_secret` — it hashes incoming keys. Set
 `start_command_queue: false` to disable background processing (useful in
-tests or when embedding the ledger without the queue). `max_retries` and
-`retry_interval` are read at runtime, so they can be changed without
-recompilation.
+tests or when embedding the ledger without the queue). `retry_interval` is read
+at runtime; `max_retries` is captured into each OCC worker at compile time
+(`Occ.Processor.__using__/1`), so changing it needs a recompile. The
+`:command_queue` list is read with `Application.compile_env/3` and is likewise
+compile-time.
+
+`insert_path: :legacy` and `batch_enabled: false` are the conservative
+defaults. To opt into the new paths, set `insert_path: :insert_all` and/or
+`batch_enabled: true` in the consuming application's configuration. Set
+`batch_size` to control how many compatible transaction commands are processed
+together and `max_batch_retries` to control retries after a stale account
+write. Account commands continue through the single-command path.
+`pending_fetch_limit` controls how many queue IDs an instance processor fetches
+per database read; it is independent of `batch_size`. When batching is enabled,
+set it to at least `batch_size` and preferably to a multiple of `batch_size` so
+each database fetch can be divided into full batches.
+Dependency configuration files are not loaded by a host application, so the
+`INSERT_PATH`, `BATCH`, and `BATCH_SIZE` environment-variable helpers in this
+repository's `config/runtime.exs` only apply when running this repository
+directly. A consuming release must translate any environment variables into
+`:double_entry_ledger` configuration in its own `config/runtime.exs`.
 
 **Standalone mode** (omit `:repo`): the library ships its own
 `DoubleEntryLedger.Repo` and supervises it automatically. Configure it
@@ -131,12 +154,16 @@ mix double_entry_ledger.install --from 1
 mix ecto.migrate
 ```
 
-This applies only the schema changes since v0.1.0 (FK constraint fixes and
-`negative_limit` replacing `allowed_negative`).
+This applies schema versions 2–5, including the FK fixes,
+`negative_limit`, trace context, query indexes, direct journal-event foreign
+keys, queue instance IDs, and widened balance columns.
 
-**Oban note:** v0.1.0 included an Oban migration (`2500_add_oban_jobs_table.exs`)
-bundled with the core migrations. Your existing copied migration continues to
-work — leave it in place.
+**Historical background-job migration:** v0.1.0 included a migration for the
+then-used job runner. An already-applied migration and its tables may remain;
+0.5.0 does not drop them because the host application may use that job runner
+independently. If you still need to execute or roll back that migration,
+declare the original dependency in your application rather than relying on DEL
+to provide it.
 
 #### Manual migration
 
@@ -154,49 +181,22 @@ end
 See `DoubleEntryLedger.Migration` docs for all options (`:version`, `:from`,
 `:prefix`).
 
-### 4. Set up Oban
+### 4. Add the command queue to your supervision tree
 
-The package uses Oban for background processing but does **not** ship
-its own Oban migration — this avoids locking you to a specific Oban
-version. Install and migrate Oban in your application
-([Oban installation guide](https://hexdocs.pm/oban/installation.html)),
-then configure DoubleEntryLedger's **named** Oban instance:
-
-```elixir
-# config/runtime.exs (runtime so deps are compiled when the module
-# reference below is evaluated)
-config :double_entry_ledger, Oban,
-  name: DoubleEntryLedger.Oban,
-  engine: Oban.Engines.Basic,
-  queues: [double_entry_ledger: 10],
-  repo: MyApp.Repo
-```
-
-The `name: DoubleEntryLedger.Oban` line is required — the library
-targets this exact instance for every enqueue. It also lets DEL's Oban
-coexist with any Oban your own app runs for unrelated work, since each
-Oban needs a unique name.
-
-In BYO-repo mode, add `DoubleEntryLedger.children/0` to your
-supervision tree so DEL's Oban and command queue start after your repo:
+In BYO-repo mode, add `DoubleEntryLedger.children/0` to your supervision tree
+so DEL's command queue starts after your repo:
 
 ```elixir
 # lib/my_app/application.ex
 children =
   [
     MyApp.Repo,
-    # …your own Oban, if any (with a different :name), other children…
+    # …other children…
   ] ++ DoubleEntryLedger.children()
 ```
 
-In standalone mode the library supervises the named Oban itself and
+In standalone mode the library supervises the command queue itself and
 consumers do not need to call `DoubleEntryLedger.children/0`.
-
-**Already running Oban for your own jobs?** Keep your existing
-`{Oban, Application.fetch_env!(:my_app, Oban)}` child as-is (with its
-own `:name` such as `MyApp.Oban`, or the default unnamed `Oban`).
-DEL's instance is strictly separate and won't interfere — the two run
-side by side, each processing its own queues against its own config.
 
 ## Quickstart
 
@@ -321,10 +321,42 @@ still balances, or `PendingTransactionLookup` to inspect open holds.
 ## Background Processing
 
 - `DoubleEntryLedger.CommandQueue.InstanceMonitor` polls for commands in `:pending`, `:occ_timeout`, or `:failed` status and ensures each instance has an `InstanceProcessor`.
-- `InstanceProcessor` claims work via `CommandQueue.Scheduling.claim_command_for_processing/2`, runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`. Each worker task is monitored via `Process.monitor/1`; if the task crashes, the processor schedules a retry automatically.
+- `InstanceProcessor` claims work through an atomic scheduling claim — `CommandQueue.Scheduling.claim_command_for_processing/3` for a single command, `claim_batch_for_processing/3` in batch mode — runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`. Each worker task is monitored via `Process.monitor/1`; if the task crashes, the processor schedules a retry automatically.
 - OCC is handled inside the workers (see `lib/double_entry_ledger/occ`). Retries use exponential backoff until `max_retries` is reached, after which commands are marked as `:dead_letter`.
 - Errors and retry metadata live on the `command_queue_item`, so you can inspect processing attempts via `CommandStore` or SQL views.
-- Oban handles fan-out tasks (currently the journal-event linking job) via `DoubleEntryLedger.Workers.Oban.JournalEventLinks`. Configure the queue size to match your workload.
+- Journal-event relationships are persisted synchronously through direct foreign keys; the command path no longer enqueues an internal linking job.
+- Commands left in `:processing` by a node that died are recovered by `InstanceMonitor` once they are older than `stale_processing_after` and are sent back through the normal retry or dead-letter path. A successful enqueue also wakes the monitor when the queue is supervised locally, so an idle queue starts draining immediately instead of waiting a full `poll_interval`; otherwise the command waits for the next poll on a node that runs the queue.
+
+### Deployment scope: one node per ledger
+
+The command queue is designed and tested for a **single node processing a given
+ledger**. Run it that way in production.
+
+Every write that completes, retries, or dead-letters a command is fenced by
+`command_queue_items.processor_version`, so a stale processor can never
+overwrite work after ownership has moved, and commands stranded in
+`:processing` by a node that died are recovered automatically. Those guarantees
+hold under concurrency and are what make a crash or restart safe.
+
+What is **not** yet guaranteed across several nodes:
+
+- `CommandQueue.Registry` is a node-local `Registry`. It prevents duplicate
+  `InstanceProcessor`s for a ledger on one node only, so each node can run its
+  own processor for the same instance.
+- Atomic claims protect individual commands, not a ledger. Processors on
+  different nodes can claim different commands of the same instance, so those
+  commands may execute concurrently and out of order.
+- Every node runs its own `InstanceMonitor`, producing redundant polling and
+  competing processor starts.
+- `batch_enabled`, `batch_size`, `pending_fetch_limit`, and
+  `stale_processing_after` are read from each node's application environment,
+  so inconsistent deployments process the same queue with different behaviour.
+- Enqueueing wakes the local monitor only; other nodes still wait for their
+  next poll.
+
+Cluster-wide safety needs an ownership lease per ledger, held in PostgreSQL
+with a fencing token and a database-clock expiry, so that only the current
+owner may claim work for that ledger. That is not implemented.
 
 ## Documentation & Further Reading
 
@@ -332,6 +364,7 @@ still balances, or `PendingTransactionLookup` to inspect open holds.
 - [Asynchronous processing details](pages/AsynchronousEventProcessing.md)
 - [Handling pending transactions and available balances](pages/HandlingPendingTransactions.md)
 - [Event sourcing architecture notes](pages/EventSourcing.md)
+- [Telemetry events and metrics](pages/Telemetry.md)
 
 Generate fresh API docs locally with:
 
@@ -349,12 +382,69 @@ Extras are bundled in `pages/` when you run `mix docs`.
 - `mix credo --strict` and `mix dialyzer` – static analysis.
 - `mix docs` – regenerate documentation, or `mix tidewave` to preview docs via the built-in dev server.
 
+## Migrating from 0.4.x to 0.5.0
+
+> ⚠️ **0.5.0 contains breaking schema and API changes.** Migration 5 is not
+> compatible with a mixed 0.4.x/0.5.0 rolling deployment. Stop 0.4.x
+> command processing, apply the upgrade migration, deploy 0.5.0, and then
+> resume processing.
+
+Generate and run an upgrade migration from schema version 4:
+
+```bash
+mix double_entry_ledger.install --from 4
+mix ecto.migrate
+```
+
+The migration performs these changes:
+
+1. Replaces `journal_event_*_links` tables with direct `command_id`,
+   `transaction_id`, and `account_id` columns on `journal_events`. Update custom
+   queries and preloads to use the direct associations.
+2. Adds and backfills `command_queue_items.instance_id`, then makes it required.
+   Custom code building queue-item changesets must provide `instance_id`.
+3. Widens account and balance-history integer balance/limit columns to `bigint`.
+   A later downgrade can fail if stored values exceed the old integer range.
+4. Moves `commands.inserted_at` plus command-queue insertion, update,
+   processing-start, and processing-completion timestamp generation to
+   PostgreSQL so processing times do not depend on application-node clocks.
+5. Adds and backfills `command_queue_items.queue_position` from a PostgreSQL
+   sequence, then uses it as the stable queue-processing order. Existing rows
+   receive dense positions in `(inserted_at, command_id)` order; PostgreSQL uses
+   the sequence for rows inserted after the backfill.
+6. Adds the transient `command_queue_items.retry_delay_seconds` column and the
+   queue-trigger rule that turns it into `next_retry_after` on the PostgreSQL
+   clock, so retry timing no longer depends on application-node clocks.
+
+The queue-position backfill rewrites every `command_queue_items` row, including
+processed and dead-letter history, while holding an `ACCESS EXCLUSIVE` table
+lock. Its runtime
+therefore scales with total queue history, not only currently processable work.
+Plan an appropriate maintenance window before applying it to a large table.
+
+`Command.processing_start_changeset/3` and
+`CommandQueueItem.processing_start_changeset/3` were removed; callers must claim
+through `CommandQueue.Scheduling.claim_command_for_processing/3`, which enforces
+queue status and the retry deadline in one atomic UPDATE.
+
+The `JournalEventAccountLink`, `JournalEventCommandLink`,
+`JournalEventTransactionLink`, and legacy journal-event link worker have been
+removed. DEL no longer depends on or supervises a third-party job runner, and
+journal-event relationships are now written synchronously. Remove the obsolete
+DEL job-runner configuration; applications using a job runner for their own
+work must declare, migrate, configure, and supervise it independently. Existing
+job-runner tables are intentionally left untouched.
+
+Batching remains opt-in. Configure `insert_path`, `batch_enabled`, and
+`batch_size` in the consuming application; this dependency's
+`config/runtime.exs` is not loaded by the host release.
+
 ## Migrating from 0.3.x to 0.4.0
 
 > ⚠️ **0.4.0 contains breaking changes.** Read this whole section before
 > bumping the dependency — at minimum you'll update store call sites and
-> the Oban config. See [CHANGELOG.md](CHANGELOG.md) for the canonical
-> migration notes per item.
+> supervision. See [CHANGELOG.md](CHANGELOG.md) for the canonical migration
+> notes per item.
 
 ### Breaking changes at a glance
 
@@ -368,13 +458,9 @@ Extras are bundled in `pages/` when you run `mix docs`.
    `(id, page, per_page)` → `(id, flop_params_map)`. No consumer
    `config :flop, repo: …` required — DEL ships its own backend.
 
-3. **Oban instance is named `DoubleEntryLedger.Oban`.** Add
-   `name: DoubleEntryLedger.Oban` to your `config :double_entry_ledger,
-   Oban, …` block or boot will fail. See [Oban setup](#4-set-up-oban).
-
-4. **Supervision shift in BYO-repo mode.** If you opt into BYO-repo
+3. **Supervision shift in BYO-repo mode.** If you opt into BYO-repo
    via `config :double_entry_ledger, repo: MyApp.Repo`, DEL no longer
-   supervises Oban or the command queue from its own tree. Add
+   supervises the command queue from its own tree. Add
    `DoubleEntryLedger.children/0` to your app's supervisor. Standalone
    consumers (no `:repo` set) are unaffected.
 
@@ -384,8 +470,7 @@ Extras are bundled in `pages/` when you run `mix docs`.
 shares the host's connection pool (and one Ecto sandbox in tests)
 instead of shipping its own `DoubleEntryLedger.Repo`. When `:repo` is
 omitted, the library runs in standalone mode as before. See
-[Configuration](#2-configure-the-application) and
-[Oban](#4-set-up-oban) for the full setup.
+[Configuration](#2-configure-the-application) for the full setup.
 
 ### Before (0.3.x)
 

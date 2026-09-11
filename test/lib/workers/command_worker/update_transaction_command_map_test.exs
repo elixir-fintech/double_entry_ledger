@@ -15,6 +15,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
   alias DoubleEntryLedger.Command.TransactionCommandMap, as: TransactionCommandMapSchema
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Stores.CommandStore
 
@@ -22,6 +23,27 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
 
   describe "process/1" do
     setup [:create_instance, :create_accounts]
+
+    test "returns a changeset when the transaction map cannot be built", ctx do
+      command_map = command_map_with_unknown_accounts(ctx, :update_transaction)
+
+      assert {:error, %Changeset{} = changeset} =
+               UpdateTransactionCommandMap.process(command_map)
+
+      assert {_msg, _} = changeset.errors[:input_command_map]
+    end
+
+    test "fails the same way the create path does for an unbuildable transaction map", ctx do
+      assert {:error, %Changeset{}} =
+               CreateTransactionCommandMap.process(
+                 command_map_with_unknown_accounts(ctx, :create_transaction)
+               )
+
+      assert {:error, %Changeset{}} =
+               UpdateTransactionCommandMap.process(
+                 command_map_with_unknown_accounts(ctx, :update_transaction)
+               )
+    end
 
     test "update command for command_map, which should also create the command", ctx do
       %{command: pending_command} = new_create_transaction_command(ctx, :pending)
@@ -57,6 +79,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
     end
 
     test "dead letter when create command does not exist", ctx do
+      telemetry_ref = attach_telemetry([:double_entry_ledger, :command, :dead_letter])
       command_map = create_transaction_command_map(ctx, :pending)
 
       update_transaction_command_map = %{
@@ -65,11 +88,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
           action: :update_transaction
       }
 
-      {:error, %{command_queue_item: %{status: status, errors: [error | _]}}} =
+      {:error, %{id: command_id, command_queue_item: %{status: status, errors: [error | _]}}} =
         UpdateTransactionCommandMap.process(update_transaction_command_map)
 
       assert status == :dead_letter
       assert error.message =~ "create Command not found for Update Command (id:"
+
+      assert_receive {:telemetry_event, ^telemetry_ref,
+                      [:double_entry_ledger, :command, :dead_letter], _measurements,
+                      %{command_id: ^command_id}}
     end
 
     test "update command for command_map, when create command not yet processed", ctx do
@@ -153,5 +180,25 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
       assert length(errors) == 5
       assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] = errors
     end
+  end
+
+  # Entries naming accounts that do not exist, so
+  # `TransactionCommandTransformer.transaction_data_to_transaction_map/2` returns
+  # `{:error, :no_accounts_found}` and the module's transaction-map error handler runs.
+  defp command_map_with_unknown_accounts(%{instance: %{address: address}}, action) do
+    %TransactionCommandMapSchema{
+      action: action,
+      instance_address: address,
+      source: "unknown-accounts",
+      source_idempk: Ecto.UUID.generate(),
+      update_idempk: Ecto.UUID.generate(),
+      payload: %DoubleEntryLedger.Command.TransactionData{
+        status: :posted,
+        entries: [
+          %{account_address: "does:not:exist:1", amount: 50, currency: "EUR"},
+          %{account_address: "does:not:exist:2", amount: 50, currency: "EUR"}
+        ]
+      }
+    }
   end
 end

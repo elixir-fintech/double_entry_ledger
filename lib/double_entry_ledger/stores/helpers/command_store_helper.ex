@@ -12,22 +12,18 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   * **Command Relationships**: Look up related commands by source identifiers
   * **Transaction Linking**: Find transactions and accounts associated with commands
   * **Ecto.Multi Integration**: Build multi operations for atomic database transactions
-  * **Status Management**: Create changesets to update command status and error information
 
   ## Usage Examples
 
   Building a changeset from a CommandMap:
 
-      event_changeset = CommandStoreHelper.build_create(command_map)
+      event_changeset = CommandStoreHelper.build_create(command_map, instance_id)
 
   Adding a step to get a create command's transaction:
 
       multi =
         Ecto.Multi.new()
         |> CommandStoreHelper.build_get_create_transaction_command_transaction(:transaction, update_command)
-        |> Ecto.Multi.update(:event, fn %{transaction: transaction} ->
-          CommandStoreHelper.build_mark_as_processed(update_command, transaction.id)
-        end)
 
   ## Implementation Notes
 

@@ -326,4 +326,126 @@ defmodule DoubleEntryLedger.Balance do
     |> change()
     |> add_error(e_type, "Cannot reverse more than the current #{e_type} balance")
   end
+
+  # ── Pure versions ─────────────────────────────────────────────────
+  # Same arithmetic as update_balance/4 etc., but return plain
+  # %Balance{} structs (or {:error, field, message}) instead of
+  # changesets. Used by the insert_all build path which bypasses
+  # Ecto's per-row dirty-tracking machinery.
+
+  @typedoc "Pure-helper return type."
+  @type pure_result :: {:ok, t()} | {:error, atom(), String.t()}
+
+  @doc """
+  Pure equivalent of `update_balance/4`. Returns `{:ok, balance}`.
+
+  ## Examples
+
+      iex> balance = DoubleEntryLedger.Balance.new()
+      iex> DoubleEntryLedger.Balance.apply_amount_pure(balance, 50, :debit, :debit)
+      {:ok, %DoubleEntryLedger.Balance{amount: 50, debit: 50, credit: 0}}
+
+      iex> balance = DoubleEntryLedger.Balance.new()
+      iex> DoubleEntryLedger.Balance.apply_amount_pure(balance, 50, :debit, :credit)
+      {:ok, %DoubleEntryLedger.Balance{amount: -50, debit: 50, credit: 0}}
+  """
+  @spec apply_amount_pure(t(), integer(), atom(), atom()) :: pure_result()
+  def apply_amount_pure(%{amount: amt} = balance, amount, e_type, a_type) when e_type == a_type do
+    {:ok,
+     balance
+     |> Map.put(:amount, amt + amount)
+     |> Map.put(e_type, Map.get(balance, e_type) + amount)}
+  end
+
+  def apply_amount_pure(%{amount: amt} = balance, amount, e_type, a_type) when e_type != a_type do
+    {:ok,
+     balance
+     |> Map.put(:amount, amt - amount)
+     |> Map.put(e_type, Map.get(balance, e_type) + amount)}
+  end
+
+  @doc """
+  Pure equivalent of `reverse_pending/4`.
+
+  ## Examples
+
+      iex> balance = %DoubleEntryLedger.Balance{amount: 50, debit: 50, credit: 0}
+      iex> DoubleEntryLedger.Balance.reverse_pending_pure(balance, 25, :debit, :debit)
+      {:ok, %DoubleEntryLedger.Balance{amount: 25, debit: 25, credit: 0}}
+
+      iex> balance = DoubleEntryLedger.Balance.new()
+      iex> DoubleEntryLedger.Balance.reverse_pending_pure(balance, 50, :debit, :debit)
+      {:error, :debit, "Cannot reverse more than the current debit balance"}
+  """
+  @spec reverse_pending_pure(t(), integer(), atom(), atom()) :: pure_result()
+  def reverse_pending_pure(%{credit: cr}, amt, :credit, _) when cr < amt,
+    do: {:error, :credit, "Cannot reverse more than the current credit balance"}
+
+  def reverse_pending_pure(%{debit: de}, amt, :debit, _) when de < amt,
+    do: {:error, :debit, "Cannot reverse more than the current debit balance"}
+
+  def reverse_pending_pure(%{amount: amt} = balance, amount, e_type, a_type)
+      when e_type == a_type do
+    {:ok,
+     balance
+     |> Map.put(:amount, amt - amount)
+     |> Map.put(e_type, Map.get(balance, e_type) - amount)}
+  end
+
+  def reverse_pending_pure(%{amount: amt} = balance, amount, e_type, a_type)
+      when e_type != a_type do
+    {:ok,
+     balance
+     |> Map.put(:amount, amt + amount)
+     |> Map.put(e_type, Map.get(balance, e_type) - amount)}
+  end
+
+  @doc """
+  Pure equivalent of `reverse_and_update_pending/5`.
+
+  ## Examples
+
+      iex> balance = %DoubleEntryLedger.Balance{amount: -50, debit: 50, credit: 0}
+      iex> DoubleEntryLedger.Balance.reverse_and_update_pending_pure(balance, 50, 75, :debit, :credit)
+      {:ok, %DoubleEntryLedger.Balance{amount: -75, debit: 75, credit: 0}}
+
+      iex> balance = %DoubleEntryLedger.Balance{amount: -40, debit: 40, credit: 0}
+      iex> DoubleEntryLedger.Balance.reverse_and_update_pending_pure(balance, 50, 75, :debit, :credit)
+      {:error, :debit, "Cannot reverse more than the current debit balance"}
+  """
+  @spec reverse_and_update_pending_pure(t(), integer(), integer(), atom(), atom()) ::
+          pure_result()
+  def reverse_and_update_pending_pure(%{credit: cr}, amt, _, :credit, _) when cr < amt,
+    do: {:error, :credit, "Cannot reverse more than the current credit balance"}
+
+  def reverse_and_update_pending_pure(%{debit: de}, amt, _, :debit, _) when de < amt,
+    do: {:error, :debit, "Cannot reverse more than the current debit balance"}
+
+  def reverse_and_update_pending_pure(
+        %{amount: amt} = balance,
+        amount_to_reverse,
+        new_amount,
+        e_type,
+        a_type
+      )
+      when e_type == a_type do
+    {:ok,
+     balance
+     |> Map.put(:amount, amt - amount_to_reverse + new_amount)
+     |> Map.put(e_type, Map.get(balance, e_type) - amount_to_reverse + new_amount)}
+  end
+
+  def reverse_and_update_pending_pure(
+        %{amount: amt} = balance,
+        amount_to_reverse,
+        new_amount,
+        e_type,
+        a_type
+      )
+      when e_type != a_type do
+    {:ok,
+     balance
+     |> Map.put(:amount, amt + amount_to_reverse - new_amount)
+     |> Map.put(e_type, Map.get(balance, e_type) - amount_to_reverse + new_amount)}
+  end
 end

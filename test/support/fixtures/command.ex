@@ -14,6 +14,58 @@ defmodule DoubleEntryLedger.CommandFixtures do
 
   import DoubleEntryLedger.Command.TransactionDataFixtures
   import DoubleEntryLedger.Command.AccountDataFixtures
+  import Ecto.Query, only: [from: 2]
+
+  alias DoubleEntryLedger.{CommandQueueItem, Repo}
+
+  @doc """
+  Moves the command's queue item to `:occ_timeout` and sets `next_retry_after`
+  to `hours` hours from the PostgreSQL clock, bypassing the application clock
+  entirely. Negative hours place the retry in the database's past.
+  """
+  def reschedule_retry_relative_to_db_clock(command_id, hours) do
+    {1, _} =
+      from(eqi in CommandQueueItem,
+        where: eqi.command_id == ^command_id,
+        update: [
+          set: [
+            status: :occ_timeout,
+            next_retry_after:
+              fragment("timezone('UTC', statement_timestamp()) + (? * interval '1 hour')", ^hours)
+          ]
+        ]
+      )
+      |> Repo.update_all([])
+
+    :ok
+  end
+
+  @doc """
+  Ages the command's queue item as if its claim had happened `seconds` ago,
+  measured on the PostgreSQL clock.
+
+  `processing_started_at` is trigger-managed: the queue trigger only stamps it
+  when the status actually changes, so this UPDATE leaves a `:processing` row
+  in `:processing` and its written timestamp survives.
+  """
+  def age_processing_started_at(command_id, seconds) do
+    {1, _} =
+      from(eqi in CommandQueueItem,
+        where: eqi.command_id == ^command_id,
+        update: [
+          set: [
+            processing_started_at:
+              fragment(
+                "timezone('UTC', statement_timestamp()) - (? * interval '1 second')",
+                ^seconds
+              )
+          ]
+        ]
+      )
+      |> Repo.update_all([])
+
+    :ok
+  end
 
   def transaction_command_attrs(attrs \\ %{}) do
     attrs

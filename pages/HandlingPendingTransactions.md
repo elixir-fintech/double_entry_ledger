@@ -47,7 +47,7 @@ The transaction is persisted immediately, pending balances are updated, and a `P
 Call `CommandApi.create_from_params/1` with the same payload to enqueue the work instead of waiting synchronously:
 
 ```elixir
-{:ok, queued_command} = CommandApi.create_from_params(event)
+{:ok, queued_command} = CommandApi.create_from_params(command)
 queued_command.command_queue_item.status
 # => :pending
 ```
@@ -120,7 +120,7 @@ Balance history (`DoubleEntryLedger.BalanceHistoryEntry`) records every mutation
 1. **Create a hold**
 
    ```elixir
-   {:ok, hold, _command} = CommandApi.process_from_params(event)
+   {:ok, hold, _command} = CommandApi.process_from_params(command)
    ```
 
 2. **Modify the pending amount** (optional)

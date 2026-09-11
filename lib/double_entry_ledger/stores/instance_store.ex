@@ -225,10 +225,18 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
             group_by: a.currency,
             select: %{
               currency: a.currency,
-              posted_debit: type(sum(fragment("(posted->>'debit')::integer")), :integer),
-              posted_credit: type(sum(fragment("(posted->>'credit')::integer")), :integer),
-              pending_debit: type(sum(fragment("(pending->>'debit')::integer")), :integer),
-              pending_credit: type(sum(fragment("(pending->>'credit')::integer")), :integer)
+              # Extract each cell as `::bigint` (not `::integer`) so
+              # balances above 2,147,483,647 don't trip PG's "integer
+              # out of range" check. Wrapping `sum(...)::bigint` casts
+              # PG's `sum(bigint) → numeric` result back to bigint so
+              # Postgrex decodes it as a regular Elixir integer (not
+              # Decimal), preserving the integer contract callers
+              # already depend on. The realistic ceiling rises from
+              # ~$21M (in cents) to ~$92 quadrillion.
+              posted_debit: fragment("(sum((posted->>'debit')::bigint))::bigint"),
+              posted_credit: fragment("(sum((posted->>'credit')::bigint))::bigint"),
+              pending_debit: fragment("(sum((pending->>'debit')::bigint))::bigint"),
+              pending_credit: fragment("(sum((pending->>'credit')::bigint))::bigint")
             }
           )
 

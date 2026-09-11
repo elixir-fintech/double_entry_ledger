@@ -3,8 +3,8 @@ defmodule DoubleEntryLedger.Command do
   Defines and manages commands in the Double Entry Ledger system.
 
   The Command schema represents a request to create or update ledger data. Commands drive the
-  asynchronous processing pipeline (queueing, retries, idempotency) and link to journal events
-  once they have been processed.
+  asynchronous processing pipeline (queueing, retries, idempotency) and are associated directly
+  with journal events once they have been processed.
   """
 
   use DoubleEntryLedger.BaseSchema
@@ -14,7 +14,6 @@ defmodule DoubleEntryLedger.Command do
     Transaction,
     Instance,
     JournalEvent,
-    JournalEventCommandLink,
     CommandQueueItem
   }
 
@@ -38,6 +37,10 @@ defmodule DoubleEntryLedger.Command do
     access. The library never interprets the contents.
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
+  * `command_queue_item`: Association to the queue item holding the processing state
+  * `journal_event`: Association to the journal event written once processed
+  * `transaction`: Association to the resulting transaction, for transaction commands
+  * `account`: Association to the resulting account, for account commands
   * `inserted_at`: Creation timestamp
   * `updated_at`: Last update timestamp
   """
@@ -47,8 +50,6 @@ defmodule DoubleEntryLedger.Command do
           trace_context: map() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
-          journal_event_command_link:
-            JournalEventCommandLink.t() | Ecto.Association.NotLoaded.t(),
           journal_event: JournalEvent.t() | Ecto.Association.NotLoaded.t(),
           transaction: Transaction.t() | Ecto.Association.NotLoaded.t(),
           account: Account.t() | Ecto.Association.NotLoaded.t(),
@@ -76,13 +77,13 @@ defmodule DoubleEntryLedger.Command do
     field(:trace_context, :map)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
-    has_one(:journal_event_command_link, JournalEventCommandLink)
-    has_one(:journal_event, through: [:journal_event_command_link, :journal_event])
+    has_one(:journal_event, JournalEvent)
     has_one(:transaction, through: [:journal_event, :transaction])
     has_one(:account, through: [:journal_event, :account])
     has_one(:command_queue_item, DoubleEntryLedger.CommandQueueItem)
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec, read_after_writes: true)
+    timestamps(type: :utc_datetime_usec, inserted_at: false)
   end
 
   @doc """
@@ -141,51 +142,9 @@ defmodule DoubleEntryLedger.Command do
     |> base_changeset(attrs)
   end
 
-  @doc """
-  Creates a changeset for marking a command as being processed.
-
-  This function prepares a changeset that updates a command to the :processing state, assigns a
-  processor, and updates processing metadata such as start time and retry count.
-
-  ## Parameters
-
-  * `command` - The Command struct to update
-  * `processor_id` - String identifier for the processor handling the command
-
-  ## Returns
-
-  * An Ecto.Changeset with processing status updates and optimistic locking
-
-  ## Fields Updated
-
-  * `status`: Set to :processing
-  * `processor_id`: Set to the provided processor_id
-  * `processing_started_at`: Set to current UTC datetime
-  * `processing_completed_at`: Set to nil
-  * `retry_count`: Incremented by 1
-  * `next_retry_after`: Set to nil
-  * `processor_version`: Used for optimistic locking
-
-  """
-  @spec processing_start_changeset(Command.t(), String.t(), non_neg_integer()) ::
-          Ecto.Changeset.t()
-  def processing_start_changeset(
-        %{command_queue_item: command_queue_item} = command,
-        processor_id,
-        retry_count
-      ) do
-    queue_changeset =
-      command_queue_item
-      |> CommandQueueItem.processing_start_changeset(processor_id, retry_count)
-
-    command
-    |> change(%{})
-    |> put_assoc(:command_queue_item, queue_changeset)
-  end
-
   @spec base_changeset(Command.t() | Ecto.Changeset.t(Command.t()), map()) :: Ecto.Changeset.t()
   defp base_changeset(command, attrs) do
-    attrs = Map.put_new(attrs, :command_queue_item, %{})
+    attrs = ensure_queue_item_instance_id(attrs)
 
     command
     |> cast(attrs, [
@@ -196,6 +155,20 @@ defmodule DoubleEntryLedger.Command do
     |> validate_required([:instance_id, :command_map])
     |> cast_assoc(:command_queue_item, with: &CommandQueueItem.changeset/2, required: true)
     |> validate_command_map(attrs)
+  end
+
+  # The denormalized `instance_id` on `command_queue_items` (migration 5)
+  # must always match the parent command's. Enforce that invariant here so
+  # callers don't need to set it in two places.
+  defp ensure_queue_item_instance_id(attrs) do
+    instance_id = Map.get(attrs, :instance_id) || Map.get(attrs, "instance_id")
+
+    queue_item_attrs =
+      attrs
+      |> Map.get(:command_queue_item, %{})
+      |> Map.put(:instance_id, instance_id)
+
+    Map.put(attrs, :command_queue_item, queue_item_attrs)
   end
 
   defp validate_command_map(changeset, attrs) do

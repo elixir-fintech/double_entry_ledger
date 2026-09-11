@@ -370,5 +370,48 @@ defmodule DoubleEntryLedger.DebitAccountTest do
                }
              } = Account.update_balances(account, %{entry: entry, trx: :pending_to_archived})
     end
+
+    test "reverses by the ORIGINAL pending amount, not the payload's new value", %{instance: inst} do
+      # Regression test for the :pending_to_archived bug where legacy
+      # `Account.update/4` reads `get_field(entry, :value)` (the NEW value
+      # cast from the update payload) instead of `entry.data.value`
+      # (the original pending amount).
+      #
+      # Existing tests pass plain %Entry{} structs, so update_balances/2
+      # wraps them in `Entry.changeset(entry, %{})` with no changes —
+      # `get_field` returns data.value and the bug doesn't manifest.
+      # Production hits the bug because `Entry.update_changeset/3` calls
+      # `cast(attrs, [:value])` to apply the new value as a change.
+      account =
+        account_fixture(
+          normal_balance: :debit,
+          instance_id: inst.id,
+          posted: %{amount: 100, debit: 100, credit: 0},
+          pending: %{amount: 50, debit: 50, credit: 0},
+          available: 50
+        )
+
+      entry = %Entry{account_id: account.id, type: :debit, value: Money.new(50, :EUR)}
+
+      entry_changeset =
+        entry
+        |> Ecto.Changeset.cast(%{value: %{amount: 30, currency: :EUR}}, [:value])
+
+      assert %Ecto.Changeset{
+               valid?: true,
+               changes: %{
+                 available: 100,
+                 pending: %Ecto.Changeset{
+                   action: :insert,
+                   valid?: true,
+                   changes: %{amount: 0, debit: 0}
+                 }
+               }
+             } =
+               Account.update_balances(account, %{
+                 entry: entry_changeset,
+                 trx: :pending_to_archived
+               })
+    end
   end
 end

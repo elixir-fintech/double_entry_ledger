@@ -5,7 +5,7 @@ defmodule DoubleEntryLedger.EntryTest do
 
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Account, Entry, Repo, Balance}
+  alias DoubleEntryLedger.{Account, Entry, Repo}
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
@@ -88,7 +88,7 @@ defmodule DoubleEntryLedger.EntryTest do
     end
   end
 
-  describe "put_balance_history_entry_assoc/1" do
+  describe "balance history entry creation" do
     setup [:create_instance, :create_accounts, :create_transaction]
 
     test "balance history entry is created", %{transaction: %{entries: [e0, _]}} do
@@ -103,25 +103,6 @@ defmodule DoubleEntryLedger.EntryTest do
       assert first.available == account.available
       assert first.posted == account.posted
       assert first.pending == account.pending
-    end
-
-    test "returns changeset with balance history entry", %{transaction: %{entries: entries}} do
-      e0 = Enum.find(entries, fn e -> e.type == :credit end)
-      changeset = Entry.update_changeset(e0, %{value: Money.new(100, :EUR)}, :pending_to_posted)
-
-      [h, t | _] =
-        balance_history_entries =
-        Ecto.Changeset.get_assoc(changeset, :balance_history_entries, :struct)
-
-      assert 2 = length(balance_history_entries)
-      assert h.account_id == e0.account_id
-      assert t.pending == %Balance{amount: 100, debit: 0, credit: 100}
-      assert t.posted == %Balance{amount: 0, debit: 0, credit: 0}
-      assert h.pending == %Balance{amount: 0, debit: 0, credit: 0}
-      assert h.posted == %Balance{amount: 100, debit: 0, credit: 100}
-
-      # not yet persisted
-      assert h.entry_id == nil
     end
   end
 

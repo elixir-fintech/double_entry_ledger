@@ -146,4 +146,31 @@ defmodule DoubleEntryLedger.BalanceHistoryEntry do
       )
     )
   end
+
+  @doc """
+  Builds the attrs map for a `Repo.insert_all/3` row, taken from the post-write
+  `Account` and `Entry` structs.
+
+  Bypasses the changeset cycle and `put_assoc(:balance_history_entries, ...)`
+  used by the legacy create path. Required because `insert_all/3` does not run
+  changesets, so the caller must supply every column including timestamps.
+
+  The `posted`/`pending` columns are stored as `:map` (JSONB), so the embedded
+  `Balance` structs are flattened to plain maps via `Map.from_struct/1`.
+  """
+  @spec build_from_account(Account.t(), Entry.t(), DateTime.t()) :: map()
+  def build_from_account(%Account{} = account, %Entry{} = entry, %DateTime{} = now) do
+    %{
+      id: Ecto.UUID.generate(),
+      account_id: account.id,
+      entry_id: entry.id,
+      available: account.available,
+      # `insert_all/3` requires the actual embedded struct here; a plain map
+      # raises `cannot dump embed` from Ecto.Embedded.dump_field/6.
+      posted: account.posted,
+      pending: account.pending,
+      inserted_at: now,
+      updated_at: now
+    }
+  end
 end

@@ -19,6 +19,27 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
   describe "process_command_with_id/1" do
     setup [:create_instance, :create_accounts]
 
+    test "returns ownership lost when another processor replaces its claim", ctx do
+      %{command: pending_command} = new_create_transaction_command(ctx)
+      handler_id = "steal-command-claim-#{System.unique_integer([:positive])}"
+
+      :telemetry.attach(
+        handler_id,
+        [:double_entry_ledger, :command, :claim],
+        &__MODULE__.replace_claim_owner/4,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      assert {:error, :command_ownership_lost} =
+               CommandWorker.process_command_with_id(pending_command.id, "old-owner")
+
+      current = CommandStore.get_by_id(pending_command.id).command_queue_item
+      assert current.status == :processing
+      assert current.processor_id == "replacement-owner"
+    end
+
     test "process create command successfully", ctx do
       %{command: pending_command} = new_create_transaction_command(ctx)
 
@@ -84,6 +105,28 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
       assert {:error, :command_not_claimable} =
                CommandWorker.process_command_with_id(command.id)
     end
+
+    test "does not process a command whose retry deadline is still in the future", ctx do
+      %{command: command} = new_create_transaction_command(ctx)
+      reschedule_retry_relative_to_db_clock(command.id, 1)
+
+      assert {:error, :command_not_claimable} =
+               CommandWorker.process_command_with_id(command.id)
+
+      current = CommandStore.get_by_id(command.id).command_queue_item
+      assert current.status == :occ_timeout
+      assert current.processor_id == nil
+      assert current.processing_started_at == nil
+    end
+  end
+
+  def replace_claim_owner(_event, _measurements, %{command_id: command_id}, _config) do
+    command_id
+    |> CommandStore.get_by_id()
+    |> Map.fetch!(:command_queue_item)
+    |> Ecto.Changeset.change(processor_id: "replacement-owner")
+    |> Ecto.Changeset.optimistic_lock(:processor_version)
+    |> Repo.update!()
   end
 
   describe "process_command_map/1" do

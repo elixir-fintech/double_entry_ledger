@@ -36,4 +36,23 @@ defmodule DoubleEntryLedger.RepoCase do
     on_exit(fn -> Sandbox.stop_owner(pid) end)
     :ok
   end
+
+  def attach_telemetry(event) do
+    ref = make_ref()
+    handler_id = "test-telemetry-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler_id,
+      event,
+      &__MODULE__.forward_telemetry/4,
+      %{test_pid: self(), ref: ref}
+    )
+
+    ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler_id) end)
+    ref
+  end
+
+  def forward_telemetry(event, measurements, metadata, %{test_pid: pid, ref: ref}) do
+    send(pid, {:telemetry_event, ref, event, measurements, metadata})
+  end
 end

@@ -111,6 +111,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTes
     setup [:create_instance, :create_accounts]
 
     test "with last retry that fails", ctx do
+      telemetry_ref = attach_telemetry([:double_entry_ledger, :command, :retry])
+
       DoubleEntryLedger.MockRepo
       |> expect(:insert, 5, fn changeset ->
         # simulate a conflict when adding the transaction
@@ -135,6 +137,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTes
 
       assert length(errors) == 5
       assert [%{"message" => "OCC conflict: Max number of 5 retries reached"} | _] = errors
+
+      assert_receive {:telemetry_event, ^telemetry_ref, [:double_entry_ledger, :command, :retry],
+                      _measurements, %{command_id: ^id, status: :occ_timeout}}
     end
 
     test "creates a pending_transaction_lookup for commands with pending status", ctx do

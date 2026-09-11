@@ -8,8 +8,10 @@ config :double_entry_ledger, DoubleEntryLedger.Repo,
   port: "5432",
   stacktrace: false,
   show_sensitive_data_on_connection_error: false,
-  pool_size: 10
+  pool_size: 60,
+  parameters: [synchronous_commit: "off"]
 
 config :logger, level: :warning
 
-config :double_entry_ledger, Oban, testing: :manual
+config :double_entry_ledger,
+  start_command_queue: false

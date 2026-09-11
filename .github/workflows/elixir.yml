@@ -22,7 +22,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:13
+        image: postgres:14
         ports:
           - 5432:5432
         env:
@@ -64,9 +64,6 @@ jobs:
     - name: Run tests
       run: mix test
     - name: Run load tests
-      run: |
-        mix ecto.create
-        mix ecto.migrate
-        mix load_test 10
+      run: mix load.process 10 10
       env:
         MIX_ENV: perf

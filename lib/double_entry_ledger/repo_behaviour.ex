@@ -13,4 +13,6 @@ defmodule DoubleEntryLedger.RepoBehaviour do
               Ecto.Schema.t()
   @callback insert!(struct_or_changeset :: Ecto.Changeset.t()) ::
               Ecto.Schema.t()
+  @callback all(queryable :: Ecto.Queryable.t()) :: [Ecto.Schema.t()]
+  @callback query!(sql :: String.t(), params :: list()) :: Postgrex.Result.t()
 end

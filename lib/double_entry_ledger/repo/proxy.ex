@@ -24,12 +24,24 @@ defmodule DoubleEntryLedger.Repo.Proxy do
   def insert(x, opts), do: Config.repo().insert(x, opts)
   def insert!(x), do: Config.repo().insert!(x)
   def insert!(x, opts), do: Config.repo().insert!(x, opts)
+
+  def insert_all(schema_or_source, entries),
+    do: Config.repo().insert_all(schema_or_source, entries)
+
+  def insert_all(schema_or_source, entries, opts),
+    do: Config.repo().insert_all(schema_or_source, entries, opts)
+
   def update(x), do: Config.repo().update(x)
   def update(x, opts), do: Config.repo().update(x, opts)
   def update!(x), do: Config.repo().update!(x)
   def update!(x, opts), do: Config.repo().update!(x, opts)
+
+  def update_all(q, updates), do: Config.repo().update_all(q, updates)
+  def update_all(q, updates, opts), do: Config.repo().update_all(q, updates, opts)
   def delete(x), do: Config.repo().delete(x)
   def delete(x, opts), do: Config.repo().delete(x, opts)
+  def delete_all(q), do: Config.repo().delete_all(q)
+  def delete_all(q, opts), do: Config.repo().delete_all(q, opts)
   def get(q, id), do: Config.repo().get(q, id)
   def get(q, id, opts), do: Config.repo().get(q, id, opts)
   def all(q), do: Config.repo().all(q)

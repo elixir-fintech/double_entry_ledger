@@ -2,7 +2,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   @moduledoc """
   CommandMap implementation for account-related operations in the Double Entry Ledger system.
 
-  This module provides validation and structure for account creation commands. It extends
+  This module provides validation and structure for account create and update commands. It extends
   the base CommandMap functionality with account-specific payload validation using the
   `AccountData` schema.
 
@@ -18,17 +18,18 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
 
   Currently supports:
   * `:create_account` - Creates a new account in the ledger instance
+  * `:update_account` - Updates an existing account's mutable fields
 
   ## Usage
 
       # Create a valid account command
       {:ok, command_map} = AccountCommandMap.create(%{
         action: :create_account,
-        instance_id: "550e8400-e29b-41d4-a716-446655440000",
+        instance_address: "acme:ledger",
         source: "accounting_system",
-        source_idempk: "acc_12345",
         payload: %{
           name: "Cash Account",
+          address: "cash:operating",
           type: :asset,
           currency: "USD"
         }
@@ -46,8 +47,8 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   ## Validation
 
   The module validates:
-  * All base CommandMap fields (action, instance_id, source, source_idempk)
-  * Action must be `:create_account`
+  * All command fields (`action`, `instance_address`, and `source`)
+  * Action must be `:create_account` or `:update_account`
   * Payload must conform to `AccountData` schema requirements
   * Required payload fields based on account type
 
@@ -171,15 +172,14 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
   ## Required Attributes
 
   * `action` - Must be `:create_account` or `"create_account"`
-  * `instance_id` - UUID string of the ledger instance
+  * `instance_address` - Address of the ledger instance
   * `source` - String identifier of the external system
-  * `source_idempk` - String identifier for idempotency
   * `payload` - Map containing account data (see `AccountData` for requirements)
 
   ## Optional Attributes
 
-  * `source_data` - Additional metadata from the source system
-  * `update_idempk` - For update operations (not used for account creation)
+  * `account_address` - Existing account address, required for updates
+  * `trace_context` - Vendor-neutral distributed tracing context
 
   ## Examples
 

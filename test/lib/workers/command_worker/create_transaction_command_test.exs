@@ -81,6 +81,7 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
       assert eqm.status == :dead_letter
     end
 
+    @tag :legacy_mock
     test "error when saving transaction", ctx do
       %{command: command} = new_create_transaction_command(ctx)
 
@@ -109,6 +110,7 @@ defmodule DoubleEntryLedger.CreateTransactionCommandTest do
                eqm.errors
     end
 
+    @tag :legacy_mock
     test "occ timeout", ctx do
       %{command: command} = new_create_transaction_command(ctx)
 

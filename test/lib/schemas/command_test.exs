@@ -13,6 +13,11 @@ defmodule DoubleEntryLedger.EventTest do
 
   doctest Command
 
+  test "configures inserted_at to be read after writes" do
+    assert :inserted_at in Command.__schema__(:read_after_writes)
+    refute :inserted_at in Command.__schema__(:autogenerate_fields)
+  end
+
   describe "changeset/2 for action: :create_transaction" do
     test "not valid for empty payload" do
       assert %Changeset{

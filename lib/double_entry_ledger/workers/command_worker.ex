@@ -2,120 +2,53 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   @moduledoc """
   Main command processing orchestrator for the Double Entry Ledger system.
 
-  This module serves as the primary interface for processing accounting commands that create
-  and update double-entry ledger transactions and accounts. It coordinates between different
-  processing strategies and delegates to specialized handler modules based on command types
-  and actions.
+  Routes an accounting command to the specialized handler for its type and
+  action, and records the outcome on the command's `CommandQueueItem`.
 
-  ## Processing Strategies
+  ## Public functions
 
-  The CommandWorker supports multiple processing approaches:
+  1. `process_new_command/1` - processes a command map from an external system.
+     A retryable failure, such as an OCC timeout, persists the command so it can
+     be retried later; a validation or transformation failure returns a changeset
+     and persists nothing.
+  2. `process_new_command_no_save_on_error/1` - the same, except nothing is
+     persisted for any failure.
+  3. `process_command_with_id/2` - claims a command already stored in the
+     database and processes it.
 
-  1. **New Command Maps** (`process_new_command/1`) - Direct processing of command maps from external systems. Command is saved for retry later if it fails.
-  2. **No-Save-On-Error** (`process_new_command_no_save_on_error/1`) -Events Processing as above without saving the Command when processing fails.
-  3. **Stored Commands** (`process_command_with_id/2`) - Processing commands already in the database using atomic claiming
+  ## Supported actions
 
-  ## Supported Command Types and Actions
+  - `:create_transaction`, `:update_transaction` on a `TransactionCommandMap`
+  - `:create_account`, `:update_account` on an `AccountCommandMap`
 
-  ### TransactionCommandMap
-  - `:create_transaction` - Creates new double-entry transactions with balanced entries
-  - `:update_transaction` - Updates pending transactions only
+  ## CommandQueueItem status lifecycle
 
-  ### AccountCommandMap
-  - `:create_account` - Creates new ledger accounts with specified types and currencies
-  - `:update_account` - Updates existing account properties
+  This is the lifecycle of a stored command claimed through
+  `process_command_with_id/2`.
 
-  ## Command Processing Flow
+  The command-map entry points never pass through `:processing`: they insert the
+  command and give it its final status in one transaction. That status is
+  `:processed` on success, `:occ_timeout` when OCC retries are exhausted, and for
+  an update either `:pending`, when the create command it depends on is not yet
+  processed, or `:dead_letter` for any other dependency error. A validation or
+  transformation failure happens before the insert, so no command is created.
 
-  ### Direct processing of command maps
-  ```
-  External System → CommandMap → CommandWorker → Specialized Handler → Transaction/Account
-                                    ↓
-                                  Command → CommandQueueItem → Final State
-                                                ↓
-                                            Retryable State
-  ```
+  - `:pending` -> `:processing` -> `:processed` (success)
+  - `:pending` -> `:processing` -> `:failed` (retryable error)
+  - `:pending` -> `:processing` -> `:occ_timeout` (concurrency timeout, retried)
+  - `:pending` -> `:processing` -> `:dead_letter` (permanent failure)
+  - `:processing` -> `:pending` when a batch write fails and its commands are
+    handed back to the queue (`CommandQueueItem.revert_to_pending_changeset/2`);
+    rows left stranded in `:processing` are recovered by `InstanceMonitor` to
+    `:failed` or `:dead_letter`.
 
-  ### Stored command
-  ```
-  EventQueue → Command → CommandWorker → Specialized Handler → Transaction/Account
-                          ↓
-                      CommandQueueItem → Final State
-                          ↓
-                       Retryable State
-  ```
+  ## Error handling
 
-  ## CommandQueueItem State Management
-
-  Commands are tracked through `CommandQueueItem` records that maintain processing state:
-
-  ### Status Lifecycle
-  - **`:pending`** → **`:processing`** → **`:processed`** (success path)
-  - **`:pending`** → **`:processing`** → **`:failed`** (retryable error)
-  - **`:pending`** → **`:processing`** → **`:occ_timeout`** (optimistic concurrency timeout)
-  - **`:pending`** → **`:processing`** → **`:dead_letter`** (permanent failure)
-
-  ### State Descriptions
-  - **`:pending`** - Ready for processing, can be claimed
-  - **`:processing`** - Currently being processed by a worker
-  - **`:processed`** - Successfully completed
-  - **`:failed`** - Failed but can be retried (temporary error)
-  - **`:occ_timeout`** - Failed due to optimistic concurrency timeout, will be retried
-  - **`:dead_letter`** - Permanently failed after exhausting retries
-
-  ## Error Handling Strategies
-
-  - **Standard Processing**: Errors update CommandQueueItem status and error details for retry logic
-  - **No-Save-On-Error**: Validation errors return changesets without Command and CommandQueueItem persistence
-  - **Command Claiming**: Uses optimistic locking on CommandQueueItem to prevent concurrent processing
-  - **Retry Logic**: Failed commands can be automatically retried based on CommandQueueItem configuration
-
-  ## Handler Modules
-
-  The CommandWorker delegates to specialized handlers in the `DoubleEntryLedger.Workers.CommandWorker` namespace:
-
-  - `CreateTransactionCommandMap` - New transaction creation from command maps
-  - `UpdateTransactionCommandMap` - Transaction updates from command maps
-  - `CreateTransactionCommand` - Transaction creation from stored commands
-  - `UpdateTransactionCommand` - Transaction updates from stored commands
-  - `CreateTransactionCommandMapNoSaveOnError` - Transaction creation without error persistence
-  - `UpdateTransactionCommandMapNoSaveOnError` - Transaction updates without error persistence
-  - `CreateAccountCommandMapNoSaveOnError` - Account creation without error persistence
-  - `UpdateAccountCommandMapNoSaveOnError` - Account updates without error persistence
-
-  ## Examples
-
-      # Process a new transaction command
-      command_map = %TransactionCommandMap{
-        action: :create_transaction,
-        instance_id: instance_id,
-        source: "payment_system",
-        source_idempk: "txn_123",
-        payload: %{
-          status: :pending,
-          entries: [
-            %{account_id: cash_account.id, amount: 100, currency: "USD"},
-            %{account_id: revenue_account.id, amount: -100, currency: "USD"}
-          ]
-        }
-      }
-
-      {:ok, transaction, event} = CommandWorker.process_new_command(command_map)
-      # event.command_queue_item.status == :processed
-
-      # Process an existing command by ID
-      {:ok, transaction, event} = CommandWorker.process_command_with_id(event_uuid)
-
-      # Process without saving errors to CommandQueueItem
-      {:ok, transaction, event} = CommandWorker.process_new_command_no_save_on_error(command_map)
-
-  ## Architecture Notes
-
-  - All processing maintains ACID properties through database transactions
-  - Commands are claimed atomically via CommandQueueItem to prevent duplicate processing
-  - Double-entry rules are enforced: debits must equal credits
-  - Processing is idempotent based on source identifiers
-  - Retry logic and error tracking handled through CommandQueueItem state management
+  - **Standard processing**: a retryable error is recorded on the CommandQueueItem;
+    a validation or transformation failure returns a changeset and creates no command
+  - **No-save-on-error**: no failure is persisted
+  - **Command claiming**: a single guarded `UPDATE` whose `WHERE` enforces both
+    status and retry deadline; `processor_version` fences the later terminal write
   """
   @behaviour DoubleEntryLedger.Workers.CommandWorkerBehaviour
 
@@ -124,6 +57,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   alias DoubleEntryLedger.{
     Command,
+    CommandQueueItem,
     Transaction,
     Account,
     Telemetry
@@ -163,8 +97,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   Upon success, the Command's CommandQueueItem will have:
   - `status: :processed` - Indicates successful completion
   - `processing_completed_at: DateTime` - Timestamp of completion
-  - `processor_id: String` - Identifier of the processing system
-  - `errors: []` - No error information
+
+  `processor_id` is set only when a queued command is claimed; the command-map
+  entry points leave it `nil`.
 
   ## Examples
 
@@ -199,7 +134,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - `status: :occ_timeout` - Optimistic concurrency timeout, will be retried
   - `status: :dead_letter` - Permanent failure after exhausting retries
   - `errors: [%{...}]` - Array of error details with timestamps
-  - `next_retry_after: DateTime` - When the next retry attempt should occur (for `:failed` status)
+  - `next_retry_after: DateTime` - When the next retry attempt should occur (set for
+    both `:failed` and `:occ_timeout`)
 
   ## Examples
 
@@ -211,45 +147,48 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   @type error_tuple :: {:error, Command.t() | Changeset.t() | String.t() | atom()}
 
   @doc """
-  Processes a new event map by dispatching to the appropriate specialized handler.
+  Processes a new command map by dispatching to the appropriate specialized handler.
 
-  This is the primary entry point for processing events received from external systems.
-  The function examines the event map's action and type to route it to the correct
+  This is the primary entry point for processing commands received from external systems.
+  The function examines the command map's action and type to route it to the correct
   processing module. Each handler is responsible for validation, transformation, and
-  persistence of the event and its resulting domain entities.
+  persistence of the command and its resulting domain entities.
 
   ## Command Processing Flow
 
-  1. **Command Creation** - Creates Command record and associated CommandQueueItem with status `:pending`
-  2. **Status Update** - Updates CommandQueueItem to `:processing` during processing
-  3. **Validation** - Ensures event map structure and data integrity
-  4. **Transformation** - Converts event data into domain entities
-  5. **Persistence** - Saves entities and updates CommandQueueItem to `:processed`
-  6. **Error Handling** - Updates CommandQueueItem to appropriate error status (`:failed`, `:occ_timeout`, `:dead_letter`)
+  1. **Validation and transformation** - The command map is checked and converted
+     into domain entities. A failure here returns a changeset and creates no Command.
+  2. **Persistence** - The Command, its CommandQueueItem and the resulting entities
+     are written in one transaction, with the CommandQueueItem going straight to
+     `:processed`.
+  3. **Error handling** - A failure after the insert persists the Command with its
+     final status: `:occ_timeout` when OCC retries are exhausted, or for an update
+     `:pending` when its create command is not yet processed and `:dead_letter` for
+     any other dependency error. `:failed` is not reachable on this path.
 
   ## Parameters
 
-  - `command_map` - A validated event map struct with the following key fields:
-    - `:action` - The operation type (`:create_transaction`, `:update_transaction`, `:create_account`, `:update_account`)
-    - `:instance_id` - UUID of the ledger instance
+  - `command_map` - A validated command map struct with the following key fields:
+    - `:action` - `:create_transaction` or `:update_transaction`
+    - `:instance_address` - Address of the ledger instance
     - `:source` - External system identifier
-    - `:source_idempk` - Idempotency key from source system
+    - `:source_idempk` - Idempotency key from the source system (transaction commands)
     - `:payload` - Command-specific data for processing
 
   ## Returns
 
-  - `success_tuple()` - Processing succeeded, returns the created entity and event with CommandQueueItem status `:processed`
+  - `success_tuple()` - Processing succeeded, returns the created entity and command with CommandQueueItem status `:processed`
   - `error_tuple()` - Processing failed, returns error details and CommandQueueItem in appropriate error state
 
   ## Supported Actions
 
-  ### Transaction Events
+  ### Transaction Commands
   - `:create_transaction` - Creates new double-entry transactions with balanced entries
   - `:update_transaction` - Modifies existing transactions (status, metadata, etc.)
 
-  ### Account Events
-  - `:create_account` - Creates new ledger accounts with specified types and currencies
-  - `:update_account` - Updates existing account properties
+  Account actions are not handled here — a `%AccountCommandMap{}` returns
+  `{:error, :action_not_supported}`. Use `process_new_command_no_save_on_error/1`
+  for `:create_account` and `:update_account`.
 
   ## Examples
 
@@ -273,8 +212,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>     ]
       ...>   }
       ...> }
-      iex> {:ok, transaction, event} = CommandWorker.process_new_command(command_map)
-      iex> { transaction.status, event.command_queue_item.status }
+      iex> {:ok, transaction, command} = CommandWorker.process_new_command(command_map)
+      iex> {transaction.status, command.command_queue_item.status}
       {:pending, :processed}
 
       # Unsupported action
@@ -287,8 +226,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       # Validation failure (returns changeset)
       {:error, %Changeset{errors: [amount: {"must be positive", []}]}}
 
-      # Business rule violation (returns event with error in CommandQueueItem)
-      {:error, %Command{command_queue_item: %{status: :failed, errors: [%{message: "Debit and credit amounts must balance"}]}}}
+      # Unbalanced entries: a validation changeset, and the command is rolled back.
+      # The error sits on :amount in each entry changeset embedded under :payload.
+      {:error,
+       %Changeset{
+         changes: %{
+           payload: %Changeset{
+             changes: %{
+               entries: [
+                 %Changeset{errors: [amount: {"must have equal debit and credit", []}]}
+               ]
+             }
+           }
+         }
+       }}
 
       # Optimistic concurrency timeout
       {:error, %Command{command_queue_item: %{status: :occ_timeout, next_retry_after: ~U[...]}}}
@@ -313,16 +264,16 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   def process_new_command(_command_map), do: {:error, :action_not_supported}
 
   @doc """
-  Processes an event map without persisting processing errors to the CommandQueueItem.
+  Processes a command map without persisting processing errors to the CommandQueueItem.
 
-  This function provides an alternative processing strategy for scenarios where you want
-  to validate and process events but avoid storing error states in the CommandQueueItem records.
-  This is useful for:
+  On success this behaves exactly like `process_new_command/1`: the command, its
+  CommandQueueItem and the resulting entities are committed. It is **not** a dry
+  run or a preview.
 
-  - **Validation Testing** - Check if an event would process successfully without side effects
-  - **Batch Processing** - Process multiple events and handle errors in memory
-  - **Preview Mode** - Show users what would happen without committing changes
-  - **Error Recovery** - Retry processing without accumulating error history in CommandQueueItem
+  The difference is that failures are not persisted. They come back as a changeset,
+  a message string, or `:action_not_supported`, instead of being written to a
+  CommandQueueItem. Use it when repeated failures should not accumulate error
+  history on the command.
 
   ## Key Differences from Standard Processing
 
@@ -339,23 +290,24 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   ## Parameters
 
-  - `command_map` - A TransactionCommandMap struct with action and payload data
+  - `command_map` - A `TransactionCommandMap` or `AccountCommandMap` struct with
+    action and payload data
 
   ## Returns
 
-  - `success_tuple()` - Processing succeeded, entity and event are created normally with CommandQueueItem status `:processed`
+  - `success_tuple()` - Processing succeeded, entity and command are created normally with CommandQueueItem status `:processed`
   - `error_tuple()` - Processing failed, returns validation changeset or error atom without CommandQueueItem persistence
 
   ## Examples
 
-      iex> # Valid event processes successfully
+      iex> # Valid command processes successfully
       iex> alias DoubleEntryLedger.Stores.AccountStore
       iex> alias DoubleEntryLedger.Stores.InstanceStore
       iex> alias DoubleEntryLedger.Command.{TransactionCommandMap, TransactionData}
       iex> {:ok, instance} = InstanceStore.create(%{address: "Sample:Instance"})
       iex> {:ok, revenue_account} = AccountStore.create(instance.address, %{address: "account:revenue", type: :liability, currency: :USD}, "unique_id_123")
       iex> {:ok, cash_account} = AccountStore.create(instance.address, %{address: "account:cash", type: :asset, currency: :USD}, "unique_id_456")
-      iex> valid_event = %TransactionCommandMap{action: :create_transaction,
+      iex> valid_command = %TransactionCommandMap{action: :create_transaction,
       ...>   instance_address: instance.address,
       ...>   source: "admin_panel",
       ...>   source_idempk: "acc_create_456",
@@ -366,8 +318,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>        %{account_address: cash_account.address, amount: 100, currency: :USD}
       ...>      ]
       ...>   }}
-      iex> {:ok, _transaction, event} = CommandWorker.process_new_command_no_save_on_error(valid_event)
-      iex> event.command_queue_item.status
+      iex> {:ok, _transaction, command} = CommandWorker.process_new_command_no_save_on_error(valid_command)
+      iex> command.command_queue_item.status
       :processed
 
       # Create a new account
@@ -384,10 +336,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       ...>     currency: "USD"
       ...>   }
       ...> }
-      iex> {:ok, account, event} = CommandWorker.process_new_command_no_save_on_error(command_map)
+      iex> {:ok, account, command} = CommandWorker.process_new_command_no_save_on_error(command_map)
       iex> account.name
       "Petty Cash"
-      iex> event.command_queue_item.status
+      iex> command.command_queue_item.status
       :processed
 
       iex> # Unsupported action
@@ -395,20 +347,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
       iex> CommandWorker.process_new_command_no_save_on_error(unsupported)
       {:error, :action_not_supported}
 
-  ## Use Cases
-
-      # Validate before committing to standard processing
-      case CommandWorker.process_new_command_no_save_on_error(command_map) do
-        {:ok, _, _} ->
-          # Safe to process normally
-          CommandWorker.process_new_command(command_map)
-        {:error, changeset} ->
-          # Handle validation errors without CommandQueueItem pollution
-          {:error, format_validation_errors(changeset)}
-      end
   """
   @spec process_new_command_no_save_on_error(em) ::
-          success_tuple() | {:error, Changeset.t(em) | String.t()}
+          success_tuple() | {:error, Changeset.t(em) | String.t() | :action_not_supported}
         when em: TransactionCommandMap.t() | AccountCommandMap.t()
   def process_new_command_no_save_on_error(
         %TransactionCommandMap{action: :create_transaction} = command_map
@@ -445,97 +386,38 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   def process_new_command_no_save_on_error(_command_map), do: {:error, :action_not_supported}
 
   @doc """
-  Retrieves and processes an existing event by its UUID using atomic CommandQueueItem claiming.
+  Claims the command with `uuid` and processes it.
 
-  This function enables processing of events that were previously stored in the database
-  but not yet processed. It implements an atomic claim-and-process pattern through the
-  CommandQueueItem to ensure that only one processor can work on an event at a time,
-  preventing race conditions and duplicate processing in concurrent environments.
-
-  ## CommandQueueItem Claiming Process
-
-  1. **Atomic Claim** - Updates CommandQueueItem status from `:pending` or claimable error states to `:processing`
-  2. **Processor Assignment** - Records processor_id and processing_started_at timestamp in CommandQueueItem
-  3. **Optimistic Locking** - Uses processor_version for concurrent update protection
-  4. **Processing** - Delegates to appropriate handler based on action
-  5. **Completion** - Updates CommandQueueItem status to `:processed` or appropriate error state
-
-  ## Use Cases
-
-  - **Retry Processing** - Reprocess events that failed previously (CommandQueueItem status `:failed` or `:occ_timeout`)
-  - **Manual Processing** - Admin tools for processing specific events
-  - **Batch Processing** - Process queued events in background jobs
-  - **Command Replay** - Reprocess events for audit or recovery scenarios
+  The claim is a single guarded `UPDATE` whose `WHERE` enforces both the queue
+  item's status and its retry deadline, so only one processor can take a command
+  and a command is never claimed before its retry time has elapsed. The claim
+  advances `processor_version`, invalidating any later write from a previous
+  owner.
 
   ## Parameters
 
-  - `uuid` - String UUID of the event to process
-  - `processor_id` - Optional identifier for the processor (defaults to "manual")
-    Recorded in CommandQueueItem for tracking which system/user initiated the processing
+  - `uuid` - UUID of the command to process
+  - `processor_id` - Identifier recorded on the queue item (defaults to `"manual"`)
 
   ## Returns
 
-  - `success_tuple()` - Command was claimed and processed successfully, CommandQueueItem status `:processed`
-  - `{:error, :command_not_found}` - No command exists with the provided UUID
-  - `{:error, :command_already_claimed}` - Another processor is already working on this command (CommandQueueItem status `:processing`)
-  - `{:error, :command_not_claimable}` - Command is in a non-processable state (e.g., already `:processed`)
-  - `error_tuple()` - Processing failed after successful claim, CommandQueueItem updated to appropriate error state
+  - `success_tuple()` - claimed and processed, CommandQueueItem status `:processed`
+  - `error_tuple()` - processing failed after the claim, CommandQueueItem in the
+    matching error state
+  - `{:error, :command_not_found}` - no command exists with that UUID
+  - `{:error, :command_already_claimed}` - another processor holds the command
+  - `{:error, :command_not_claimable}` - not in a claimable state, or its retry
+    deadline has not elapsed
+  - `{:error, :command_ownership_lost}` - the claim moved to another processor
+    while this one was working, so its write was fenced out
+  - `{:error, :command_not_in_processing_state}` - the claimed command was not in
+    `:processing`
+  - `{:error, :action_not_supported}` - the command's action has no handler
 
-  ## CommandQueueItem States and Claimability
+  ## Claimable states
 
-  | CommandQueueItem Status | Claimable? | Description |
-  |-------------|------------|-------------|
-  | `:pending` | ✓ | Ready for initial processing |
-  | `:failed` | ✓ | Failed previously, can be retried (if retry window passed) |
-  | `:occ_timeout` | ✓ | Failed due to optimistic concurrency, can be retried |
-  | `:processing` | ✗ | Currently being processed by another worker |
-  | `:processed` | ✗ | Successfully completed |
-  | `:dead_letter` | ✗ | Permanently failed after exhausting retries |
-
-  ## Examples
-
-      # Process a pending command
-      {:ok, transaction, command} = CommandWorker.process_command_with_id("550e8400-e29b-41d4-a716-446655440000")
-      command.command_queue_item.status
-      :processed
-      command.command_queue_item.processor_id
-      "manual"
-
-      # Attempt to process non-existent command
-      CommandWorker.process_command_with_id("00000000-0000-0000-0000-000000000000")
-      {:error, :command_not_found}
-
-      # Process with custom processor ID
-      {:ok, _, command} = CommandWorker.process_command_with_id(command_uuid, "background_job_1")
-      command.command_queue_item.processor_id
-      "background_job_1"
-
-      # Command already being processed
-      Task.async(fn -> CommandWorker.process_command_with_id(uuid, "proc_1") end)
-      CommandWorker.process_command_with_id(uuid, "proc_2")
-      {:error, :command_already_claimed}
-
-      # Retry a failed command
-      {:ok, _, command} = CommandWorker.process_command_with_id(failed_command_uuid)
-      command.command_queue_item.status
-      :processed
-      command.command_queue_item.retry_count
-      2
-
-  ## Concurrency Safety
-
-  The claiming mechanism uses database-level optimistic locking on CommandQueueItem to ensure atomicity:
-  This prevents race conditions even with multiple concurrent processors.
-
-  ## Monitoring and Debugging
-
-  The processor_id and timing fields in CommandQueueItem help with operational monitoring:
-
-  - Track which systems are processing events (`processor_id`)
-  - Debug stuck or slow processing jobs through CommandQueueItem queries
-  - Implement processor-specific retry logic (`retry_count`, `occ_retry_count`)
-  - Generate processing performance metrics from CommandQueueItem timestamps
-  - Monitor error patterns through the `errors` array
+  `:pending`, `:failed` and `:occ_timeout` are claimable once the retry deadline
+  has passed; `:processing`, `:processed` and `:dead_letter` are not.
   """
   @impl DoubleEntryLedger.Workers.CommandWorkerBehaviour
   @spec process_command_with_id(Ecto.UUID.t(), String.t()) ::
@@ -544,12 +426,22 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     case claim_command_for_processing(uuid, processor_id) do
       {:ok, command} ->
         Telemetry.command_process_span(span_metadata(command), fn ->
-          process_command(command)
+          process_claimed_command(command)
         end)
 
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  defp process_claimed_command(command) do
+    process_command(command)
+  rescue
+    error in Ecto.StaleEntryError ->
+      case error.changeset.data do
+        %CommandQueueItem{} -> {:error, :command_ownership_lost}
+        _other -> reraise error, __STACKTRACE__
+      end
   end
 
   # Private function - processes a claimed command based on its action type

@@ -10,8 +10,8 @@ defmodule DoubleEntryLedger do
   @doc """
   Child specs to add to a consumer application's supervisor in BYO-repo mode.
 
-  Place this after the consumer's repo so Oban and the command queue see a
-  started repo:
+  Place this after the consumer's repo so the command queue sees a started
+  repo:
 
       # lib/my_app/application.ex
       children = [

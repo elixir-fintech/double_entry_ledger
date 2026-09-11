@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Command.TransactionData do
   The module enforces several business rules during validation:
 
   * Transactions must have at least 2 entries
-  * Each entry must affect a different account (no duplicate account IDs)
+  * Each entry must affect a different account (no duplicate account addresses)
   * Status values must be one of the allowed transaction states
 
   ## Status Transitions
@@ -36,8 +36,8 @@ defmodule DoubleEntryLedger.Command.TransactionData do
       changeset = TransactionData.changeset(%TransactionData{}, %{
         status: :pending,
         entries: [
-          %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: :USD},
-          %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: :USD}
+          %{account_address: "assets:cash", amount: 100, currency: :USD},
+          %{account_address: "revenue:sales", amount: 100, currency: :USD}
         ]
       })
 
@@ -48,7 +48,7 @@ defmodule DoubleEntryLedger.Command.TransactionData do
   Converting to a plain map:
 
       map = TransactionData.to_map(transaction_data)
-      # %{status: :pending, entries: [%{account_id: "...", amount: 100, currency: :USD}, ...]}
+      # %{status: :pending, entries: [%{account_address: "assets:cash", amount: 100, currency: :USD}, ...]}
   """
 
   use Ecto.Schema
@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.Command.TransactionData do
 
   This function builds an Ecto changeset that validates the required fields
   and structure of transaction data, enforcing business rules like requiring
-  at least two entries with distinct account IDs.
+  at least two entries with distinct account addresses.
 
   ## Parameters
     - `transaction_data`: The TransactionData struct to create a changeset for

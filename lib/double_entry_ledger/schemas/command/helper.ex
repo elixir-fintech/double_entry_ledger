@@ -1,6 +1,7 @@
 defmodule DoubleEntryLedger.Command.Helper do
   @moduledoc """
-    Helper functions
+  Shared lookups for command actions: which actions exist, the validation
+  regexes for sources and addresses, and the command map module for an action.
   """
   alias DoubleEntryLedger.Account
   alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionCommandMap}
@@ -23,16 +24,23 @@ defmodule DoubleEntryLedger.Command.Helper do
             end)
           )
 
+  @doc "Returns the supported actions for the `:transaction` or `:account` command family."
   @spec actions(:transaction) :: [transaction_action()]
   @spec actions(:account) :: [account_action()]
   def actions(:transaction), do: @transaction_actions
   def actions(:account), do: @account_actions
 
+  @doc "Returns the regex a command's `source` must match."
   @spec source_regex() :: Regex.t()
   def source_regex(), do: @source_regex
 
+  @doc "Returns the regex an instance or account address must match."
   defdelegate address_regex(), to: Account
 
+  @doc """
+  Returns `{:ok, AccountCommandMap}` or `{:ok, TransactionCommandMap}` for the
+  map's action, or `:error` when the action is unknown.
+  """
   def action_to_mod(command_map) do
     case fetch_action(command_map) do
       a when a in @transaction_actions -> {:ok, TransactionCommandMap}

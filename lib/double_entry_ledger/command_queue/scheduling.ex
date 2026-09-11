@@ -20,8 +20,13 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.Telemetry
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
+  import Ecto.Query, only: [from: 2]
+
+  import DoubleEntryLedger.CommandQueue.QueryHelpers,
+    only: [retry_eligible: 1, stale_processing: 2, processing_age_seconds: 1]
 
   alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.CommandQueue.QueryHelpers
 
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
@@ -29,12 +34,14 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   alias DoubleEntryLedger.CommandQueueItem
   alias Ecto.Changeset
 
+  @schema_prefix DoubleEntryLedger.Config.schema_prefix()
+
   @config Application.compile_env(:double_entry_ledger, :command_queue, [])
   @max_retries Keyword.get(@config, :max_retries, 5)
   @base_delay Keyword.get(@config, :base_retry_delay, 30)
   @max_delay Keyword.get(@config, :max_retry_delay, 3600)
 
-  @processable_states [:pending, :occ_timeout, :failed]
+  @processable_states QueryHelpers.processable_states()
 
   @doc """
   Sets the next retry time for a failed command using exponential backoff.
@@ -47,6 +54,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `{:error, updated_command}` - The command with updated retry information
     - `{:error, changeset}` - Error updating the command
+
+  Raises `Ecto.StaleEntryError` when the `processor_version` fence loses, i.e.
+  the claim has since moved to another processor. Callers are expected to
+  rescue it and skip the command.
   """
   @spec schedule_retry_with_reason(
           Command.t(),
@@ -57,20 +68,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
           {:error, Command.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(command, reason, status, repo \\ Repo) do
     case build_schedule_retry_with_reason(command, reason, status) |> repo.update() do
-      {:ok, command} ->
-        {:error, command}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  @spec mark_as_dead_letter(Command.t(), String.t(), Ecto.Repo.t()) ::
-          {:error, Command.t()} | {:error, Changeset.t()}
-  def mark_as_dead_letter(command, error, repo \\ Repo) do
-    case build_mark_as_dead_letter(command, error) |> repo.update() do
-      {:ok, command} ->
-        {:error, command}
+      {:ok, updated_command} ->
+        persisted_failure(updated_command)
 
       {:error, changeset} ->
         {:error, changeset}
@@ -78,21 +77,48 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   end
 
   @doc """
-  Claims a command for processing by marking it as being processed by a specific processor.
+  Marks a command as permanently failed (`:dead_letter`) and persists the change.
+  """
+  @spec mark_as_dead_letter(Command.t(), String.t(), Ecto.Repo.t()) ::
+          {:error, Command.t()} | {:error, Changeset.t()}
+  def mark_as_dead_letter(command, error, repo \\ Repo) do
+    case build_mark_as_dead_letter(command, error) |> repo.update() do
+      {:ok, updated_command} ->
+        persisted_failure(updated_command)
 
-  This function implements optimistic concurrency control to ensure that only one processor
-  can claim a command at a time. It only allows claiming commands with status :pending or :occ_timeout.
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Claims a single command for processing by marking it as being processed by a
+  specific processor.
+
+  The claim itself is `claim_batch_for_processing/3` applied to one command, so
+  status and retry deadline are enforced together inside one atomic UPDATE
+  (`QueryHelpers.retry_eligible/1`, evaluated on the database clock). A command
+  whose `next_retry_after` has not elapsed is therefore never claimed early,
+  and no separate check-then-claim window exists.
+
+  The status load before the claim only short-circuits the obvious cases; the
+  reload after a zero-row UPDATE distinguishes "someone else claimed it" from
+  "not claimable".
 
   ## Parameters
     - `id`: The UUID of the command to claim
-    - `processor_id`: A string identifier for the processor claiming the command (defaults to "manual")
+    - `processor_id`: A string identifier for the processor claiming the command
     - `repo`: The Ecto repository to use (defaults to Repo)
 
   ## Returns
-    - `{:ok, command}`: If the command was successfully claimed
+    - `{:ok, command}`: Claimed, carrying the refreshed `command_queue_item`
+      (`:processing`, `processor_id` stamped, `processor_version` advanced,
+      `retry_count` bumped for a retry, `next_retry_after` cleared)
     - `{:error, :command_not_found}`: If no command with the given ID exists
-    - `{:error, :command_already_claimed}`: If the command was claimed by another processor
-    - `{:error, :command_not_claimable}`: If the command is not in a claimable state (not pending or occ_timeout)
+    - `{:error, :command_already_claimed}`: If another processor claimed the
+      command between the load and the UPDATE
+    - `{:error, :command_not_claimable}`: If the command is not in a claimable
+      state, or its retry deadline is still in the database's future
   """
   @spec claim_command_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
           {:ok, Command.t()} | {:error, atom()}
@@ -101,30 +127,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       nil ->
         {:error, :command_not_found}
 
-      %{command_queue_item: %{status: state} = eqi} = command when state in @processable_states ->
-        try do
-          case Command.processing_start_changeset(
-                 command,
-                 processor_id,
-                 retry_count_by_status(eqi)
-               )
-               |> repo.update() do
-            {:ok, claimed} = result ->
-              Telemetry.command_claim(%{
-                command_id: claimed.id,
-                instance_id: claimed.instance_id,
-                processor_id: processor_id,
-                trace_context: claimed.trace_context
-              })
-
-              result
-
-            error ->
-              error
-          end
-        rescue
-          Ecto.StaleEntryError ->
-            {:error, :command_already_claimed}
+      %{command_queue_item: %{status: state}} = command when state in @processable_states ->
+        case claim_batch_for_processing([command], processor_id, repo) do
+          [claimed] -> {:ok, claimed}
+          [] -> classify_unclaimed(id)
         end
 
       _ ->
@@ -132,10 +138,151 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     end
   end
 
+  # The UPDATE matched no row: either a competing processor claimed it, or its
+  # retry deadline had not elapsed on the database clock.
+  @spec classify_unclaimed(Ecto.UUID.t()) :: {:error, atom()}
+  defp classify_unclaimed(id) do
+    case CommandStore.get_by_id(id) do
+      %{command_queue_item: %{status: :processing}} -> {:error, :command_already_claimed}
+      _ -> {:error, :command_not_claimable}
+    end
+  end
+
+  @doc """
+  Claims a batch of commands for processing. This is the only claim
+  statement: `claim_command_for_processing/3` runs it with a single command.
+
+  For every command: status → `:processing`, stamps `processor_id`, clears
+  `next_retry_after`, advances `processor_version`, and bumps `retry_count`
+  (unchanged for `:pending`, `+1` otherwise). A single conditional bulk
+  update applies the appropriate retry-count rule to each row. The queue
+  trigger stamps `processing_started_at`.
+
+  The status and retry-time guards in the UPDATE are the concurrency check
+  (in place of the single-row `optimistic_lock`): a command already claimed
+  by another processor, or rescheduled for a future retry, is skipped.
+
+  Returns the subset of `commands` that were actually claimed, in the same
+  order, each with a refreshed `command_queue_item`. Commands that raced
+  out of a claimable state are omitted.
+  """
+  @spec claim_batch_for_processing([Command.t()], String.t(), Ecto.Repo.t()) :: [Command.t()]
+  def claim_batch_for_processing(commands, processor_id, repo \\ Repo)
+
+  def claim_batch_for_processing([], _processor_id, _repo), do: []
+
+  def claim_batch_for_processing(commands, processor_id, repo) do
+    ids = Enum.map(commands, & &1.id)
+
+    {_count, claimed_items} =
+      from(eqi in CommandQueueItem,
+        prefix: ^@schema_prefix,
+        where: eqi.command_id in ^ids and retry_eligible(eqi),
+        update: [
+          set: [
+            status: :processing,
+            processor_id: ^processor_id,
+            next_retry_after: nil,
+            retry_count:
+              fragment(
+                "? + CASE WHEN ? IN ('occ_timeout', 'failed') THEN 1 ELSE 0 END",
+                eqi.retry_count,
+                eqi.status
+              )
+          ],
+          inc: [processor_version: 1]
+        ],
+        select: eqi
+      )
+      |> repo.update_all([])
+
+    items_by_command_id = Map.new(claimed_items, &{&1.command_id, &1})
+
+    claimed_commands =
+      commands
+      |> Enum.filter(&Map.has_key?(items_by_command_id, &1.id))
+      |> Enum.map(&%{&1 | command_queue_item: Map.fetch!(items_by_command_id, &1.id)})
+
+    # One `[:command, :claim]` event per claimed command
+    # (Telemetry.command_claim/1), single-command claims included.
+    Enum.each(claimed_commands, fn command ->
+      Telemetry.command_claim(%{
+        command_id: command.id,
+        instance_id: command.instance_id,
+        processor_id: processor_id,
+        trace_context: command.trace_context
+      })
+    end)
+
+    claimed_commands
+  end
+
+  @doc """
+  Query for up to `limit` ids of the next processable commands for
+  `instance_id`, lowest queue position first.
+
+  Retry eligibility is evaluated on the database clock
+  (`QueryHelpers.retry_eligible/1`). Drives off the partial index
+  `idx_command_queue_items_in_flight` (migration 5):
+  `(instance_id, queue_position) WHERE status IN ('pending', 'occ_timeout',
+  'failed')`. `InstanceProcessor` runs it to refill its in-memory buffer.
+  """
+  @spec next_command_ids_query(Ecto.UUID.t(), pos_integer()) :: Ecto.Query.t()
+  def next_command_ids_query(instance_id, limit) do
+    from(eqi in CommandQueueItem,
+      prefix: ^@schema_prefix,
+      where: eqi.instance_id == ^instance_id and retry_eligible(eqi),
+      order_by: [asc: eqi.queue_position],
+      limit: ^limit,
+      select: eqi.command_id
+    )
+  end
+
+  @doc """
+  Query for the distinct instance ids that have at least one processable
+  command, evaluating retry eligibility on the database clock
+  (`QueryHelpers.retry_eligible/1`). `InstanceMonitor` runs it on every poll.
+  """
+  @spec instances_with_processable_commands_query() :: Ecto.Query.t()
+  def instances_with_processable_commands_query do
+    from(c in Command,
+      join: cqi in CommandQueueItem,
+      prefix: ^@schema_prefix,
+      on: c.id == cqi.command_id,
+      where: retry_eligible(cqi),
+      select: c.instance_id,
+      distinct: true
+    )
+  end
+
+  @doc """
+  Query for up to `limit` commands stranded in `:processing`: rows claimed at
+  least `stale_after_seconds` ago on the database clock whose owner never
+  reported back (`QueryHelpers.stale_processing/2`). Oldest claim first.
+
+  Selects `{command, queue_item, seconds_in_processing}` so the caller can
+  rebuild the command with its queue item and report how long the row was
+  stuck without consulting the application clock. `InstanceMonitor` runs it on
+  every poll and routes each row through the normal failure path.
+  """
+  @spec stale_processing_commands_query(non_neg_integer(), pos_integer()) :: Ecto.Query.t()
+  def stale_processing_commands_query(stale_after_seconds, limit) do
+    from(c in Command,
+      join: cqi in CommandQueueItem,
+      prefix: ^@schema_prefix,
+      on: c.id == cqi.command_id,
+      where: stale_processing(cqi, ^stale_after_seconds),
+      order_by: [asc: cqi.processing_started_at],
+      limit: ^limit,
+      select: {c, cqi, processing_age_seconds(cqi)}
+    )
+  end
+
   @doc """
   Builds a changeset to mark a command as processed.
 
-  This function updates the queue item's status to `:processed` and records completion metadata.
+  This function updates the queue item's status to `:processed` and clears its
+  retry timestamp. The queue trigger stamps `processing_completed_at`.
 
   ## Parameters
     - `command` - The Command struct to update
@@ -183,7 +330,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   Handles both normal retries and terminal failures (dead letter):
   - If the retry count exceeds the configured maximum, marks as dead letter
-  - Otherwise, calculates the next retry time using exponential backoff
+  - Otherwise, calculates the retry delay using exponential backoff and writes
+    it as `retry_delay_seconds`; PostgreSQL computes `next_retry_after` from
+    it on the database clock when the changeset is persisted
   - Sets the appropriate command status, clears processor reference, and adds the error
 
   ## Parameters
@@ -210,15 +359,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         "Max retry count (#{@max_retries}) exceeded: #{error || status}"
       )
     else
-      Telemetry.command_retry(%{
-        command_id: command.id,
-        instance_id: command.instance_id,
-        status: status,
-        retry_count: retry_count,
-        trace_context: command.trace_context
-      })
-
-      # Calculate next retry time with exponential backoff
+      # Exponential-backoff delay; the database turns it into next_retry_after.
       retry_delay = calculate_retry_delay(retry_count)
 
       command_queue_item_changeset =
@@ -240,7 +381,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   on a failed create command.
 
   Ensures that update commands don't retry before their prerequisite create commands
-  by scheduling them after the create command's next retry time.
+  by scheduling them after the create command's next retry time. When the create
+  command has no retry time, only the delay is written and PostgreSQL computes
+  `next_retry_after` on the database clock.
 
   ## Parameters
     - `command` - The update command that needs to be retried
@@ -279,15 +422,6 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   """
   @spec build_mark_as_dead_letter(Command.t(), String.t()) :: Changeset.t()
   def build_mark_as_dead_letter(%{command_queue_item: command_queue_item} = command, error) do
-    Logger.error("dead-lettering command #{command.id}: #{error}")
-
-    Telemetry.command_dead_letter(%{
-      command_id: command.id,
-      instance_id: command.instance_id,
-      error: error,
-      trace_context: command.trace_context
-    })
-
     command_queue_changeset =
       command_queue_item
       |> CommandQueueItem.dead_letter_changeset(error)
@@ -296,6 +430,43 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     |> change(%{})
     |> put_assoc(:command_queue_item, command_queue_changeset)
   end
+
+  @doc "Emits telemetry for a persisted command failure and returns its worker error tuple."
+  @spec persisted_failure(Command.t()) :: {:error, Command.t()}
+  def persisted_failure(
+        %Command{command_queue_item: %{errors: [%{message: message} | _], status: status}} =
+          command
+      ) do
+    emit_persisted_failure(command, status, message)
+    {:error, command}
+  end
+
+  @doc "Emits retry or dead-letter telemetry after a failure transition is persisted."
+  @spec emit_persisted_failure(Command.t(), CommandQueueItem.state(), String.t()) :: :ok
+  def emit_persisted_failure(command, :dead_letter, message) do
+    Logger.error("dead-lettering command #{command.id}: #{message}")
+
+    Telemetry.command_dead_letter(%{
+      command_id: command.id,
+      instance_id: command.instance_id,
+      error: message,
+      trace_context: command.trace_context
+    })
+  end
+
+  def emit_persisted_failure(command, status, message) when status in [:failed, :occ_timeout] do
+    Logger.warning("command #{command.id} persisted with #{status} status: #{message}")
+
+    Telemetry.command_retry(%{
+      command_id: command.id,
+      instance_id: command.instance_id,
+      status: status,
+      retry_count: command.command_queue_item.retry_count || 0,
+      trace_context: command.trace_context
+    })
+  end
+
+  def emit_persisted_failure(_command, _status, _message), do: :ok
 
   # Private function to calculate retry delay
   @spec calculate_retry_delay(non_neg_integer()) :: non_neg_integer()
@@ -308,8 +479,4 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
     trunc(delay + jitter)
   end
-
-  @spec retry_count_by_status(CommandQueueItem.t()) :: non_neg_integer()
-  defp retry_count_by_status(%{status: :pending, retry_count: retry_count}), do: retry_count
-  defp retry_count_by_status(%{status: _, retry_count: retry_count}), do: retry_count + 1
 end

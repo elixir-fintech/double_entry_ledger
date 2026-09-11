@@ -29,3 +29,7 @@ double_entry_ledger-*.tar
 .elixir_ls/
 .expert/
 .envrc
+
+# Local Codex workspace and generated documentation drafts.
+/.codex/
+/docs/

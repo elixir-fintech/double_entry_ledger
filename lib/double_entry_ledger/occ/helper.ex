@@ -1,50 +1,17 @@
 defmodule DoubleEntryLedger.Occ.Helper do
   @moduledoc """
-  Provides helper functions for managing Optimistic Concurrency Control (OCC) in the Double Entry Ledger system.
+  Helpers for the OCC retry loop driven by `DoubleEntryLedger.Occ.Processor`.
 
-  This module contains utilities for implementing OCC retry logic, including backoff timing,
-  error tracking, and retry state management. It offers a consistent framework for handling
-  concurrent modification conflicts across the application.
-
-  ## Key Functionality
-
-  * **Retry Management**: Calculate and apply appropriate backoff delays
-  * **Error Tracking**: Update error maps with retry information and messages
-  * **Configuration**: Access OCC-related configuration settings like max retries
-  * **Timing Utilities**: Calculate next retry times for command scheduling
+  * **Backoff**: `delay/1` grows the wait exponentially with each attempt and
+    `set_delay_timer/1` sleeps for it.
+  * **Error tracking**: `update_error_map/3` accumulates the retry messages and
+    `occ_timeout_changeset/2` marks a command as `:occ_timeout` once the
+    attempts are exhausted.
 
   ## Configuration
 
-  The module's behavior can be configured through the following application environment variables:
-
-  * `:max_retries` - Maximum number of retry attempts (default: 5)
-  * `:retry_interval` - Base interval for retries in milliseconds (default: 200)
-  * `:next_retry_after_interval` - Time to wait before next retry attempt (default: max_retries * retry_interval)
-
-  ## Usage Examples
-
-  Setting a delay based on current attempt number:
-
-      # Pause execution with exponential backoff
-      DoubleEntryLedger.Occ.Helper.set_delay_timer(attempt_number)
-
-  Updating an error map after an OCC conflict:
-
-      updated_error_map = DoubleEntryLedger.Occ.Helper.update_error_map(
-        existing_error_map,
-        current_attempt_number,
-        %{step_1: result_1, step_2: result_2}
-      )
-
-  Calculating timestamps for retry scheduling:
-
-      {now, next_retry_time} = DoubleEntryLedger.Occ.Helper.get_now_and_next_retry_after()
-
-  ## Implementation Notes
-
-  This module uses an exponential backoff strategy where retry intervals double with
-  each successive attempt, helping to reduce contention over time while maintaining
-  responsiveness for quick resolutions.
+    * `:max_retries` - maximum number of OCC attempts (default: 5)
+    * `:retry_interval` - base backoff interval in milliseconds (default: 200)
   """
 
   import DoubleEntryLedger.Command.ErrorMap

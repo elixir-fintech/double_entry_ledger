@@ -18,7 +18,6 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
   This module extends the base `DoubleEntryLedger.Command.CommandMap` behavior by:
 
   * Using the CommandMap macro to inject common fields and functionality
-  * Implementing the `payload_to_map/1` callback for TransactionData serialization
   * Providing action-specific validation through custom changeset logic
   * Supporting both create and update transaction operations
 
@@ -43,9 +42,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   * `create/1`: Creates and validates a TransactionCommandMap from a map of attributes
   * `changeset/2`: Builds a changeset for validating TransactionCommandMap data with action-specific logic
-  * `payload_to_map/1`: Converts TransactionData payload to a plain map (CommandMap callback)
-  * `to_map/1`: Converts a TransactionCommandMap struct to a plain map representation (inherited)
-  * `log_trace/1,2`: Builds a map of trace metadata for logging from a TransactionCommandMap (inherited)
+  * `to_map/1`: Converts a TransactionCommandMap struct to a plain map representation
 
   ## Implementation Details
 
@@ -92,8 +89,8 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
         payload: %{
           status: "pending",
           entries: [
-            %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db8", amount: 100, currency: "USD"},
-            %{account_id: "c24a758c-7300-4e94-a2fe-d2dc9b1c2db7", amount: -100, currency: "USD"}
+            %{account_address: "assets:cash", amount: 100, currency: "USD"},
+            %{account_address: "revenue:sales", amount: 100, currency: "USD"}
           ]
         }
       })

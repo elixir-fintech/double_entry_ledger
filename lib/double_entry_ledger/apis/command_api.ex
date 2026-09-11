@@ -49,8 +49,13 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
 
   This function validates the payload using the appropriate `AccountCommandMap` or
   `TransactionCommandMap`, resolves the instance, and persists a `Command` with an attached
-  `CommandQueueItem` in the `:pending` state. `InstanceMonitor` will later claim and process
-  the command; callers only need to inspect the returned struct to track progress.
+  `CommandQueueItem` in the `:pending` state. Where the command queue is supervised in this
+  runtime, persisting the command wakes `InstanceMonitor`, which starts the instance's
+  `InstanceProcessor` to claim and process it. Where it is not (`start_command_queue: false`,
+  or a node that only enqueues), the command stays `:pending` until a node running the queue
+  polls for it. The returned struct is a snapshot taken at insert, so it shows
+  `:pending` forever; keep its `id` and reload with `CommandStore.get_by_id/1` to
+  observe progress.
 
   ## Parameters
     - `command_params`: Map containing string keys for `"instance_address"`, `"action"`,
@@ -58,8 +63,11 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
 
   ## Returns
     - `{:ok, command}`: On success with the queued command (status `:pending`)
-    - `{:error, changeset}`: When the payload could not be cast into a command map
-    - `{:error, :instance_not_found | :action_not_supported}`: When the instance or action is invalid
+    - `{:error, changeset}`: When the params fail command-map validation, or when
+      persisting the `Command` fails
+    - `{:error, :action_not_supported}`: When the action is not supported
+    - `{:error, :pending_transaction_idempotency_violation}`: When a pending create
+      transaction command already exists for the same source and idempotency key
 
   ## Examples
 
@@ -91,8 +99,8 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   @spec create_from_params(command_params()) ::
           {:ok, Command.t()}
           | {:error,
-             Ecto.Changeset.t(AccountCommandMap.t() | TransactionCommandMap.t())
-             | :instance_not_found
+             Ecto.Changeset.t(AccountCommandMap.t() | TransactionCommandMap.t() | Command.t())
+             | :pending_transaction_idempotency_violation
              | :action_not_supported}
   def create_from_params(%{"action" => action} = command_params)
       when action in @account_actions do
@@ -130,8 +138,12 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   ## Returns
 
     - `{:ok, transaction | account, command}` on success with the created/updated projection.
-    - `{:error, command}` when the worker persisted an error state (queued for retry).
-    - `{:error, changeset}` when payload validation fails.
+    - `{:error, command}` when the worker persisted an error state. Its
+      `command_queue_item` says which: `:failed` and `:occ_timeout` are retried,
+      `:pending` is an update waiting on its create command and is picked up again,
+      and `:dead_letter` is terminal.
+    - `{:error, changeset}` when the params fail command-map validation, or — with
+      `on_error: :fail` — when processing fails without persisting.
     - `{:error, reason}` for other failures (e.g., `:action_not_supported`).
 
   ## Examples

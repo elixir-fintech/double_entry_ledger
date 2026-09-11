@@ -4,12 +4,26 @@ defmodule DoubleEntryLedger.MixProject do
   def project do
     [
       app: :double_entry_ledger,
-      version: "0.4.0",
+      version: "0.5.0",
       description: """
         DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engine for Elixir and PostgreSQL.
       """,
       elixir: "~> 1.15",
       package: [
+        files: [
+          "lib",
+          "priv",
+          ".formatter.exs",
+          "mix.exs",
+          "README.md",
+          "CHANGELOG.md",
+          "LICENSE",
+          "pages/DoubleEntryLedger.md",
+          "pages/AsynchronousEventProcessing.md",
+          "pages/HandlingPendingTransactions.md",
+          "pages/EventSourcing.md",
+          "pages/Telemetry.md"
+        ],
         licenses: ["MIT"],
         links: %{"GitHub" => "https://github.com/elixir-fintech/double_entry_ledger"}
       ],
@@ -32,22 +46,23 @@ defmodule DoubleEntryLedger.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger] ++ tools_for(Mix.env()),
       # use below for profiling
       # extra_applications: [:logger, :tools, :runtime_tools],
       mod: {DoubleEntryLedger.Application, []}
     ]
   end
 
+  defp tools_for(:perf), do: [:tools]
+  defp tools_for(_), do: []
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
       {:ecto_sql, "~> 3.0"},
-      {:postgrex, ">= 0.0.0"},
+      {:postgrex, ">= 0.22.2"},
       {:money, "~> 1.12"},
       {:logger_json, "~> 7.0"},
       {:jason, "~> 1.4"},
-      {:oban, "~> 2.19"},
       {:flop, "~> 0.26"},
       {:telemetry_metrics, "~> 1.0", optional: true},
 
@@ -61,7 +76,10 @@ defmodule DoubleEntryLedger.MixProject do
 
       # security
       {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false, warn_if_outdated: true},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+
+      # property-based testing
+      {:stream_data, "~> 1.3", only: [:test, :equiv], runtime: false}
 
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
@@ -100,6 +118,7 @@ defmodule DoubleEntryLedger.MixProject do
       main: "readme",
       extras: [
         "README.md",
+        "CHANGELOG.md",
         "pages/DoubleEntryLedger.md",
         "pages/AsynchronousEventProcessing.md",
         "pages/HandlingPendingTransactions.md",
@@ -126,13 +145,11 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Transaction,
           DoubleEntryLedger.PendingTransactionLookup,
           DoubleEntryLedger.Stores.TransactionStore,
-          DoubleEntryLedger.Stores.TransactionStoreHelper
+          DoubleEntryLedger.Stores.TransactionStoreHelper,
+          DoubleEntryLedger.Stores.BatchTransactionStoreHelper
         ],
         JournalEvent: [
           DoubleEntryLedger.JournalEvent,
-          DoubleEntryLedger.JournalEventAccountLink,
-          DoubleEntryLedger.JournalEventCommandLink,
-          DoubleEntryLedger.JournalEventTransactionLink,
           DoubleEntryLedger.Stores.JournalEventStore,
           DoubleEntryLedger.Stores.JournalEventStoreHelper
         ],
@@ -156,7 +173,6 @@ defmodule DoubleEntryLedger.MixProject do
         ],
         CommandWorker: [
           DoubleEntryLedger.Workers.CommandWorker,
-          DoubleEntryLedger.Workers.CommandWorker.ProcessCommand,
           DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand,
           DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap,
           DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnError,
@@ -172,17 +188,19 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveOnError,
           DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler,
           DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler,
-          DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
+          DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError,
+          DoubleEntryLedger.Workers.CommandWorkerBehaviour
         ],
         CommandQueue: [
           DoubleEntryLedger.CommandQueueItem,
+          DoubleEntryLedger.BatchProcessor,
+          DoubleEntryLedger.BatchSerializer,
           DoubleEntryLedger.CommandQueue.Supervisor,
           DoubleEntryLedger.CommandQueue.Scheduling,
           DoubleEntryLedger.CommandQueue.InstanceProcessor,
-          DoubleEntryLedger.CommandQueue.InstanceMonitor
-        ],
-        Oban: [
-          DoubleEntryLedger.Workers.Oban.JournalEventLinks
+          DoubleEntryLedger.CommandQueue.InstanceMonitor,
+          DoubleEntryLedger.CommandQueue.QueryHelpers,
+          DoubleEntryLedger.CommandQueue.OwnershipError
         ],
         Telemetry: [
           DoubleEntryLedger.Telemetry
@@ -194,7 +212,8 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Utils.Currency,
           DoubleEntryLedger.Utils.Map,
           DoubleEntryLedger.Utils.Traceable,
-          DoubleEntryLedger.Logger
+          DoubleEntryLedger.Logger,
+          DoubleEntryLedger.Config
         ],
         "Optimistic Concurrency Control": [
           DoubleEntryLedger.Occ.Processor,
@@ -207,7 +226,12 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.BaseSchema
         ],
         Migration: [
-          DoubleEntryLedger.Migration
+          DoubleEntryLedger.Migration,
+          DoubleEntryLedger.Migration.V1,
+          DoubleEntryLedger.Migration.V2,
+          DoubleEntryLedger.Migration.V3,
+          DoubleEntryLedger.Migration.V4,
+          DoubleEntryLedger.Migration.V5
         ]
       ],
       before_closing_head_tag: &before_closing_head_tag/1

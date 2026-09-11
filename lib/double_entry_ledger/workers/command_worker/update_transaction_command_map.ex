@@ -6,19 +6,21 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
 
   ## Features
 
-    * Transaction Processing: Handles update of transactions based on the event map's action.
-    * Atomic Operations: Ensures all event and transaction changes are performed in a single database transaction.
-    * Error Handling: Maps validation and dependency errors to the appropriate changeset or event state.
-    * Retry Logic: Retries OCC conflicts and schedules retries for dependency errors.
-    * OCC Integration: Integrates with the OCC processor behavior for safe, idempotent event processing.
+    * Transaction Processing: Handles update of transactions based on the command map's action.
+    * Atomic Operations: Ensures all command and transaction changes are performed in a single database transaction.
+    * Error Handling: Maps validation and dependency errors to the appropriate changeset or command state.
+    * Retry Logic: Retries OCC conflicts. A create command that is not yet processed
+      reverts this command to `:pending`; every other dependency error dead-letters it.
+    * OCC Integration: Integrates with the OCC processor behavior for safe, idempotent command processing.
 
   ## Main Functions
 
-    * `process/2` — Entry point for processing update event maps with error handling and OCC.
-    * `build_transaction/3` — Constructs Ecto.Multi operations for update actions.
-    * `handle_build_transaction/3` — Adds event update or error handling steps to the Multi.
+    * `process/2` — Entry point for processing update command maps with error handling and OCC.
+    * `build_transaction/4` — Constructs Ecto.Multi operations for update actions.
+    * `handle_build_transaction/3` — Adds the command update or error handling steps to the Multi.
 
-  This module ensures that update events are processed exactly once, even in high-concurrency environments, and that all error and retry scenarios are handled transparently.
+  Atomic writes, OCC, and idempotency checks make concurrent retries safe without claiming
+  stronger delivery semantics than the database-backed queue provides.
   """
 
   use DoubleEntryLedger.Occ.Processor
@@ -35,71 +37,73 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
 
   alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
-  alias DoubleEntryLedger.Workers
   alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   alias Ecto.Multi
 
   @impl true
   @doc """
-  Handles errors that occur when converting event map data to a transaction map.
+  Handles errors that occur when converting command map data to a transaction map.
 
-  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler.handle_transaction_map_error/3`.
+  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler.handle_transaction_map_error/3`.
 
   ## Parameters
 
-    - `command_map`: The event map being processed.
+    - `command_map`: The command map being processed.
     - `error`: The error encountered during transaction map conversion.
     - `repo`: The Ecto repository.
 
   ## Returns
 
-    - An `Ecto.Multi` that updates the event with error information.
+    - An `Ecto.Multi` carrying `Multi.error/3` with a `TransactionCommandMap`
+      changeset. The transaction rolls back, so no command is created or updated.
   """
   defdelegate handle_transaction_map_error(command_map, error, repo),
-    to: Workers.CommandWorker.TransactionCommandResponseHandler,
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
   @doc """
-  Handles the case when OCC retries are exhausted for an event map.
+  Handles the case when OCC retries are exhausted for a command map.
 
   Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler.handle_occ_final_timeout/2`.
 
   ## Parameters
 
-    - `command_map`: The event map being processed.
+    - `command_map`: The command map being processed.
     - `repo`: The Ecto repository.
 
   ## Returns
 
-    - An `Ecto.Multi` that updates the event as dead letter or timed out.
+    - An `Ecto.Multi` that updates the command as dead letter or timed out.
   """
   defdelegate handle_occ_final_timeout(command_map, repo),
-    to: Workers.CommandWorker.TransactionCommandResponseHandler,
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
     as: :handle_occ_final_timeout
 
   @doc """
-  Processes an `TransactionCommandMap` by creating both an event record and its associated transaction atomically.
+  Processes an `TransactionCommandMap` by creating both a command record and its associated transaction atomically.
 
-  This function is designed for synchronous use, ensuring that both the event and the transaction
-  are created or updated in one atomic operation. It handles both `:create_transaction` and `:update` action types,
-  with appropriate transaction building logic for each case. The entire operation uses Optimistic
+  This function is designed for synchronous use, ensuring that both the command and the transaction
+  are updated in one atomic operation. It handles `:update_transaction` only; a command map
+  carrying any other action raises `FunctionClauseError`. The entire operation uses Optimistic
   Concurrency Control (OCC) with retry mechanisms to handle concurrent modifications effectively.
 
   ## Parameters
 
-    - `command_map`: An `TransactionCommandMap` struct containing all event and transaction data.
+    - `command_map`: An `TransactionCommandMap` struct containing all command and transaction data.
     - `repo`: The repository to use for database operations (defaults to `Repo`).
 
   ## Returns
 
-    - `{:ok, transaction, event}` on success, where both the transaction and event are created/updated successfully.
-    - `{:error, event}` if the transaction processing fails with an OCC or dependency issue:
-      - If there was an OCC timeout, the event will be in the `:occ_timeout` state and can be retried.
-      - If this is an update event and the create event is still in pending state, the event will be in the `:pending` state.
+    - `{:ok, transaction, command}` on success. The third element is the processed
+      `Command`; its `command_queue_item` carries the resulting status.
+    - `{:error, command}` on an OCC or dependency failure. The returned `Command` is
+      left in `:occ_timeout` after exhausted retries, in `:pending` when the create
+      command it depends on has not been processed yet, or in `:dead_letter` for any
+      other dependency error.
     - `{:error, changeset}` if validation errors occur:
-      - For event validation failures, the TransactionCommandMap changeset will contain event-related errors.
+      - For command validation failures, the TransactionCommandMap changeset will contain command-related errors.
       - For transaction validation failures, the TransactionCommandMap changeset will contain mapped transaction errors.
     - `{:error, reason}` for other errors, with a string describing the error and the failing step.
   """
@@ -107,9 +111,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
           CommandWorker.success_tuple() | CommandWorker.error_tuple()
   def process(%{action: :update_transaction} = command_map, repo \\ Repo) do
     case process_with_retry(command_map, repo) do
-      {:ok, %{command_failure: %{command_queue_item: %{errors: [last_error | _]}} = event}} ->
-        warn("#{last_error.message}", event)
-        {:error, event}
+      {:ok, %{command_failure: event}} ->
+        persisted_failure(event)
 
       response ->
         default_response_handler(response, command_map)
@@ -118,26 +121,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
 
   @impl true
   @doc """
-  Builds an `Ecto.Multi` transaction for processing an event map based on its action type.
+  Builds an `Ecto.Multi` for an `:update_transaction` command map.
 
-  This function implements the OCC processor behavior and creates the appropriate
-  transaction operations depending on whether the event is a `:create_transaction` or `:update` action.
-
-  ### For `:create_transaction` actions:
-    - Inserts a new event with status `:pending`
-    - Creates a new transaction in the ledger
-    - Updates the event to mark it as processed with the transaction ID
-
-  ### For `:update` actions:
-    - Inserts a new event with status `:pending`
-    - Retrieves the related "create event" transaction
-    - Updates the existing transaction with new data
-    - Updates the event to mark it as processed with the transaction ID
+  Inserts the command with status `:pending`, retrieves the transaction created by
+  the original create command, updates it with the new data, and marks the command
+  processed with the transaction id.
 
   ## Parameters
 
-    - `command_map`: An `TransactionCommandMap` struct containing the event details and action type.
-    - `transaction_map`: A map containing the transaction data to be created or updated.
+    - `command_map`: An `TransactionCommandMap` struct containing the command details and action type.
+    - `transaction_map`: A map containing the new transaction data to apply.
+    - `instance_id`: UUID of the ledger instance.
     - `repo`: The Ecto repository to use for database operations.
 
   ## Returns
@@ -177,20 +171,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
 
   @impl true
   @doc """
-  Adds the step to update the event or handle errors after transaction processing.
+  Adds the step to update the command or handle errors after transaction processing.
 
   This function inspects the results of the previous `Ecto.Multi` steps and determines
-  the appropriate next action for the event:
+  the appropriate next action for the command:
 
-    * If both the transaction and event creation succeed, the event is marked as processed.
-    * If the related create event is not yet processed, the event is reverted to pending.
-    * If the related create event failed, a retry is scheduled for the update event.
-    * For all other errors, the event is marked as dead letter.
+    * If the transaction is written successfully, the command is marked processed.
+    * If the create command is not yet processed, the command is reverted to `:pending`.
+    * Every other dependency error marks the command `:dead_letter`.
 
   ## Parameters
 
     - `multi`: The `Ecto.Multi` built so far.
-    - `command_map`: The event map being processed.
+    - `command_map`: The command map being processed.
     - `_repo`: The Ecto repository (unused).
 
   ## Returns
@@ -205,17 +198,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
         new_command: %{id: eid, command_map: em, instance_id: iid} = event
       } ->
         Multi.insert(Multi.new(), :journal_event, fn _ ->
-          JournalEvent.build_create(%{command_map: em, instance_id: iid})
+          JournalEvent.build_create(%{
+            command_map: em,
+            instance_id: iid,
+            command_id: eid,
+            transaction_id: tid
+          })
         end)
         |> Multi.update(:command_success, fn _ ->
           build_mark_as_processed(event)
-        end)
-        |> DoubleEntryLedger.Oban.insert(:create_transaction_link, fn %{journal_event: %{id: jid}} ->
-          Workers.Oban.JournalEventLinks.new(%{
-            command_id: eid,
-            transaction_id: tid,
-            journal_event_id: jid
-          })
         end)
 
       %{

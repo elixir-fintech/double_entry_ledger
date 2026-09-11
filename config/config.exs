@@ -24,15 +24,11 @@ config :double_entry_ledger, :command_queue,
   base_retry_delay: 30,
   # Maximum delay in seconds (1 hour)
   max_retry_delay: 3600,
+  # Seconds a command may stay in :processing before InstanceMonitor treats it
+  # as stranded by a dead node and sends it back through the failure path
+  stale_processing_after: 300,
   # Name prefix for processors
   processor_name: "command_queue"
-
-config :double_entry_ledger, Oban,
-  name: DoubleEntryLedger.Oban,
-  engine: Oban.Engines.Basic,
-  queues: [double_entry_ledger: 1],
-  repo: DoubleEntryLedger.Repo,
-  prefix: "public"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
