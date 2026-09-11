@@ -42,13 +42,18 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer 
   ## Fields
 
     * `:instance_id` - UUID of the instance this transaction belongs to
-    * `:status` - Current state of the transaction (e.g. `:pending`, `:completed`)
-    * `:entries` - List of entry maps that make up this transaction
+    * `:status` - Current state of the transaction (`:pending`, `:posted` or `:archived`)
+    * `:entries` - List of entry maps. Absent entirely for an empty, nil-entry or
+      `:archived` transaction
   """
+  # `:entries` is absent for an empty, nil-entry or `:archived` transaction —
+  # three of the four `transaction_data_to_transaction_map/2` clauses return a
+  # map without it. Declaring it required made callers' no-entry branches look
+  # unreachable to Dialyzer.
   @type transaction_map() :: %{
-          instance_id: Ecto.UUID.t(),
-          status: Transaction.state(),
-          entries: list(entry_map())
+          required(:instance_id) => Ecto.UUID.t(),
+          required(:status) => Transaction.state(),
+          optional(:entries) => list(entry_map())
         }
 
   @doc """
@@ -86,7 +91,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer 
       iex> TransactionCommandTransformer.transaction_data_to_transaction_map(transaction_data, "instance-123")
       {:ok, %{instance_id: "instance-123", status: :pending}}
   """
-  @spec transaction_data_to_transaction_map(TransactionData.t() | map(), Ecto.UUID.t()) ::
+  @spec transaction_data_to_transaction_map(TransactionData.t(), Ecto.UUID.t()) ::
           {:ok, transaction_map()}
           | {:error,
              :no_accounts_found
