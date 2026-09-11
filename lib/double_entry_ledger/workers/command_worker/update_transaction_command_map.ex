@@ -44,7 +44,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
   @doc """
   Handles errors that occur when converting event map data to a transaction map.
 
-  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler.handle_transaction_map_error/3`.
+  Delegates to `DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler.handle_transaction_map_error/3`.
 
   ## Parameters
 
@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap do
     - An `Ecto.Multi` that updates the event with error information.
   """
   defdelegate handle_transaction_map_error(command_map, error, repo),
-    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHandler,
+    to: DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
     as: :handle_transaction_map_error
 
   @impl true
