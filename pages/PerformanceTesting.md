@@ -213,12 +213,12 @@ Beyond requires DB-side scaling (bigger host, PgBouncer, sharding).
 
 Several migrations were driven by perf findings:
 
-| Version | Change | Why |
+| Migration | Change | Why |
 |---|---|---|
-| v4 | Compound `(entry_id, inserted_at)` index on `balance_history_entries` | Removed sequential scans on entry lookups |
-| v5 | Replaced three journal-event link tables and the linking job with direct foreign keys | Removed link-table and background-job write amplification |
-| v6 | Denormalized `instance_id` onto `command_queue_items` + partial in-flight index | Fixed O(N²) drain in `find_next_command_ids` |
-| v7 | Widened `accounts.{available, negative_limit}` + `balance_history_entries.available` from `int4` to `bigint` | Original `int4` capped balances at ~2.1B; load tests at N≥30000 hit overflow, and real ledgers would too |
+| 4 | Compound `(entry_id, inserted_at)` index on `balance_history_entries` | Removed sequential scans on entry lookups |
+| 5 | Replaced three journal-event link tables and the linking job with direct foreign keys | Removed link-table and background-job write amplification |
+| 5 | Denormalized `instance_id` onto `command_queue_items` + partial in-flight index | Fixed O(N²) drain in `find_next_command_ids` |
+| 5 | Widened `accounts.{available, negative_limit}` + `balance_history_entries.available` from `int4` to `bigint` | Original `int4` capped balances at ~2.1B; load tests at N≥30000 hit overflow, and real ledgers would too |
 
 The `test/double_entry_ledger/migration_test.exs` file asserts the
 landed state of each.

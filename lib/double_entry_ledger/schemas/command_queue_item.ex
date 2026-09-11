@@ -12,7 +12,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
 
   ## Retry deadlines
 
-  PostgreSQL also computes `next_retry_after` (migration v10). Retry
+  PostgreSQL also computes `next_retry_after` (migration 5). Retry
   changesets write a `retry_delay_seconds` instruction instead of a
   timestamp; the queue trigger sets `next_retry_after` to the database clock
   plus that delay and clears `retry_delay_seconds` in the same write, so the
@@ -67,7 +67,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     field(:processing_completed_at, :utc_datetime_usec, read_after_writes: true)
     field(:retry_count, :integer, default: 0)
     field(:next_retry_after, :utc_datetime_usec, read_after_writes: true)
-    # Transient instruction to the queue trigger (migration v10); never
+    # Transient instruction to the queue trigger (migration 5); never
     # persisted, so it reads back as nil after every write.
     field(:retry_delay_seconds, :integer, read_after_writes: true)
     field(:occ_retry_count, :integer, default: 0)
@@ -78,7 +78,7 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     field(:updated_at, :utc_datetime_usec, read_after_writes: true)
 
     belongs_to(:command, Command, type: Ecto.UUID)
-    # Denormalized from `commands.instance_id` (migration v6) so the
+    # Denormalized from `commands.instance_id` (migration 5) so the
     # `find_next_command` partial index can be keyed on
     # (instance_id, queue_position) without a JOIN.
     belongs_to(:instance, Instance, type: Ecto.UUID)

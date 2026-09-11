@@ -286,10 +286,10 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       assert reload_account(a1.id).available == a1.available
     end
 
-    test "writes accounts.available + balance_history_entries.available above int4 range (post-v7 bigint regression)",
+    test "writes accounts.available + balance_history_entries.available above int4 range (migration 5 bigint regression)",
          %{instance: inst} do
       # 5_000_000_000 > INT_MAX (~2.14B). The accounts.available and
-      # BHE.available columns were widened to bigint in migration v7
+      # BHE.available columns were widened to bigint in migration 5
       # specifically to handle this range; before the fix the writer's
       # `::integer` casts truncated/erred. With `::bigint` the value
       # round-trips intact.

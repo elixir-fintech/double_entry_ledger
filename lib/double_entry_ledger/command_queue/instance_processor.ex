@@ -465,7 +465,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # Returns up to `limit` ids of the next in-flight commands for this
   # instance, lowest queue position first. See
   # `Scheduling.next_command_ids_query/2` for the index it drives off.
-  # Before v6 this query started from `commands` and walked every row in
+  # Before migration 5 this query started from `commands` and walked every row in
   # timestamp order — O(N²) drain behaviour.
   defp find_next_command_ids(instance_id, limit) do
     instance_id

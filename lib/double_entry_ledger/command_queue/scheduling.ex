@@ -214,7 +214,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   Retry eligibility is evaluated on the database clock
   (`QueryHelpers.retry_eligible/1`). Drives off the partial index
-  `idx_command_queue_items_in_flight` (migration v9):
+  `idx_command_queue_items_in_flight` (migration 5):
   `(instance_id, queue_position) WHERE status IN ('pending', 'occ_timeout',
   'failed')`. `InstanceProcessor` runs it to refill its in-memory buffer.
   """

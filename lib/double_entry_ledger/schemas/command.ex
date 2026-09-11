@@ -153,7 +153,7 @@ defmodule DoubleEntryLedger.Command do
     |> validate_command_map(attrs)
   end
 
-  # The denormalized `instance_id` on `command_queue_items` (migration v6)
+  # The denormalized `instance_id` on `command_queue_items` (migration 5)
   # must always match the parent command's. Enforce that invariant here so
   # callers don't need to set it in two places.
   defp ensure_queue_item_instance_id(attrs) do

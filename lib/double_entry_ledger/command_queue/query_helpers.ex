@@ -4,7 +4,7 @@ defmodule DoubleEntryLedger.CommandQueue.QueryHelpers do
   eligibility is evaluated on the PostgreSQL clock, not the application node's.
   """
 
-  # Same expression the migration v8 queue trigger uses for
+  # Same expression the migration 5 queue trigger uses for
   # `processing_started_at` / `processing_completed_at`.
   @db_now_sql "timezone('UTC', statement_timestamp())"
 

@@ -41,7 +41,7 @@ defmodule DoubleEntryLedger.Stores.InstanceStoreTest do
              } = InstanceStore.sum_accounts_debits_and_credits_by_currency(inst.id)
     end
 
-    test "sums balances above int4 range (regression: post-v7 bigint columns)",
+    test "sums balances above int4 range (regression: migration 5 bigint columns)",
          %{instance: inst} do
       # 5_000_000_000 > INT_MAX (~2.14B). Before the fix the SQL fragment
       # cast `(posted->>'debit')::integer`, which raised PG "integer out

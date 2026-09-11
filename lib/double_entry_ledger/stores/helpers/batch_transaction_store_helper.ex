@@ -172,7 +172,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
 
   Retry deadlines are computed by PostgreSQL: the UPDATE writes both
   `next_retry_after` and `retry_delay_seconds`, and the queue trigger
-  (migration v10) turns a non-`NULL` delay into
+  (migration 5) turns a non-`NULL` delay into
   `next_retry_after = database_now + delay`, clearing the delay in the same
   write. No application clock is involved in retry timing.
 
@@ -502,7 +502,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelper do
         # `lock_version` columns are currently int4; cast as ::bigint
         # anyway so the parameter cast is forward-compatible if the
         # column is later widened (matching posted/pending/available
-        # which were widened in v7). PG auto-coerces the assignment.
+        # which were widened in migration 5). PG auto-coerces the assignment.
         cast =
           "(#{p(placeholders, 0)}::uuid, #{p(placeholders, 1)}::jsonb, " <>
             "#{p(placeholders, 2)}::jsonb, #{p(placeholders, 3)}::bigint, " <>

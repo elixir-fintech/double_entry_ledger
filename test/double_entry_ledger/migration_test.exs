@@ -12,22 +12,22 @@ defmodule DoubleEntryLedger.MigrationTest do
   @prefix Application.compile_env(:double_entry_ledger, :schema_prefix, "double_entry_ledger")
   @rollback_version 99_999_999_999_999
 
-  # Drives the v10 -> v9 -> v10 transition through the real migrator inside
-  # the test's sandbox transaction, so the schema is restored on rollback.
-  defmodule RollbackV10 do
+  # Drives the 5 -> 4 -> 5 transition through the real migrator inside the
+  # test's sandbox transaction, so the schema is restored on rollback.
+  defmodule RollbackV5 do
     use Ecto.Migration
 
-    def up, do: DoubleEntryLedger.Migration.down(from: 10, version: 9)
-    def down, do: DoubleEntryLedger.Migration.up(from: 9)
+    def up, do: DoubleEntryLedger.Migration.down(from: 5, version: 4)
+    def down, do: DoubleEntryLedger.Migration.up(from: 4)
   end
 
   describe "latest_version/0" do
-    test "returns 10" do
-      assert Migration.latest_version() == 10
+    test "returns 5" do
+      assert Migration.latest_version() == 5
     end
   end
 
-  describe "v10 migration — database-computed retry deadlines" do
+  describe "version 5 — database-computed retry deadlines" do
     setup [:create_instance, :create_accounts]
 
     test "adds a nullable integer retry_delay_seconds column" do
@@ -81,7 +81,7 @@ defmodule DoubleEntryLedger.MigrationTest do
     end
   end
 
-  describe "v10 migration — transient retry_delay_seconds invariant" do
+  describe "version 5 — transient retry_delay_seconds invariant" do
     setup [:create_instance, :create_accounts]
 
     test "enforces that retry_delay_seconds is never stored" do
@@ -102,24 +102,37 @@ defmodule DoubleEntryLedger.MigrationTest do
     end
   end
 
-  describe "v10 migration — rollback" do
-    test "down restores the v8 trigger and drops the column, up reapplies both" do
-      Ecto.Migrator.run(Repo, [{@rollback_version, RollbackV10}], :up,
+  describe "version 5 — rollback to version 4" do
+    test "down restores the version 4 schema and up reapplies version 5" do
+      Ecto.Migrator.run(Repo, [{@rollback_version, RollbackV5}], :up,
         all: true,
         log: false,
         migration_lock: false
       )
 
       refute column_exists?("command_queue_items", "retry_delay_seconds")
-      refute function_definition("set_command_queue_item_timestamps") =~ "retry_delay_seconds"
+      refute column_exists?("command_queue_items", "queue_position")
+      refute column_exists?("command_queue_items", "instance_id")
+      refute column_exists?("journal_events", "command_id")
+      refute function_exists?("set_command_queue_item_timestamps")
+      refute index_exists?("idx_command_queue_items_in_flight")
+      assert table_exists?("journal_event_command_links")
+      assert column_data_type("accounts", "available") == "integer"
 
-      Ecto.Migrator.run(Repo, [{@rollback_version, RollbackV10}], :down,
+      Ecto.Migrator.run(Repo, [{@rollback_version, RollbackV5}], :down,
         all: true,
         log: false,
         migration_lock: false
       )
 
       assert column_data_type("command_queue_items", "retry_delay_seconds") == "integer"
+      assert column_data_type("command_queue_items", "queue_position") == "bigint"
+      refute column_nullable?("command_queue_items", "instance_id")
+      assert column_data_type("journal_events", "command_id") == "uuid"
+      assert trigger_exists?("command_queue_items_set_timestamps")
+      assert index_exists?("idx_command_queue_items_in_flight")
+      refute table_exists?("journal_event_command_links")
+      assert column_data_type("accounts", "available") == "bigint"
 
       assert function_definition("set_command_queue_item_timestamps") =~
                "make_interval(secs => NEW.retry_delay_seconds)"
@@ -129,7 +142,7 @@ defmodule DoubleEntryLedger.MigrationTest do
     end
   end
 
-  describe "v9 migration — stable queue positions" do
+  describe "version 5 — stable queue positions" do
     test "adds a required database-generated bigint queue position" do
       assert column_data_type("command_queue_items", "queue_position") == "bigint"
       refute column_nullable?("command_queue_items", "queue_position")
@@ -157,15 +170,15 @@ defmodule DoubleEntryLedger.MigrationTest do
     end
   end
 
-  describe "v7 migration — bigint widening for balance/limit columns" do
-    test "up/1 widens accounts.available, accounts.negative_limit, and balance_history_entries.available to bigint" do
+  describe "version 5 — bigint widening for balance/limit columns" do
+    test "widens accounts.available, accounts.negative_limit, and balance_history_entries.available to bigint" do
       assert column_data_type("accounts", "available") == "bigint"
       assert column_data_type("accounts", "negative_limit") == "bigint"
       assert column_data_type("balance_history_entries", "available") == "bigint"
     end
   end
 
-  describe "v8 migration — database-generated command queue timestamps" do
+  describe "version 5 — database-generated command queue timestamps" do
     test "commands and command_queue_items use the PostgreSQL clock for inserted_at" do
       assert column_default("commands", "inserted_at") =~ "statement_timestamp()"
       assert column_default("command_queue_items", "inserted_at") =~ "statement_timestamp()"
@@ -324,6 +337,40 @@ defmodule DoubleEntryLedger.MigrationTest do
       WHERE trigger_schema = $1 AND trigger_name = $2
       """,
       [@prefix, trigger]
+    )
+  end
+
+  defp function_exists?(function) do
+    exists?(
+      """
+      SELECT 1
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = $1 AND p.proname = $2
+      """,
+      [@prefix, function]
+    )
+  end
+
+  defp table_exists?(table) do
+    exists?(
+      """
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = $1 AND table_name = $2
+      """,
+      [@prefix, table]
+    )
+  end
+
+  defp index_exists?(index) do
+    exists?(
+      """
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = $1 AND indexname = $2
+      """,
+      [@prefix, index]
     )
   end
 

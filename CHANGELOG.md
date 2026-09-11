@@ -8,11 +8,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### ⚠️ Breaking changes
 
-- Schema migrations 5–10 replace the three `journal_event_*_links` tables with
-  direct foreign keys, add a required `command_queue_items.instance_id`, and
-  widen balance/limit columns to `bigint`. They also move command and queue-item
-  timestamps to the PostgreSQL clock, add a database-generated queue position
-  for stable processing order, and add the transient
+- Schema migration 5 replaces the three `journal_event_*_links` tables with
+  direct foreign keys, adds a required `command_queue_items.instance_id`, and
+  widens balance/limit columns to `bigint`. It also moves command and queue-item
+  timestamps to the PostgreSQL clock, adds a database-generated queue position
+  for stable processing order, and adds the transient
   `command_queue_items.retry_delay_seconds` column and queue-trigger rule that
   compute retry deadlines on the database clock. Upgrades from 0.4.x must use
   `DoubleEntryLedger.Migration.up(from: 4)`.
@@ -67,12 +67,12 @@ project follows [Semantic Versioning](https://semver.org/).
   back after writes, avoiding application-node clock skew.
 - Commands are selected using a stable, database-generated queue position
   instead of potentially tied insertion timestamps.
-- Retry deadlines are computed by PostgreSQL. Migration v10 adds a transient
+- Retry deadlines are computed by PostgreSQL. Migration 5 adds a transient
   `command_queue_items.retry_delay_seconds` instruction that the queue trigger
   converts into `next_retry_after` on the database clock, and retry eligibility
   reads (`InstanceProcessor`, `InstanceMonitor`, batch claims) compare against
   the database clock as well, so application-node clock skew no longer affects
-  retry timing. Consumers must run migration v10.
+  retry timing. Consumers must run migration 5.
 - Instance command processors are temporary dynamic children, so their exits do
   not consume the shared supervisor's restart budget or terminate processors for
   other instances. `InstanceMonitor` continues to discover claimable work.

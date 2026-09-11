@@ -348,8 +348,8 @@ Extras are bundled in `pages/` when you run `mix docs`.
 
 ## Migrating from 0.4.x to 0.5.0
 
-> ⚠️ **0.5.0 contains breaking schema and API changes.** Migrations 5 and
-> 6 are not compatible with a mixed 0.4.x/0.5.0 rolling deployment. Stop 0.4.x
+> ⚠️ **0.5.0 contains breaking schema and API changes.** Migration 5 is not
+> compatible with a mixed 0.4.x/0.5.0 rolling deployment. Stop 0.4.x
 > command processing, apply the upgrade migration, deploy 0.5.0, and then
 > resume processing.
 
@@ -377,8 +377,9 @@ The migration performs these changes:
    receive dense positions in `(inserted_at, command_id)` order; PostgreSQL uses
    the sequence for rows inserted after the backfill.
 
-Migration v9 rewrites every `command_queue_items` row, including processed and
-dead-letter history, while holding an `ACCESS EXCLUSIVE` table lock. Its runtime
+The queue-position backfill rewrites every `command_queue_items` row, including
+processed and dead-letter history, while holding an `ACCESS EXCLUSIVE` table
+lock. Its runtime
 therefore scales with total queue history, not only currently processable work.
 Plan an appropriate maintenance window before applying it to a large table.
 

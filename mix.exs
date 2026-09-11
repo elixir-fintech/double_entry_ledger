@@ -223,7 +223,12 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.BaseSchema
         ],
         Migration: [
-          DoubleEntryLedger.Migration
+          DoubleEntryLedger.Migration,
+          DoubleEntryLedger.Migration.V1,
+          DoubleEntryLedger.Migration.V2,
+          DoubleEntryLedger.Migration.V3,
+          DoubleEntryLedger.Migration.V4,
+          DoubleEntryLedger.Migration.V5
         ]
       ],
       before_closing_head_tag: &before_closing_head_tag/1
