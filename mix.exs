@@ -59,7 +59,7 @@ defmodule DoubleEntryLedger.MixProject do
   defp deps do
     [
       {:ecto_sql, "~> 3.0"},
-      {:postgrex, ">= 0.0.0"},
+      {:postgrex, ">= 0.22.2"},
       {:money, "~> 1.12"},
       {:logger_json, "~> 7.0"},
       {:jason, "~> 1.4"},
@@ -173,7 +173,6 @@ defmodule DoubleEntryLedger.MixProject do
         ],
         CommandWorker: [
           DoubleEntryLedger.Workers.CommandWorker,
-          DoubleEntryLedger.Workers.CommandWorker.ProcessCommand,
           DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand,
           DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap,
           DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoSaveOnError,
@@ -189,7 +188,8 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveOnError,
           DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler,
           DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler,
-          DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
+          DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError,
+          DoubleEntryLedger.Workers.CommandWorkerBehaviour
         ],
         CommandQueue: [
           DoubleEntryLedger.CommandQueueItem,
@@ -198,7 +198,9 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.CommandQueue.Supervisor,
           DoubleEntryLedger.CommandQueue.Scheduling,
           DoubleEntryLedger.CommandQueue.InstanceProcessor,
-          DoubleEntryLedger.CommandQueue.InstanceMonitor
+          DoubleEntryLedger.CommandQueue.InstanceMonitor,
+          DoubleEntryLedger.CommandQueue.QueryHelpers,
+          DoubleEntryLedger.CommandQueue.OwnershipError
         ],
         Telemetry: [
           DoubleEntryLedger.Telemetry
@@ -210,7 +212,8 @@ defmodule DoubleEntryLedger.MixProject do
           DoubleEntryLedger.Utils.Currency,
           DoubleEntryLedger.Utils.Map,
           DoubleEntryLedger.Utils.Traceable,
-          DoubleEntryLedger.Logger
+          DoubleEntryLedger.Logger,
+          DoubleEntryLedger.Config
         ],
         "Optimistic Concurrency Control": [
           DoubleEntryLedger.Occ.Processor,
