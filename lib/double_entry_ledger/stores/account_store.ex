@@ -64,16 +64,16 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
 
   import Ecto.Query, only: [from: 2]
 
-  alias DoubleEntryLedger.Command.AccountCommandMap
   alias DoubleEntryLedger.Apis.CommandApi
-  alias DoubleEntryLedger.Utils.Currency
+  alias DoubleEntryLedger.Command.AccountCommandMap
   alias DoubleEntryLedger.Stores.AccountStoreHelper
+  alias DoubleEntryLedger.Utils.Currency
 
   alias DoubleEntryLedger.{
     Account,
+    BalanceHistoryEntry,
     Instance,
-    Types,
-    BalanceHistoryEntry
+    Types
   }
 
   alias DoubleEntryLedger.Repo.Proxy, as: Repo

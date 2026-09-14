@@ -38,8 +38,9 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
     Transaction
   }
 
-  alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.CommandQueue.{OwnershipError, Scheduling}
+  alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
+  alias DoubleEntryLedger.Stores.CommandStore
 
   # ── helpers ──────────────────────────────────────────────────────
 
@@ -239,7 +240,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
           }
         )
 
-      {:ok, command} = DoubleEntryLedger.Stores.CommandStore.create(cmd_attrs)
+      {:ok, command} = CommandStore.create(cmd_attrs)
       reload_command_with_qi(command.id)
     end)
   end
@@ -1124,7 +1125,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
           }
         )
 
-      {:ok, new_create_cmd} = DoubleEntryLedger.Stores.CommandStore.create(new_create_attrs)
+      {:ok, new_create_cmd} = CommandStore.create(new_create_attrs)
       new_create_cmd = reload_command_with_qi(new_create_cmd.id)
 
       {new_create_success, advanced_a34} =

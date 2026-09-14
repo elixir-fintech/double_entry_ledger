@@ -6,7 +6,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Command, Account}
+  alias DoubleEntryLedger.{Account, Command}
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand
 

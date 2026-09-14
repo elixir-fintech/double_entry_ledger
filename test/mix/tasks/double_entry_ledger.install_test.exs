@@ -3,6 +3,8 @@ defmodule Mix.Tasks.DoubleEntryLedger.InstallTest do
 
   import ExUnit.CaptureIO
 
+  alias Mix.Tasks.DoubleEntryLedger.Install
+
   @tmp_dir Path.join(System.tmp_dir!(), "del_install_test")
 
   setup do
@@ -18,7 +20,7 @@ defmodule Mix.Tasks.DoubleEntryLedger.InstallTest do
   describe "run/1" do
     test "generates core migration file", %{migrations_path: migrations_path} do
       run_in_tmp(fn ->
-        capture_io(fn -> Mix.Tasks.DoubleEntryLedger.Install.run([]) end)
+        capture_io(fn -> Install.run([]) end)
 
         files = File.ls!(migrations_path)
         assert length(files) == 1
@@ -34,7 +36,7 @@ defmodule Mix.Tasks.DoubleEntryLedger.InstallTest do
 
     test "generates upgrade migration with --from", %{migrations_path: migrations_path} do
       run_in_tmp(fn ->
-        capture_io(fn -> Mix.Tasks.DoubleEntryLedger.Install.run(["--from", "1"]) end)
+        capture_io(fn -> Install.run(["--from", "1"]) end)
 
         files = File.ls!(migrations_path)
         assert length(files) == 1

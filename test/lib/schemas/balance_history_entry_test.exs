@@ -6,7 +6,7 @@ defmodule BalanceHistoryEntryTest do
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.{AccountFixtures, InstanceFixtures}
-  alias DoubleEntryLedger.{Account, Entry, BalanceHistoryEntry, Balance}
+  alias DoubleEntryLedger.{Account, Balance, BalanceHistoryEntry, Entry}
 
   doctest BalanceHistoryEntry
 

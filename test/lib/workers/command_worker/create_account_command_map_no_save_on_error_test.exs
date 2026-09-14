@@ -6,8 +6,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveO
   use DoubleEntryLedger.RepoCase
 
   alias DoubleEntryLedger.{Account, Command}
-  alias DoubleEntryLedger.Stores.InstanceStore
   alias DoubleEntryLedger.Command.{AccountCommandMap, AccountData}
+  alias DoubleEntryLedger.Stores.InstanceStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommandMapNoSaveOnError
 
   import DoubleEntryLedger.InstanceFixtures

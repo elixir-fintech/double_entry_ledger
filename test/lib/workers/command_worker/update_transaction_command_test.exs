@@ -15,8 +15,8 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
   alias DoubleEntryLedger.Command.TransactionData
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
-    UpdateTransactionCommand,
-    CreateTransactionCommand
+    CreateTransactionCommand,
+    UpdateTransactionCommand
   }
 
   alias DoubleEntryLedger.CommandQueue.Scheduling
@@ -228,7 +228,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
         new_create_transaction_command(ctx, :pending)
 
       {:error, failed_create_command} =
-        DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
+        Scheduling.schedule_retry_with_reason(
           pending_command,
           "some reason",
           :failed
@@ -251,7 +251,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
       %{command: %{command_map: %{source: s, source_idempk: s_id}} = pending_command} =
         new_create_transaction_command(ctx, :pending)
 
-      DoubleEntryLedger.CommandQueue.Scheduling.build_mark_as_dead_letter(
+      Scheduling.build_mark_as_dead_letter(
         pending_command,
         "some reason"
       )

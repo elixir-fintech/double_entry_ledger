@@ -50,12 +50,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
   import DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler,
     only: [default_response_handler: 2]
 
-  alias Ecto.{Changeset, Multi}
-  alias DoubleEntryLedger.Workers.CommandWorker.{AccountCommandMapResponseHandler}
   alias DoubleEntryLedger.Command.AccountCommandMap
   alias DoubleEntryLedger.JournalEvent
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.{AccountStoreHelper, CommandStoreHelper, InstanceStoreHelper}
+  alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandler
+  alias Ecto.{Changeset, Multi}
 
   @doc """
   Processes an AccountCommandMap to update an existing account in the ledger system.

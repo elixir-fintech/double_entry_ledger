@@ -9,6 +9,7 @@ defmodule DoubleEntryLedger.BatchSerializerTest do
   use ExUnit.Case, async: true
 
   alias DoubleEntryLedger.{Balance, BatchSerializer}
+  alias Money.Ecto.Map.Type
 
   describe "dump_balance/1" do
     test "produces a plain map of amount/debit/credit" do
@@ -42,7 +43,7 @@ defmodule DoubleEntryLedger.BatchSerializerTest do
     test "matches Money.Ecto.Map.Type.dump/1 (unwrapped) — byte-equivalent to legacy path" do
       money = Money.new(2_500, :EUR)
 
-      {:ok, ecto_dumped} = Money.Ecto.Map.Type.dump(money)
+      {:ok, ecto_dumped} = Type.dump(money)
 
       assert BatchSerializer.dump_money(money) == ecto_dumped
     end

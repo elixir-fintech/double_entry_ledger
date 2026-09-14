@@ -13,11 +13,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
   import DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler,
     only: [default_response_handler: 2]
 
-  alias Ecto.Multi
   alias DoubleEntryLedger.{Command, JournalEvent}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
+  alias Ecto.Multi
 
   @doc "Runs the create-account command and returns the handler response."
   @spec process(Command.t()) :: AccountCommandResponseHandler.response()

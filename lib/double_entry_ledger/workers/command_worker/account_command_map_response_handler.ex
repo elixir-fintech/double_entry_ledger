@@ -35,9 +35,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
       from_account_to_command_map_payload: 2
     ]
 
-  alias Ecto.Changeset
+  alias DoubleEntryLedger.{Account, Command, Telemetry}
   alias DoubleEntryLedger.Command.AccountCommandMap
-  alias DoubleEntryLedger.{Command, Account, Telemetry}
+  alias Ecto.Changeset
 
   @typedoc """
   Success response tuple containing the processed account and associated event.

@@ -206,19 +206,12 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
     StreamData.bind(
       StreamData.list_of(create_generator(addrs), min_length: 5, max_length: 20),
       fn raw_creates ->
-        creates =
-          if length(raw_creates) >= 5 do
-            stamp_unique_idempk(raw_creates)
-          else
-            stamp_unique_idempk(
-              raw_creates ++ List.duplicate(hd(raw_creates), 5 - length(raw_creates))
-            )
-          end
+        creates = stamp_unique_idempk(raw_creates)
 
         eligible_idempks =
-          Enum.flat_map(creates, fn c ->
-            if c.status == :pending, do: [c.idempk_idx], else: []
-          end)
+          creates
+          |> Enum.filter(&(&1.status == :pending))
+          |> Enum.map(& &1.idempk_idx)
 
         StreamData.bind(
           updates_generator(creates, eligible_idempks),
@@ -733,7 +726,7 @@ defmodule DoubleEntryLedger.BatchProcessorEquivalenceTest do
 
   defp section(label, mismatches, fmt) do
     header = "\n--- #{label} (#{length(mismatches)} mismatches) ---"
-    body = mismatches |> Enum.take(5) |> Enum.map(fmt) |> Enum.join("\n")
+    body = mismatches |> Enum.take(5) |> Enum.map_join("\n", fmt)
     extra = if length(mismatches) > 5, do: "\n  ... (#{length(mismatches) - 5} more)", else: ""
     header <> "\n" <> body <> extra
   end

@@ -59,8 +59,8 @@ defmodule DoubleEntryLedger.Command.TransactionData do
   @posted ["posted", :posted]
   @archived ["archived", :archived]
 
-  alias DoubleEntryLedger.Transaction
   alias DoubleEntryLedger.Command.EntryData
+  alias DoubleEntryLedger.Transaction
   alias __MODULE__, as: TransactionData
 
   @derive {Jason.Encoder, only: [:status, :entries]}

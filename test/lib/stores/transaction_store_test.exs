@@ -10,10 +10,10 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreTest do
   alias DoubleEntryLedger.Repo
 
   alias DoubleEntryLedger.Stores.{
-    TransactionStore,
-    TransactionStoreHelper,
+    AccountStore,
     InstanceStore,
-    AccountStore
+    TransactionStore,
+    TransactionStoreHelper
   }
 
   alias Ecto.Multi

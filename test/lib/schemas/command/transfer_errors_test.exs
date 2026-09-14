@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.Command.TransferErrorsTest do
     TransactionData
   }
 
-  alias DoubleEntryLedger.{Command, Account, Transaction}
+  alias DoubleEntryLedger.{Account, Command, Transaction}
 
   doctest TransferErrors
 

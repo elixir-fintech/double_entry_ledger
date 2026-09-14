@@ -46,7 +46,7 @@ defmodule DoubleEntryLedger.Stores.InstanceStore do
   to ensure consistency when concurrent operations are taking place.
   """
   import Ecto.Query, only: [from: 2]
-  alias DoubleEntryLedger.{Instance, Account, Telemetry}
+  alias DoubleEntryLedger.{Account, Instance, Telemetry}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 

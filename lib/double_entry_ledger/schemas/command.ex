@@ -11,10 +11,10 @@ defmodule DoubleEntryLedger.Command do
 
   alias DoubleEntryLedger.{
     Account,
-    Transaction,
+    CommandQueueItem,
     Instance,
     JournalEvent,
-    CommandQueueItem
+    Transaction
   }
 
   alias DoubleEntryLedger.Command.CommandMap

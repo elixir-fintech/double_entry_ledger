@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.JournalEvent do
 
   use DoubleEntryLedger.BaseSchema
 
-  alias DoubleEntryLedger.{Instance, Account, Command, Transaction}
+  alias DoubleEntryLedger.{Account, Command, Instance, Transaction}
 
   alias DoubleEntryLedger.Command.CommandMap
 

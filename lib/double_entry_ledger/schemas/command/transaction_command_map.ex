@@ -206,7 +206,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
     embeds_one(:payload, TransactionData, on_replace: :delete)
   end
 
-  def actions(), do: @actions
+  def actions, do: @actions
 
   @doc """
   Builds a validated TransactionCommandMap or returns a changeset with errors.

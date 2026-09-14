@@ -89,7 +89,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   alias DoubleEntryLedger.CommandQueue.InstanceMonitor
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
-  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionCommandMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
 
   @doc """

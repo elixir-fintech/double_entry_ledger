@@ -6,10 +6,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandTest do
   use ExUnit.Case, async: true
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.{Command, Account, Repo, CommandQueueItem}
+  alias DoubleEntryLedger.{Account, Command, CommandQueueItem, Repo}
+  alias DoubleEntryLedger.Command.AccountData
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.{CreateAccountCommand, UpdateAccountCommand}
-  alias DoubleEntryLedger.Command.AccountData
 
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.CommandFixtures
