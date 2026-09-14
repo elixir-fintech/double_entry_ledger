@@ -17,6 +17,14 @@ project follows [Semantic Versioning](https://semver.org/).
   and must be set consistently on every node that enqueues. No migration is
   required. `Config.serialize_enqueue?/0` exposes the flag.
 
+### Changed
+
+- Requires `flop ~> 0.29`. Flop 0.29 turned `Flop.Schema` from a protocol into
+  a behaviour, so the paginated schemas now configure it with `use Flop.Schema`
+  and `@flop_options` instead of `@derive`. The Flop options themselves are
+  unchanged. Applications that depend on Flop directly must also be on 0.29 or
+  later.
+
 ## [0.5.0]
 
 ### ⚠️ Breaking changes

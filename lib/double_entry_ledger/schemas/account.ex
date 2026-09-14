@@ -119,8 +119,9 @@ defmodule DoubleEntryLedger.Account do
           updated_at: DateTime.t() | nil
         }
 
-  @derive {
-    Flop.Schema,
+  use Flop.Schema
+
+  @flop_options [
     filterable: [:type, :currency, :address],
     sortable: [:inserted_at, :id, :address, :type, :currency],
     default_limit: 40,
@@ -129,7 +130,7 @@ defmodule DoubleEntryLedger.Account do
       order_by: [:inserted_at, :id],
       order_directions: [:desc, :desc]
     }
-  }
+  ]
 
   schema "accounts" do
     field(:currency, Ecto.Enum, values: @currency_atoms)

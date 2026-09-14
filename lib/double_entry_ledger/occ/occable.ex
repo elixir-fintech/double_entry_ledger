@@ -53,11 +53,11 @@ defprotocol DoubleEntryLedger.Occ.Occable do
 end
 
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
-  alias Ecto.{Multi, Repo, Changeset}
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Command.{ErrorMap, IdempotencyKey}
   alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
+  alias Ecto.{Changeset, Multi, Repo}
 
   @doc """
   Updates an Command with retry information during OCC retry cycles.
@@ -130,12 +130,12 @@ defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command do
 end
 
 defimpl DoubleEntryLedger.Occ.Occable, for: DoubleEntryLedger.Command.TransactionCommandMap do
-  alias Ecto.{Multi, Repo}
-  alias DoubleEntryLedger.Command.{ErrorMap, TransactionCommandMap, IdempotencyKey}
+  alias DoubleEntryLedger.Command.{ErrorMap, IdempotencyKey, TransactionCommandMap}
+  alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.PendingTransactionLookup
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, InstanceStoreHelper}
-  alias DoubleEntryLedger.Occ.Helper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
+  alias Ecto.{Multi, Repo}
 
   @doc """
   Updates an TransactionCommandMap during OCC retry cycles.
