@@ -112,20 +112,19 @@ defmodule BatchEquivalence do
     Repo
   }
 
+  alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Stores.CommandStore
+  alias Ecto.Adapters.SQL
 
   @num_accounts 10
 
   # Truncate all the listed tables in one statement. Using a single
   # TRUNCATE ... RESTART IDENTITY CASCADE keeps it atomic.
   def truncate!(tables, prefix) do
-    qualified =
-      tables
-      |> Enum.map(fn t -> ~s("#{prefix}".#{t}) end)
-      |> Enum.join(", ")
+    qualified = Enum.map_join(tables, ", ", fn t -> ~s("#{prefix}".#{t}) end)
 
     sql = "TRUNCATE #{qualified} RESTART IDENTITY CASCADE"
-    Ecto.Adapters.SQL.query!(Repo, sql, [])
+    SQL.query!(Repo, sql, [])
     :ok
   end
 
@@ -224,8 +223,7 @@ defmodule BatchEquivalence do
     # validation passes on the batched path (type preservation).
     updates =
       creates
-      |> Enum.filter(&(&1.payload.status == :pending))
-      |> Enum.filter(fn _ -> :rand.uniform(2) == 1 end)
+      |> Enum.filter(&(&1.payload.status == :pending and :rand.uniform(2) == 1))
       |> Enum.map(fn create ->
         new_status = Enum.random([:posted, :pending, :archived])
         new_amounts = regenerate_amounts(length(create.payload.entries))
@@ -262,7 +260,7 @@ defmodule BatchEquivalence do
   # preloaded with :command_queue_item, in the original order.
   def insert_commands(command_attrs) do
     Enum.map(command_attrs, fn attrs ->
-      {:ok, cmd_map} = DoubleEntryLedger.Command.TransactionCommandMap.create(attrs)
+      {:ok, cmd_map} = TransactionCommandMap.create(attrs)
       {:ok, command} = CommandStore.create(cmd_map)
 
       command

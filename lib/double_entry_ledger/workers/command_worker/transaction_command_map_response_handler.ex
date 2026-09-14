@@ -42,11 +42,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseH
       from_idempotency_key_to_command_map: 2
     ]
 
-  alias Ecto.{Changeset, Multi}
+  alias DoubleEntryLedger.Command.{IdempotencyKey, TransactionCommandMap}
   alias DoubleEntryLedger.Occ.Occable
-  alias DoubleEntryLedger.Command.{TransactionCommandMap, IdempotencyKey}
+  alias Ecto.{Changeset, Multi}
 
-  alias DoubleEntryLedger.{Command, Transaction, Telemetry}
+  alias DoubleEntryLedger.{Command, Telemetry, Transaction}
   alias DoubleEntryLedger.Workers.CommandWorker
 
   @doc """

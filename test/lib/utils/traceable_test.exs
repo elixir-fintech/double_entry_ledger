@@ -9,9 +9,9 @@ defmodule DoubleEntryLedger.Utils.TraceableTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
 
-  alias DoubleEntryLedger.Utils.Traceable
-  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionCommandMap}
   alias DoubleEntryLedger.Stores.CommandStore
+  alias DoubleEntryLedger.Utils.Traceable
 
   describe "Command trace_context propagation" do
     setup [:create_instance, :create_accounts]

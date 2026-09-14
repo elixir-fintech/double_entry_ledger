@@ -11,13 +11,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapTes
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias Ecto.Changeset
+  alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Command.TransactionCommandMap, as: TransactionCommandMapSchema
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap
+  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap
-  alias DoubleEntryLedger.Command
-  alias DoubleEntryLedger.Stores.CommandStore
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMap
+  alias Ecto.Changeset
 
   doctest UpdateTransactionCommandMap
 

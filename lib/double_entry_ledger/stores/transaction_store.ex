@@ -33,17 +33,17 @@ defmodule DoubleEntryLedger.Stores.TransactionStore do
 
   alias DoubleEntryLedger.{
     Account,
+    BalanceHistoryEntry,
     Entry,
     Instance,
-    Transaction,
-    BalanceHistoryEntry
+    Transaction
   }
 
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
-  alias DoubleEntryLedger.Stores.JournalEventStore
   alias DoubleEntryLedger.Apis.CommandApi
   alias DoubleEntryLedger.Command.TransactionCommandMap
+  alias DoubleEntryLedger.Stores.JournalEventStore
 
   @type entry_map() :: %{
           account_address: String.t(),

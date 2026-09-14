@@ -16,6 +16,7 @@ defmodule DoubleEntryLedger.Occ.ConcurrencyTest do
   alias DoubleEntryLedger.Apis.CommandApi
   alias DoubleEntryLedger.Repo
   alias DoubleEntryLedger.Stores.AccountStore
+  alias Ecto.Adapters.SQL.Sandbox
 
   setup [:create_instance, :create_accounts]
 
@@ -52,7 +53,7 @@ defmodule DoubleEntryLedger.Occ.ConcurrencyTest do
   } do
     a3 = account_fixture(instance_id: inst.id, type: :liability, normal_balance: :credit)
 
-    Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
+    Sandbox.mode(Repo, {:shared, self()})
 
     task1 =
       Task.async(fn ->

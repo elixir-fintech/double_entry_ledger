@@ -5,8 +5,8 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  alias Ecto.Changeset
   alias DoubleEntryLedger.CommandQueueItem
+  alias Ecto.Changeset
 
   doctest CommandQueueItem
 

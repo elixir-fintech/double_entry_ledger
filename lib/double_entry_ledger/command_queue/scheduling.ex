@@ -30,8 +30,8 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
-  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.CommandQueueItem
+  alias DoubleEntryLedger.Stores.CommandStore
   alias Ecto.Changeset
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()

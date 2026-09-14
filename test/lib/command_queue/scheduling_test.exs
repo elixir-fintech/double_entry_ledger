@@ -4,6 +4,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   """
   use ExUnit.Case, async: true
   import ExUnit.CaptureLog
+  alias Ecto.Adapters.SQL
   alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.CommandFixtures
@@ -284,7 +285,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert [] = Scheduling.claim_batch_for_processing([command], "proc-1", QueryCapturingRepo)
       assert_receive {:update_all_query, query}
 
-      {sql, params} = Ecto.Adapters.SQL.to_sql(:update_all, Repo, query)
+      {sql, params} = SQL.to_sql(:update_all, Repo, query)
 
       # The comparison happens in SQL; no BEAM-side timestamp is bound.
       assert sql =~ "timezone('UTC', statement_timestamp())"
@@ -500,7 +501,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         new_create_transaction_command(ctx, :pending)
 
       {:error, failed_create_command} =
-        DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
+        Scheduling.schedule_retry_with_reason(
           pending_command,
           "some reason",
           :failed
@@ -586,7 +587,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     test "evaluates retry eligibility on the database clock" do
       query = Scheduling.next_command_ids_query(Ecto.UUID.generate(), 10)
 
-      {sql, params} = Ecto.Adapters.SQL.to_sql(:all, Repo, query)
+      {sql, params} = SQL.to_sql(:all, Repo, query)
 
       assert sql =~ "timezone('UTC', statement_timestamp())"
       refute Enum.any?(params, &match?(%DateTime{}, &1))
@@ -598,7 +599,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     test "evaluates retry eligibility on the database clock" do
       query = Scheduling.instances_with_processable_commands_query()
 
-      {sql, params} = Ecto.Adapters.SQL.to_sql(:all, Repo, query)
+      {sql, params} = SQL.to_sql(:all, Repo, query)
 
       assert sql =~ "timezone('UTC', statement_timestamp())"
       refute Enum.any?(params, &match?(%DateTime{}, &1))

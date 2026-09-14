@@ -29,8 +29,8 @@ defmodule DoubleEntryLedger.BalanceHistoryEntry do
   chronological record of all balance changes in the system.
   """
   use DoubleEntryLedger.BaseSchema
+  alias DoubleEntryLedger.{Account, Balance, Entry}
   alias Ecto.Changeset
-  alias DoubleEntryLedger.{Account, Entry, Balance}
   alias __MODULE__, as: BalanceHistoryEntry
 
   @typedoc """

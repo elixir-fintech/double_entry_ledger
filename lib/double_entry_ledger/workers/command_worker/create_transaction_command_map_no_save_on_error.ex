@@ -15,10 +15,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
   import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
     only: [default_response_handler: 2]
 
-  alias Ecto.Changeset
   alias DoubleEntryLedger.Command.TransactionCommandMap
-  alias DoubleEntryLedger.Workers.CommandWorker
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
+  alias DoubleEntryLedger.Workers.CommandWorker
+  alias Ecto.Changeset
 
   @impl true
   defdelegate handle_transaction_map_error(command_map, error, repo),

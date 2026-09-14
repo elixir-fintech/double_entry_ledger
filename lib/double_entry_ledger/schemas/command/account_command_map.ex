@@ -151,7 +151,7 @@ defmodule DoubleEntryLedger.Command.AccountCommandMap do
     embeds_one(:payload, AccountData, on_replace: :delete)
   end
 
-  def actions(), do: @actions
+  def actions, do: @actions
 
   @doc """
   Creates and validates an AccountCommandMap from the given attributes.

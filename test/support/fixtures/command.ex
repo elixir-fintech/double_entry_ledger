@@ -6,10 +6,10 @@ defmodule DoubleEntryLedger.CommandFixtures do
   alias DoubleEntryLedger.Stores.CommandStore
 
   alias DoubleEntryLedger.Command.{
-    TransactionCommandMap,
-    TransactionData,
     AccountCommandMap,
-    AccountData
+    AccountData,
+    TransactionCommandMap,
+    TransactionData
   }
 
   import DoubleEntryLedger.Command.TransactionDataFixtures

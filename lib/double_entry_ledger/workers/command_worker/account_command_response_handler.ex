@@ -34,9 +34,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler 
       schedule_retry_with_reason: 3
     ]
 
-  alias Ecto.Changeset
-  alias DoubleEntryLedger.{Command, Account, Telemetry}
+  alias DoubleEntryLedger.{Account, Command, Telemetry}
   alias DoubleEntryLedger.CommandQueue.Scheduling
+  alias Ecto.Changeset
 
   @typedoc """
   Success response tuple containing the processed account and associated event.

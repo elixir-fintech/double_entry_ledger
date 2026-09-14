@@ -5,17 +5,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapTes
   use ExUnit.Case
   import Mox
 
+  alias DoubleEntryLedger.Command.{EntryData, TransactionCommandMap, TransactionData}
   alias Ecto.Changeset
-  alias DoubleEntryLedger.Command.{TransactionCommandMap, TransactionData, EntryData}
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap
   alias DoubleEntryLedger.{Command, PendingTransactionLookup}
   alias DoubleEntryLedger.Stores.CommandStore
+  alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap
 
   doctest CreateTransactionCommandMap
 

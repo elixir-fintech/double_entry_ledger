@@ -56,25 +56,25 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   alias Ecto.Changeset
 
   alias DoubleEntryLedger.{
+    Account,
     Command,
     CommandQueueItem,
-    Transaction,
-    Account,
-    Telemetry
+    Telemetry,
+    Transaction
   }
 
-  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionCommandMap}
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
     CreateAccountCommand,
-    CreateTransactionCommand,
-    UpdateAccountCommand,
-    UpdateTransactionCommand,
-    CreateTransactionCommandMap,
-    UpdateTransactionCommandMap,
     CreateAccountCommandMapNoSaveOnError,
-    UpdateAccountCommandMapNoSaveOnError,
+    CreateTransactionCommand,
+    CreateTransactionCommandMap,
     CreateTransactionCommandMapNoSaveOnError,
+    UpdateAccountCommand,
+    UpdateAccountCommandMapNoSaveOnError,
+    UpdateTransactionCommand,
+    UpdateTransactionCommandMap,
     UpdateTransactionCommandMapNoSaveOnError
   }
 

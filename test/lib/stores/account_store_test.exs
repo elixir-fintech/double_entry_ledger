@@ -10,8 +10,8 @@ defmodule DoubleEntryLedger.Stores.AccountStoreTest do
 
   alias DoubleEntryLedger.Stores.{
     AccountStore,
-    InstanceStore,
-    AccountStoreHelper
+    AccountStoreHelper,
+    InstanceStore
   }
 
   alias DoubleEntryLedger.Account

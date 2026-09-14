@@ -52,11 +52,11 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   """
 
-  alias Ecto.Multi
   alias DoubleEntryLedger.{Command, Transaction}
   alias DoubleEntryLedger.Command.ErrorMap
-  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
   alias DoubleEntryLedger.Occ.Occable
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
+  alias Ecto.Multi
 
   @doc """
   Builds an Ecto.Multi transaction for processing a command.
@@ -170,8 +170,8 @@ defmodule DoubleEntryLedger.Occ.Processor do
     quote do
       @behaviour DoubleEntryLedger.Occ.Processor
 
-      alias DoubleEntryLedger.Telemetry
       alias DoubleEntryLedger.Repo.Proxy, as: Repo
+      alias DoubleEntryLedger.Telemetry
       alias Ecto.Multi
       import DoubleEntryLedger.Occ.Helper
       import DoubleEntryLedger.CommandQueue.Scheduling
