@@ -87,10 +87,20 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   }
 
   alias DoubleEntryLedger.CommandQueue.InstanceMonitor
+  alias DoubleEntryLedger.Config
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
-  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionCommandMap}
   alias DoubleEntryLedger.Stores.InstanceStoreHelper
+
+  # First argument of the two-key `pg_advisory_xact_lock/2` taken by
+  # `create/1` when `:serialize_enqueue` is on. Namespaces the ledger's locks
+  # away from any advisory locks the consuming application uses.
+  @enqueue_lock_namespace 1_398_034_213
+
+  @doc false
+  @spec enqueue_lock_namespace() :: integer()
+  def enqueue_lock_namespace, do: @enqueue_lock_namespace
 
   @doc """
   Retrieves a command by its unique ID.
@@ -171,6 +181,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
            :instance,
            InstanceStoreHelper.build_get_id_by_address(attrs.instance_address)
          )
+         |> maybe_serialize_enqueue()
          |> Multi.insert(:command, fn %{instance: id} ->
            build_create(attrs, id)
          end)
@@ -204,6 +215,7 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
   def create(%{instance_address: address} = attrs) do
     case Multi.new()
          |> Multi.one(:instance, InstanceStoreHelper.build_get_id_by_address(address))
+         |> maybe_serialize_enqueue()
          |> Multi.insert(:command, fn %{instance: id} ->
            build_create(attrs, id)
          end)
@@ -215,6 +227,32 @@ defmodule DoubleEntryLedger.Stores.CommandStore do
 
       {:error, :command, changeset, _changes} ->
         {:error, changeset}
+    end
+  end
+
+  # With `:serialize_enqueue` on, take a transaction-scoped advisory lock on
+  # the instance before the queue item allocates its position. The lock is
+  # released when the enqueue transaction commits or rolls back, so positions
+  # for one ledger are allocated in commit order. Ledgers are locked
+  # independently: `hashtext/1` folds the UUID into the int4 key the
+  # two-argument lock takes, and a hash collision between two ledgers only
+  # serializes them needlessly.
+  defp maybe_serialize_enqueue(multi) do
+    if Config.serialize_enqueue?() do
+      Multi.run(multi, :serialize_enqueue, fn
+        _repo, %{instance: nil} ->
+          {:ok, nil}
+
+        repo, %{instance: instance_id} ->
+          repo.query!(
+            "SELECT pg_advisory_xact_lock($1, hashtext($2::text))",
+            [@enqueue_lock_namespace, instance_id]
+          )
+
+          {:ok, instance_id}
+      end)
+    else
+      multi
     end
   end
 

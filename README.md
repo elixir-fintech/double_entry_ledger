@@ -71,6 +71,7 @@ config :double_entry_ledger,
   idempotency_secret: System.fetch_env!("LEDGER_IDEMPOTENCY_SECRET"),
   start_command_queue: true,
   insert_path: :legacy,
+  serialize_enqueue: false,
   batch_enabled: false,
   batch_size: 8,
   max_batch_retries: 3,
@@ -109,6 +110,19 @@ write. Account commands continue through the single-command path.
 per database read; it is independent of `batch_size`. When batching is enabled,
 set it to at least `batch_size` and preferably to a multiple of `batch_size` so
 each database fetch can be divided into full batches.
+
+`serialize_enqueue: true` makes `CommandStore.create/1` take a
+transaction-scoped PostgreSQL advisory lock keyed on the ledger before the
+queue item allocates its position. Queue positions are assigned from a
+sequence, so without the lock two concurrent enqueues for one ledger can
+commit in the opposite order to their positions and the processor may see the
+later position first. With the lock, positions for one ledger are allocated in
+commit order. Ledgers are locked independently except for a possible 32-bit
+hash collision, which only adds waiting. The cost is that concurrent enqueues
+for the same ledger become serial, and if you wrap `create/1` in your own
+transaction the lock is held until that outer transaction ends. It is read at
+runtime and off by default. The setting is node-local, so every node that
+enqueues commands must enable it for the ordering guarantee to hold.
 Dependency configuration files are not loaded by a host application, so the
 `INSERT_PATH`, `BATCH`, and `BATCH_SIZE` environment-variable helpers in this
 repository's `config/runtime.exs` only apply when running this repository

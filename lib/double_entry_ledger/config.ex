@@ -24,6 +24,7 @@ defmodule DoubleEntryLedger.Config do
         max_batch_retries: 3,
         start_command_queue: true,
         insert_path: :legacy,
+        serialize_enqueue: false,
         max_retries: 5,
         retry_interval: 200,
         batch_size: 8,
@@ -44,6 +45,13 @@ defmodule DoubleEntryLedger.Config do
       form can be changed at release time.
     * `:start_command_queue` - supervise the queue on this node (default: `true`)
     * `:insert_path` - `:legacy` or `:insert_all` transaction insert path (default: `:legacy`)
+    * `:serialize_enqueue` - take a transaction-scoped PostgreSQL advisory lock
+      per ledger in `Stores.CommandStore.create/1`, so queue positions for one
+      ledger are allocated in commit order (default: `false`). Enqueues for the
+      same ledger then wait on each other; ledgers are locked independently
+      except for a possible 32-bit hash collision, which only adds waiting.
+      Node-local: every node that enqueues commands must set the same value,
+      or the commit-order guarantee does not hold.
     * `:max_retries` - OCC attempts before a command times out (default: `5`)
     * `:retry_interval` - OCC backoff base in milliseconds (default: `200`)
     * `:poll_interval` - monitor poll interval in milliseconds (default: `5_000`)
@@ -63,7 +71,7 @@ defmodule DoubleEntryLedger.Config do
   compile-environment mismatch on boot — even keys that other modules go on to
   read with `Application.get_env/3`. Everything outside that list
   (`:batch_enabled`, `:batch_size`, `:max_batch_retries`, `:insert_path`,
-  `:retry_interval`) is read at runtime.
+  `:serialize_enqueue`, `:retry_interval`) is read at runtime.
   """
 
   @schema_prefix Application.compile_env(
@@ -93,4 +101,13 @@ defmodule DoubleEntryLedger.Config do
   """
   @spec schema_prefix() :: String.t()
   def schema_prefix, do: @schema_prefix
+
+  @doc """
+  Whether `Stores.CommandStore.create/1` serializes enqueues per ledger.
+
+  Read at runtime. Defaults to `false`.
+  """
+  @spec serialize_enqueue?() :: boolean()
+  def serialize_enqueue?,
+    do: Application.get_env(:double_entry_ledger, :serialize_enqueue, false) == true
 end
