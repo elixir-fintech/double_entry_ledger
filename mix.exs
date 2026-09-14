@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.MixProject do
       {:money, "~> 1.12"},
       {:logger_json, "~> 7.0"},
       {:jason, "~> 1.4"},
-      {:flop, "~> 0.26"},
+      {:flop, "~> 0.29"},
       {:telemetry_metrics, "~> 1.0", optional: true},
 
       # dev and test deps

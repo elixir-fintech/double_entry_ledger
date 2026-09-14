@@ -80,8 +80,9 @@ defmodule DoubleEntryLedger.Instance do
           pending_credit: integer()
         }
 
-  @derive {
-    Flop.Schema,
+  use Flop.Schema
+
+  @flop_options [
     filterable: [:address],
     sortable: [:inserted_at, :id, :address],
     default_limit: 40,
@@ -90,7 +91,7 @@ defmodule DoubleEntryLedger.Instance do
       order_by: [:inserted_at, :id],
       order_directions: [:desc, :desc]
     }
-  }
+  ]
 
   schema "instances" do
     field(:config, :map)

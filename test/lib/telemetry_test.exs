@@ -343,7 +343,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
       test "returns a list of Telemetry.Metrics structs" do
         metrics = LedgerTelemetry.dashboard_metrics()
         assert is_list(metrics)
-        assert length(metrics) > 0
+        assert metrics != []
         assert Enum.all?(metrics, &is_struct/1)
       end
     end

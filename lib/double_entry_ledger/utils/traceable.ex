@@ -21,7 +21,7 @@ defprotocol DoubleEntryLedger.Utils.Traceable do
 end
 
 defimpl DoubleEntryLedger.Utils.Traceable, for: DoubleEntryLedger.Command do
-  alias DoubleEntryLedger.{Command, Account, Transaction}
+  alias DoubleEntryLedger.{Account, Command, Transaction}
   import DoubleEntryLedger.Utils.Changeset
 
   def metadata(%{command_queue_item: command_queue_item, command_map: command_map} = command) do
