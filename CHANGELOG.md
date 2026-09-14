@@ -4,6 +4,19 @@ All notable changes to DoubleEntryLedger are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Opt-in `serialize_enqueue` configuration (runtime, default `false`). When
+  enabled, `Stores.CommandStore.create/1` takes a transaction-scoped
+  PostgreSQL advisory lock keyed on the instance before the queue item is
+  inserted, so queue positions for one ledger are allocated in commit order.
+  Enqueues for the same ledger wait on each other; ledgers are locked
+  independently except for a possible hash collision. The flag is node-local
+  and must be set consistently on every node that enqueues. No migration is
+  required. `Config.serialize_enqueue?/0` exposes the flag.
+
 ## [0.5.0]
 
 ### ⚠️ Breaking changes
