@@ -35,8 +35,8 @@ defmodule DoubleEntryLedger.Transaction do
 
   alias DoubleEntryLedger.{
     Entry,
-    JournalEvent,
     Instance,
+    JournalEvent,
     Types
   }
 

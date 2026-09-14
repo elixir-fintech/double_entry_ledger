@@ -35,8 +35,8 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
   }
 
   alias DoubleEntryLedger.Command.TransactionData
-  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.CommandQueue.Scheduling
+  alias DoubleEntryLedger.Stores.CommandStore
 
   import Ecto.Query, only: [from: 2]
 

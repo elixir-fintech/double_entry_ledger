@@ -18,11 +18,11 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
 
   alias DoubleEntryLedger.Command.{
     AccountCommandMap,
-    TransactionCommandMap,
     AccountData,
-    TransactionData,
     EntryData,
-    IdempotencyKey
+    IdempotencyKey,
+    TransactionCommandMap,
+    TransactionData
   }
 
   alias DoubleEntryLedger.{Account, Command, Transaction}

@@ -267,22 +267,31 @@ defmodule DoubleEntryLedger.BatchProcessor do
     # so we discard the local copy and return the original `accounts` to
     # the caller via the error branch (state unchanged for this command).
     Enum.reduce_while(entries, {:ok, accounts, []}, fn entry, {:ok, accs, snaps} ->
-      case Map.fetch(accs, entry.account_id) do
-        {:ok, account} ->
-          case Account.compute_balance_changes(account, entry, trx) do
-            {:ok, change} ->
-              next_account = Account.apply_balance_change(account, change)
-              snapshot = Map.put(entry, :account_after, next_account)
-              {:cont, {:ok, Map.put(accs, account.id, next_account), [snapshot | snaps]}}
+      case apply_entry(accs, entry, trx) do
+        {:ok, next_account} ->
+          snapshot = Map.put(entry, :account_after, next_account)
+          {:cont, {:ok, Map.put(accs, next_account.id, next_account), [snapshot | snaps]}}
 
-            {:error, field, message} ->
-              {:halt, {:error, {:balance_change_error, field, message}}}
-          end
-
-        :error ->
-          {:halt, {:error, {:account_not_found, entry.account_id}}}
+        {:error, reason} ->
+          {:halt, {:error, reason}}
       end
     end)
+  end
+
+  @spec apply_entry(map(), entry(), DoubleEntryLedger.Types.trx_types()) ::
+          {:ok, Account.t()} | {:error, failure_reason()}
+  defp apply_entry(accounts, entry, trx) do
+    case Map.fetch(accounts, entry.account_id) do
+      {:ok, account} -> apply_balance_change(account, entry, trx)
+      :error -> {:error, {:account_not_found, entry.account_id}}
+    end
+  end
+
+  defp apply_balance_change(account, entry, trx) do
+    case Account.compute_balance_changes(account, entry, trx) do
+      {:ok, change} -> {:ok, Account.apply_balance_change(account, change)}
+      {:error, field, message} -> {:error, {:balance_change_error, field, message}}
+    end
   end
 
   @spec build_merged_accounts(map(), map()) :: %{Ecto.UUID.t() => merged_account_state()}
@@ -948,22 +957,25 @@ defmodule DoubleEntryLedger.BatchProcessor do
 
     result =
       Enum.reduce_while(new_entries, {:ok, []}, fn new_entry, {:ok, acc} ->
-        case Map.fetch(existing_by_account_id, new_entry.account_id) do
-          {:ok, existing} ->
-            if new_entry.type == existing.type do
-              {:cont, {:ok, [{new_entry, existing} | acc]}}
-            else
-              {:halt, {:error, :entry_type_changed}}
-            end
-
-          :error ->
-            {:halt, {:error, :entry_account_mismatch}}
+        case pair_entry(existing_by_account_id, new_entry) do
+          {:ok, existing} -> {:cont, {:ok, [{new_entry, existing} | acc]}}
+          {:error, reason} -> {:halt, {:error, reason}}
         end
       end)
 
     case result do
       {:ok, paired_rev} -> {:ok, Enum.reverse(paired_rev)}
       err -> err
+    end
+  end
+
+  defp pair_entry(existing_by_account_id, new_entry) do
+    new_type = new_entry.type
+
+    case Map.fetch(existing_by_account_id, new_entry.account_id) do
+      {:ok, %{type: ^new_type} = existing} -> {:ok, existing}
+      {:ok, _existing} -> {:error, :entry_type_changed}
+      :error -> {:error, :entry_account_mismatch}
     end
   end
 

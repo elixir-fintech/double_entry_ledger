@@ -55,8 +55,8 @@ defmodule DoubleEntryLedger.Account do
     BalanceHistoryEntry,
     Entry,
     Instance,
-    Types,
-    JournalEvent
+    JournalEvent,
+    Types
   }
 
   alias DoubleEntryLedger.Utils.Currency
@@ -638,7 +638,8 @@ defmodule DoubleEntryLedger.Account do
     |> optimistic_lock(:lock_version)
   end
 
-  # if the normal_balance is already set, do nothing. This allows for the setup of accounts with a specific normal_balance
+  # if the normal_balance is already set, do nothing. This allows for the setup of accounts
+  # with a specific normal_balance
   # such as contra accounts and similar
   @spec set_normal_balance_based_on_type(Changeset.t()) :: Changeset.t()
   defp set_normal_balance_based_on_type(%{changes: %{normal_balance: nb}} = changeset)

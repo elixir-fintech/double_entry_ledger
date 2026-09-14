@@ -6,8 +6,8 @@ defmodule DoubleEntryLedger.TransactionCommandTransformerTest do
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
   alias DoubleEntryLedger.Command.{EntryData, TransactionData}
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 

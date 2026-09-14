@@ -32,12 +32,12 @@ defmodule DoubleEntryLedger.Stores.CommandStoreHelper do
   """
   import Ecto.Query, only: [from: 2]
 
-  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
-  alias Ecto.Changeset
-  alias Ecto.Multi
-  alias DoubleEntryLedger.{Command, Transaction, Account, Entry, PendingTransactionLookup}
+  alias DoubleEntryLedger.{Account, Command, Entry, PendingTransactionLookup, Transaction}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionCommandMap}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
+  alias Ecto.Changeset
+  alias Ecto.Multi
 
   @doc """
   Builds an Command changeset from a TransactionCommandMap or AccountCommandMap.

@@ -15,8 +15,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.Command.TransactionData
   alias DoubleEntryLedger.CommandQueue.{InstanceProcessor, Scheduling}
-  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.{CommandQueueItem, Repo}
+  alias DoubleEntryLedger.Stores.CommandStore
 
   # ── Test stub modules for the batch path ─────────────────────────
   #

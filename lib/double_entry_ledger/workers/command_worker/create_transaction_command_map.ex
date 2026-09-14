@@ -31,10 +31,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMap do
   use DoubleEntryLedger.Logger
 
   alias DoubleEntryLedger.{Command, JournalEvent, PendingTransactionLookup}
-  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Command.TransactionCommandMap
-  alias DoubleEntryLedger.Workers.CommandWorker
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.{CommandStoreHelper, TransactionStoreHelper}
+  alias DoubleEntryLedger.Workers.CommandWorker
 
   alias Ecto.Multi
 

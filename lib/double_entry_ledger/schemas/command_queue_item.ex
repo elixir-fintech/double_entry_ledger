@@ -22,9 +22,9 @@ defmodule DoubleEntryLedger.CommandQueueItem do
 
   use DoubleEntryLedger.BaseSchema
   import Ecto.Changeset
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
-  alias DoubleEntryLedger.Command.ErrorMap
   alias DoubleEntryLedger.{Command, Instance}
+  alias DoubleEntryLedger.Command.ErrorMap
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import DoubleEntryLedger.Command.ErrorMap, only: [build_error: 1]
 
   alias __MODULE__, as: CommandQueueItem

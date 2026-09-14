@@ -5,8 +5,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommandMapNoS
   use ExUnit.Case
   import Mox
 
-  alias Ecto.Changeset
   alias DoubleEntryLedger.Command.TransactionCommandMap, as: TransactionCommandMapSchema
+  alias Ecto.Changeset
   use DoubleEntryLedger.RepoCase
 
   import DoubleEntryLedger.CommandFixtures

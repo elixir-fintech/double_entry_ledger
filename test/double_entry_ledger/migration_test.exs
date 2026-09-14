@@ -7,6 +7,7 @@ defmodule DoubleEntryLedger.MigrationTest do
 
   alias DoubleEntryLedger.{CommandQueueItem, Migration, Repo}
   alias DoubleEntryLedger.Stores.CommandStore
+  alias Ecto.Adapters.SQL
 
   @discarded_timestamp ~U[2000-01-01 00:00:00.000000Z]
   @prefix Application.compile_env(:double_entry_ledger, :schema_prefix, "double_entry_ledger")
@@ -401,11 +402,11 @@ defmodule DoubleEntryLedger.MigrationTest do
   end
 
   defp single_value(sql, args) do
-    %{rows: [[value]]} = Ecto.Adapters.SQL.query!(Repo, sql, args)
+    %{rows: [[value]]} = SQL.query!(Repo, sql, args)
     value
   end
 
   defp exists?(sql, args) do
-    Ecto.Adapters.SQL.query!(Repo, sql, args).num_rows > 0
+    SQL.query!(Repo, sql, args).num_rows > 0
   end
 end

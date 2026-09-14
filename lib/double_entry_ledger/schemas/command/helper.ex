@@ -32,7 +32,7 @@ defmodule DoubleEntryLedger.Command.Helper do
 
   @doc "Returns the regex a command's `source` must match."
   @spec source_regex() :: Regex.t()
-  def source_regex(), do: @source_regex
+  def source_regex, do: @source_regex
 
   @doc "Returns the regex an instance or account address must match."
   defdelegate address_regex(), to: Account

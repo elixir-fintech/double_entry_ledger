@@ -40,8 +40,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandResponseHand
       mark_as_dead_letter: 2
     ]
 
-  alias Ecto.{Multi, Changeset}
   alias DoubleEntryLedger.Occ.Occable
+  alias Ecto.{Changeset, Multi}
 
   alias DoubleEntryLedger.{Command, Telemetry}
   alias DoubleEntryLedger.CommandQueue.Scheduling

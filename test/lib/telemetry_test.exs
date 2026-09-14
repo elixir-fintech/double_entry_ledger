@@ -12,9 +12,10 @@ defmodule DoubleEntryLedger.TelemetryTest do
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.CommandFixtures
 
-  alias DoubleEntryLedger.Telemetry, as: LedgerTelemetry
-  alias DoubleEntryLedger.Stores.{CommandStore, InstanceStore}
   alias DoubleEntryLedger.Apis.CommandApi
+  alias DoubleEntryLedger.CommandQueue.Scheduling
+  alias DoubleEntryLedger.Stores.{CommandStore, InstanceStore}
+  alias DoubleEntryLedger.Telemetry, as: LedgerTelemetry
 
   describe "command_enqueue" do
     setup [:create_instance, :create_accounts]
@@ -40,7 +41,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       {:ok, _claimed} =
-        DoubleEntryLedger.CommandQueue.Scheduling.claim_command_for_processing(
+        Scheduling.claim_command_for_processing(
           command.id,
           "test_processor"
         )
@@ -61,7 +62,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       assert {:error, _updated_command} =
-               DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
+               Scheduling.schedule_retry_with_reason(
                  command,
                  "test error",
                  :failed
@@ -83,7 +84,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       assert {:error, _updated_command} =
-               DoubleEntryLedger.CommandQueue.Scheduling.mark_as_dead_letter(
+               Scheduling.mark_as_dead_letter(
                  command,
                  "terminal error"
                )

@@ -38,11 +38,11 @@ defmodule DoubleEntryLedger.LoadTesting do
   """
 
   alias DoubleEntryLedger.{Account, Balance, Instance, Repo}
-  alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Apis.CommandApi
+  alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.CommandQueue.InstanceProcessor
   alias DoubleEntryLedger.LoadTesting.TelemetryCollector
+  alias DoubleEntryLedger.Workers.CommandWorker
   @destination_accounts 10
   @drain_prefill_concurrency 10
   # Function to run a single transaction process
@@ -647,19 +647,17 @@ defmodule DoubleEntryLedger.LoadTesting do
 
     workers =
       Enum.map(0..(concurrency - 1), fn worker_id ->
-        spawn_link(fn ->
-          worker_loop(
-            parent,
-            instance,
-            transaction_lists,
-            num_rounds,
-            worker_id,
-            0,
-            0,
-            end_time,
-            worker_fn
-          )
-        end)
+        worker = %{
+          parent: parent,
+          instance: instance,
+          transaction_lists: transaction_lists,
+          num_rounds: num_rounds,
+          worker_id: worker_id,
+          end_time: end_time,
+          worker_fn: worker_fn
+        }
+
+        spawn_link(fn -> worker_loop(worker, 0, 0) end)
       end)
 
     collect_results(MapSet.new(workers), 0)
@@ -668,44 +666,26 @@ defmodule DoubleEntryLedger.LoadTesting do
   # Each worker is bound to a fixed source account (its worker_id). Across
   # iterations it cycles through the @destination_accounts destination accounts
   # for that source, mirroring the slot the original barrier-based driver would
-  # have placed it in. `worker_fn` is the per-iteration unit of work.
-  defp worker_loop(
-         parent,
-         instance,
-         transaction_lists,
-         num_rounds,
-         worker_id,
-         iter,
-         success_count,
-         end_time,
-         worker_fn
-       ) do
-    if System.monotonic_time(:millisecond) >= end_time do
-      send(parent, {:worker_done, self(), success_count})
+  # have placed it in. `worker.worker_fn` is the per-iteration unit of work;
+  # the fixed per-worker settings travel in the `worker` map, only `iter` and
+  # `success_count` change between iterations.
+  defp worker_loop(worker, iter, success_count) do
+    if System.monotonic_time(:millisecond) >= worker.end_time do
+      send(worker.parent, {:worker_done, self(), success_count})
     else
       params =
-        transaction_lists
-        |> Enum.at(rem(iter, num_rounds))
-        |> Enum.at(worker_id)
+        worker.transaction_lists
+        |> Enum.at(rem(iter, worker.num_rounds))
+        |> Enum.at(worker.worker_id)
 
       delta =
-        case worker_fn.(instance, params) do
+        case worker.worker_fn.(worker.instance, params) do
           {:ok, _, _} -> 1
           {:ok, _} -> 1
           _ -> 0
         end
 
-      worker_loop(
-        parent,
-        instance,
-        transaction_lists,
-        num_rounds,
-        worker_id,
-        iter + 1,
-        success_count + delta,
-        end_time,
-        worker_fn
-      )
+      worker_loop(worker, iter + 1, success_count + delta)
     end
   end
 

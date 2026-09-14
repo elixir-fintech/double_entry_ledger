@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer 
   and that entries are properly structured and valid before they are recorded in the ledger.
   """
 
-  alias DoubleEntryLedger.{Account, Types, Transaction}
+  alias DoubleEntryLedger.{Account, Transaction, Types}
   alias DoubleEntryLedger.Command.{EntryData, TransactionData}
   alias DoubleEntryLedger.Stores.AccountStore
 
