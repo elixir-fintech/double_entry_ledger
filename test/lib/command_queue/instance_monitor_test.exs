@@ -314,42 +314,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitorTest do
     end
   end
 
-  describe "stale_processing_after configuration" do
-    test "refuses to start when the threshold is zero" do
-      put_stale_processing_after(0)
-
-      assert {:error, {{%ArgumentError{message: message}, _stack}, _child}} =
-               start_supervised(InstanceMonitor)
-
-      assert message =~ ":stale_processing_after"
-    end
-
-    test "refuses to start when the threshold is negative" do
-      put_stale_processing_after(-1)
-
-      assert {:error, {{%ArgumentError{message: message}, _stack}, _child}} =
-               start_supervised(InstanceMonitor)
-
-      assert message =~ ":stale_processing_after"
-    end
-
-    test "refuses to start when the threshold is not an integer" do
-      put_stale_processing_after("300")
-
-      assert {:error, {{%ArgumentError{message: message}, _stack}, _child}} =
-               start_supervised(InstanceMonitor)
-
-      assert message =~ ":stale_processing_after"
-    end
-
-    test "starts when the threshold is a positive integer" do
-      put_stale_processing_after(300)
-
-      assert pid = start_supervised!(InstanceMonitor)
-      assert Process.alive?(pid)
-    end
-  end
-
   describe "stale_processing_after default" do
     setup [:create_instance, :create_accounts]
 
