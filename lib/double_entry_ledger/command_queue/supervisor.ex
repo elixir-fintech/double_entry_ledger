@@ -14,6 +14,8 @@ defmodule DoubleEntryLedger.CommandQueue.Supervisor do
 
   use Supervisor
 
+  alias DoubleEntryLedger.CommandQueue.Config
+
   @doc """
   Starts the command queue supervisor.
 
@@ -33,6 +35,8 @@ defmodule DoubleEntryLedger.CommandQueue.Supervisor do
   @impl true
   @doc false
   def init(_init_arg) do
+    Config.validate!()
+
     children = [
       {Registry, keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry},
       {DynamicSupervisor,

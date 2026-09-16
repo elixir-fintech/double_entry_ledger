@@ -76,16 +76,13 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
   alias DoubleEntryLedger.Command
-  alias DoubleEntryLedger.CommandQueue.{InstanceProcessor, Scheduling}
+  alias DoubleEntryLedger.CommandQueue.{Config, InstanceProcessor, Scheduling}
   alias DoubleEntryLedger.Telemetry
 
   # Rows recovered per poll. Stranded rows are expected to be rare, so this is
   # only a guard against one poll stalling on a large backlog; the remainder is
   # picked up by the next poll.
   @stale_recovery_limit 100
-
-  # Fallback when `:stale_processing_after` is not configured, in seconds.
-  @default_stale_processing_after 300
 
   # Client API
 
@@ -147,13 +144,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   @impl true
   @doc false
   def init(_) do
-    config = Application.get_env(:double_entry_ledger, :command_queue, [])
-    poll_interval = Keyword.get(config, :poll_interval, 5_000)
-
-    # Validate up front so a bad threshold fails at startup rather than
-    # crash-looping the poll.
-    _ = stale_processing_after()
-
+    poll_interval = Config.poll_interval()
     schedule_poll(poll_interval)
     {:ok, %{poll_interval: poll_interval}}
   end
@@ -168,7 +159,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
   """
   @spec recover_stale_processing_commands(Ecto.Repo.t()) :: :ok
   def recover_stale_processing_commands(repo \\ Repo) do
-    stale_after = stale_processing_after()
+    stale_after = Config.stale_processing_after()
 
     stale_after
     |> Scheduling.stale_processing_commands_query(@stale_recovery_limit)
@@ -239,28 +230,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
 
   defp emit_recovery({:error, %Ecto.Changeset{} = changeset}, _previous_processor_id, _stale_for) do
     Logger.error("could not recover stale command: #{inspect(changeset.errors)}")
-  end
-
-  # Read and validate together: a zero or negative threshold would make every
-  # `:processing` row instantly stale and recover live work on every poll, and
-  # a non-integer would reach PostgreSQL as a query parameter and crash the
-  # poll. `init/1` calls this so bad configuration fails at startup.
-  @spec stale_processing_after() :: pos_integer()
-  defp stale_processing_after do
-    :double_entry_ledger
-    |> Application.get_env(:command_queue, [])
-    |> Keyword.get(:stale_processing_after, @default_stale_processing_after)
-    |> validate_stale_processing_after()
-  end
-
-  @spec validate_stale_processing_after(term()) :: pos_integer()
-  defp validate_stale_processing_after(seconds) when is_integer(seconds) and seconds > 0,
-    do: seconds
-
-  defp validate_stale_processing_after(other) do
-    raise ArgumentError,
-          ":stale_processing_after must be a positive integer number of seconds, " <>
-            "got: #{inspect(other)}"
   end
 
   defp monitor_instances do
