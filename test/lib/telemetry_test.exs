@@ -340,11 +340,49 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   if Code.ensure_loaded?(Telemetry.Metrics) do
     describe "dashboard_metrics/0" do
-      test "returns a list of Telemetry.Metrics structs" do
-        metrics = LedgerTelemetry.dashboard_metrics()
-        assert is_list(metrics)
-        assert metrics != []
-        assert Enum.all?(metrics, &is_struct/1)
+      test "exposes a metric for every documented ledger event" do
+        names = Enum.map(LedgerTelemetry.dashboard_metrics(), & &1.name)
+
+        expected = [
+          [:double_entry_ledger, :command, :process, :stop, :duration],
+          [:double_entry_ledger, :command, :enqueue, :system_time],
+          [:double_entry_ledger, :command, :claim, :system_time],
+          [:double_entry_ledger, :command, :retry, :system_time],
+          [:double_entry_ledger, :command, :dead_letter, :system_time],
+          [:double_entry_ledger, :command, :recovered, :system_time],
+          [:double_entry_ledger, :command, :idempotency_hit, :system_time],
+          [:double_entry_ledger, :occ, :retry, :system_time],
+          [:double_entry_ledger, :transaction, :created, :system_time],
+          [:double_entry_ledger, :transaction, :posted, :system_time],
+          [:double_entry_ledger, :transaction, :archived, :system_time],
+          [:double_entry_ledger, :account, :created, :system_time],
+          [:double_entry_ledger, :account, :updated, :system_time],
+          [:double_entry_ledger, :instance, :created, :system_time]
+        ]
+
+        assert [] == expected -- names
+      end
+
+      test "builds only counter and summary metrics" do
+        kinds =
+          LedgerTelemetry.dashboard_metrics()
+          |> Enum.map(& &1.__struct__)
+          |> Enum.uniq()
+          |> Enum.sort()
+
+        assert kinds == [Telemetry.Metrics.Counter, Telemetry.Metrics.Summary]
+      end
+
+      test "reports command processing duration as a millisecond summary" do
+        duration =
+          Enum.find(
+            LedgerTelemetry.dashboard_metrics(),
+            &(&1.name == [:double_entry_ledger, :command, :process, :stop, :duration])
+          )
+
+        assert duration.unit == :millisecond
+        assert duration.tags == [:action, :source]
+        assert duration.event_name == [:double_entry_ledger, :command, :process, :stop]
       end
     end
   end
