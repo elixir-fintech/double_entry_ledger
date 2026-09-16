@@ -2,7 +2,7 @@ defmodule DoubleEntryLedger.Migration.Version do
   @moduledoc false
 
   # Shared boilerplate for the per-version migration modules
-  # (`DoubleEntryLedger.Migration.V1` … `V5`). It exists so the five of them do
+  # (`DoubleEntryLedger.Migration.V1` … `V6`). It exists so the six of them do
   # not each repeat `use Ecto.Migration` plus an identical `default_prefix/0`.
   #
   # It is deliberately not a behaviour and carries no dispatch: each version
