@@ -43,6 +43,10 @@ defmodule DoubleEntryLedger.Migration do
       queue-item timestamps — including the `next_retry_after` deadline
       computed from a transient `retry_delay_seconds` instruction — onto the
       PostgreSQL clock. See `DoubleEntryLedger.Migration.V5`.
+    * Version 6 — adds `command_queue_leases`, one row per instance recording
+      the current owner, a fencing token, and a database-clock expiry. This
+      version is one-way: `down/1` refuses to roll back past it. See
+      `DoubleEntryLedger.Migration.V6`.
 
   New consumers add a single migration calling `up()` / `down()` — all versions
   apply in order. Existing consumers upgrading to a new library release add a
@@ -79,9 +83,9 @@ defmodule DoubleEntryLedger.Migration do
 
   use Ecto.Migration
 
-  alias DoubleEntryLedger.Migration.{V1, V2, V3, V4, V5}
+  alias DoubleEntryLedger.Migration.{V1, V2, V3, V4, V5, V6}
 
-  @latest_version 5
+  @latest_version 6
 
   @doc "Returns the latest migration version."
   @spec latest_version() :: pos_integer()
@@ -127,7 +131,12 @@ defmodule DoubleEntryLedger.Migration do
       flush()
     end
 
-    if from < 5 and version >= 5, do: V5.up(prefix)
+    if from < 5 and version >= 5 do
+      V5.up(prefix)
+      flush()
+    end
+
+    if from < 6 and version >= 6, do: V6.up(prefix)
 
     :ok
   end
@@ -151,6 +160,10 @@ defmodule DoubleEntryLedger.Migration do
     version = Keyword.get(opts, :version, 0)
     from = Keyword.get(opts, :from, @latest_version)
     prefix = prefix(opts)
+
+    if from >= 6 and version < 6 do
+      raise "migration 6 is one-way; restore a database backup to return to 0.5"
+    end
 
     if from >= 5 and version < 5 do
       V5.down(prefix)
