@@ -21,6 +21,40 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
                     |> Keyword.get(:base_retry_delay, 30)
   @first_retry_delay_range @base_retry_delay..(@base_retry_delay + div(@base_retry_delay, 10) + 1)
 
+  # `Scheduling.reschedule_orphaned_processing!/2`'s dead-letter boundary.
+  @max_retries Application.compile_env(:double_entry_ledger, :command_queue, [])
+               |> Keyword.get(:max_retries, 5)
+
+  defp mark_processing(command, processor_id) do
+    {1, _} =
+      Repo.update_all(
+        from(q in CommandQueueItem, where: q.command_id == ^command.id),
+        set: [status: :processing, processor_id: processor_id]
+      )
+
+    :ok
+  end
+
+  defmodule RaisesOnSecondWriteRepo do
+    @moduledoc false
+    # Loads normally and delegates the first write to the real Repo, so it
+    # really lands, then raises on every write after that. A test can use
+    # this to prove that a later failure rolls back an earlier write that
+    # already succeeded inside the same caller transaction. State lives in
+    # the process dictionary of the (single, synchronous) caller process,
+    # not in the test body.
+    def all(query), do: DoubleEntryLedger.Repo.all(query)
+
+    def update!(changeset) do
+      if Process.get(__MODULE__) do
+        raise Postgrex.Error, message: "simulated write failure"
+      else
+        Process.put(__MODULE__, true)
+        DoubleEntryLedger.Repo.update!(changeset)
+      end
+    end
+  end
+
   defmodule QueryCapturingRepo do
     @moduledoc false
     # Stands in for the repo passed to `claim_batch_for_processing/3` so a test
@@ -490,6 +524,169 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       assert log =~ "command #{command.id} persisted with failed status"
       assert log =~ "retry reason"
+    end
+  end
+
+  describe "build_schedule_retry_with_reason/4 with retry_delay: 0" do
+    setup [:create_instance, :create_accounts]
+
+    test "writes a zero delay so the row is eligible at once", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      {:ok, updated} =
+        command
+        |> Scheduling.build_schedule_retry_with_reason("orphaned", :failed, retry_delay: 0)
+        |> Repo.update()
+
+      assert updated.command_queue_item.status == :failed
+      assert [updated.id] == Repo.all(Scheduling.next_command_ids_query(instance.id, 10))
+    end
+  end
+
+  describe "reschedule_orphaned_processing!/2" do
+    setup [:create_instance, :create_accounts]
+
+    test "reschedules every :processing row regardless of processor_id, in position order", %{
+      instance: instance
+    } do
+      {:ok, first} =
+        CommandStore.create(
+          transaction_command_attrs(instance_address: instance.address, source_idempk: "one")
+        )
+
+      {:ok, second} =
+        CommandStore.create(
+          transaction_command_attrs(instance_address: instance.address, source_idempk: "two")
+        )
+
+      mark_processing(first, "legacy-a")
+      mark_processing(second, "legacy-b")
+
+      {:ok, orphans} =
+        Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
+
+      assert Enum.map(orphans, & &1.id) == [first.id, second.id]
+      assert Enum.all?(orphans, &(&1.command_queue_item.status == :failed))
+      assert Enum.all?(orphans, &is_nil(&1.command_queue_item.processor_id))
+      assert Repo.all(Scheduling.next_command_ids_query(instance.id, 10)) == [first.id, second.id]
+    end
+
+    test "returns rows in queue position order even when marked :processing in reverse order",
+         %{instance: instance} do
+      {:ok, first} =
+        CommandStore.create(
+          transaction_command_attrs(instance_address: instance.address, source_idempk: "one")
+        )
+
+      {:ok, second} =
+        CommandStore.create(
+          transaction_command_attrs(instance_address: instance.address, source_idempk: "two")
+        )
+
+      {:ok, third} =
+        CommandStore.create(
+          transaction_command_attrs(instance_address: instance.address, source_idempk: "three")
+        )
+
+      mark_processing(third, "legacy-c")
+      mark_processing(second, "legacy-b")
+      mark_processing(first, "legacy-a")
+
+      {:ok, orphans} =
+        Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
+
+      assert Enum.map(orphans, & &1.id) == [first.id, second.id, third.id]
+    end
+
+    test "does not touch another instance's :processing row", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      mark_processing(command, "legacy-a")
+
+      other_instance = instance_fixture(address: "other:instance:address")
+
+      {:ok, other_command} =
+        CommandStore.create(transaction_command_attrs(instance_address: other_instance.address))
+
+      mark_processing(other_command, "other-node")
+
+      {:ok, orphans} =
+        Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
+
+      assert Enum.map(orphans, & &1.id) == [command.id]
+
+      untouched = Repo.get_by(CommandQueueItem, command_id: other_command.id)
+      assert untouched.status == :processing
+      assert untouched.processor_id == "other-node"
+      assert untouched.retry_count == 0
+      assert untouched.errors == []
+      assert untouched.next_retry_after == nil
+    end
+
+    test "records the previous processor in the error", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      mark_processing(command, "legacy-a")
+
+      {:ok, [orphan]} =
+        Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
+
+      assert hd(orphan.command_queue_item.errors).message =~ "legacy-a"
+      assert hd(orphan.command_queue_item.errors).message =~ "orphaned by lease acquisition"
+    end
+
+    test "dead-letters an orphan already at max retries", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      mark_processing(command, "legacy-a")
+
+      Repo.update_all(
+        from(q in CommandQueueItem, where: q.command_id == ^command.id),
+        set: [retry_count: @max_retries]
+      )
+
+      {:ok, [orphan]} =
+        Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
+
+      assert orphan.command_queue_item.status == :dead_letter
+    end
+
+    test "returns [] when nothing is :processing", %{instance: instance} do
+      {:ok, _} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      {:ok, []} =
+        Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
+    end
+
+    test "rolls back an earlier successful write when a later write in the same call fails", %{
+      instance: instance
+    } do
+      {:ok, first} =
+        CommandStore.create(
+          transaction_command_attrs(instance_address: instance.address, source_idempk: "one")
+        )
+
+      {:ok, second} =
+        CommandStore.create(
+          transaction_command_attrs(instance_address: instance.address, source_idempk: "two")
+        )
+
+      mark_processing(first, "legacy-a")
+      mark_processing(second, "legacy-b")
+
+      assert_raise Postgrex.Error, fn ->
+        Repo.transaction(fn ->
+          Scheduling.reschedule_orphaned_processing!(instance.id, RaisesOnSecondWriteRepo)
+        end)
+      end
+
+      assert Repo.get_by(CommandQueueItem, command_id: first.id).status == :processing
+      assert Repo.get_by(CommandQueueItem, command_id: second.id).status == :processing
     end
   end
 

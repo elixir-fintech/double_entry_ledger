@@ -343,37 +343,72 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the command
   """
-  @spec build_schedule_retry_with_reason(Command.t(), String.t() | nil, CommandQueueItem.state()) ::
-          Changeset.t()
+  @spec build_schedule_retry_with_reason(
+          Command.t(),
+          String.t() | nil,
+          CommandQueueItem.state(),
+          keyword()
+        ) :: Changeset.t()
   def build_schedule_retry_with_reason(
         %{command_queue_item: command_queue_item} = command,
         error,
-        status
+        status,
+        opts \\ []
       ) do
     retry_count = command_queue_item.retry_count || 0
 
     if retry_count >= @max_retries do
-      # Max retries exceeded, mark as dead letter
       build_mark_as_dead_letter(
         command,
         "Max retry count (#{@max_retries}) exceeded: #{error || status}"
       )
     else
-      # Exponential-backoff delay; the database turns it into next_retry_after.
-      retry_delay = calculate_retry_delay(retry_count)
+      # `retry_delay: 0` is used by lease takeover so orphaned rows are
+      # eligible at once; everything else gets exponential backoff.
+      retry_delay =
+        Keyword.get_lazy(opts, :retry_delay, fn -> calculate_retry_delay(retry_count) end)
 
       command_queue_item_changeset =
-        command_queue_item
-        |> CommandQueueItem.schedule_retry_changeset(
-          error,
-          status,
-          retry_delay
-        )
+        CommandQueueItem.schedule_retry_changeset(command_queue_item, error, status, retry_delay)
 
       command
       |> change(%{})
       |> put_assoc(:command_queue_item, command_queue_item_changeset)
     end
+  end
+
+  @doc """
+  Reschedules every `:processing` row on `instance_id`, whatever its
+  `processor_id`, as `:failed` with a zero retry delay, and returns the
+  updated commands with their queue items, lowest queue position first.
+
+  Called during lease takeover inside a transaction that already holds the
+  lease row lock, which proves no live lease-aware owner exists, so every
+  `:processing` row is an orphan (a dead owner, a rolling deploy in progress,
+  or a pre-lease manual call). Raises on any failure, including
+  `Ecto.StaleEntryError`, so the caller's transaction rolls back. Emits
+  nothing; the caller emits after commit.
+  """
+  @spec reschedule_orphaned_processing!(Ecto.UUID.t(), Ecto.Repo.t()) :: [Command.t()]
+  def reschedule_orphaned_processing!(instance_id, repo) do
+    from(c in Command,
+      prefix: ^@schema_prefix,
+      join: cqi in CommandQueueItem,
+      on: cqi.command_id == c.id,
+      where: cqi.instance_id == ^instance_id and cqi.status == :processing,
+      order_by: [asc: cqi.queue_position],
+      preload: [command_queue_item: cqi]
+    )
+    |> repo.all()
+    |> Enum.map(fn command ->
+      reason =
+        "orphaned by lease acquisition; previous processor " <>
+          inspect(command.command_queue_item.processor_id)
+
+      command
+      |> build_schedule_retry_with_reason(reason, :failed, retry_delay: 0)
+      |> repo.update!()
+    end)
   end
 
   @doc """
