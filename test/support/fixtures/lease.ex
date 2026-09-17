@@ -6,6 +6,7 @@ defmodule DoubleEntryLedger.LeaseFixtures do
   import Ecto.Query, only: [from: 2]
   import ExUnit.Callbacks, only: [on_exit: 1]
 
+  alias DoubleEntryLedger.CommandQueue.Lease
   alias DoubleEntryLedger.CommandQueue.Lease.Grant
   alias DoubleEntryLedger.{CommandQueueLease, Repo}
 
@@ -30,6 +31,12 @@ defmodule DoubleEntryLedger.LeaseFixtures do
 
   def lease_row(instance_id), do: Repo.get(CommandQueueLease, instance_id)
 
+  @doc "Acquires a lease under a unique test owner and returns the grant."
+  def test_grant(instance_id) do
+    {:ok, grant, _info} = Lease.acquire(instance_id, "test:" <> Ecto.UUID.generate())
+    grant
+  end
+
   @doc "Moves the lease's expiry one hour into the database's past."
   def expire_lease(instance_id) do
     {1, _} =
@@ -52,7 +59,9 @@ defmodule DoubleEntryLedger.LeaseFixtures do
   the probe after it began are visible to `Repo`; rows inserted through `Repo`
   are *not* visible to the probe, which is why contention fixtures cannot use
   the sandbox. Registers an `on_exit` that deletes the instance (the lease row
-  follows by `on_delete: :delete_all`) over a fresh connection.
+  follows by `on_delete: :delete_all`) over a fresh connection, then calls
+  `discard_sandbox_writes/0` so that delete is never blocked by a lock the
+  sandbox is still holding on the row.
   """
   def committed_lease(probe, owner_id, token) do
     instance_id = Ecto.UUID.generate()
@@ -81,8 +90,61 @@ defmodule DoubleEntryLedger.LeaseFixtures do
     )
 
     on_exit(fn -> delete_committed_instance(dumped) end)
+    discard_sandbox_writes()
 
     %Grant{instance_id: instance_id, owner_id: owner_id, fencing_token: token}
+  end
+
+  @doc """
+  Discards, at teardown, every write the sandbox connection makes from here on.
+
+  Called by `committed_lease/3`, which is the only caller it needs: a
+  `committed_lease/3` row lives outside the sandbox, so a `Repo` write to it
+  holds a row lock until the sandbox transaction ends — and ExUnit ends it only
+  after the last `on_exit` has run, so `committed_lease/3`'s own DELETE would
+  block on that lock until its `lock_timeout` fired. Rolling back to the
+  savepoint releases those locks first.
+
+  `on_exit` is LIFO, so this is registered after `committed_lease/3`'s delete
+  and before anything a test registers later, such as `hold_lock_on_probe/2`'s
+  rollback: probe lock released, then sandbox writes discarded, then the row
+  deleted. `sandbox_subtransaction: false` is required: the sandbox otherwise
+  wraps every statement outside an Ecto transaction in a savepoint of its own
+  and releases it afterwards, which would discard this one the moment it was
+  created.
+  """
+  def discard_sandbox_writes do
+    savepoint = "lease_fixture_#{System.unique_integer([:positive])}"
+    Repo.query!("SAVEPOINT #{savepoint}", [], sandbox_subtransaction: false)
+
+    on_exit(fn ->
+      Repo.query!("ROLLBACK TO SAVEPOINT #{savepoint}", [], sandbox_subtransaction: false)
+    end)
+
+    :ok
+  end
+
+  @doc """
+  Expires a `committed_lease/3` row over the probe's own connection, which
+  autocommits.
+
+  `expire_lease/1` cannot be used for it: that runs through `Repo`, whose
+  sandbox transaction would then hold the row lock for the rest of the test and
+  block `hold_lock_on_probe/2` forever.
+  """
+  def expire_lease_on_probe(probe, %Grant{instance_id: instance_id}) do
+    %Postgrex.Result{num_rows: 1} =
+      Postgrex.query!(
+        probe,
+        """
+        UPDATE #{@prefix}.command_queue_leases
+        SET expires_at = timezone('UTC', clock_timestamp()) - interval '1 hour'
+        WHERE instance_id = $1
+        """,
+        [Ecto.UUID.dump!(instance_id)]
+      )
+
+    :ok
   end
 
   @doc """
