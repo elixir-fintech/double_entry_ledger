@@ -34,6 +34,10 @@ defmodule DoubleEntryLedger.Telemetry do
   | `[:double_entry_ledger, :batch, :processed]` | Batch write completed |
   | `[:double_entry_ledger, :instance_processor, :start]` | Instance processor started |
   | `[:double_entry_ledger, :instance_processor, :stop]` | Instance processor stopped |
+  | `[:double_entry_ledger, :lease, :acquired]` | Ledger lease acquired (fresh or takeover) |
+  | `[:double_entry_ledger, :lease, :renewed]` | Ledger lease renewed by an idle heartbeat |
+  | `[:double_entry_ledger, :lease, :lost]` | Owner found its lease taken by another owner |
+  | `[:double_entry_ledger, :lease, :released]` | Ledger lease released gracefully |
 
   ## Phoenix LiveDashboard Integration
 
@@ -152,6 +156,8 @@ defmodule DoubleEntryLedger.Telemetry do
     - `:stale_for_seconds` - Seconds the row spent in `:processing`, measured
       on the database clock
     - `:trace_context` - Consumer-supplied tracing context (map or nil)
+    - `:reason` - `:stale_sweep` (monitor sweep) or `:takeover` (a lease
+      acquisition rescheduled the row)
   """
   @spec command_recovered(map()) :: :ok
   def command_recovered(metadata) do
@@ -303,6 +309,46 @@ defmodule DoubleEntryLedger.Telemetry do
   end
 
   @doc """
+  Emits a lease acquired event, after the acquisition committed.
+
+  ## Metadata
+    - `:instance_id`, `:owner_id`, `:fencing_token`
+    - `:takeover` - `true` when the previous owner expired without releasing
+    - `:previous_owner_id` - previous owner, or nil for a fresh lease
+    - `:orphans` - number of `:processing` rows rescheduled by the acquisition
+    - `:coordination` - who nominated this owner: the `Coordinator` strategy
+      (`:database_polling`) or `:manual`. Present on all four lease events.
+  """
+  @spec lease_acquired(map()) :: :ok
+  def lease_acquired(metadata), do: execute([:double_entry_ledger, :lease, :acquired], metadata)
+
+  @doc "Emits a lease renewed event from an idle heartbeat. Metadata: `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`."
+  @spec lease_renewed(map()) :: :ok
+  def lease_renewed(metadata), do: execute([:double_entry_ledger, :lease, :renewed], metadata)
+
+  @doc """
+  Emits a lease lost event: an owner-filtered update matched zero rows
+  because another owner holds the ledger. Alert on this.
+
+  ## Metadata
+    - `:instance_id`, `:owner_id`, `:fencing_token`
+    - `:source` - `:renewal`, `:claim`, or `:transaction`
+  """
+  @spec lease_lost(map()) :: :ok
+  def lease_lost(metadata), do: execute([:double_entry_ledger, :lease, :lost], metadata)
+
+  @doc """
+  Emits a lease released event, after the release committed.
+
+  ## Metadata
+    - `:instance_id`, `:owner_id`, `:fencing_token`
+    - `:reason` - `:drained`, `:shutdown`, `:manual`, `:start_failed`, or
+      `:monitor_down` (the acquisition task saw its monitor die before replying)
+  """
+  @spec lease_released(map()) :: :ok
+  def lease_released(metadata), do: execute([:double_entry_ledger, :lease, :released], metadata)
+
+  @doc """
   Emits the appropriate transaction lifecycle event based on the transaction's state.
 
   Dispatches to `transaction_created/1`, `transaction_posted/1`, or
@@ -428,7 +474,11 @@ defmodule DoubleEntryLedger.Telemetry do
           tags: [:type, :currency]
         ),
         counter("double_entry_ledger.account.updated.system_time"),
-        counter("double_entry_ledger.instance.created.system_time")
+        counter("double_entry_ledger.instance.created.system_time"),
+        counter("double_entry_ledger.lease.acquired.system_time", tags: [:takeover]),
+        counter("double_entry_ledger.lease.renewed.system_time"),
+        counter("double_entry_ledger.lease.lost.system_time", tags: [:source]),
+        counter("double_entry_ledger.lease.released.system_time", tags: [:reason])
       ]
     end
   end

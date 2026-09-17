@@ -314,6 +314,89 @@ defmodule DoubleEntryLedger.TelemetryTest do
     end
   end
 
+  describe "lease events" do
+    test "lease_acquired/1 emits with metadata" do
+      ref = attach_telemetry([:double_entry_ledger, :lease, :acquired])
+
+      LedgerTelemetry.lease_acquired(%{
+        instance_id: "i",
+        owner_id: "o",
+        fencing_token: 1,
+        takeover: false,
+        previous_owner_id: nil,
+        orphans: 0
+      })
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :lease, :acquired],
+                      %{system_time: _}, %{owner_id: "o", fencing_token: 1, takeover: false}}
+    end
+
+    test "lease_renewed/1 emits with owner and token" do
+      ref = attach_telemetry([:double_entry_ledger, :lease, :renewed])
+      LedgerTelemetry.lease_renewed(%{instance_id: "i", owner_id: "o", fencing_token: 1})
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :lease, :renewed],
+                      %{system_time: _}, %{owner_id: "o", fencing_token: 1}}
+    end
+
+    test "lease_lost/1 emits with source" do
+      ref = attach_telemetry([:double_entry_ledger, :lease, :lost])
+
+      LedgerTelemetry.lease_lost(%{
+        instance_id: "i",
+        owner_id: "o",
+        fencing_token: 1,
+        source: :renewal
+      })
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :lease, :lost],
+                      %{system_time: _}, %{source: :renewal}}
+    end
+
+    test "lease_released/1 emits with reason" do
+      ref = attach_telemetry([:double_entry_ledger, :lease, :released])
+
+      LedgerTelemetry.lease_released(%{
+        instance_id: "i",
+        owner_id: "o",
+        fencing_token: 1,
+        reason: :drained
+      })
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :lease, :released],
+                      %{system_time: _}, %{reason: :drained}}
+    end
+
+    test "dashboard_metrics/0 counts the four lease events" do
+      names = Enum.map(LedgerTelemetry.dashboard_metrics(), & &1.name)
+
+      assert [:double_entry_ledger, :lease, :acquired, :system_time] in names
+      assert [:double_entry_ledger, :lease, :renewed, :system_time] in names
+      assert [:double_entry_ledger, :lease, :lost, :system_time] in names
+      assert [:double_entry_ledger, :lease, :released, :system_time] in names
+    end
+
+    test "dashboard_metrics/0 tags the four lease counters" do
+      metrics = LedgerTelemetry.dashboard_metrics()
+
+      acquired =
+        Enum.find(metrics, &(&1.name == [:double_entry_ledger, :lease, :acquired, :system_time]))
+
+      renewed =
+        Enum.find(metrics, &(&1.name == [:double_entry_ledger, :lease, :renewed, :system_time]))
+
+      lost = Enum.find(metrics, &(&1.name == [:double_entry_ledger, :lease, :lost, :system_time]))
+
+      released =
+        Enum.find(metrics, &(&1.name == [:double_entry_ledger, :lease, :released, :system_time]))
+
+      assert acquired.tags == [:takeover]
+      assert renewed.tags == []
+      assert lost.tags == [:source]
+      assert released.tags == [:reason]
+    end
+  end
+
   describe "defensive error handling" do
     test "emit_transaction swallows exceptions on malformed input" do
       # Missing required fields on the struct should not crash
