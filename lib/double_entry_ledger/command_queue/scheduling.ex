@@ -382,12 +382,12 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   `processor_id`, as `:failed` with a zero retry delay, and returns the
   updated commands with their queue items, lowest queue position first.
 
-  Called during lease takeover inside a transaction that already holds the
-  lease row lock, which proves no live lease-aware owner exists, so every
-  `:processing` row is an orphan (a dead owner, a rolling deploy in progress,
-  or a pre-lease manual call). Raises on any failure, including
-  `Ecto.StaleEntryError`, so the caller's transaction rolls back. Emits
-  nothing; the caller emits after commit.
+  Called by `DoubleEntryLedger.CommandQueue.Lease.acquire/4` inside the
+  transaction that already holds the lease row lock, which proves no live
+  lease-aware owner exists, so every `:processing` row is an orphan (a dead
+  owner, a rolling deploy in progress, or a pre-lease manual call). Raises on
+  any failure, including `Ecto.StaleEntryError`, so the caller's transaction
+  rolls back. Emits nothing; the caller emits after commit.
   """
   @spec reschedule_orphaned_processing!(Ecto.UUID.t(), Ecto.Repo.t()) :: [Command.t()]
   def reschedule_orphaned_processing!(instance_id, repo) do
