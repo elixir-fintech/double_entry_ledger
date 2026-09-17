@@ -1,4 +1,4 @@
-defmodule DoubleEntryLedger.CommandQueueLease do
+defmodule DoubleEntryLedger.CommandQueueLeaseRow do
   @moduledoc """
   One row per ledger recording which processor owns it. Written only by
   `DoubleEntryLedger.CommandQueue.Lease`; read by discovery and tests. All

@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.LeaseFixtures do
 
   alias DoubleEntryLedger.CommandQueue.Lease
   alias DoubleEntryLedger.CommandQueue.Lease.Grant
-  alias DoubleEntryLedger.{CommandQueueLease, Repo}
+  alias DoubleEntryLedger.{CommandQueueLeaseRow, Repo}
 
   @prefix DoubleEntryLedger.Config.schema_prefix()
 
@@ -29,7 +29,7 @@ defmodule DoubleEntryLedger.LeaseFixtures do
     probe
   end
 
-  def lease_row(instance_id), do: Repo.get(CommandQueueLease, instance_id)
+  def lease_row(instance_id), do: Repo.get(CommandQueueLeaseRow, instance_id)
 
   @doc "Acquires a lease under a unique test owner and returns the grant."
   def test_grant(instance_id) do
@@ -40,7 +40,7 @@ defmodule DoubleEntryLedger.LeaseFixtures do
   @doc "Moves the lease's expiry one hour into the database's past."
   def expire_lease(instance_id) do
     {1, _} =
-      from(l in CommandQueueLease,
+      from(l in CommandQueueLeaseRow,
         where: l.instance_id == ^instance_id,
         update: [
           set: [expires_at: fragment("timezone('UTC', clock_timestamp()) - interval '1 hour'")]

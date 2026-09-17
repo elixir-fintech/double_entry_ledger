@@ -15,7 +15,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   alias DoubleEntryLedger.Command
   alias DoubleEntryLedger.CommandQueue.Config
   alias DoubleEntryLedger.CommandQueue.Scheduling
-  alias DoubleEntryLedger.CommandQueueLease
+  alias DoubleEntryLedger.CommandQueueLeaseRow
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Telemetry
 
@@ -208,7 +208,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
         }
       )
 
-    case repo.insert_all(CommandQueueLease, source,
+    case repo.insert_all(CommandQueueLeaseRow, source,
            prefix: @schema_prefix,
            on_conflict: :nothing,
            returning: [:fencing_token]
@@ -224,7 +224,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   defp take_over(instance_id, owner_id, ttl, repo) do
     {prev_owner, released_at, expired?} =
       repo.one!(
-        from(l in CommandQueueLease,
+        from(l in CommandQueueLeaseRow,
           prefix: ^@schema_prefix,
           where: l.instance_id == ^instance_id,
           lock: "FOR UPDATE",
@@ -243,7 +243,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
       # design that must never steal a live lease, so it fails loudly rather
       # than overwrite an owner.
       {1, [[token]]} =
-        from(l in CommandQueueLease,
+        from(l in CommandQueueLeaseRow,
           prefix: ^@schema_prefix,
           where:
             l.instance_id == ^instance_id and
@@ -421,7 +421,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   @doc false
   @spec owner_update_query(Grant.t(), pos_integer()) :: Ecto.Query.t()
   def owner_update_query(%Grant{instance_id: id, owner_id: owner, fencing_token: token}, ttl) do
-    from(l in CommandQueueLease,
+    from(l in CommandQueueLeaseRow,
       prefix: ^@schema_prefix,
       where:
         l.instance_id == ^id and l.owner_id == ^owner and l.fencing_token == ^token and
@@ -515,7 +515,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
 
   defp release_count(%Grant{instance_id: id, owner_id: owner, fencing_token: token}, repo) do
     {count, _} =
-      from(l in CommandQueueLease,
+      from(l in CommandQueueLeaseRow,
         prefix: ^@schema_prefix,
         where:
           l.instance_id == ^id and l.owner_id == ^owner and l.fencing_token == ^token and
