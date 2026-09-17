@@ -224,7 +224,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
       instance_id: command.instance_id,
       previous_processor_id: previous_processor_id,
       stale_for_seconds: stale_for,
-      trace_context: command.trace_context
+      trace_context: command.trace_context,
+      reason: :stale_sweep
     })
   end
 
