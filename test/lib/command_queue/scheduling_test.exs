@@ -2,18 +2,24 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   @moduledoc """
   Tests for the scheduling of commands in the command queue.
   """
-  use ExUnit.Case, async: true
+  # Not async: the lease tests here put global application config
+  # (`put_queue_config/1`) and need the shared sandbox so a `Task` can reach
+  # the database, exactly like `DoubleEntryLedger.CommandQueue.LeaseTest`.
+  use DoubleEntryLedger.RepoCase, async: false
   import ExUnit.CaptureLog
   alias Ecto.Adapters.SQL
   alias Ecto.Changeset
-  use DoubleEntryLedger.RepoCase
   import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
-  alias DoubleEntryLedger.{Command, CommandQueueItem}
+  import DoubleEntryLedger.LeaseFixtures
+  alias DoubleEntryLedger.{Command, CommandQueueItem, CommandQueueLeaseRow, Instance}
+  alias DoubleEntryLedger.CommandQueue.Lease
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
+
+  @prefix DoubleEntryLedger.Config.schema_prefix()
 
   # `Scheduling.calculate_retry_delay/1` for retry_count 0: base delay plus a
   # jitter of 1..(base/10 + 1) seconds.
@@ -57,34 +63,49 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
   defmodule QueryCapturingRepo do
     @moduledoc false
-    # Stands in for the repo passed to `claim_batch_for_processing/3` so a test
-    # can inspect the UPDATE query it builds instead of executing it.
-    def update_all(query, _updates) do
+    # The claim runs in a transaction with lease statements. Delegate all
+    # of it except the command_queue_items UPDATE, which is captured.
+    alias DoubleEntryLedger.Repo
+
+    def transaction(fun), do: Repo.transaction(fun)
+    def in_transaction?, do: Repo.in_transaction?()
+    def query!(sql, params), do: Repo.query!(sql, params)
+
+    def update_all(%Ecto.Query{from: %{source: {"command_queue_items", _}}} = query, _updates) do
       send(self(), {:update_all_query, query})
       {0, []}
     end
+
+    def update_all(query, updates), do: Repo.update_all(query, updates)
   end
 
-  defmodule LostClaimRaceRepo do
+  defmodule StatementOrderRepo do
     @moduledoc false
-    # Reproduces the race `claim_command_for_processing/3` cannot stage from
-    # the outside: the claim UPDATE really lands (the row becomes
-    # `:processing`) but the caller is told zero rows matched, exactly as it
-    # would be if a competing processor had claimed the row between the load
-    # and the claim. Only `update_all/2` is stubbed — the classification
-    # reload goes through `CommandStore`, which uses the real repo.
-    def update_all(query, updates) do
-      DoubleEntryLedger.Repo.update_all(query, updates)
-      {0, []}
+    # Delegates everything, recording the table each `update_all/2` touches, so
+    # a test can pin the ordering the whole lease design rests on: the lease
+    # row UPDATE (`Lease.lock!/3`) first and last, the claim UPDATE between
+    # them. Both lease statements issue the same query, so only their position
+    # in the sequence tells them apart.
+    alias DoubleEntryLedger.Repo
+
+    def transaction(fun), do: Repo.transaction(fun)
+    def in_transaction?, do: Repo.in_transaction?()
+    def query!(sql, params), do: Repo.query!(sql, params)
+
+    def update_all(%Ecto.Query{from: %{source: {table, _}}} = query, updates) do
+      send(self(), {:update_all_table, table})
+      Repo.update_all(query, updates)
     end
   end
 
   describe "claim_command_for_processing/2" do
     setup [:create_instance, :create_accounts]
 
-    test "returns error when command not found" do
+    test "returns error when command not found", %{instance: instance} do
+      grant = test_grant(instance.id)
+
       assert {:error, :command_not_found} =
-               Scheduling.claim_command_for_processing(Ecto.UUID.generate(), "manual")
+               Scheduling.claim_command_for_processing(Ecto.UUID.generate(), grant)
     end
 
     test "returns error when command not claimable", %{instance: instance} do
@@ -101,19 +122,21 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         |> Repo.update!()
 
       assert {:error, :command_not_claimable} =
-               Scheduling.claim_command_for_processing(command.id, "manual")
+               Scheduling.claim_command_for_processing(command.id, test_grant(instance.id))
     end
 
     test "claims a command for processing", %{instance: instance} do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
+      grant = test_grant(instance.id)
+
       assert {:ok, %Command{command_queue_item: eqm} = claimed_command} =
-               Scheduling.claim_command_for_processing(command.id, "manual")
+               Scheduling.claim_command_for_processing(command.id, grant)
 
       assert eqm.status == :processing
       assert eqm.command_id == claimed_command.id
-      assert eqm.processor_id == "manual"
+      assert eqm.processor_id == grant.owner_id
       assert eqm.processing_started_at != nil
       assert eqm.processing_completed_at == nil
       assert eqm.retry_count == 0
@@ -128,7 +151,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       before_claim = CommandStore.get_by_id(command.id).command_queue_item
 
       assert {:error, :command_not_claimable} =
-               Scheduling.claim_command_for_processing(command.id, "manual")
+               Scheduling.claim_command_for_processing(command.id, test_grant(instance.id))
 
       current = CommandStore.get_by_id(command.id).command_queue_item
       assert current.status == :occ_timeout
@@ -140,14 +163,15 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     test "claims a retry whose next_retry_after is in the database's past", %{instance: instance} do
       command = seed_occ_timeout_command(instance, 2)
       reschedule_retry_relative_to_db_clock(command.id, -1)
+      grant = test_grant(instance.id)
 
       assert {:ok, %Command{command_queue_item: qi}} =
-               Scheduling.claim_command_for_processing(command.id, "manual")
+               Scheduling.claim_command_for_processing(command.id, grant)
 
       assert qi.status == :processing
       assert qi.retry_count == 3
       assert qi.next_retry_after == nil
-      assert qi.processor_id == "manual"
+      assert qi.processor_id == grant.owner_id
     end
 
     test "does not claim a :pending command whose dependency wait has not elapsed", %{
@@ -161,22 +185,11 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       |> Repo.update!()
 
       assert {:error, :command_not_claimable} =
-               Scheduling.claim_command_for_processing(command.id, "manual")
+               Scheduling.claim_command_for_processing(command.id, test_grant(instance.id))
 
       current = CommandStore.get_by_id(command.id).command_queue_item
       assert current.status == :pending
       assert current.processor_id == nil
-    end
-
-    test "returns already claimed when the claim update matches no rows and the row is :processing",
-         %{instance: instance} do
-      command = seed_occ_timeout_command(instance, 0)
-      reschedule_retry_relative_to_db_clock(command.id, -1)
-
-      assert {:error, :command_already_claimed} =
-               Scheduling.claim_command_for_processing(command.id, "proc-b", LostClaimRaceRepo)
-
-      assert CommandStore.get_by_id(command.id).command_queue_item.status == :processing
     end
 
     test "emits exactly one claim telemetry event for a successful claim", %{instance: instance} do
@@ -184,12 +197,14 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       command_id = command.id
+      grant = test_grant(instance.id)
+      owner_id = grant.owner_id
       ref = attach_telemetry([:double_entry_ledger, :command, :claim])
 
-      assert {:ok, _claimed} = Scheduling.claim_command_for_processing(command.id, "manual")
+      assert {:ok, _claimed} = Scheduling.claim_command_for_processing(command.id, grant)
 
       assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim], _m,
-                      %{command_id: ^command_id, processor_id: "manual"}}
+                      %{command_id: ^command_id, processor_id: ^owner_id}}
 
       refute_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim], _m2,
                       %{command_id: ^command_id}},
@@ -207,12 +222,13 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       # this pins batch-claim ≡ single-claim so the two paths can't drift.
       single = seed_occ_timeout_command(instance, 2)
       batched = seed_occ_timeout_command(instance, 2)
+      grant = test_grant(instance.id)
 
       {:ok, %Command{command_queue_item: single_qi}} =
-        Scheduling.claim_command_for_processing(single.id, "proc-1")
+        Scheduling.claim_command_for_processing(single.id, grant)
 
       [%Command{command_queue_item: batch_qi}] =
-        Scheduling.claim_batch_for_processing([batched], "proc-1")
+        Scheduling.claim_batch_for_processing([batched], grant)
 
       assert single_qi.status == :processing
       assert batch_qi.status == :processing
@@ -221,8 +237,8 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert single_qi.retry_count == 3
       assert batch_qi.retry_count == 3
 
-      assert single_qi.processor_id == "proc-1"
-      assert batch_qi.processor_id == "proc-1"
+      assert single_qi.processor_id == grant.owner_id
+      assert batch_qi.processor_id == grant.owner_id
 
       assert single_qi.next_retry_after == nil
       assert batch_qi.next_retry_after == nil
@@ -244,7 +260,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       command = CommandStore.get_by_id(command.id)
 
       [%Command{command_queue_item: qi}] =
-        Scheduling.claim_batch_for_processing([command], "proc-1")
+        Scheduling.claim_batch_for_processing([command], test_grant(instance.id))
 
       assert qi.status == :processing
       assert qi.retry_count == 0
@@ -258,7 +274,8 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       retryable = seed_occ_timeout_command(instance, 2)
 
-      claimed = Scheduling.claim_batch_for_processing([retryable, pending], "proc-1")
+      claimed =
+        Scheduling.claim_batch_for_processing([retryable, pending], test_grant(instance.id))
 
       assert Enum.map(claimed, & &1.id) == [retryable.id, pending.id]
       assert Enum.map(claimed, & &1.command_queue_item.retry_count) == [3, 0]
@@ -277,7 +294,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       command = CommandStore.get_by_id(command.id)
 
-      assert [] = Scheduling.claim_batch_for_processing([command], "proc-1")
+      assert [] = Scheduling.claim_batch_for_processing([command], test_grant(instance.id))
 
       queue_item = CommandStore.get_by_id(command.id).command_queue_item
       assert queue_item.status == :occ_timeout
@@ -293,7 +310,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       command = CommandStore.get_by_id(command.id)
 
       [%Command{command_queue_item: qi}] =
-        Scheduling.claim_batch_for_processing([command], "proc-1")
+        Scheduling.claim_batch_for_processing([command], test_grant(instance.id))
 
       assert qi.status == :processing
       assert qi.retry_count == 3
@@ -307,7 +324,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       reschedule_retry_relative_to_db_clock(command.id, 1)
       command = CommandStore.get_by_id(command.id)
 
-      assert [] = Scheduling.claim_batch_for_processing([command], "proc-1")
+      assert [] = Scheduling.claim_batch_for_processing([command], test_grant(instance.id))
       assert CommandStore.get_by_id(command.id).command_queue_item.status == :occ_timeout
     end
 
@@ -315,8 +332,9 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       instance: instance
     } do
       command = seed_occ_timeout_command(instance, 0)
+      grant = test_grant(instance.id)
 
-      assert [] = Scheduling.claim_batch_for_processing([command], "proc-1", QueryCapturingRepo)
+      assert [] = Scheduling.claim_batch_for_processing([command], grant, QueryCapturingRepo)
       assert_receive {:update_all_query, query}
 
       {sql, params} = SQL.to_sql(:update_all, Repo, query)
@@ -335,7 +353,8 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       |> Changeset.change(%{status: :processed})
       |> Repo.update!()
 
-      claimed = Scheduling.claim_batch_for_processing([claimable, not_claimable], "proc-1")
+      claimed =
+        Scheduling.claim_batch_for_processing([claimable, not_claimable], test_grant(instance.id))
 
       assert Enum.map(claimed, & &1.id) == [claimable.id]
     end
@@ -343,20 +362,236 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     test "emits a command_claim telemetry event per claimed command", %{instance: instance} do
       c1 = seed_occ_timeout_command(instance, 0)
       c2 = seed_occ_timeout_command(instance, 0)
+      grant = test_grant(instance.id)
+      owner_id = grant.owner_id
 
       ref = attach_telemetry([:double_entry_ledger, :command, :claim])
 
-      Scheduling.claim_batch_for_processing([c1, c2], "proc-1")
+      Scheduling.claim_batch_for_processing([c1, c2], grant)
 
       # Same claim event the single-command path emits, one per command.
       assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim], _m,
-                      %{command_id: id_a, processor_id: "proc-1"}}
+                      %{command_id: id_a, processor_id: ^owner_id}}
 
       assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim], _m,
-                      %{command_id: id_b, processor_id: "proc-1"}}
+                      %{command_id: id_b, processor_id: ^owner_id}}
 
       assert MapSet.new([id_a, id_b]) == MapSet.new([c1.id, c2.id])
     end
+  end
+
+  describe "claims under a lease" do
+    setup [:create_instance, :create_accounts]
+
+    test "claim stamps the grant's owner_id, sets lease_grant, and refreshes expiry", %{
+      instance: instance
+    } do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      grant = test_grant(instance.id)
+      before = lease_row(instance.id)
+
+      assert {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, grant)
+
+      assert claimed.command_queue_item.processor_id == grant.owner_id
+      assert claimed.lease_grant == grant
+
+      # Against `before.renewed_at`, not `before.acquired_at`: `test_grant/1`
+      # acquires through `Lease.acquire/4`, which already ends in
+      # `refresh_locked!/3`, so `renewed_at` is non-nil and >= `acquired_at`
+      # before the claim runs. Only a strict advance on `renewed_at` proves the
+      # claim transaction issued an owner update of its own.
+      assert DateTime.compare(lease_row(instance.id).renewed_at, before.renewed_at) == :gt
+    end
+
+    test "claim after a takeover returns {:error, :lease_lost} and leaves the row pending", %{
+      instance: instance
+    } do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      old = test_grant(instance.id)
+      expire_lease(instance.id)
+      _new = test_grant(instance.id)
+
+      assert {:error, :lease_lost} = Scheduling.claim_command_for_processing(command.id, old)
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :pending
+    end
+
+    test "runs the claim between a lease lock and a lease refresh", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      command = CommandStore.get_by_id(command.id)
+      grant = test_grant(instance.id)
+
+      assert [_claimed] =
+               Scheduling.claim_batch_for_processing([command], grant, StatementOrderRepo)
+
+      assert update_all_tables(4) == [
+               "command_queue_leases",
+               "command_queue_items",
+               "command_queue_leases",
+               :nothing_more
+             ]
+    end
+
+    test "refuses to claim inside a caller's transaction", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      command = CommandStore.get_by_id(command.id)
+      grant = test_grant(instance.id)
+
+      # `Lease.with_grant/3`'s guard. Without it `repo.transaction/1` would
+      # join the caller's transaction, the lease lock would no longer be its
+      # first statement, and the claim would silently run unfenced.
+      assert_raise ArgumentError, fn ->
+        Repo.transaction(fn -> Scheduling.claim_batch_for_processing([command], grant) end)
+      end
+
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :pending
+    end
+
+    # The probe can only contend for a row it can see, so these two tests own a
+    # `committed_lease/3` ledger instead of the sandbox `instance`.
+    test "claim while the probe holds the lease row past the timeout returns {:error, :lease_busy}" do
+      put_queue_config(lease_lock_timeout_ms: 200)
+      probe = probe_connection()
+      grant = committed_lease(probe, "holder", 1)
+      {:ok, command} = create_command_on(grant.instance_id)
+      hold_lock_on_probe(probe, grant)
+
+      assert {:error, :lease_busy} = Scheduling.claim_command_for_processing(command.id, grant)
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :pending
+    end
+
+    # Deliberately does NOT call `Scheduling`: the probe stands in for the
+    # claim's statement sequence, because the real claim runs on the sandbox
+    # connection and a second sandbox process cannot contend with it. It pins
+    # the lease serialization an open claim relies on, not the claim itself, so
+    # it will keep passing however `claim_batch_for_processing/3` is reordered
+    # or broken — the statement-order test above is what covers that. Keep the
+    # probe's statements in step with `claim_batch_for_processing/3` if the
+    # claim's shape changes.
+    test "an acquire waits behind a probe standing in for an open claim that then rolls back" do
+      put_queue_config(lease_lock_timeout_ms: 5_000)
+      probe = probe_connection()
+      grant = committed_lease(probe, "claimer", 1)
+      command_id = committed_command(probe, grant.instance_id)
+      expire_lease_on_probe(probe, grant)
+      hold_lock_on_probe(probe, grant)
+
+      %Postgrex.Result{num_rows: 1} =
+        Postgrex.query!(
+          probe,
+          "UPDATE #{@prefix}.command_queue_items " <>
+            "SET status = 'processing', processor_id = $2 WHERE command_id = $1",
+          [Ecto.UUID.dump!(command_id), grant.owner_id]
+        )
+
+      task = Task.async(fn -> Lease.acquire(grant.instance_id, "successor") end)
+      assert Task.yield(task, 300) == nil
+
+      rollback_probe(probe)
+
+      assert {:ok, _grant, %{orphans: []}} = Task.await(task, 5_000)
+      assert Repo.get_by(CommandQueueItem, command_id: command_id).status == :pending
+    end
+  end
+
+  # The first `count` tables `StatementOrderRepo` recorded, in mailbox order,
+  # padded with `:nothing_more` once the claim has issued its last statement.
+  # `assert_receive` cannot pin an order: it scans the mailbox for a match and
+  # skips past anything that does not fit, so a reordered claim still satisfies
+  # a sequence of them.
+  defp update_all_tables(count) do
+    Enum.map(1..count, fn _ ->
+      receive do
+        {:update_all_table, table} -> table
+      after
+        200 -> :nothing_more
+      end
+    end)
+  end
+
+  # The inverse of `LeaseFixtures.expire_lease/1`: moves the expiry an hour
+  # into the database's future and touches nothing else.
+  defp unexpire_lease(instance_id) do
+    {1, _} =
+      from(l in CommandQueueLeaseRow,
+        where: l.instance_id == ^instance_id,
+        update: [
+          set: [expires_at: fragment("timezone('UTC', clock_timestamp()) + interval '1 hour'")]
+        ]
+      )
+      |> Repo.update_all([])
+
+    :ok
+  end
+
+  defp create_command_on(instance_id) do
+    CommandStore.create(
+      transaction_command_attrs(
+        instance_address: Repo.get!(Instance, instance_id).address,
+        source_idempk: "lease-#{System.unique_integer([:positive])}"
+      )
+    )
+  end
+
+  # A command committed over `probe`, so the probe's own transaction can write
+  # its queue row: rows created through `Repo` live in the sandbox transaction
+  # and the probe cannot see them. `command_map` is copied from a real command
+  # so the row still loads through `Command`'s custom type. `on_exit` is LIFO,
+  # so registering the DELETE here and `discard_sandbox_writes/0` after it
+  # gives: probe lock released, sandbox writes discarded (releasing any lock on
+  # these rows), command deleted, then `committed_lease/3` deletes the instance
+  # the `commands` foreign key points at.
+  defp committed_command(probe, instance_id) do
+    {:ok, template} = create_command_on(instance_id)
+
+    %{rows: [[command_map]]} =
+      Repo.query!("SELECT command_map FROM #{@prefix}.commands WHERE id = $1", [
+        Ecto.UUID.dump!(template.id)
+      ])
+
+    command_id = Ecto.UUID.generate()
+    dumped_command = Ecto.UUID.dump!(command_id)
+    dumped_instance = Ecto.UUID.dump!(instance_id)
+
+    Postgrex.query!(
+      probe,
+      """
+      INSERT INTO #{@prefix}.commands (id, instance_id, command_map, updated_at)
+      VALUES ($1, $2, $3::jsonb, timezone('UTC', clock_timestamp()))
+      """,
+      [dumped_command, dumped_instance, Jason.encode!(command_map)]
+    )
+
+    Postgrex.query!(
+      probe,
+      """
+      INSERT INTO #{@prefix}.command_queue_items (id, command_id, instance_id, status)
+      VALUES ($1, $2, $3, 'pending')
+      """,
+      [Ecto.UUID.dump!(Ecto.UUID.generate()), dumped_command, dumped_instance]
+    )
+
+    on_exit(fn -> delete_committed_command(dumped_command) end)
+    discard_sandbox_writes()
+
+    command_id
+  end
+
+  defp delete_committed_command(dumped_command_id) do
+    cleaner = probe_connection()
+    Postgrex.query!(cleaner, "SET lock_timeout = '5s'", [])
+
+    Postgrex.query!(cleaner, "DELETE FROM #{@prefix}.commands WHERE id = $1", [dumped_command_id])
+
+    GenServer.stop(cleaner)
+    :ok
   end
 
   defp seed_occ_timeout_command(instance, retry_count) do
@@ -383,7 +618,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       {:ok, claimed_by_old_owner} =
-        Scheduling.claim_command_for_processing(command.id, "old-owner")
+        Scheduling.claim_command_for_processing(command.id, test_grant(instance.id))
 
       claimed_by_old_owner.command_queue_item
       |> Changeset.change(processor_id: "new-owner")
@@ -456,7 +691,9 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, pending_command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      {:ok, command} = Scheduling.claim_command_for_processing(pending_command.id, "manual")
+      {:ok, command} =
+        Scheduling.claim_command_for_processing(pending_command.id, test_grant(instance.id))
+
       error = "Test error"
 
       %{changes: %{command_queue_item: command_queue_item}} =
@@ -799,6 +1036,74 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {sql, params} = SQL.to_sql(:all, Repo, query)
 
       assert sql =~ "timezone('UTC', statement_timestamp())"
+      refute Enum.any?(params, &match?(%DateTime{}, &1))
+      refute Enum.any?(params, &match?(%NaiveDateTime{}, &1))
+    end
+  end
+
+  describe "instances_with_processable_commands_query/0 with leases" do
+    setup [:create_instance, :create_accounts]
+
+    test "includes a ledger with work and no lease", %{instance: instance} do
+      {:ok, _} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      assert instance.id in Repo.all(Scheduling.instances_with_processable_commands_query())
+    end
+
+    test "excludes a ledger with a live lease", %{instance: instance} do
+      {:ok, _} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      _grant = test_grant(instance.id)
+      refute instance.id in Repo.all(Scheduling.instances_with_processable_commands_query())
+    end
+
+    test "includes a ledger with an expired lease", %{instance: instance} do
+      {:ok, _} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      _grant = test_grant(instance.id)
+      expire_lease(instance.id)
+      assert instance.id in Repo.all(Scheduling.instances_with_processable_commands_query())
+    end
+
+    test "includes a ledger whose only row is :processing under an expired lease", %{
+      instance: instance
+    } do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      grant = test_grant(instance.id)
+      {:ok, _} = Scheduling.claim_command_for_processing(command.id, grant)
+      expire_lease(instance.id)
+
+      assert instance.id in Repo.all(Scheduling.instances_with_processable_commands_query())
+    end
+
+    test "includes a ledger whose lease was released", %{instance: instance} do
+      {:ok, _} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      grant = test_grant(instance.id)
+
+      assert :ok = Lease.release(grant, :drained)
+
+      # `Lease.release/3` stamps `expires_at` and `released_at` in one
+      # statement, so an expiry-only predicate would surface this ledger by
+      # accident. Pushing the expiry back out leaves `released_at` as the only
+      # reason it can be offered, which is the clause under test.
+      unexpire_lease(instance.id)
+
+      assert instance.id in Repo.all(Scheduling.instances_with_processable_commands_query())
+    end
+
+    test "binds no application timestamp" do
+      {sql, params} =
+        SQL.to_sql(:all, Repo, Scheduling.instances_with_processable_commands_query())
+
+      assert sql =~ "command_queue_leases"
+      assert sql =~ "statement_timestamp()"
       refute Enum.any?(params, &match?(%DateTime{}, &1))
       refute Enum.any?(params, &match?(%NaiveDateTime{}, &1))
     end
