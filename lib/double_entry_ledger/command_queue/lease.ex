@@ -18,6 +18,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   alias DoubleEntryLedger.CommandQueueLeaseRow
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Telemetry
+  alias Ecto.Multi
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
@@ -84,7 +85,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   @doc """
   Acquires the lease for `instance_id` under `owner_id`, taking over an
   expired lease and rescheduling any `:processing` rows on the ledger, in one
-  transaction. Emits nothing; call `emit_acquisition_events/2` afterwards.
+  transaction. Emits nothing; call `emit_acquisition_events/3` afterwards.
 
   `:held` when a live lease exists (any holder). `:busy` when the row lock was
   not granted within the lock timeout or an orphan reschedule lost a race.
@@ -144,9 +145,30 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
     end
   end
 
-  @doc "Emits the events for a committed acquisition: acquired, then one recovered event per orphan."
-  @spec emit_acquisition_events(Grant.t(), acquire_info()) :: :ok
-  def emit_acquisition_events(%Grant{} = grant, info) do
+  @doc """
+  Emits the events for a committed acquisition: acquired, then one recovered
+  event per orphan.
+
+  Raises `ArgumentError` inside a caller's transaction. `acquire/4` refuses to
+  run in one, so its result was committed by the time it returned; emitting
+  from inside a later transaction of the caller's would report an acquisition
+  that a rollback can still undo, and would put `in_transaction: true` on every
+  event. Callers therefore emit where they acquired.
+
+  Never raises for any other reason. This runs AFTER the acquisition
+  transaction committed, so the database already records this node as the
+  owner; a raise here would abort the caller, which would then believe it holds
+  nothing while no other node can take over until the lease expires — a ledger
+  stranded for a full TTL by a reporting failure. Events are reporting, not
+  ownership, so every failure is logged and swallowed.
+  """
+  @spec emit_acquisition_events(Grant.t(), acquire_info(), Ecto.Repo.t()) :: :ok
+  def emit_acquisition_events(%Grant{} = grant, info, repo \\ Repo) do
+    require_no_transaction!(repo, "emit_acquisition_events/3")
+    report_acquisition(grant, info)
+  end
+
+  defp report_acquisition(grant, info) do
     Logger.info(
       "acquired lease for instance #{grant.instance_id} as #{grant.owner_id}/#{grant.fencing_token}" <>
         " (takeover: #{info.takeover}, orphans: #{length(info.orphans)})"
@@ -160,20 +182,33 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
       })
     )
 
-    Enum.each(info.orphans, fn %Command{command_queue_item: item} = command ->
-      Logger.warning("rescheduled orphan #{command.id} on lease acquisition")
+    Enum.each(info.orphans, &report_orphan/1)
+  rescue
+    error ->
+      Logger.error(
+        "lease acquisition events for instance #{grant.instance_id} failed; the lease is " <>
+          "held and processing continues: " <> Exception.format(:error, error, __STACKTRACE__)
+      )
 
-      Telemetry.command_recovered(%{
-        command_id: command.id,
-        instance_id: command.instance_id,
-        previous_processor_id: previous_processor_from_error(item),
-        stale_for_seconds: nil,
-        reason: :takeover,
-        trace_context: command.trace_context
-      })
+      :ok
+  end
 
-      Scheduling.emit_persisted_failure(command, item.status, hd(item.errors).message)
-    end)
+  defp report_orphan(%Command{command_queue_item: item} = command) do
+    Logger.warning("rescheduled orphan #{command.id} on lease acquisition")
+
+    Telemetry.command_recovered(%{
+      command_id: command.id,
+      instance_id: command.instance_id,
+      previous_processor_id: previous_processor_from_error(item),
+      stale_for_seconds: nil,
+      reason: :takeover,
+      trace_context: command.trace_context
+    })
+
+    # Deliberately NOT `Scheduling.persisted_failure/1`: that returns
+    # `{:error, command}` and reads the status off the command, while the
+    # status that must be reported here is the one the reschedule wrote.
+    Scheduling.emit_persisted_failure(command, item.status, hd(item.errors).message)
   end
 
   # `{:ok, token}` when this claim created the row, `:exists` when the ledger
@@ -318,6 +353,41 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   end
 
   defp previous_processor_from_error(_), do: nil
+
+  @doc """
+  Prepends the lease row lock to `multi` as the step `:lease_lock`.
+
+  The counterpart to `refresh_step/2`, and the shared form of the fence for
+  every writer that joins a transaction it does not own: the business `Multi`
+  already exists and has named steps, so the lease is prepended and appended
+  rather than wrapping the transaction the way `with_grant/3` does for the
+  claim. `Occ.Processor`'s generated `build_multi/3` and final-timeout write,
+  and the two account-command modules, all fence through these two.
+
+  `nil` (an item that was never claimed under a lease) leaves `multi`
+  untouched. Anything else raises: a fence that silently turns itself off for
+  a malformed grant is worse than no fence, because it looks present.
+  """
+  @spec lock_step(Multi.t(), Grant.t() | nil) :: Multi.t()
+  def lock_step(multi, %Grant{} = grant) do
+    Multi.run(multi, :lease_lock, fn repo, _changes -> {:ok, lock!(grant, repo)} end)
+  end
+
+  def lock_step(multi, nil), do: multi
+
+  @doc """
+  Appends the closing lease refresh to `multi` as the step `:lease_refresh`.
+
+  Last rather than first so the expiry is measured at commit, not at the start
+  of a transaction that may run for a while. See `lock_step/2` for the `nil`
+  rule.
+  """
+  @spec refresh_step(Multi.t(), Grant.t() | nil) :: Multi.t()
+  def refresh_step(multi, %Grant{} = grant) do
+    Multi.run(multi, :lease_refresh, fn repo, _changes -> {:ok, refresh_locked!(grant, repo)} end)
+  end
+
+  def refresh_step(multi, nil), do: multi
 
   @doc """
   First step of a claim, processing or batch transaction: takes the lease row

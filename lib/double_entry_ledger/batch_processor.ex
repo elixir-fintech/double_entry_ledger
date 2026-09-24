@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     Transaction
   }
 
-  alias DoubleEntryLedger.CommandQueue.{OwnershipError, Scheduling}
+  alias DoubleEntryLedger.CommandQueue.{Lease, OwnershipError, Scheduling}
   alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
@@ -354,6 +354,11 @@ defmodule DoubleEntryLedger.BatchProcessor do
       via `:double_entry_ledger, :max_batch_retries`).
     * On command ownership loss: returns `{:error, :command_ownership_lost}`
       immediately without retrying or splitting the stale command structs.
+    * On lease loss: returns `{:error, :lease_lost}` — another node owns the
+      ledger and nothing was written. On lease contention:
+      `{:error, :lease_busy}` — the lease row lock was not granted within
+      `CommandQueue.Config.lease_lock_timeout_ms/0`, again with nothing
+      written. Both are immediate: no retry, no split.
     * On retry exhaustion AND `length(commands) > 1`: splits the batch
       in half and recurses on each half. Combines results.
     * On retry exhaustion with `length(commands) <= 1`: propagates
@@ -669,7 +674,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
       merged_accounts: fold_plan.merged_accounts
     }
 
-    case do_write(write_plan, repo, now) do
+    case do_write(write_plan, repo, now, batch_grant(commands)) do
       {:ok, persisted_failures} ->
         Enum.each(persisted_failures, fn plan ->
           Scheduling.emit_persisted_failure(plan.command, plan.status, plan.error.message)
@@ -710,12 +715,15 @@ defmodule DoubleEntryLedger.BatchProcessor do
   # is converted to `{:error, e}` rather than allowed to crash the batch
   # task — the caller then falls back to per-command processing (plan §8.3),
   # keeping worst-case behaviour no worse than the single-command path.
-  @spec do_write(write_plan(), Ecto.Repo.t(), DateTime.t()) ::
+  @spec do_write(write_plan(), Ecto.Repo.t(), DateTime.t(), Lease.Grant.t() | nil) ::
           {:ok, [BatchTransactionStoreHelper.planned_failure()]} | {:error, term()}
-  defp do_write(write_plan, repo, now) do
+  defp do_write(write_plan, repo, now, grant) do
     repo.transaction(fn ->
+      lease_lock(grant, repo)
       BatchTransactionStoreHelper.write_successes(write_plan, repo, now)
-      BatchTransactionStoreHelper.write_failures(write_plan.failures, repo, now)
+      failures = BatchTransactionStoreHelper.write_failures(write_plan.failures, repo, now)
+      lease_refresh(grant, repo)
+      failures
     end)
     |> case do
       {:ok, persisted_failures} -> {:ok, persisted_failures}
@@ -723,9 +731,28 @@ defmodule DoubleEntryLedger.BatchProcessor do
     end
   rescue
     _error in OwnershipError -> {:error, :command_ownership_lost}
+    _error in Lease.LostError -> {:error, :lease_lost}
+    _error in Lease.BusyError -> {:error, :lease_busy}
     e in Ecto.StaleEntryError -> {:error, e}
     e in [Ecto.ConstraintError, Postgrex.Error] -> {:error, e}
   end
+
+  # Claimed commands all carry the same grant, so the head decides for the
+  # batch; the recursive `run_batch/2` calls from `handle_split_or_give_up/3`
+  # re-derive it from their own sub-lists. Commands that were never claimed
+  # under a lease (the synchronous path, and tests) carry `nil` and the write
+  # runs unfenced, exactly as before. Whatever the head carries is passed
+  # through unexamined, so a `lease_grant` that is neither a grant nor `nil`
+  # raises in `lease_lock/2` rather than silently turning the fence off.
+  @spec batch_grant([Command.t()]) :: Lease.Grant.t() | nil
+  defp batch_grant([%Command{lease_grant: grant} | _rest]), do: grant
+  defp batch_grant([]), do: nil
+
+  defp lease_lock(%Lease.Grant{} = grant, repo), do: Lease.lock!(grant, repo)
+  defp lease_lock(nil, _repo), do: :ok
+
+  defp lease_refresh(%Lease.Grant{} = grant, repo), do: Lease.refresh_locked!(grant, repo)
+  defp lease_refresh(nil, _repo), do: :ok
 
   # ── split-on-exhaustion ──────────────────────────────────────────
 

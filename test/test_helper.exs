@@ -45,6 +45,21 @@ defmodule DoubleEntryLedger.LeaseProbeSweep do
 
     Postgrex.query!(conn, "SET lock_timeout = '5s'", [])
 
+    # Commands first: `commands.instance_id` is `on_delete: :nothing`, so one
+    # leaked `LeaseFixtures.committed_command/2` row would make the instance
+    # DELETE below raise a foreign key violation HERE, at load time, and the
+    # whole suite would fail to start. Queue items cascade from commands.
+    Postgrex.query!(
+      conn,
+      """
+      DELETE FROM #{@prefix}.commands
+      WHERE instance_id IN (
+        SELECT id FROM #{@prefix}.instances WHERE address LIKE 'lease:probe:%'
+      )
+      """,
+      []
+    )
+
     Postgrex.query!(
       conn,
       "DELETE FROM #{@prefix}.instances WHERE address LIKE 'lease:probe:%'",

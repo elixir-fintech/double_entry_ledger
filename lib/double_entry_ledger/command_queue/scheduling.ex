@@ -61,6 +61,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   Raises `Ecto.StaleEntryError` when the `processor_version` fence loses, i.e.
   the claim has since moved to another processor. Callers are expected to
   rescue it and skip the command.
+
+  A command that carries a `lease_grant` is written under the lease
+  (`fenced_update/3`) and raises `Lease.LostError` when the ledger has moved
+  to another owner, without writing anything.
   """
   @spec schedule_retry_with_reason(
           Command.t(),
@@ -70,29 +74,54 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         ) ::
           {:error, Command.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(command, reason, status, repo \\ Repo) do
-    case build_schedule_retry_with_reason(command, reason, status) |> repo.update() do
-      {:ok, updated_command} ->
-        persisted_failure(updated_command)
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
+    fenced_update(command, repo, fn r ->
+      build_schedule_retry_with_reason(command, reason, status) |> r.update()
+    end)
   end
 
   @doc """
   Marks a command as permanently failed (`:dead_letter`) and persists the change.
+
+  Fenced on the command's `lease_grant` exactly like
+  `schedule_retry_with_reason/4`.
   """
   @spec mark_as_dead_letter(Command.t(), String.t(), Ecto.Repo.t()) ::
           {:error, Command.t()} | {:error, Changeset.t()}
   def mark_as_dead_letter(command, error, repo \\ Repo) do
-    case build_mark_as_dead_letter(command, error) |> repo.update() do
-      {:ok, updated_command} ->
-        persisted_failure(updated_command)
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
+    fenced_update(command, repo, fn r ->
+      build_mark_as_dead_letter(command, error) |> r.update()
+    end)
   end
+
+  # Both writes happen AFTER the processing Multi rolled back, outside any
+  # transaction, so the lease steps inside the Multi cannot cover them. Under a
+  # grant the write therefore runs in its own lease-locked transaction: a
+  # `LostError` propagates to the worker, which reports `{:error, :lease_lost}`,
+  # and nothing is written. With `nil` (the synchronous command-map path, and
+  # `InstanceMonitor`'s stale sweep, which loads commands from the database) the
+  # write runs exactly as before.
+  #
+  # Those are the only two clauses, matching `Lease.lock_step/2` and
+  # `BatchProcessor.batch_grant/1`: anything else in `lease_grant` raises
+  # rather than quietly landing an unfenced write on a ledger this node may
+  # have lost.
+  #
+  # `persisted_failure/1` runs after `with_grant/3` has returned, so a write
+  # that rolled back emits no telemetry.
+  @spec fenced_update(Command.t(), Ecto.Repo.t(), (Ecto.Repo.t() -> term())) ::
+          {:error, Command.t()} | {:error, Changeset.t()}
+  defp fenced_update(%Command{lease_grant: %Grant{} = grant}, repo, write) do
+    grant
+    |> Lease.with_grant(repo, write)
+    |> emit_or_return()
+  end
+
+  defp fenced_update(%Command{lease_grant: nil}, repo, write) do
+    write.(repo) |> emit_or_return()
+  end
+
+  defp emit_or_return({:ok, updated_command}), do: persisted_failure(updated_command)
+  defp emit_or_return({:error, changeset}), do: {:error, changeset}
 
   @doc """
   Claims a single command for processing under the lease `grant`.

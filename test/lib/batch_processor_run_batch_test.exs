@@ -21,7 +21,7 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
   use DoubleEntryLedger.RepoCase
   import Mox
 
-  import DoubleEntryLedger.{AccountFixtures, InstanceFixtures}
+  import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, LeaseFixtures}
 
   alias DoubleEntryLedger.{
     BalanceHistoryEntry,
@@ -955,8 +955,15 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
          %{instance: inst, accounts: [a1, a2, _, _]} do
       command = insert_balanced_command(inst, a1, a2, :posted)
 
-      [claimed_by_old_owner] =
-        Scheduling.claim_batch_for_processing([command], "old-batch-owner")
+      # The grant is dropped before the write: this test is about the
+      # `processor_version` row fence, which stays until Task 11 retires it,
+      # and `MockRepo` cannot carry the lease. `MockRepo` implements
+      # `RepoBehaviour`, and that behaviour cannot declare `in_transaction?/0`
+      # — `Lease.lock!/3`'s first call — without conflicting with the same
+      # callback in `Ecto.Repo`. The lease's own fence on the batch write has
+      # its own test in the "lease fencing" describe below, on the real repo.
+      [claimed] = Scheduling.claim_batch_for_processing([command], test_grant(inst.id))
+      claimed_by_old_owner = %{claimed | lease_grant: nil}
 
       claimed_by_old_owner.command_queue_item
       |> Ecto.Changeset.change(processor_id: "replacement-owner")
@@ -1102,6 +1109,92 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       # transaction, rolling back any failures writes.
       qi = Repo.get!(CommandQueueItem, command.command_queue_item.id)
       assert qi.status == :pending
+    end
+  end
+
+  # ── lease fencing ───────────────────────────────────────────────────
+  #
+  # A batch claimed under a lease carries its grant on every command;
+  # `do_write/4` takes the lease row lock first and refreshes it last, so a
+  # batch whose ledger moved to another node writes nothing.
+
+  describe "lease fencing" do
+    setup [:create_instance, :create_accounts]
+
+    test "a batch whose lease was lost writes nothing and returns {:error, :lease_lost}",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+      grant = test_grant(inst.id)
+      [claimed] = Scheduling.claim_batch_for_processing([command], grant)
+      expire_lease(inst.id)
+      _successor = test_grant(inst.id)
+
+      assert {:error, :lease_lost} = BatchProcessor.run_batch([claimed])
+
+      assert count(Transaction) == 0
+    end
+
+    test "a live grant lets the batch write and touches the lease",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+      grant = test_grant(inst.id)
+      [claimed] = Scheduling.claim_batch_for_processing([command], grant)
+      before = lease_row(inst.id)
+
+      assert {:ok, %{successes: [_success], failures: []}} = BatchProcessor.run_batch([claimed])
+
+      assert DateTime.compare(lease_row(inst.id).renewed_at, before.renewed_at) == :gt
+    end
+
+    # The lost-lease test above proves the fence is present but not where it
+    # sits: `do_write/4` rolls back whatever the order, so it would pass with
+    # the lock anywhere. Position is what matters — the lock before every
+    # business write, the refresh after all of them, so the expiry is measured
+    # at commit rather than at the start of a long batch — and only the
+    # statement order can show it, since `lock!/3` and `refresh_locked!/3` run
+    # the same owner UPDATE.
+    test "the batch locks the lease before its writes and refreshes it after",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+      grant = test_grant(inst.id)
+      [claimed] = Scheduling.claim_batch_for_processing([command], grant)
+      ref = attach_telemetry([:double_entry_ledger, :repo, :query])
+
+      assert {:ok, %{successes: [_success], failures: []}} = BatchProcessor.run_batch([claimed])
+
+      sequence = write_sequence(ref)
+      assert List.first(sequence) == :lease
+      assert List.last(sequence) == :lease
+      assert lease_update_count(sequence) == 2
+      assert length(sequence) > 2
+    end
+
+    # `batch_grant/1` hands the head's `lease_grant` on unexamined, so anything
+    # that is neither a grant nor `nil` raises in `lease_lock/2` instead of
+    # quietly running the batch unfenced.
+    test "a lease_grant that is neither a grant nor nil raises",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+
+      assert_raise FunctionClauseError, ~r/lease_lock/, fn ->
+        BatchProcessor.run_batch([%{command | lease_grant: "pre-lease-processor-id"}])
+      end
+    end
+
+    # Contention, not loss. The lease row is committed by the probe and the
+    # sandbox never locks it — nothing here claims through `Repo` — so a second
+    # connection can hold it while `do_write/4` opens its transaction.
+    test "a batch that cannot take the lease row lock returns {:error, :lease_busy}" do
+      put_queue_config(lease_lock_timeout_ms: 200)
+      probe = probe_connection()
+      grant = committed_lease(probe, "holder", 1)
+      command_id = committed_command(probe, grant.instance_id)
+      claimed = %{CommandStore.get_by_id(command_id) | lease_grant: grant}
+      hold_lock_on_probe(probe, grant)
+
+      assert {:error, :lease_busy} = BatchProcessor.run_batch([claimed])
+
+      assert count(Transaction) == 0
     end
   end
 end
