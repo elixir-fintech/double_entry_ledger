@@ -14,6 +14,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
     only: [default_response_handler: 2]
 
   alias DoubleEntryLedger.{Command, JournalEvent}
+  alias DoubleEntryLedger.CommandQueue.Lease
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
   alias DoubleEntryLedger.Stores.AccountStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.AccountCommandResponseHandler
@@ -27,12 +28,21 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
     |> default_response_handler(event)
   end
 
+  # `:command_success` is a queue-row write, so this transaction is fenced on
+  # the grant the command was claimed under exactly like the OCC pipeline's.
+  # This module cannot inherit `Occ.Processor`'s `__using__` macro without
+  # pulling in the whole OCC retry pipeline, so it fences through the shared
+  # `Lease.lock_step/2` and `Lease.refresh_step/2` directly.
   @spec build_create_account(Command.t()) :: Ecto.Multi.t()
   defp build_create_account(
-         %Command{command_map: %{payload: account_data} = command_map, instance_id: instance_id} =
-           event
+         %Command{
+           command_map: %{payload: account_data} = command_map,
+           instance_id: instance_id,
+           lease_grant: grant
+         } = event
        ) do
     Multi.new()
+    |> Lease.lock_step(grant)
     |> Multi.insert(:account, AccountStoreHelper.build_create(account_data, instance_id))
     |> Multi.insert(:journal_event, fn %{account: account} ->
       JournalEvent.build_create(%{
@@ -43,5 +53,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
       })
     end)
     |> Multi.update(:command_success, build_mark_as_processed(event))
+    |> Lease.refresh_step(grant)
   end
 end

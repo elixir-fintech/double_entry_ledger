@@ -6,9 +6,11 @@ defmodule DoubleEntryLedger.LeaseFixtures do
   import Ecto.Query, only: [from: 2]
   import ExUnit.Callbacks, only: [on_exit: 1]
 
+  alias DoubleEntryLedger.CommandFixtures
   alias DoubleEntryLedger.CommandQueue.Lease
   alias DoubleEntryLedger.CommandQueue.Lease.Grant
-  alias DoubleEntryLedger.{CommandQueueLeaseRow, Repo}
+  alias DoubleEntryLedger.{CommandQueueLeaseRow, Instance, Repo}
+  alias DoubleEntryLedger.Stores.CommandStore
 
   @prefix DoubleEntryLedger.Config.schema_prefix()
 
@@ -31,10 +33,92 @@ defmodule DoubleEntryLedger.LeaseFixtures do
 
   def lease_row(instance_id), do: Repo.get(CommandQueueLeaseRow, instance_id)
 
-  @doc "Acquires a lease under a unique test owner and returns the grant."
+  @doc """
+  Acquires a lease under a unique test owner and returns the grant.
+
+  Beware: acquisition rescues orphans, so this REWRITES the queue. Every
+  `:processing` row on `instance_id`, whatever its `processor_id`, is
+  rescheduled to `:failed` (or `:dead_letter` at the retry limit) with an
+  "orphaned by lease acquisition" error, by
+  `Lease.acquire/4` -> `Scheduling.reschedule_orphaned_processing!/2`. A test
+  that marks a row `:processing` and then calls this will find its fixture
+  silently rewritten; acquire first, then set up the row.
+  """
   def test_grant(instance_id) do
     {:ok, grant, _info} = Lease.acquire(instance_id, "test:" <> Ecto.UUID.generate())
     grant
+  end
+
+  @doc "Creates a pending `:create_transaction` command on `instance_id`."
+  def create_command_on(instance_id) do
+    CommandStore.create(
+      CommandFixtures.transaction_command_attrs(
+        instance_address: Repo.get!(Instance, instance_id).address,
+        source_idempk: "lease-#{System.unique_integer([:positive])}"
+      )
+    )
+  end
+
+  @doc """
+  A command committed over `probe`, so the probe's own transaction can write
+  its queue row: rows created through `Repo` live in the sandbox transaction
+  and the probe cannot see them. Returns the command's id.
+
+  `command_map` is copied from a real command so the row still loads through
+  `Command`'s custom type: `Repo.query!` hands the column back already decoded,
+  so it is re-encoded and inserted through a `text` parameter
+  (`$3::text::jsonb`). Binding it to a `jsonb` parameter instead would let the
+  driver encode the JSON a second time and store a JSON *string*, which reads
+  back fine over raw SQL but fails to load as a `Command`. `on_exit` is LIFO, so registering the DELETE here
+  and `discard_sandbox_writes/0` after it gives: probe lock released, sandbox
+  writes discarded (releasing any lock on these rows), command deleted, then
+  `committed_lease/3` deletes the instance the `commands` foreign key points
+  at.
+  """
+  def committed_command(probe, instance_id) do
+    {:ok, template} = create_command_on(instance_id)
+
+    %{rows: [[command_map]]} =
+      Repo.query!("SELECT command_map FROM #{@prefix}.commands WHERE id = $1", [
+        Ecto.UUID.dump!(template.id)
+      ])
+
+    command_id = Ecto.UUID.generate()
+    dumped_command = Ecto.UUID.dump!(command_id)
+    dumped_instance = Ecto.UUID.dump!(instance_id)
+
+    Postgrex.query!(
+      probe,
+      """
+      INSERT INTO #{@prefix}.commands (id, instance_id, command_map, updated_at)
+      VALUES ($1, $2, $3::text::jsonb, timezone('UTC', clock_timestamp()))
+      """,
+      [dumped_command, dumped_instance, Jason.encode!(command_map)]
+    )
+
+    Postgrex.query!(
+      probe,
+      """
+      INSERT INTO #{@prefix}.command_queue_items (id, command_id, instance_id, status)
+      VALUES ($1, $2, $3, 'pending')
+      """,
+      [Ecto.UUID.dump!(Ecto.UUID.generate()), dumped_command, dumped_instance]
+    )
+
+    on_exit(fn -> delete_committed_command(dumped_command) end)
+    discard_sandbox_writes()
+
+    command_id
+  end
+
+  defp delete_committed_command(dumped_command_id) do
+    cleaner = probe_connection()
+    Postgrex.query!(cleaner, "SET lock_timeout = '5s'", [])
+
+    Postgrex.query!(cleaner, "DELETE FROM #{@prefix}.commands WHERE id = $1", [dumped_command_id])
+
+    GenServer.stop(cleaner)
+    :ok
   end
 
   @doc "Moves the lease's expiry one hour into the database's past."
@@ -193,6 +277,57 @@ defmodule DoubleEntryLedger.LeaseFixtures do
     Postgrex.query!(probe, "ROLLBACK", [])
     :ok
   end
+
+  @doc """
+  Drains the repo-query telemetry mailbox for `ref` and returns one tag per
+  write, in the order the connection issued it: `:lease` for an UPDATE against
+  the lease row, `{:write, source}` for any other INSERT, UPDATE, DELETE or
+  CTE. `source` is `nil` for a statement issued through `repo.query!/2`, such
+  as the batch writers. Reads, savepoints and `SET` statements are dropped.
+
+  This is how a fenced transaction is pinned by POSITION rather than by effect.
+  `lock!/3` and `refresh_locked!/3` run the same owner UPDATE, so `renewed_at`
+  cannot tell the closing refresh from the opening lock, and a count cannot see
+  where either one sits. A "ledger moved" test cannot see it either: the whole
+  transaction rolls back whatever the order, so it passes with the lock
+  anywhere. What a fully fenced transaction looks like is `:lease` first, the
+  business writes, `:lease` last — the expiry measured at commit rather than at
+  the start of a transaction that may run for a while.
+
+  Attach with `RepoCase.attach_telemetry([:double_entry_ledger, :repo, :query])`
+  immediately before the call under test.
+
+  Recursive, and deliberately kept out of test bodies. Draining rather than a
+  sequence of `assert_receive` is the point: a selective receive scans past
+  messages that do not match, so it can neither count nor pin an order.
+  """
+  def write_sequence(ref, acc \\ []) do
+    receive do
+      {:telemetry_event, ^ref, _event, _measurements, metadata} ->
+        write_sequence(ref, prepend_write(metadata, acc))
+    after
+      50 -> Enum.reverse(acc)
+    end
+  end
+
+  # `WITH` counts because the batch writers are CTEs issued through
+  # `repo.query!/2`, which carry no `source` at all and would otherwise be
+  # invisible. No read-only CTE is issued anywhere in this library.
+  @write_prefixes ~w(INSERT UPDATE DELETE WITH)
+
+  defp prepend_write(%{source: "command_queue_leases", query: "UPDATE" <> _}, acc),
+    do: [:lease | acc]
+
+  defp prepend_write(%{source: source, query: query}, acc),
+    do: prepend_if_write(String.starts_with?(query, @write_prefixes), source, acc)
+
+  defp prepend_write(_metadata, acc), do: acc
+
+  defp prepend_if_write(true, source, acc), do: [{:write, source} | acc]
+  defp prepend_if_write(false, _source, acc), do: acc
+
+  @doc "How many lease-row updates `write_sequence/2` recorded."
+  def lease_update_count(sequence), do: Enum.count(sequence, &(&1 == :lease))
 
   @doc "Merges `overrides` into the :command_queue config for this test only."
   def put_queue_config(overrides) do

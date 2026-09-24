@@ -225,7 +225,7 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
   defp attach_release_telemetry,
     do: attach_lease_telemetry([:double_entry_ledger, :lease, :released])
 
-  # Every event `emit_acquisition_events/2` can produce, under ONE handler and
+  # Every event `emit_acquisition_events/3` can produce, under ONE handler and
   # ONE ref, so a test observes the real emission order instead of picking
   # events out of the mailbox by pattern.
   @acquisition_events [
@@ -557,7 +557,7 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
     end
   end
 
-  describe "emit_acquisition_events/2" do
+  describe "emit_acquisition_events/3" do
     setup [:create_accounts]
 
     test "emits acquired, then recovered and retry for a rescued orphan, in that order", %{

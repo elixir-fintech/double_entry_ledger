@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  import DoubleEntryLedger.{AccountFixtures, InstanceFixtures}
+  import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, LeaseFixtures}
 
   # `Scheduling.calculate_retry_delay/1` for retry_count 0: base delay plus a
   # jitter of 1..(base/10 + 1) seconds.
@@ -254,7 +254,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       [command] = insert_commands(ctx, 1, :posted)
 
       [claimed_by_old_owner] =
-        Scheduling.claim_batch_for_processing([command], "old-batch-owner")
+        Scheduling.claim_batch_for_processing([command], test_grant(ctx.instance.id))
 
       claimed_by_old_owner.command_queue_item
       |> Ecto.Changeset.change(processor_id: "new-batch-owner")
@@ -1207,7 +1207,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       telemetry_ref = attach_telemetry([:double_entry_ledger, :command, :retry])
 
       [claimed_by_old_owner] =
-        Scheduling.claim_batch_for_processing([command], "old-batch-owner")
+        Scheduling.claim_batch_for_processing([command], test_grant(ctx.instance.id))
 
       claimed_by_old_owner.command_queue_item
       |> Ecto.Changeset.change(processor_id: "new-batch-owner")

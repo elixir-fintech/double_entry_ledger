@@ -6,6 +6,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerBehaviour do
   alternative implementations for testing (e.g., mocking crashes).
   """
 
-  @callback process_command_with_id(Ecto.UUID.t(), String.t()) ::
+  @callback process_command_with_id(
+              Ecto.UUID.t(),
+              String.t() | DoubleEntryLedger.CommandQueue.Lease.Grant.t()
+            ) ::
               {:ok, term(), term()} | {:error, term()}
 end

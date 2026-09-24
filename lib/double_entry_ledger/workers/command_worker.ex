@@ -64,6 +64,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   }
 
   alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionCommandMap}
+  alias DoubleEntryLedger.CommandQueue.Lease
+  alias DoubleEntryLedger.CommandQueue.Lease.Grant
+  alias DoubleEntryLedger.Repo.Proxy, as: Repo
+  alias DoubleEntryLedger.Stores.CommandStore
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
     CreateAccountCommand,
@@ -394,10 +398,31 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   advances `processor_version`, invalidating any later write from a previous
   owner.
 
+  Both the claim and the processing transaction run under a ledger lease, so
+  a command is only ever worked on by the node that owns its ledger.
+
+  > #### A manual call rewrites the ledger's queue {: .warning}
+  >
+  > Passing a string (including the `"manual"` default) acquires a lease, and
+  > acquisition rescues orphans: **every** `:processing` row on that ledger,
+  > whoever claimed it, is rescheduled to `:failed` — or `:dead_letter` once it
+  > is at the retry limit — with an "orphaned by lease acquisition" error, by
+  > `CommandQueue.Scheduling.reschedule_orphaned_processing!/2`. That is the
+  > point of acquisition: a `:processing` row under no live lease is by
+  > definition stranded. But it means a manual call touches rows other than
+  > the one named by `uuid`, and it will reschedule work a processor on this
+  > node is running right now if that processor's lease has expired. Pass a
+  > `Lease.Grant` instead when a lease is already held.
+
   ## Parameters
 
   - `uuid` - UUID of the command to process
-  - `processor_id` - Identifier recorded on the queue item (defaults to `"manual"`)
+  - `processor_id_or_grant` - a `Lease.Grant` proving this node already owns
+    the ledger (what `InstanceProcessor` passes), or a string prefix
+    (defaults to `"manual"`). A string makes this a *manual* call: it takes a
+    lease of its own for the duration, so it cannot run alongside a processor
+    on another node, and releases it afterwards. A manual call must therefore
+    be made outside any transaction of the caller's.
 
   ## Returns
 
@@ -413,6 +438,15 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - `{:error, :command_not_in_processing_state}` - the claimed command was not in
     `:processing`
   - `{:error, :action_not_supported}` - the command's action has no handler
+  - `{:error, :in_transaction}` - a manual call was made inside a transaction;
+    nothing was claimed, acquired or emitted
+  - `{:error, :ledger_owned}` - a manual call found a live lease held by
+    someone else
+  - `{:error, :ledger_busy}` - a manual call timed out on the lease row lock
+  - `{:error, :lease_lost}` - the ledger moved to another owner; the write was
+    fenced out and rolled back
+  - `{:error, :lease_busy}` - the lease row lock was not granted within
+    `CommandQueue.Config.lease_lock_timeout_ms/0`; nothing was written
 
   ## Claimable states
 
@@ -420,10 +454,48 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   has passed; `:processing`, `:processed` and `:dead_letter` are not.
   """
   @impl DoubleEntryLedger.Workers.CommandWorkerBehaviour
-  @spec process_command_with_id(Ecto.UUID.t(), String.t()) ::
+  @spec process_command_with_id(Ecto.UUID.t(), String.t() | Grant.t()) ::
           success_tuple() | error_tuple()
-  def process_command_with_id(uuid, processor_id \\ "manual") do
-    case claim_command_for_processing(uuid, processor_id) do
+  def process_command_with_id(uuid, processor_id_or_grant \\ "manual")
+
+  def process_command_with_id(uuid, %Grant{} = grant), do: claim_and_process(uuid, grant)
+
+  def process_command_with_id(uuid, owner_prefix) when is_binary(owner_prefix) do
+    if Repo.in_transaction?(),
+      do: {:error, :in_transaction},
+      else: self_leased(uuid, owner_prefix)
+  end
+
+  # Manual processing holds its own short lease so it cannot run alongside a
+  # processor on another node. Acquisition events are emitted after the
+  # acquisition committed and before processing starts.
+  defp self_leased(uuid, owner_prefix) do
+    case CommandStore.get_by_id(uuid) do
+      nil ->
+        {:error, :command_not_found}
+
+      %Command{instance_id: instance_id} ->
+        instance_id
+        |> Lease.acquire("#{owner_prefix}:#{Ecto.UUID.generate()}", Repo, coordination: :manual)
+        |> process_under_own_lease(uuid)
+    end
+  end
+
+  defp process_under_own_lease(:held, _uuid), do: {:error, :ledger_owned}
+  defp process_under_own_lease(:busy, _uuid), do: {:error, :ledger_busy}
+
+  defp process_under_own_lease({:ok, grant, info}, uuid) do
+    Lease.emit_acquisition_events(grant, info, Repo)
+
+    try do
+      claim_and_process(uuid, grant)
+    after
+      Lease.release(grant, :manual)
+    end
+  end
+
+  defp claim_and_process(uuid, grant) do
+    case claim_command_for_processing(uuid, grant) do
       {:ok, command} ->
         Telemetry.command_process_span(span_metadata(command), fn ->
           process_claimed_command(command)
@@ -434,9 +506,19 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     end
   end
 
+  # `LostError` and `BusyError` are raised out of the processing transaction by
+  # the `:lease_lock` / `:lease_refresh` steps `Occ.Processor.build_multi/3`
+  # adds, and by the fenced failure writes in `CommandQueue.Scheduling`. The
+  # `processor_version` row fence stays alongside them until it is retired.
   defp process_claimed_command(command) do
     process_command(command)
   rescue
+    Lease.LostError ->
+      {:error, :lease_lost}
+
+    Lease.BusyError ->
+      {:error, :lease_busy}
+
     error in Ecto.StaleEntryError ->
       case error.changeset.data do
         %CommandQueueItem{} -> {:error, :command_ownership_lost}

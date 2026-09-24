@@ -13,7 +13,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.LeaseFixtures
-  alias DoubleEntryLedger.{Command, CommandQueueItem, CommandQueueLeaseRow, Instance}
+  alias DoubleEntryLedger.{Command, CommandQueueItem, CommandQueueLeaseRow}
   alias DoubleEntryLedger.CommandQueue.Lease
   alias DoubleEntryLedger.CommandQueue.Scheduling
   alias DoubleEntryLedger.Stores.CommandStore
@@ -528,69 +528,6 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       )
       |> Repo.update_all([])
 
-    :ok
-  end
-
-  defp create_command_on(instance_id) do
-    CommandStore.create(
-      transaction_command_attrs(
-        instance_address: Repo.get!(Instance, instance_id).address,
-        source_idempk: "lease-#{System.unique_integer([:positive])}"
-      )
-    )
-  end
-
-  # A command committed over `probe`, so the probe's own transaction can write
-  # its queue row: rows created through `Repo` live in the sandbox transaction
-  # and the probe cannot see them. `command_map` is copied from a real command
-  # so the row still loads through `Command`'s custom type. `on_exit` is LIFO,
-  # so registering the DELETE here and `discard_sandbox_writes/0` after it
-  # gives: probe lock released, sandbox writes discarded (releasing any lock on
-  # these rows), command deleted, then `committed_lease/3` deletes the instance
-  # the `commands` foreign key points at.
-  defp committed_command(probe, instance_id) do
-    {:ok, template} = create_command_on(instance_id)
-
-    %{rows: [[command_map]]} =
-      Repo.query!("SELECT command_map FROM #{@prefix}.commands WHERE id = $1", [
-        Ecto.UUID.dump!(template.id)
-      ])
-
-    command_id = Ecto.UUID.generate()
-    dumped_command = Ecto.UUID.dump!(command_id)
-    dumped_instance = Ecto.UUID.dump!(instance_id)
-
-    Postgrex.query!(
-      probe,
-      """
-      INSERT INTO #{@prefix}.commands (id, instance_id, command_map, updated_at)
-      VALUES ($1, $2, $3::jsonb, timezone('UTC', clock_timestamp()))
-      """,
-      [dumped_command, dumped_instance, Jason.encode!(command_map)]
-    )
-
-    Postgrex.query!(
-      probe,
-      """
-      INSERT INTO #{@prefix}.command_queue_items (id, command_id, instance_id, status)
-      VALUES ($1, $2, $3, 'pending')
-      """,
-      [Ecto.UUID.dump!(Ecto.UUID.generate()), dumped_command, dumped_instance]
-    )
-
-    on_exit(fn -> delete_committed_command(dumped_command) end)
-    discard_sandbox_writes()
-
-    command_id
-  end
-
-  defp delete_committed_command(dumped_command_id) do
-    cleaner = probe_connection()
-    Postgrex.query!(cleaner, "SET lock_timeout = '5s'", [])
-
-    Postgrex.query!(cleaner, "DELETE FROM #{@prefix}.commands WHERE id = $1", [dumped_command_id])
-
-    GenServer.stop(cleaner)
     :ok
   end
 
