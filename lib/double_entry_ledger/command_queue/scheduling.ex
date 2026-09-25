@@ -22,10 +22,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
   import Ecto.Query, only: [from: 2]
 
-  import DoubleEntryLedger.CommandQueue.QueryHelpers,
-    only: [retry_eligible: 1, stale_processing: 2, processing_age_seconds: 1]
+  import DoubleEntryLedger.CommandQueue.QueryHelpers, only: [retry_eligible: 1]
 
   alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.Command.ErrorMap
   alias DoubleEntryLedger.CommandQueue.Lease
   alias DoubleEntryLedger.CommandQueue.Lease.Grant
   alias DoubleEntryLedger.CommandQueue.QueryHelpers
@@ -46,6 +46,12 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   @processable_states QueryHelpers.processable_states()
 
+  @typedoc """
+  A queue row that `reschedule_orphaned_processing!/2` moved out of
+  `:processing`, paired with the `processor_id` it carried beforehand.
+  """
+  @type orphan :: {Command.t(), String.t() | nil}
+
   @doc """
   Sets the next retry time for a failed command using exponential backoff.
 
@@ -57,10 +63,6 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `{:error, updated_command}` - The command with updated retry information
     - `{:error, changeset}` - Error updating the command
-
-  Raises `Ecto.StaleEntryError` when the `processor_version` fence loses, i.e.
-  the claim has since moved to another processor. Callers are expected to
-  rescue it and skip the command.
 
   A command that carries a `lease_grant` is written under the lease
   (`fenced_update/3`) and raises `Lease.LostError` when the ledger has moved
@@ -97,26 +99,36 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   # transaction, so the lease steps inside the Multi cannot cover them. Under a
   # grant the write therefore runs in its own lease-locked transaction: a
   # `LostError` propagates to the worker, which reports `{:error, :lease_lost}`,
-  # and nothing is written. With `nil` (the synchronous command-map path, and
-  # `InstanceMonitor`'s stale sweep, which loads commands from the database) the
-  # write runs exactly as before.
+  # and nothing is written. With `nil` (the synchronous command-map path, which
+  # never claims and so is never under a lease) the write runs unfenced.
   #
-  # Those are the only two clauses, matching `Lease.lock_step/2` and
-  # `BatchProcessor.batch_grant/1`: anything else in `lease_grant` raises
-  # rather than quietly landing an unfenced write on a ledger this node may
-  # have lost.
+  # `Lease.grant_for/1` decides which of the two this is, so "claimed implies a
+  # grant" is written once, in `Lease`, and a change to what counts as claimed
+  # does not have to be found in two modules. A claimed command (`:processing`)
+  # that arrives without its grant raises there, before the write.
+  #
+  # Beyond that, those are the only two clauses, matching `Lease.lock_step/2`
+  # and `BatchProcessor.batch_grant/1`: anything else in `lease_grant` reaches
+  # `fenced_update_with_grant/3`, which matches neither, and raises rather than
+  # quietly landing an unfenced write on a ledger this node may have lost.
   #
   # `persisted_failure/1` runs after `with_grant/3` has returned, so a write
   # that rolled back emits no telemetry.
   @spec fenced_update(Command.t(), Ecto.Repo.t(), (Ecto.Repo.t() -> term())) ::
           {:error, Command.t()} | {:error, Changeset.t()}
-  defp fenced_update(%Command{lease_grant: %Grant{} = grant}, repo, write) do
+  defp fenced_update(%Command{} = command, repo, write) do
+    command
+    |> Lease.grant_for()
+    |> fenced_update_with_grant(repo, write)
+  end
+
+  defp fenced_update_with_grant(%Grant{} = grant, repo, write) do
     grant
     |> Lease.with_grant(repo, write)
     |> emit_or_return()
   end
 
-  defp fenced_update(%Command{lease_grant: nil}, repo, write) do
+  defp fenced_update_with_grant(nil, repo, write) do
     write.(repo) |> emit_or_return()
   end
 
@@ -146,7 +158,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   ## Returns
     - `{:ok, command}`: Claimed, carrying the refreshed `command_queue_item`
-      (`:processing`, `processor_id` stamped, `processor_version` advanced,
+      (`:processing`, `processor_id` stamped,
       `retry_count` bumped for a retry, `next_retry_after` cleared) and
       `lease_grant` set to `grant`
     - `{:error, :command_not_found}`: If no command with the given ID exists
@@ -171,8 +183,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   Note that only the wait for the lease row is bounded.
   `Lease.with_lock_timeout/2` restores the caller's `lock_timeout` before
   `lock!/3` returns, so the claim UPDATE waits on queue rows with the
-  connection default, which is normally unlimited. That matters for as long as
-  queue writers outside the lease discipline still exist (through Task 11).
+  connection default, which is normally unlimited. Every queue-row writer now
+  takes the lease row first, so that wait is bounded by the holder's own
+  transaction rather than by an unfenced writer.
   """
   @spec claim_command_for_processing(Ecto.UUID.t(), Grant.t(), Ecto.Repo.t()) ::
           {:ok, Command.t()} | {:error, atom()}
@@ -216,15 +229,14 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   `require_no_transaction!`, so such a caller raises `ArgumentError` instead.
 
   For every command: status → `:processing`, stamps the grant's `owner_id` as
-  `processor_id`, clears `next_retry_after`, advances `processor_version`, and
+  `processor_id`, clears `next_retry_after`, and
   bumps `retry_count` (unchanged for `:pending`, `+1` otherwise). A single
   conditional bulk update applies the appropriate retry-count rule to each
   row. The queue trigger stamps `processing_started_at`.
 
-  `processor_version` is advanced here only until Task 11 removes the column:
-  the lease row lock, not the per-row fence, is now the real concurrency
-  check. The status and retry-time guards in the UPDATE skip a command that is
-  not claimable or is rescheduled for a future retry.
+  The lease row lock is the only concurrency check; the queue row carries no
+  fence of its own. The status and retry-time guards in the UPDATE skip a
+  command that is not claimable or is rescheduled for a future retry.
 
   Returns the subset of `commands` that were actually claimed, in the same
   order, each with a refreshed `command_queue_item` and `lease_grant` set to
@@ -282,8 +294,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
               eqi.retry_count,
               eqi.status
             )
-        ],
-        inc: [processor_version: 1]
+        ]
       ],
       select: eqi
     )
@@ -361,29 +372,6 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
              l.expires_at <= fragment("timezone('UTC', statement_timestamp())")),
       select: cqi.instance_id,
       distinct: true
-    )
-  end
-
-  @doc """
-  Query for up to `limit` commands stranded in `:processing`: rows claimed at
-  least `stale_after_seconds` ago on the database clock whose owner never
-  reported back (`QueryHelpers.stale_processing/2`). Oldest claim first.
-
-  Selects `{command, queue_item, seconds_in_processing}` so the caller can
-  rebuild the command with its queue item and report how long the row was
-  stuck without consulting the application clock. `InstanceMonitor` runs it on
-  every poll and routes each row through the normal failure path.
-  """
-  @spec stale_processing_commands_query(non_neg_integer(), pos_integer()) :: Ecto.Query.t()
-  def stale_processing_commands_query(stale_after_seconds, limit) do
-    from(c in Command,
-      join: cqi in CommandQueueItem,
-      prefix: ^@schema_prefix,
-      on: c.id == cqi.command_id,
-      where: stale_processing(cqi, ^stale_after_seconds),
-      order_by: [asc: cqi.processing_started_at],
-      limit: ^limit,
-      select: {c, cqi, processing_age_seconds(cqi)}
     )
   end
 
@@ -488,8 +476,12 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   @doc """
   Reschedules every `:processing` row on `instance_id`, whatever its
-  `processor_id`, as `:failed` with a zero retry delay, and returns the
-  updated commands with their queue items, lowest queue position first.
+  `processor_id`, as `:failed` with a zero retry delay, and returns one
+  `t:orphan/0` per row, lowest queue position first.
+
+  The previous `processor_id` is returned beside each command because the
+  reschedule nulls it on the row: the caller reports it on
+  `[:command, :recovered]` and has no other way to see it.
 
   Called by `DoubleEntryLedger.CommandQueue.Lease.acquire/4` inside the
   transaction that already holds the lease row lock, which proves no live
@@ -498,7 +490,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   any failure, including `Ecto.StaleEntryError`, so the caller's transaction
   rolls back. Emits nothing; the caller emits after commit.
   """
-  @spec reschedule_orphaned_processing!(Ecto.UUID.t(), Ecto.Repo.t()) :: [Command.t()]
+  @spec reschedule_orphaned_processing!(Ecto.UUID.t(), Ecto.Repo.t()) :: [orphan()]
   def reschedule_orphaned_processing!(instance_id, repo) do
     from(c in Command,
       prefix: ^@schema_prefix,
@@ -509,15 +501,22 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       preload: [command_queue_item: cqi]
     )
     |> repo.all()
-    |> Enum.map(fn command ->
-      reason =
-        "orphaned by lease acquisition; previous processor " <>
-          inspect(command.command_queue_item.processor_id)
+    |> Enum.map(&reschedule_orphan!(&1, repo))
+  end
 
+  defp reschedule_orphan!(command, repo) do
+    previous_processor_id = command.command_queue_item.processor_id
+
+    reason =
+      "orphaned by lease acquisition; previous processor " <>
+        inspect(previous_processor_id)
+
+    rescheduled =
       command
       |> build_schedule_retry_with_reason(reason, :failed, retry_delay: 0)
       |> repo.update!()
-    end)
+
+    {rescheduled, previous_processor_id}
   end
 
   @doc """
@@ -575,30 +574,53 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     |> put_assoc(:command_queue_item, command_queue_changeset)
   end
 
-  @doc "Emits telemetry for a persisted command failure and returns its worker error tuple."
+  @doc """
+  Emits telemetry for a persisted command failure and returns its worker error
+  tuple.
+
+  The head pattern is deliberately narrow: this is the library's own path, and
+  a queue row whose newest error is not an entry `ErrorMap.build_error/2` built
+  — an empty list, or a row loaded from the database with string keys and never
+  re-prepended — means the write that was supposed to record a failure did not.
+  That raises here rather than reporting nothing, exactly as it did before
+  `:class` existed.
+  """
   @spec persisted_failure(Command.t()) :: {:error, Command.t()}
   def persisted_failure(
-        %Command{command_queue_item: %{errors: [%{message: message} | _], status: status}} =
-          command
+        %Command{
+          command_queue_item: %{errors: [%{message: _, class: _} = error | _], status: status}
+        } = command
       ) do
-    emit_persisted_failure(command, status, message)
+    emit_persisted_failure(command, status, error)
     {:error, command}
   end
 
-  @doc "Emits retry or dead-letter telemetry after a failure transition is persisted."
-  @spec emit_persisted_failure(Command.t(), CommandQueueItem.state(), String.t()) :: :ok
-  def emit_persisted_failure(command, :dead_letter, message) do
+  @doc """
+  Emits retry or dead-letter telemetry after a failure transition is persisted.
+
+  `error` is the entry `ErrorMap.build_error/2` wrote at the head of the queue
+  row's `errors`. Its `:class` is carried as a field rather than recovered from
+  `:message`, so what leaves the database is decided where the entry is built.
+
+  A failure status whose `error` is not such an entry logs at `:error` and emits
+  nothing; it cannot raise, because this is called by the library after the
+  write already committed. A status that is not a failure transition is a
+  silent `:ok` — there is nothing to report.
+  """
+  @spec emit_persisted_failure(Command.t(), CommandQueueItem.state(), ErrorMap.error()) :: :ok
+  def emit_persisted_failure(command, :dead_letter, %{message: message, class: class}) do
     Logger.error("dead-lettering command #{command.id}: #{message}")
 
     Telemetry.command_dead_letter(%{
       command_id: command.id,
       instance_id: command.instance_id,
-      error: error_type(message),
+      error: class,
       trace_context: command.trace_context
     })
   end
 
-  def emit_persisted_failure(command, status, message) when status in [:failed, :occ_timeout] do
+  def emit_persisted_failure(command, status, %{message: message})
+      when status in [:failed, :occ_timeout] do
     Logger.warning("command #{command.id} persisted with #{status} status: #{message}")
 
     Telemetry.command_retry(%{
@@ -610,37 +632,22 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     })
   end
 
-  def emit_persisted_failure(_command, _status, _message), do: :ok
+  # A failure transition whose head error entry is not one
+  # `ErrorMap.build_error/2` built. Nothing can be reported from it, and this
+  # function is public, so say so at `:error` rather than returning `:ok` as if
+  # the event had fired. The entry itself is NOT logged: it is the one term here
+  # that can hold a fragment of a command's payload, and the command id is
+  # enough to find the row.
+  def emit_persisted_failure(command, status, _error)
+      when status in [:failed, :occ_timeout, :dead_letter] do
+    Logger.error(
+      "no #{status} telemetry emitted for command #{command.id}: the newest entry in its " <>
+        "errors is not an ErrorMap entry, so it carries neither a message nor a class"
+    )
+  end
 
-  # The queue row and a telemetry event are not the same kind of sink, so the
-  # message is split by destination rather than by content.
-  #
-  # The COLUMN crosses no boundary. `commands.command_map` sits beside it and
-  # `Command`'s Jason encoder serialises `command_map` and `command_queue_item`
-  # together, so a payload fragment in the queue item's errors tells a reader
-  # nothing the field next to it does not, and this is the column operators
-  # actually read. The full message stays there.
-  #
-  # The EVENT does cross one. It reaches whatever exporter the host attached
-  # and carries no payload of its own — `command_id`, `instance_id` and this
-  # string — so the error text is the only route by which a fragment of a
-  # command's payload could leave the database. A crashed task's reason reaches
-  # here through `InstanceProcessor`'s crash retry (see
-  # `CommandQueue.Cleanup.failure_shape/1`) and again when a takeover re-reads
-  # the row. The event therefore carries the TYPE; a consumer that needs the
-  # detail has the command id and can read the row, which puts the detail
-  # behind database access.
-  #
-  # The type is everything before the FIRST `": "`, and taking only the first
-  # segment is the safety property rather than a formatting choice: every
-  # message this library persists is written `"<type>: <detail>"`, and a detail
-  # can itself contain `": "` — a `MatchError`'s message is `"no match of right
-  # hand side value: <term>"`. A rule that split on a later separator would
-  # carry exactly the fragment this exists to stop. For the same reason the
-  # crashing exception's own module stays on the row: it sits two segments deep,
-  # behind `"Max retry count (N) exceeded: Task crashed: "`.
-  @spec error_type(String.t()) :: String.t()
-  defp error_type(message), do: message |> String.split(": ", parts: 2) |> hd()
+  # Not a failure transition: there is nothing to report.
+  def emit_persisted_failure(_command, _status, _error), do: :ok
 
   # Private function to calculate retry delay
   @spec calculate_retry_delay(non_neg_integer()) :: non_neg_integer()

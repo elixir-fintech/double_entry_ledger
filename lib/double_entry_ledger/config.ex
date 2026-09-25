@@ -30,7 +30,6 @@ defmodule DoubleEntryLedger.Config do
         batch_size: 8,
         command_queue: [
           poll_interval: 5_000,
-          stale_processing_after: 300,
           max_retries: 5,
           base_retry_delay: 30,
           max_retry_delay: 3_600,
@@ -55,7 +54,6 @@ defmodule DoubleEntryLedger.Config do
     * `:max_retries` - OCC attempts before a command times out (default: `5`)
     * `:retry_interval` - OCC backoff base in milliseconds (default: `200`)
     * `:poll_interval` - monitor poll interval in milliseconds (default: `5_000`)
-    * `:stale_processing_after` - seconds before a `:processing` row is stranded (default: `300`)
     * `:max_retries` - queue retries before a command is dead-lettered (default: `5`).
       Distinct from the top-level `:max_retries` above, which counts OCC attempts.
     * `:base_retry_delay` - first retry delay in seconds (default: `30`)

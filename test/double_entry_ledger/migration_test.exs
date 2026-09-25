@@ -181,6 +181,7 @@ defmodule DoubleEntryLedger.MigrationTest do
       refute column_nullable?("command_queue_leases", "expires_at")
       assert column_nullable?("command_queue_leases", "released_at")
       assert index_exists?("idx_command_queue_leases_expires_at")
+      refute column_exists?("command_queue_items", "processor_version")
     end
 
     test "down is refused and leaves the schema untouched" do
@@ -193,6 +194,7 @@ defmodule DoubleEntryLedger.MigrationTest do
       end
 
       assert table_exists?("command_queue_leases")
+      refute column_exists?("command_queue_items", "processor_version")
     end
 
     test "Migration.down/1 refuses a rollback that crosses version 6 before touching anything" do

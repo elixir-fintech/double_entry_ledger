@@ -262,8 +262,9 @@ defmodule DoubleEntryLedger.Occ.Processor do
         # `Lease.lock_step/2` takes the lease row lock and proves ownership
         # first, `Lease.refresh_step/2` pushes the expiry forward last so it is
         # measured at commit. Both are no-ops for the synchronous command-map
-        # path, which holds no lease.
-        grant = Map.get(occable_item, :lease_grant)
+        # path, which holds no lease; a claimed command that reached here
+        # without its grant raises in `Lease.grant_for/1`.
+        grant = Lease.grant_for(occable_item)
 
         Multi.new()
         |> Lease.lock_step(grant)
@@ -350,7 +351,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
         # A separate transaction from the processing one, and it writes the
         # queue row (`:occ_timeout`, then whatever `handle_occ_final_timeout/2`
         # adds), so it carries the same fence.
-        grant = Map.get(occable_item, :lease_grant)
+        grant = Lease.grant_for(occable_item)
 
         Multi.new()
         |> Lease.lock_step(grant)

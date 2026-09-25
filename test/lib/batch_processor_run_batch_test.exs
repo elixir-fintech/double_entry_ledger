@@ -951,43 +951,6 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
                BatchProcessor.run_batch([command], DoubleEntryLedger.MockRepo)
     end
 
-    test "ownership loss returns immediately without OCC retry or split",
-         %{instance: inst, accounts: [a1, a2, _, _]} do
-      command = insert_balanced_command(inst, a1, a2, :posted)
-
-      # The grant is dropped before the write: this test is about the
-      # `processor_version` row fence, which stays until Task 11 retires it,
-      # and `MockRepo` cannot carry the lease. `MockRepo` implements
-      # `RepoBehaviour`, and that behaviour cannot declare `in_transaction?/0`
-      # — `Lease.lock!/3`'s first call — without conflicting with the same
-      # callback in `Ecto.Repo`. The lease's own fence on the batch write has
-      # its own test in the "lease fencing" describe below, on the real repo.
-      [claimed] = Scheduling.claim_batch_for_processing([command], test_grant(inst.id))
-      claimed_by_old_owner = %{claimed | lease_grant: nil}
-
-      claimed_by_old_owner.command_queue_item
-      |> Ecto.Changeset.change(processor_id: "replacement-owner")
-      |> Ecto.Changeset.optimistic_lock(:processor_version)
-      |> Repo.update!()
-
-      {:ok, transaction_count} = Agent.start(fn -> 0 end)
-      on_exit(fn -> Agent.stop(transaction_count) end)
-
-      stub(DoubleEntryLedger.MockRepo, :transaction, fn fun ->
-        Agent.update(transaction_count, &(&1 + 1))
-        Repo.transaction(fun)
-      end)
-
-      assert {:error, :command_ownership_lost} =
-               BatchProcessor.run_batch([claimed_by_old_owner], DoubleEntryLedger.MockRepo)
-
-      assert Agent.get(transaction_count, & &1) == 1
-
-      current = Repo.get!(CommandQueueItem, command.command_queue_item.id)
-      assert current.status == :processing
-      assert current.processor_id == "replacement-owner"
-    end
-
     # ── Scenario 1: stale resolved on first retry ──────────────────
 
     test "stale on first attempt, resolved on retry: batch succeeds with retry_count=1",
@@ -1132,6 +1095,25 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       assert {:error, :lease_lost} = BatchProcessor.run_batch([claimed])
 
       assert count(Transaction) == 0
+    end
+
+    # Inherited from the deleted row-fence test: an ownership failure must not
+    # be treated as a stale-write conflict, so it is neither retried nor split.
+    # Every attempt opens with `lock!/3`, which issues the lease-row UPDATE even
+    # when it matches nothing, so the number of lease updates is the number of
+    # attempts.
+    test "a batch whose lease was lost is attempted exactly once",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+      grant = test_grant(inst.id)
+      [claimed] = Scheduling.claim_batch_for_processing([command], grant)
+      expire_lease(inst.id)
+      _successor = test_grant(inst.id)
+      ref = attach_telemetry([:double_entry_ledger, :repo, :query])
+
+      assert {:error, :lease_lost} = BatchProcessor.run_batch([claimed])
+
+      assert lease_update_count(write_sequence(ref)) == 1
     end
 
     test "a live grant lets the batch write and touches the lease",

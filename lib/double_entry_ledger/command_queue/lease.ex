@@ -22,14 +22,6 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
-  # Reads the reason string written by
-  # `DoubleEntryLedger.CommandQueue.Scheduling.reschedule_orphaned_processing!/2`,
-  # which ends in `"previous processor " <> inspect(processor_id)` and may be
-  # embedded in a longer dead-letter message. Grep for this attribute from the
-  # writing side before rewording that reason. Task 11 replaces the coupling by
-  # carrying the id on the queue item.
-  @previous_processor_regex ~r/previous processor "([^"]*)"/
-
   defmodule Grant do
     @moduledoc "Proof of ownership handed to a processor by `Lease.acquire/4`."
     @enforce_keys [:instance_id, :owner_id, :fencing_token]
@@ -69,7 +61,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   @type acquire_info :: %{
           previous_owner_id: String.t() | nil,
           takeover: boolean(),
-          orphans: [Command.t()]
+          orphans: [Scheduling.orphan()]
         }
 
   @doc "A new unique owner id: `prefix:node:uuid`."
@@ -88,12 +80,11 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   transaction. Emits nothing; call `emit_acquisition_events/3` afterwards.
 
   `:held` when a live lease exists (any holder). `:busy` when the row lock was
-  not granted within the lock timeout or an orphan reschedule lost a race.
-  Concretely that is any transient contention condition — the lock timeout
-  fired, a deadlock was broken, the snapshot could not be serialized, or the
-  `processor_version` fence on a queue row lost — and `acquire/4` follows
-  `renew/3` and `release/3` in treating all of them as "another transaction is
-  on this work, try again later", rather than `lock!/3`'s narrower rule.
+  not granted within the lock timeout. Concretely that is any transient
+  contention condition — the lock timeout fired, a deadlock was broken, or the
+  snapshot could not be serialized — and `acquire/4` follows `renew/3` and
+  `release/3` in treating all of them as "another transaction is on this work,
+  try again later", rather than `lock!/3`'s narrower rule.
   Nothing was written in any of those cases and the caller's response is the
   same for all of them: back off and retry on the next poll. Raises
   `ArgumentError` inside a caller's transaction.
@@ -122,11 +113,10 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
     end
   end
 
-  # `lease_transaction/2` reports the three outcomes in two shapes: `{:error,
-  # reason}` whenever the transaction body called `repo.rollback/1` (`:held` for
-  # a live lease, `:busy` for a lost row fence), and a bare `:busy` from its own
-  # rescue of a transient PostgreSQL error. Flatten the rollback shape here so
-  # `acquire/4` reads one vocabulary.
+  # `lease_transaction/2` reports its outcomes in two shapes: `{:error, :held}`
+  # when the transaction body called `repo.rollback/1` for a live lease, and a
+  # bare `:busy` from its own rescue of a transient PostgreSQL error. Flatten
+  # the rollback shape here so `acquire/4` reads one vocabulary.
   defp unwrap_rollback({:error, reason}), do: reason
   defp unwrap_rollback(result), do: result
 
@@ -193,14 +183,13 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
       :ok
   end
 
-  defp report_orphan(%Command{command_queue_item: item} = command) do
+  defp report_orphan({%Command{command_queue_item: item} = command, previous_processor_id}) do
     Logger.warning("rescheduled orphan #{command.id} on lease acquisition")
 
     Telemetry.command_recovered(%{
       command_id: command.id,
       instance_id: command.instance_id,
-      previous_processor_id: previous_processor_from_error(item),
-      stale_for_seconds: nil,
+      previous_processor_id: previous_processor_id,
       reason: :takeover,
       trace_context: command.trace_context
     })
@@ -208,7 +197,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
     # Deliberately NOT `Scheduling.persisted_failure/1`: that returns
     # `{:error, command}` and reads the status off the command, while the
     # status that must be reported here is the one the reschedule wrote.
-    Scheduling.emit_persisted_failure(command, item.status, hd(item.errors).message)
+    Scheduling.emit_persisted_failure(command, item.status, hd(item.errors))
   end
 
   # `{:ok, token}` when this claim created the row, `:exists` when the ledger
@@ -320,10 +309,10 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
 
   # Any failure while rescheduling orphans rolls the whole acquisition back:
   # the successor starts from a clean queue or not at all. Transient
-  # contention is :busy (lock waits via lease_transaction/2's rescue, a lost
-  # row fence via reschedule_orphans!/2). Every other error propagates out of
-  # acquire/4 so a constraint violation or schema mismatch is a visible crash
-  # of the acquisition task, not a retried "busy" (R11.2).
+  # contention is :busy (lock waits via lease_transaction/2's rescue). Every
+  # other error propagates out of acquire/4 so a constraint violation or schema
+  # mismatch is a visible crash of the acquisition task, not a retried "busy"
+  # (R11.2).
   #
   # `predecessor` is the half of the `acquire_info/0` map that the claim path
   # already knows — `previous_owner_id` and `takeover`; this completes it with
@@ -335,24 +324,55 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
     {grant, Map.put(predecessor, :orphans, orphans)}
   end
 
-  # A lost `processor_version` fence means another transaction is writing the
-  # same queue row right now, which is what :busy already means everywhere else
-  # in this module. Rolling back as :busy turns a crashed acquisition task into
-  # a clean retry on the next poll; the ledger is simply not claimed this time.
   defp reschedule_orphans!(instance_id, repo) do
     Scheduling.reschedule_orphaned_processing!(instance_id, repo)
-  rescue
-    Ecto.StaleEntryError -> repo.rollback(:busy)
   end
 
-  defp previous_processor_from_error(%{errors: [%{message: message} | _]}) do
-    case Regex.run(@previous_processor_regex, message) do
-      [_, id] -> id
-      _ -> nil
-    end
+  @doc """
+  The grant a write on `occable_item` must be fenced with, or `nil` when the
+  item was never claimed.
+
+  `nil` in `lease_grant` is ambiguous on its own: the field is virtual and
+  defaults to nothing, so "never claimed" and "claimed, then the grant was
+  dropped somewhere between claim and write" look identical. The queue row
+  resolves it. A row that is `:processing` was moved there by
+  `Scheduling.claim_batch_for_processing/3`, which only runs under a grant, so
+  a missing grant on such a command is a dropped fence and raises.
+
+  Everything else — the synchronous command-map path, which creates and
+  processes in one go and never claims — is unclaimed and legitimately
+  unfenced. That path is the only one left now that `InstanceMonitor`'s stale
+  sweep is gone.
+
+  A command whose `command_queue_item` is not loaded raises too: the preload is
+  what makes the rule decidable, so an unloaded association is "cannot tell",
+  and the fence is not something to skip on a "cannot tell".
+
+  A `lease_grant` that is neither a grant nor `nil` is passed through, so it
+  raises at the fence itself (`lock_step/2`, `Scheduling.fenced_update/3`,
+  `BatchProcessor.batch_grant/1`) rather than here.
+  """
+  @spec grant_for(term()) :: Grant.t() | nil | term()
+  def grant_for(occable_item) do
+    checked_grant(
+      Map.get(occable_item, :lease_grant),
+      Map.get(occable_item, :command_queue_item)
+    )
   end
 
-  defp previous_processor_from_error(_), do: nil
+  defp checked_grant(nil, %{status: :processing}), do: dropped_fence!()
+  defp checked_grant(nil, %Ecto.Association.NotLoaded{}), do: dropped_fence!()
+  defp checked_grant(grant, _queue_item), do: grant
+
+  @doc false
+  @spec dropped_fence!() :: no_return()
+  def dropped_fence! do
+    raise ArgumentError,
+          "a command whose queue row is :processing, or whose queue row is not " <>
+            "loaded, was or may have been claimed under a lease, so it must carry " <>
+            "the grant it was claimed under; lease_grant is nil. Writing it now " <>
+            "would bypass the only ownership fence there is."
+  end
 
   @doc """
   Prepends the lease row lock to `multi` as the step `:lease_lock`.

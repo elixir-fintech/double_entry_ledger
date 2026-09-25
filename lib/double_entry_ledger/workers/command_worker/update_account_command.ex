@@ -24,12 +24,17 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
 
   @doc "Runs the update-account command and returns the handler response."
   @spec process(Command.t()) :: AccountCommandResponseHandler.response()
-  def process(%Command{command_map: %{action: :update_account}, lease_grant: grant} = event) do
+  def process(%Command{command_map: %{action: :update_account}} = event) do
+    grant = Lease.grant_for(event)
+
     # The closing half of the fence belongs here rather than in
-    # `build_update_account/1`, because the queue-row write is appended after
+    # `build_update_account/2`, because the queue-row write is appended after
     # that builder returns, by `handle_build_update_account/2`. The refresh has
-    # to be the last step of the transaction, so it goes on after it.
-    build_update_account(event)
+    # to be the last step of the transaction, so it goes on after it. The grant
+    # is resolved once, here, and handed down: both halves must fence on the
+    # same one.
+    event
+    |> build_update_account(grant)
     |> handle_build_update_account(event)
     |> Lease.refresh_step(grant)
     |> Repo.transaction()
@@ -42,11 +47,13 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommand do
   # This module cannot inherit `Occ.Processor`'s `__using__` macro without
   # pulling in the whole OCC retry pipeline, so it takes the lease row lock
   # through the shared `Lease.lock_step/2` directly.
-  @spec build_update_account(Command.t()) :: Ecto.Multi.t()
-  defp build_update_account(%Command{
-         command_map: %{payload: account_data, instance_address: iaddr, account_address: aaddr},
-         lease_grant: grant
-       }) do
+  @spec build_update_account(Command.t(), Lease.Grant.t() | nil) :: Ecto.Multi.t()
+  defp build_update_account(
+         %Command{
+           command_map: %{payload: account_data, instance_address: iaddr, account_address: aaddr}
+         },
+         grant
+       ) do
     Multi.new()
     |> Lease.lock_step(grant)
     |> Multi.one(:_get_account, AccountStoreHelper.get_by_address_query(iaddr, aaddr))

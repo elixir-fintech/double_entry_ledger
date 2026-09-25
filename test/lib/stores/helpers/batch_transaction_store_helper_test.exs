@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  import DoubleEntryLedger.{AccountFixtures, InstanceFixtures, LeaseFixtures}
+  import DoubleEntryLedger.{AccountFixtures, InstanceFixtures}
 
   # `Scheduling.calculate_retry_delay/1` for retry_count 0: base delay plus a
   # jitter of 1..(base/10 + 1) seconds.
@@ -38,7 +38,6 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
     Transaction
   }
 
-  alias DoubleEntryLedger.CommandQueue.{OwnershipError, Scheduling}
   alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.Stores.CommandStore
 
@@ -250,43 +249,6 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
   describe "write_successes/3" do
     setup [:create_instance, :create_accounts]
 
-    test "rejects a success written by a stale batch owner", %{accounts: [a1, a2, _, _]} = ctx do
-      [command] = insert_commands(ctx, 1, :posted)
-
-      [claimed_by_old_owner] =
-        Scheduling.claim_batch_for_processing([command], test_grant(ctx.instance.id))
-
-      claimed_by_old_owner.command_queue_item
-      |> Ecto.Changeset.change(processor_id: "new-batch-owner")
-      |> Ecto.Changeset.optimistic_lock(:processor_version)
-      |> Repo.update!()
-
-      initial = accounts_map([a1, a2])
-
-      {success, advanced} =
-        success_for(claimed_by_old_owner, initial, :posted, [
-          {a1.id, :debit, 100},
-          {a2.id, :credit, 100}
-        ])
-
-      write_plan = %{
-        successes: [success],
-        failures: [],
-        merged_accounts: merged_accounts(initial, advanced)
-      }
-
-      assert_raise OwnershipError, fn ->
-        Repo.transaction(fn ->
-          BatchTransactionStoreHelper.write_successes(write_plan, Repo, DateTime.utc_now())
-        end)
-      end
-
-      current = reload_qi(command.command_queue_item.id)
-      assert current.status == :processing
-      assert current.processor_id == "new-batch-owner"
-      assert reload_account(a1.id).available == a1.available
-    end
-
     test "writes accounts.available + balance_history_entries.available above int4 range (migration 5 bigint regression)",
          %{instance: inst} do
       # 5_000_000_000 > INT_MAX (~2.14B). The accounts.available and
@@ -410,11 +372,10 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       assert a1_after.posted.amount == 100
       assert a2_after.posted.amount == 100
 
-      # Queue item marked :processed and the ownership token advanced.
+      # Queue item marked :processed.
       qi = Repo.get!(CommandQueueItem, command.command_queue_item.id)
       assert qi.status == :processed
       assert qi.processing_completed_at != nil
-      assert qi.processor_version == command.command_queue_item.processor_version + 1
 
       # No pending_transaction_lookup row created for :posted
       assert Repo.get_by(PendingTransactionLookup, command_id: command.id) == nil
@@ -690,35 +651,6 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
 
       assert count(PendingTransactionLookup) == lookup_before
-    end
-
-    # ── 8. processor_version advanced in success path ─────────────
-
-    test "write_successes/3 advances processor_version",
-         %{accounts: [a1, a2, _, _]} = ctx do
-      [command] = insert_commands(ctx, 1, :posted)
-      now = DateTime.utc_now()
-
-      version_before = command.command_queue_item.processor_version
-
-      initial = accounts_map([a1, a2])
-
-      {success, advanced} =
-        success_for(command, initial, :posted, [
-          {a1.id, :debit, 100},
-          {a2.id, :credit, 100}
-        ])
-
-      write_plan = %{
-        successes: [success],
-        failures: [],
-        merged_accounts: merged_accounts(initial, advanced)
-      }
-
-      :ok = BatchTransactionStoreHelper.write_successes(write_plan, Repo, now)
-
-      qi = reload_qi(command.command_queue_item.id)
-      assert qi.processor_version == version_before + 1
     end
 
     # ── 9. fresh INSERT branch of pending_transaction_lookup upsert ───
@@ -1202,27 +1134,21 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
   describe "write_failures/3" do
     setup [:create_instance, :create_accounts]
 
-    test "rejects a failure written by a stale batch owner", ctx do
+    # Inherited from the deleted stale-owner test, which could only refute
+    # telemetry because nothing was written. The property is the writer's own:
+    # `BatchProcessor.run_batch/2` emits from the plans this returns, after its
+    # transaction commits, so a rollback cannot leave an event behind.
+    test "writing a failure emits no telemetry of its own", ctx do
       [command] = insert_commands(ctx, 1, :posted)
       telemetry_ref = attach_telemetry([:double_entry_ledger, :command, :retry])
 
-      [claimed_by_old_owner] =
-        Scheduling.claim_batch_for_processing([command], test_grant(ctx.instance.id))
+      [_plan] =
+        BatchTransactionStoreHelper.write_failures(
+          [%{command: command, reason: {:unbalanced}}],
+          Repo,
+          DateTime.utc_now()
+        )
 
-      claimed_by_old_owner.command_queue_item
-      |> Ecto.Changeset.change(processor_id: "new-batch-owner")
-      |> Ecto.Changeset.optimistic_lock(:processor_version)
-      |> Repo.update!()
-
-      failure = %{command: claimed_by_old_owner, reason: {:unbalanced}}
-
-      assert_raise OwnershipError, fn ->
-        BatchTransactionStoreHelper.write_failures([failure], Repo, DateTime.utc_now())
-      end
-
-      current = reload_qi(command.command_queue_item.id)
-      assert current.status == :processing
-      assert current.processor_id == "new-batch-owner"
       refute_received {:telemetry_event, ^telemetry_ref, _event, _measurements, _metadata}
     end
 
@@ -1254,7 +1180,6 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       # Legacy `schedule_retry_changeset/4` does NOT touch retry_count;
       # the bump happens at claim time via `retry_count_by_status/1`.
       assert qi.retry_count == command.command_queue_item.retry_count
-      assert qi.processor_version == command.command_queue_item.processor_version + 1
       assert qi.processing_completed_at != nil
       assert qi.next_retry_after != nil
       assert DateTime.compare(qi.next_retry_after, now) == :gt
@@ -1386,7 +1311,6 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
       # Legacy `dead_letter_changeset/2` does NOT touch retry_count;
       # it stays at whatever the most recent claim wrote.
       assert qi.retry_count == max_retries
-      assert qi.processor_version == command.command_queue_item.processor_version + 1
       assert qi.processing_completed_at != nil
 
       # Dead-letter still records the failure in the errors array.
@@ -1454,26 +1378,6 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
       [%{"message" => m3}] = qi3.errors
       assert String.contains?(m3, "account not found")
-    end
-
-    # ── 6. processor_version advanced in failure path ─────────────
-
-    test "write_failures/3 advances processor_version",
-         ctx do
-      [command] = insert_commands(ctx, 1, :posted)
-      now = DateTime.utc_now()
-
-      version_before = command.command_queue_item.processor_version
-
-      [_plan] =
-        BatchTransactionStoreHelper.write_failures(
-          [%{command: command, reason: {:unbalanced}}],
-          Repo,
-          now
-        )
-
-      qi = reload_qi(command.command_queue_item.id)
-      assert qi.processor_version == version_before + 1
     end
 
     # ── 7. processor_id cleared on :failed (matches schedule_retry_changeset) ─

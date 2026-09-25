@@ -148,7 +148,6 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
     } do
       command = seed_occ_timeout_command(instance, 2)
       reschedule_retry_relative_to_db_clock(command.id, 1)
-      before_claim = CommandStore.get_by_id(command.id).command_queue_item
 
       assert {:error, :command_not_claimable} =
                Scheduling.claim_command_for_processing(command.id, test_grant(instance.id))
@@ -157,7 +156,6 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert current.status == :occ_timeout
       assert current.processor_id == nil
       assert current.retry_count == 2
-      assert current.processor_version == before_claim.processor_version
     end
 
     test "claims a retry whose next_retry_after is in the database's past", %{instance: instance} do
@@ -248,9 +246,6 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       assert single_qi.processing_completed_at == nil
       assert batch_qi.processing_completed_at == nil
-
-      # processor_version advanced identically from the seeded baseline.
-      assert single_qi.processor_version == batch_qi.processor_version
     end
 
     test "leaves retry_count unchanged when claiming a :pending command", %{instance: instance} do
@@ -550,29 +545,6 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
   describe "build_mark_as_processed/1" do
     setup [:create_instance, :create_accounts]
 
-    test "rejects completion from an owner whose claim version is stale", %{instance: instance} do
-      {:ok, command} =
-        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
-
-      {:ok, claimed_by_old_owner} =
-        Scheduling.claim_command_for_processing(command.id, test_grant(instance.id))
-
-      claimed_by_old_owner.command_queue_item
-      |> Changeset.change(processor_id: "new-owner")
-      |> Changeset.optimistic_lock(:processor_version)
-      |> Repo.update!()
-
-      assert_raise Ecto.StaleEntryError, fn ->
-        claimed_by_old_owner
-        |> Scheduling.build_mark_as_processed()
-        |> Repo.update!()
-      end
-
-      current = CommandStore.get_by_id(command.id).command_queue_item
-      assert current.status == :processing
-      assert current.processor_id == "new-owner"
-    end
-
     test "builds changeset to mark command as processed", %{instance: instance} do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
@@ -647,6 +619,98 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       assert log =~ "dead-lettering command #{command.id}"
       assert log =~ "Terminal failure"
+    end
+  end
+
+  # A queue row whose newest error is not an entry `ErrorMap.build_error/2`
+  # built means the write that was supposed to record a failure did not. Before
+  # `:class` existed the narrow head made that a FunctionClauseError; it still
+  # does. `emit_persisted_failure/3` is public and runs after the write already
+  # committed, so it cannot raise — it logs instead of returning `:ok` as if the
+  # event had fired.
+  describe "a failure whose error entry is not an ErrorMap entry" do
+    setup [:create_instance, :create_accounts]
+
+    # Reloaded rather than hand-built: a row read back from PostgreSQL carries
+    # its errors as string-keyed maps, which is exactly the "loaded from the
+    # database and not re-prepended" case.
+    test "persisted_failure/1 raises on a reloaded row's string-keyed entry", %{
+      instance: instance
+    } do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      {:error, _} = Scheduling.schedule_retry_with_reason(command, "boom", :failed)
+      reloaded = CommandStore.get_by_id(command.id)
+
+      assert_raise FunctionClauseError, ~r/persisted_failure/, fn ->
+        Scheduling.persisted_failure(reloaded)
+      end
+    end
+
+    test "persisted_failure/1 raises on a queue row with no errors at all", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      command.command_queue_item
+      |> Changeset.change(%{status: :failed, errors: []})
+      |> Repo.update!()
+
+      assert_raise FunctionClauseError, ~r/persisted_failure/, fn ->
+        Scheduling.persisted_failure(CommandStore.get_by_id(command.id))
+      end
+    end
+
+    test "emit_persisted_failure/3 emits no retry event", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      ref = attach_telemetry([:double_entry_ledger, :command, :retry])
+
+      capture_log(fn ->
+        Scheduling.emit_persisted_failure(command, :failed, %{"message" => "boom"})
+      end)
+
+      refute_received {:telemetry_event, ^ref, _event, _measurements, _metadata}
+    end
+
+    test "emit_persisted_failure/3 says so at error level", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      log =
+        capture_log([level: :error], fn ->
+          Scheduling.emit_persisted_failure(command, :failed, %{"message" => "boom"})
+        end)
+
+      assert log =~ "no failed telemetry emitted for command #{command.id}"
+    end
+
+    test "emit_persisted_failure/3 does not log the entry it could not read", %{
+      instance: instance
+    } do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      log =
+        capture_log([level: :error], fn ->
+          Scheduling.emit_persisted_failure(command, :dead_letter, %{"message" => "4200"})
+        end)
+
+      refute log =~ "4200"
+    end
+
+    test "a status that is not a failure transition stays a silent :ok", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      log =
+        capture_log([level: :error], fn ->
+          assert Scheduling.emit_persisted_failure(command, :processed, %{"message" => "boom"}) ==
+                   :ok
+        end)
+
+      assert log == ""
     end
   end
 
@@ -769,9 +833,14 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, orphans} =
         Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
 
-      assert Enum.map(orphans, & &1.id) == [first.id, second.id]
-      assert Enum.all?(orphans, &(&1.command_queue_item.status == :failed))
-      assert Enum.all?(orphans, &is_nil(&1.command_queue_item.processor_id))
+      assert Enum.map(orphans, fn {command, _previous} -> command.id end) ==
+               [first.id, second.id]
+
+      assert Enum.map(orphans, fn {_command, previous} -> previous end) ==
+               ["legacy-a", "legacy-b"]
+
+      assert Enum.all?(orphans, fn {c, _} -> c.command_queue_item.status == :failed end)
+      assert Enum.all?(orphans, fn {c, _} -> is_nil(c.command_queue_item.processor_id) end)
       assert Repo.all(Scheduling.next_command_ids_query(instance.id, 10)) == [first.id, second.id]
     end
 
@@ -799,7 +868,8 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, orphans} =
         Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
 
-      assert Enum.map(orphans, & &1.id) == [first.id, second.id, third.id]
+      assert Enum.map(orphans, fn {command, _previous} -> command.id end) ==
+               [first.id, second.id, third.id]
     end
 
     test "does not touch another instance's :processing row", %{instance: instance} do
@@ -818,7 +888,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       {:ok, orphans} =
         Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
 
-      assert Enum.map(orphans, & &1.id) == [command.id]
+      assert Enum.map(orphans, fn {orphan, _previous} -> orphan.id end) == [command.id]
 
       untouched = Repo.get_by(CommandQueueItem, command_id: other_command.id)
       assert untouched.status == :processing
@@ -834,11 +904,39 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
 
       mark_processing(command, "legacy-a")
 
-      {:ok, [orphan]} =
+      {:ok, [{orphan, _previous}]} =
         Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
 
       assert hd(orphan.command_queue_item.errors).message =~ "legacy-a"
       assert hd(orphan.command_queue_item.errors).message =~ "orphaned by lease acquisition"
+    end
+
+    # The id is returned as data rather than left for the caller to recover
+    # from the sentence above: the reschedule nulls `processor_id` on the row,
+    # so this is the caller's only source for it.
+    test "returns the previous processor id beside the command", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      mark_processing(command, "legacy-a")
+
+      {:ok, [{orphan, previous}]} =
+        Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
+
+      assert previous == "legacy-a"
+      assert orphan.command_queue_item.processor_id == nil
+    end
+
+    test "returns a nil previous processor for a row that carried none", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      mark_processing(command, nil)
+
+      {:ok, [{_orphan, previous}]} =
+        Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
+
+      assert previous == nil
     end
 
     test "dead-letters an orphan already at max retries", %{instance: instance} do
@@ -852,7 +950,7 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
         set: [retry_count: @max_retries]
       )
 
-      {:ok, [orphan]} =
+      {:ok, [{orphan, _previous}]} =
         Repo.transaction(fn -> Scheduling.reschedule_orphaned_processing!(instance.id, Repo) end)
 
       assert orphan.command_queue_item.status == :dead_letter
