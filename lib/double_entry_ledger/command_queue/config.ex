@@ -8,8 +8,6 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
   Keys and defaults:
 
     * `:poll_interval` - monitor poll interval in milliseconds (5_000)
-    * `:stale_processing_after` - seconds before a `:processing` row is
-      treated as stranded by the sweep (300)
     * `:lease_ttl` - seconds a lease lives without a refresh (20)
     * `:lease_lock_timeout_ms` - wait for the lease row lock (1_000)
     * `:max_leases_per_node` - processors this node may run at once (`:infinity`)
@@ -21,7 +19,6 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
 
   @defaults [
     poll_interval: 5_000,
-    stale_processing_after: 300,
     lease_ttl: 20,
     lease_lock_timeout_ms: 1_000,
     max_leases_per_node: :infinity,
@@ -35,9 +32,6 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
 
   @spec poll_interval() :: pos_integer()
   def poll_interval, do: get(:poll_interval)
-
-  @spec stale_processing_after() :: pos_integer()
-  def stale_processing_after, do: get(:stale_processing_after)
 
   @spec lease_ttl() :: pos_integer()
   def lease_ttl, do: get(:lease_ttl)
@@ -62,7 +56,6 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
   @spec validate!() :: :ok
   def validate! do
     positive_integer!(:poll_interval)
-    positive_integer!(:stale_processing_after)
     positive_integer!(:lease_ttl)
     positive_integer!(:lease_lock_timeout_ms)
     positive_integer_or_infinity!(:max_leases_per_node)

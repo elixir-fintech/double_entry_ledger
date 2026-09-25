@@ -37,10 +37,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.CreateAccountCommand do
   defp build_create_account(
          %Command{
            command_map: %{payload: account_data} = command_map,
-           instance_id: instance_id,
-           lease_grant: grant
+           instance_id: instance_id
          } = event
        ) do
+    grant = Lease.grant_for(event)
+
     Multi.new()
     |> Lease.lock_step(grant)
     |> Multi.insert(:account, AccountStoreHelper.build_create(account_data, instance_id))

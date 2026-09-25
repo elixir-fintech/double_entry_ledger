@@ -39,8 +39,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - `:pending` -> `:processing` -> `:dead_letter` (permanent failure)
   - `:processing` -> `:pending` when a batch write fails and its commands are
     handed back to the queue (`CommandQueueItem.revert_to_pending_changeset/2`);
-    rows left stranded in `:processing` are recovered by `InstanceMonitor` to
-    `:failed` or `:dead_letter`.
+    rows left stranded in `:processing` by a dead owner are rescheduled to
+    `:failed` — or `:dead_letter` at the retry limit — by the next
+    `CommandQueue.Lease.acquire/4` on that ledger.
 
   ## Error handling
 
@@ -48,7 +49,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
     a validation or transformation failure returns a changeset and creates no command
   - **No-save-on-error**: no failure is persisted
   - **Command claiming**: a single guarded `UPDATE` whose `WHERE` enforces both
-    status and retry deadline; `processor_version` fences the later terminal write
+    status and retry deadline, run under the ledger lease that also fences the
+    later terminal write
   """
   @behaviour DoubleEntryLedger.Workers.CommandWorkerBehaviour
 
@@ -58,7 +60,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   alias DoubleEntryLedger.{
     Account,
     Command,
-    CommandQueueItem,
     Telemetry,
     Transaction
   }
@@ -394,9 +395,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   The claim is a single guarded `UPDATE` whose `WHERE` enforces both the queue
   item's status and its retry deadline, so only one processor can take a command
-  and a command is never claimed before its retry time has elapsed. The claim
-  advances `processor_version`, invalidating any later write from a previous
-  owner.
+  and a command is never claimed before its retry time has elapsed.
 
   Both the claim and the processing transaction run under a ledger lease, so
   a command is only ever worked on by the node that owns its ledger.
@@ -430,11 +429,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   - `error_tuple()` - processing failed after the claim, CommandQueueItem in the
     matching error state
   - `{:error, :command_not_found}` - no command exists with that UUID
-  - `{:error, :command_already_claimed}` - another processor holds the command
   - `{:error, :command_not_claimable}` - not in a claimable state, or its retry
     deadline has not elapsed
-  - `{:error, :command_ownership_lost}` - the claim moved to another processor
-    while this one was working, so its write was fenced out
   - `{:error, :command_not_in_processing_state}` - the claimed command was not in
     `:processing`
   - `{:error, :action_not_supported}` - the command's action has no handler
@@ -508,8 +504,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
   # `LostError` and `BusyError` are raised out of the processing transaction by
   # the `:lease_lock` / `:lease_refresh` steps `Occ.Processor.build_multi/3`
-  # adds, and by the fenced failure writes in `CommandQueue.Scheduling`. The
-  # `processor_version` row fence stays alongside them until it is retired.
+  # adds, and by the fenced failure writes in `CommandQueue.Scheduling`. They
+  # are the whole ownership story: the queue row carries no fence of its own.
   defp process_claimed_command(command) do
     process_command(command)
   rescue
@@ -518,12 +514,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
     Lease.BusyError ->
       {:error, :lease_busy}
-
-    error in Ecto.StaleEntryError ->
-      case error.changeset.data do
-        %CommandQueueItem{} -> {:error, :command_ownership_lost}
-        _other -> reraise error, __STACKTRACE__
-      end
   end
 
   # Private function - processes a claimed command based on its action type

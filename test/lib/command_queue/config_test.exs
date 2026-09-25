@@ -19,7 +19,6 @@ defmodule DoubleEntryLedger.CommandQueue.ConfigTest do
     assert Config.lease_lock_timeout_ms() == 1_000
     assert Config.max_leases_per_node() == :infinity
     assert Config.max_concurrent_acquisitions() == 4
-    assert Config.stale_processing_after() == 300
     assert Config.poll_interval() == 5_000
     assert Config.validate!() == :ok
   end
@@ -51,11 +50,6 @@ defmodule DoubleEntryLedger.CommandQueue.ConfigTest do
   test "validate! accepts :infinity for max_leases_per_node" do
     Application.put_env(:double_entry_ledger, :command_queue, max_leases_per_node: :infinity)
     assert Config.validate!() == :ok
-  end
-
-  test "validate! rejects a non-positive stale_processing_after" do
-    Application.put_env(:double_entry_ledger, :command_queue, stale_processing_after: -1)
-    assert_raise ArgumentError, ~r/stale_processing_after/, fn -> Config.validate!() end
   end
 
   test "coordination_strategy defaults to :database_polling and maps to the module" do

@@ -142,8 +142,11 @@ defmodule DoubleEntryLedger.Telemetry do
   @doc """
   Emits a command recovery event.
 
-  Emitted by `CommandQueue.InstanceMonitor` when a queue row left in
-  `:processing` by a vanished owner is routed back through the failure path.
+  Emitted by `CommandQueue.Lease.emit_acquisition_events/3` — not by
+  `acquire/4`, which rescheduled the row but emits nothing — for a queue row
+  left in `:processing` by a vanished owner and routed back through the failure
+  path. `CommandQueue.InstanceMonitor` makes that call, from a different
+  process than the one that ran the acquisition transaction.
   The resulting retry or dead-letter event is emitted as well, so alert on
   this event to distinguish "commands are being recovered" from "a command
   failed".
@@ -153,11 +156,8 @@ defmodule DoubleEntryLedger.Telemetry do
     - `:command_id` - Command UUID
     - `:instance_id` - Ledger instance UUID
     - `:previous_processor_id` - Processor identifier that held the claim
-    - `:stale_for_seconds` - Seconds the row spent in `:processing`, measured
-      on the database clock
     - `:trace_context` - Consumer-supplied tracing context (map or nil)
-    - `:reason` - `:stale_sweep` (monitor sweep) or `:takeover` (a lease
-      acquisition rescheduled the row)
+    - `:reason` - `:takeover` (a lease acquisition rescheduled the row)
   """
   @spec command_recovered(map()) :: :ok
   def command_recovered(metadata) do

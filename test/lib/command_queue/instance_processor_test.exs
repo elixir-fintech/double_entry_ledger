@@ -97,10 +97,12 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
   end
 
   defmodule OwnershipLostCrashBatchProcessor do
+    # Moves the claim to another processor and then crashes, so the cleanup
+    # that follows has to notice the row is no longer this owner's
+    # (`CommandQueue.Cleanup.reload_if_still_mine/3`) and leave it alone.
     def run_batch([stolen | _] = commands, _repo \\ DoubleEntryLedger.Repo) do
       stolen.command_queue_item
       |> Ecto.Changeset.change(processor_id: "replacement-owner")
-      |> Ecto.Changeset.optimistic_lock(:processor_version)
       |> Repo.update!()
 
       send(
@@ -491,7 +493,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
 
         claimed.command_queue_item
         |> Ecto.Changeset.change(processor_id: "replacement-owner")
-        |> Ecto.Changeset.optimistic_lock(:processor_version)
         |> Repo.update!()
 
         raise "crash after ownership changed"

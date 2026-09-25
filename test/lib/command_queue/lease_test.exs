@@ -102,29 +102,6 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
     end
   end
 
-  defmodule StaleOrphanRepo do
-    @moduledoc false
-    # Real repo except `update!/1`, which loses the `processor_version` fence
-    # exactly as a competing writer to the same queue row would. The acquisition
-    # must roll back and report :busy rather than crash the acquisition task.
-    alias DoubleEntryLedger.{CommandQueueItem, Repo}
-
-    def in_transaction?, do: Repo.in_transaction?()
-    def transaction(fun), do: Repo.transaction(fun)
-    def rollback(v), do: Repo.rollback(v)
-    def query!(sql, params), do: Repo.query!(sql, params)
-    def all(q), do: Repo.all(q)
-    def insert_all(src, entries, opts), do: Repo.insert_all(src, entries, opts)
-    def one!(q), do: Repo.one!(q)
-    def update_all(q, u), do: Repo.update_all(q, u)
-
-    def update!(_changeset) do
-      raise Ecto.StaleEntryError,
-        action: :update,
-        changeset: Ecto.Changeset.change(%CommandQueueItem{})
-    end
-  end
-
   defmodule SelectPausingRepo do
     @moduledoc false
     # Real repo, except that `one!/1` pauses after the `SELECT ... FOR UPDATE`
@@ -357,8 +334,9 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
 
       :ok = mark_processing(first, "legacy")
 
-      assert {:ok, _grant, %{orphans: [orphan]}} = Lease.acquire(instance.id, "b")
+      assert {:ok, _grant, %{orphans: [{orphan, previous}]}} = Lease.acquire(instance.id, "b")
       assert orphan.id == first.id
+      assert previous == "legacy"
       assert orphan.command_queue_item.status == :failed
       assert Repo.all(Scheduling.next_command_ids_query(instance.id, 10)) == [first.id, second.id]
     end
@@ -405,21 +383,6 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
       # part spent.
       assert DateTime.diff(row.renewed_at, row.acquired_at, :millisecond) >= 250
       assert_in_delta DateTime.diff(row.expires_at, row.renewed_at, :millisecond), 30_000, 1_000
-    end
-
-    test "an orphan reschedule that loses the row fence returns :busy and writes nothing", %{
-      instance: instance
-    } do
-      {:ok, command} =
-        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
-
-      acquired = attach_lease_telemetry([:double_entry_ledger, :lease, :acquired])
-      :ok = mark_processing(command, "legacy")
-
-      assert Lease.acquire(instance.id, "b", StaleOrphanRepo) == :busy
-      assert lease_row(instance.id) == nil
-      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :processing
-      refute_receive {:telemetry_event, ^acquired, _, _, _}, 100
     end
   end
 
@@ -570,7 +533,7 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
 
       :ok = mark_processing(command, "legacy")
 
-      {:ok, grant, %{orphans: [orphan]} = info} = Lease.acquire(instance.id, "a")
+      {:ok, grant, %{orphans: [{orphan, _previous}]} = info} = Lease.acquire(instance.id, "a")
       assert orphan.command_queue_item.status == :failed
       refute_received {:telemetry_event, ^ref, _, _, _}
 
@@ -590,7 +553,6 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
                   reason: :takeover,
                   command_id: recovered_id,
                   previous_processor_id: "legacy",
-                  stale_for_seconds: nil,
                   in_transaction: false
                 }},
                {[:double_entry_ledger, :command, :retry],
@@ -612,15 +574,15 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
 
       :ok = mark_processing(command, "legacy", @max_retries)
 
-      {:ok, grant, %{orphans: [orphan]} = info} = Lease.acquire(instance.id, "a")
+      {:ok, grant, %{orphans: [{orphan, _previous}]} = info} = Lease.acquire(instance.id, "a")
       assert orphan.command_queue_item.status == :dead_letter
       refute_received {:telemetry_event, ^ref, _, _, _}
 
       :ok = Lease.emit_acquisition_events(grant, info)
 
-      # The reason reaches `previous_processor_id` from inside a longer
-      # "Max retry count (N) exceeded: ..." message here, which is the harder
-      # case for @previous_processor_regex.
+      # The id is carried beside the command by
+      # `Scheduling.reschedule_orphaned_processing!/2`, so it survives the
+      # dead-letter path rewriting the persisted message.
       assert [
                {[:double_entry_ledger, :lease, :acquired], %{orphans: 1, in_transaction: false}},
                {[:double_entry_ledger, :command, :recovered],

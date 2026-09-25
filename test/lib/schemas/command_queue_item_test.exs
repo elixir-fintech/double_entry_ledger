@@ -14,7 +14,6 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
     test "adds default values" do
       assert %CommandQueueItem{
                status: :pending,
-               processor_version: 1,
                retry_count: 0,
                occ_retry_count: 0,
                errors: []

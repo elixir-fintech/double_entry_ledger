@@ -33,6 +33,7 @@ defmodule DoubleEntryLedger.Occ.LeaseFenceTest do
   }
 
   alias Ecto.Adapters.SQL.Sandbox
+  alias Ecto.Association.NotLoaded
 
   defmodule RollingBackRepo do
     @moduledoc false
@@ -111,6 +112,150 @@ defmodule DoubleEntryLedger.Occ.LeaseFenceTest do
           Repo
         )
       end
+    end
+  end
+
+  # `nil` in `lease_grant` used to mean two different things: "never claimed"
+  # and "claimed, but the grant was lost on the way to the write". The queue
+  # row tells them apart — only `Scheduling.claim_batch_for_processing/3` puts
+  # a row in `:processing`, and it only runs under a grant — so a `:processing`
+  # command with no grant is a dropped fence and raises at every fence site.
+  # Removing `InstanceMonitor`'s stale sweep left the synchronous command-map
+  # path as the only legitimate unfenced writer, and it never claims.
+  describe "a claimed command that lost its grant" do
+    test "grant_for/1 raises for a :processing command with no grant", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      grant = test_grant(ctx.instance.id)
+      {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, grant)
+
+      assert_raise ArgumentError, ~r/must carry the grant/, fn ->
+        Lease.grant_for(%{claimed | lease_grant: nil})
+      end
+    end
+
+    test "grant_for/1 returns nil for an unclaimed command", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+
+      assert Lease.grant_for(command) == nil
+    end
+
+    test "grant_for/1 returns the grant a claimed command carries", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      grant = test_grant(ctx.instance.id)
+      {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, grant)
+
+      assert Lease.grant_for(claimed) == grant
+    end
+
+    test "the processing Multi refuses to run and writes nothing", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      grant = test_grant(ctx.instance.id)
+      {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, grant)
+
+      assert_raise ArgumentError, ~r/must carry the grant/, fn ->
+        CreateTransactionCommand.process(%{claimed | lease_grant: nil})
+      end
+
+      assert Repo.aggregate(Transaction, :count) == 0
+    end
+
+    test "a create_account command refuses to run and writes no account", ctx do
+      {:ok, command} =
+        CommandStore.create(account_command_attrs(%{instance_address: ctx.instance.address}))
+
+      grant = test_grant(ctx.instance.id)
+      {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, grant)
+
+      assert_raise ArgumentError, ~r/must carry the grant/, fn ->
+        CreateAccountCommand.process(%{claimed | lease_grant: nil})
+      end
+
+      refute Repo.get_by(Account, address: "account:1")
+    end
+
+    test "a failure write refuses to run and leaves the row :processing", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      grant = test_grant(ctx.instance.id)
+      {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, grant)
+
+      assert_raise ArgumentError, ~r/must carry the grant/, fn ->
+        Scheduling.schedule_retry_with_reason(%{claimed | lease_grant: nil}, "boom", :failed)
+      end
+
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :processing
+    end
+
+    test "a batch write refuses to run and writes nothing", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      grant = test_grant(ctx.instance.id)
+      [claimed] = Scheduling.claim_batch_for_processing([command], grant)
+
+      assert_raise ArgumentError, ~r/must carry the grant/, fn ->
+        DoubleEntryLedger.BatchProcessor.run_batch([%{claimed | lease_grant: nil}])
+      end
+
+      assert Repo.aggregate(Transaction, :count) == 0
+    end
+
+    # The final-timeout write is a queue-row writer of its own, reached only
+    # after the OCC pipeline exhausts its retries, which makes it the site most
+    # likely to be reworked by someone who does not know the rule is there.
+    test "the OCC final-timeout write refuses to run and leaves the row :processing", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      grant = test_grant(ctx.instance.id)
+      {:ok, claimed} = Scheduling.claim_command_for_processing(command.id, grant)
+
+      assert_raise ArgumentError, ~r/must carry the grant/, fn ->
+        CreateTransactionCommand.retry(
+          CreateTransactionCommand,
+          %{claimed | lease_grant: nil},
+          ErrorMap.create_error_map(claimed),
+          0,
+          Repo
+        )
+      end
+
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :processing
+    end
+
+    test "an update_account command refuses to run and leaves the account alone", ctx do
+      {:ok, create_command} =
+        CommandStore.create(
+          account_command_attrs(%{
+            instance_address: ctx.instance.address,
+            payload: account_data_attrs(%{name: "Old Name"})
+          })
+        )
+
+      {:ok, _account, _} = CreateAccountCommand.process(create_command)
+      {:ok, update_command} = CommandStore.create(update_account_attrs(ctx))
+      grant = test_grant(ctx.instance.id)
+      {:ok, claimed} = Scheduling.claim_command_for_processing(update_command.id, grant)
+
+      assert_raise ArgumentError, ~r/must carry the grant/, fn ->
+        UpdateAccountCommand.process(%{claimed | lease_grant: nil})
+      end
+
+      assert Repo.get_by(Account, address: "account:1").name == "Old Name"
+    end
+
+    # The preload is what makes the rule decidable. Without it `grant_for/1`
+    # cannot tell a claimed command from an unclaimed one, and a fence is not
+    # something to skip on a "cannot tell".
+    test "grant_for/1 raises when the queue item is not loaded", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+
+      assert_raise ArgumentError, ~r/must carry the grant/, fn ->
+        Lease.grant_for(%{command | lease_grant: nil, command_queue_item: %NotLoaded{}})
+      end
+    end
+
+    test "an unclaimed command still processes unfenced", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+
+      assert {:ok, %Transaction{}, _} = CreateTransactionCommand.process(command)
+
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :processed
     end
   end
 

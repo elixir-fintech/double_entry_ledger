@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     Transaction
   }
 
-  alias DoubleEntryLedger.CommandQueue.{Lease, OwnershipError, Scheduling}
+  alias DoubleEntryLedger.CommandQueue.{Lease, Scheduling}
   alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
@@ -352,8 +352,6 @@ defmodule DoubleEntryLedger.BatchProcessor do
     * On `Ecto.StaleEntryError`: re-preloads accounts, re-runs fold,
       retries up to `:max_batch_retries` times (default 3, configurable
       via `:double_entry_ledger, :max_batch_retries`).
-    * On command ownership loss: returns `{:error, :command_ownership_lost}`
-      immediately without retrying or splitting the stale command structs.
     * On lease loss: returns `{:error, :lease_lost}` — another node owns the
       ledger and nothing was written. On lease contention:
       `{:error, :lease_busy}` — the lease row lock was not granted within
@@ -677,7 +675,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     case do_write(write_plan, repo, now, batch_grant(commands)) do
       {:ok, persisted_failures} ->
         Enum.each(persisted_failures, fn plan ->
-          Scheduling.emit_persisted_failure(plan.command, plan.status, plan.error.message)
+          Scheduling.emit_persisted_failure(plan.command, plan.status, plan.error)
         end)
 
         emit_telemetry(commands, write_plan, attempt)
@@ -730,7 +728,6 @@ defmodule DoubleEntryLedger.BatchProcessor do
       {:error, reason} -> {:error, reason}
     end
   rescue
-    _error in OwnershipError -> {:error, :command_ownership_lost}
     _error in Lease.LostError -> {:error, :lease_lost}
     _error in Lease.BusyError -> {:error, :lease_busy}
     e in Ecto.StaleEntryError -> {:error, e}
@@ -740,12 +737,13 @@ defmodule DoubleEntryLedger.BatchProcessor do
   # Claimed commands all carry the same grant, so the head decides for the
   # batch; the recursive `run_batch/2` calls from `handle_split_or_give_up/3`
   # re-derive it from their own sub-lists. Commands that were never claimed
-  # under a lease (the synchronous path, and tests) carry `nil` and the write
-  # runs unfenced, exactly as before. Whatever the head carries is passed
+  # under a lease (the synchronous path) carry `nil` and the write runs
+  # unfenced; a head whose queue row is `:processing` but carries no grant
+  # raises in `Lease.grant_for/1`. Whatever else the head carries is passed
   # through unexamined, so a `lease_grant` that is neither a grant nor `nil`
   # raises in `lease_lock/2` rather than silently turning the fence off.
   @spec batch_grant([Command.t()]) :: Lease.Grant.t() | nil
-  defp batch_grant([%Command{lease_grant: grant} | _rest]), do: grant
+  defp batch_grant([%Command{} = head | _rest]), do: Lease.grant_for(head)
   defp batch_grant([]), do: nil
 
   defp lease_lock(%Lease.Grant{} = grant, repo), do: Lease.lock!(grant, repo)
