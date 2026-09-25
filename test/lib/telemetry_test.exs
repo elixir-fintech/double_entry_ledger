@@ -11,6 +11,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.CommandFixtures
+  import DoubleEntryLedger.LeaseFixtures, only: [test_grant: 1]
 
   alias DoubleEntryLedger.Apis.CommandApi
   alias DoubleEntryLedger.CommandQueue.Scheduling
@@ -40,15 +41,14 @@ defmodule DoubleEntryLedger.TelemetryTest do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      {:ok, _claimed} =
-        Scheduling.claim_command_for_processing(
-          command.id,
-          "test_processor"
-        )
+      grant = test_grant(instance.id)
+      owner_id = grant.owner_id
+
+      {:ok, _claimed} = Scheduling.claim_command_for_processing(command.id, grant)
 
       assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim],
                       %{system_time: _},
-                      %{command_id: _, instance_id: _, processor_id: "test_processor"}}
+                      %{command_id: _, instance_id: _, processor_id: ^owner_id}}
     end
   end
 

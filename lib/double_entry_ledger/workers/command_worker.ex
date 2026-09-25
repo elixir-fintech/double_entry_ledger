@@ -472,7 +472,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
 
       %Command{instance_id: instance_id} ->
         instance_id
-        |> Lease.acquire("#{owner_prefix}:#{Ecto.UUID.generate()}", Repo, coordination: :manual)
+        |> Lease.acquire(Lease.owner_id(owner_prefix), Repo, coordination: :manual)
         |> process_under_own_lease(uuid)
     end
   end

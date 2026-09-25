@@ -19,8 +19,7 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
 
   # `Scheduling.build_schedule_retry_with_reason/4` dead-letters instead of
   # rescheduling once a queue row has reached this retry count.
-  @max_retries Application.compile_env(:double_entry_ledger, :command_queue, [])
-               |> Keyword.get(:max_retries, 5)
+  @max_retries Application.compile_env(:double_entry_ledger, [:command_queue, :max_retries], 5)
 
   setup [:create_instance]
 
@@ -728,6 +727,32 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
       grant = insert_lease(instance.id, "a", 1)
       expire_lease(instance.id)
       assert Lease.renew(grant, Repo) == :ok
+    end
+
+    # `lease_transaction/2` sets the lease lock timeout and stops there. It
+    # cannot be checked by counting writes or by reading the row back: what was
+    # removed is a `SELECT current_setting('lock_timeout')` and the `SET LOCAL`
+    # that put the caller's value back, neither of which writes anything. Only
+    # the full statement stream shows them, hence `query_sequence/2` rather than
+    # `write_sequence/2`. Six statements before, four now.
+    #
+    # There is nothing to restore: `renew/3` refuses to run inside a caller's
+    # transaction, so this transaction is its own and ends one statement after
+    # the SET. `lock!/3`, which joins a transaction the caller owns, still
+    # restores — see the two `lock!` tests above.
+    test "an idle heartbeat sets the lock timeout once and never reads it back",
+         %{instance: instance} do
+      grant = insert_lease(instance.id, "a", 1)
+      ref = attach_telemetry([:double_entry_ledger, :repo, :query])
+
+      assert Lease.renew(grant, Repo) == :ok
+
+      assert query_sequence(ref) == [
+               "begin",
+               "SET LOCAL",
+               ~s(UPDATE "#{@prefix}"."command_queue_leases"),
+               "commit"
+             ]
     end
 
     test "returns :lost for a stale token", %{instance: instance} do

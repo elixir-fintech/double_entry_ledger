@@ -15,6 +15,11 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
       also `AcquireSupervisor`'s `max_children` (4)
     * `:coordination_strategy` - which `Coordinator` decides what this node
       attempts; `:database_polling` is the only value in this release
+    * `:pending_fetch_limit` - command ids a processor buffers per database
+      round-trip (64)
+    * `:batch_enabled` - process claimed commands in batches (false). Read per
+      dispatch round, so it is a live switch.
+    * `:batch_size` - commands per batch (8)
   """
 
   @defaults [
@@ -23,7 +28,10 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
     lease_lock_timeout_ms: 1_000,
     max_leases_per_node: :infinity,
     max_concurrent_acquisitions: 4,
-    coordination_strategy: :database_polling
+    coordination_strategy: :database_polling,
+    pending_fetch_limit: 64,
+    batch_enabled: false,
+    batch_size: 8
   ]
 
   # Strategy atom -> Coordinator implementation. The only entry in this
@@ -48,6 +56,15 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
   @spec coordination_strategy() :: atom()
   def coordination_strategy, do: get(:coordination_strategy)
 
+  @spec pending_fetch_limit() :: pos_integer()
+  def pending_fetch_limit, do: get(:pending_fetch_limit)
+
+  @spec batch_enabled?() :: boolean()
+  def batch_enabled?, do: get(:batch_enabled)
+
+  @spec batch_size() :: pos_integer()
+  def batch_size, do: get(:batch_size)
+
   @doc "The `Coordinator` implementation selected by `:coordination_strategy`."
   @spec coordinator() :: module()
   def coordinator, do: Map.fetch!(@coordinators, coordination_strategy())
@@ -61,7 +78,18 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
     positive_integer_or_infinity!(:max_leases_per_node)
     positive_integer!(:max_concurrent_acquisitions)
     known_strategy!(:coordination_strategy)
+    positive_integer!(:pending_fetch_limit)
+    boolean!(:batch_enabled)
+    positive_integer!(:batch_size)
     :ok
+  end
+
+  defp boolean!(key) do
+    value = get(key)
+
+    unless is_boolean(value) do
+      raise ArgumentError, ":#{key} must be a boolean, got: #{inspect(value)}"
+    end
   end
 
   defp known_strategy!(key) do

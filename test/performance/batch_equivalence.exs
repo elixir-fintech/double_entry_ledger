@@ -296,7 +296,7 @@ defmodule BatchEquivalence do
 
   # Run Path B: orchestrator. Chunks `commands` into batches of
   # `batch_size` (configurable via BATCH_SIZE env var, default 100) to
-  # mirror production's `InstanceProcessor.batch_size/0` chunking
+  # mirror production's `CommandQueue.Config.batch_size/0` chunking
   # before calling `run_batch/2`. Without chunking, large N hits
   # Postgres' 65535 SQL parameter ceiling — the InstanceProcessor
   # never sends a 50k-command batch to a single CTE bundle in

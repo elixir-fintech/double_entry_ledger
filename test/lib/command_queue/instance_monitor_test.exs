@@ -261,6 +261,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitorTest do
       # Tolerates a processor that already drained before emission; either way
       # it existed first.
       assert lookup != [] or status != :pending
+
+      # Let the processor finish before the test process does. `on_exit` runs
+      # after the test process has died, which reverts the sandbox to :manual,
+      # so a processor still running at that point hits a dead connection in
+      # `terminate/2`'s `Lease.release/3` and logs an ownership error over the
+      # rest of the run. Draining first also means the lease is released the
+      # way it is in production rather than left to expire.
+      wait_until(fn -> Registry.lookup(@registry, instance.id) == [] end)
     end
 
     test "wake/1 on an owned ledger is a no-op", %{instance: instance} do

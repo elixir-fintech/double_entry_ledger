@@ -16,11 +16,12 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     * Process each command and update its status in the database.
     * Handle retries and error cases according to command queue logic.
     * Ensure only one processor runs per instance at a time (enforced via Registry).
-    * Buffer command ids in memory (`:pending_fetch_limit`, default 64) and drain that
-      buffer before hitting the database again.
-    * When `:batch_enabled` is set, process up to `:batch_size` (default 8) commands per
-      batch; a batch that hits an unexpected database error is reverted to `:pending` and
-      its commands are flagged `force_single` so they drain one at a time.
+    * Buffer command ids in memory (`:command_queue` key `:pending_fetch_limit`,
+      default 64) and drain that buffer before hitting the database again.
+    * When the `:command_queue` key `:batch_enabled` is set, process up to
+      `:batch_size` (default 8) commands per batch; a batch that hits an
+      unexpected database error is reverted to `:pending` and its commands are
+      flagged `force_single` so they drain one at a time.
 
   Worker tasks (single command and batch) run under
   `DoubleEntryLedger.CommandQueue.WorkerSupervisor`, unlinked and tracked by
@@ -98,6 +99,17 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         worker: worker,
         batch_processor: batch_processor
       }) do
+    # Not only the supervisor's job. `CommandQueue.Supervisor.init/1` is the
+    # other caller, but it never runs when `:start_command_queue` is false —
+    # the perf and test environments, and the documented setting for embedding
+    # the ledger without the queue — and those are exactly the setups that
+    # start a processor by hand with the batch size coming off an environment
+    # variable. `:batch_size` and `:pending_fetch_limit` are read per dispatch
+    # round, so a typo there is a live mistake, and neither is clamped: a zero
+    # batch size dispatches nothing and re-sends `:process_next` forever. Fail
+    # the start, naming the key.
+    Config.validate!()
+
     Process.flag(:trap_exit, true)
     Logger.info("Starting command processor for instance #{instance_id} as #{grant.owner_id}")
     Telemetry.instance_processor_start(%{instance_id: instance_id, owner_id: grant.owner_id})
@@ -126,6 +138,9 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
        # A cleanup (revert or crash retry) that found the lease row locked and
        # must be retried before any further work is dispatched.
        pending_cleanup: nil,
+       # Consecutive `:busy` outcomes for the cleanup above, bounded by
+       # `@max_cleanup_busy_retries`. Reset by any cleanup that lands.
+       cleanup_attempts: 0,
        # Command ids that must be processed one-at-a-time via the
        # single-cmd path instead of being re-batched. Populated when a
        # batch write hits an unexpected DB error and we fall back to
@@ -146,8 +161,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   def handle_info(:process_next, %{pending_cleanup: nil, in_flight: nil} = state) do
     # Drain from the in-memory buffer first; only hit the DB to refill
     # when it's empty. This amortizes the find_next SELECT cost across
-    # `pending_fetch_limit/0` commands per round-trip.
-    case find_next_command_ids(state.instance_id, pending_fetch_limit()) do
+    # `Config.pending_fetch_limit/0` commands per round-trip.
+    case find_next_command_ids(state.instance_id, Config.pending_fetch_limit()) do
       [] ->
         Logger.info(
           "No more commands to process for instance #{state.instance_id}, shutting down"
@@ -354,16 +369,62 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     case Cleanup.perform(cleanup, state.grant) do
       {:ok, reverted_ids} ->
         send(self(), :process_next)
-        {:noreply, apply_continuation(cleanup, reverted_ids, %{state | pending_cleanup: nil})}
+
+        {:noreply,
+         apply_continuation(cleanup, reverted_ids, %{
+           state
+           | pending_cleanup: nil,
+             cleanup_attempts: 0
+         })}
 
       :busy ->
-        Logger.debug("cleanup for #{state.instance_id} found the lease row locked; retrying")
-        Process.send_after(self(), :retry_cleanup, Config.lease_lock_timeout_ms())
-        {:noreply, %{state | pending_cleanup: cleanup}}
+        retry_or_give_up(cleanup, %{state | cleanup_attempts: state.cleanup_attempts + 1})
 
       :lost ->
         lease_lost(%{state | pending_cleanup: nil}, :transaction)
     end
+  end
+
+  # Whoever holds the lease row is not a successor — a successor would have
+  # taken the lease and the next cleanup would read `:lost`, not `:busy`. So
+  # the retry has no self-resolving deadline of its own, and without a bound
+  # this processor heartbeats the lease, dispatches nothing and waits forever
+  # (R12.1 says only this owner may clean the row up).
+  #
+  # The bound is a stop rather than a shrug: the queue row is left `:processing`
+  # under this owner, and the one thing that can rescue it is another owner's
+  # acquisition, which reschedules every `:processing` row on the ledger. So
+  # giving up the ledger IS the escalation. `terminate/2` releases the lease,
+  # which stamps the row expired so a successor may acquire it.
+  #
+  # Not a promise of immediate rescue. The lock holder this owner could not get
+  # past blocks the successor's acquisition too, so until it lets go the
+  # successor reads `:busy` and backs off, and the release above reads `:busy`
+  # as well, leaving the lease to expire by TTL — the designed backstop for
+  # every unreleased lease. What the bound buys is a processor that stops and
+  # says so, and a ledger other nodes may attempt, instead of one node
+  # heartbeating a lease it cannot use and dispatching nothing.
+  @max_cleanup_busy_retries 10
+
+  defp retry_or_give_up(cleanup, %{cleanup_attempts: attempts} = state)
+       when attempts >= @max_cleanup_busy_retries do
+    Logger.error(
+      "cleanup for instance #{state.instance_id} found the lease row locked " <>
+        "#{attempts} times in a row; giving up the ledger so a successor can " <>
+        "reschedule what this owner left :processing"
+    )
+
+    Telemetry.cleanup_stalled(
+      Lease.grant_metadata(state.grant, %{attempts: attempts, cleanup: elem(cleanup, 0)})
+    )
+
+    {:stop, :normal, %{state | pending_cleanup: nil}}
+  end
+
+  defp retry_or_give_up(cleanup, state) do
+    Logger.debug("cleanup for #{state.instance_id} found the lease row locked; retrying")
+    Process.send_after(self(), :retry_cleanup, Config.lease_lock_timeout_ms())
+    {:noreply, %{state | pending_cleanup: cleanup}}
   end
 
   # The continuation decides what happens to the reverted ids (R13.1).
@@ -403,7 +464,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # resumes; otherwise a normal batch round runs. When batching is off,
   # every command goes through the legacy single-cmd path.
   defp dispatch_pending(%{pending_ids: [head | rest]} = state) do
-    if batch_enabled?() do
+    if Config.batch_enabled?() do
       case take_forced_single(state) do
         {id, new_state} -> start_processing(new_state, id)
         :none -> dispatch_batch_or_legacy(state)
@@ -416,13 +477,13 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end
   end
 
-  # Loads up to `batch_size/0` commands and batches the longest contiguous
+  # Loads up to `Config.batch_size/0` commands and batches the longest contiguous
   # batchable prefix. The first non-batchable command remains at the head of
   # `pending_ids`, so it is processed singly on the next cycle before any
   # later commands. If the first command is non-batchable, process it singly
   # immediately. IDs whose commands disappeared are dropped.
   defp dispatch_batch_or_legacy(%{pending_ids: ids} = state) do
-    {candidate_ids, ids_after_window} = Enum.split(ids, batch_size())
+    {candidate_ids, ids_after_window} = Enum.split(ids, Config.batch_size())
     commands = Scheduling.load_commands(candidate_ids)
     {batchable_prefix, remaining_commands} = Enum.split_while(commands, &batchable?/1)
     remaining_ids = Enum.map(remaining_commands, & &1.id) ++ ids_after_window
@@ -565,28 +626,5 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     instance_id
     |> Scheduling.next_command_ids_query(limit)
     |> Repo.all()
-  end
-
-  defp pending_fetch_limit do
-    Application.get_env(:double_entry_ledger, :command_queue, [])[:pending_fetch_limit] || 64
-  end
-
-  defp batch_enabled? do
-    Application.get_env(:double_entry_ledger, :batch_enabled, false)
-  end
-
-  defp batch_size do
-    configured_size =
-      Application.get_env(:double_entry_ledger, :batch_size) ||
-        Application.get_env(:double_entry_ledger, :command_queue, [])[:batch_size] ||
-        8
-
-    normalize_batch_size(configured_size)
-  end
-
-  defp normalize_batch_size(size) when is_integer(size), do: max(size, 1)
-
-  defp normalize_batch_size(size) do
-    raise ArgumentError, "expected :batch_size to be an integer, got: #{inspect(size)}"
   end
 end

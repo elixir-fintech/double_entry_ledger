@@ -329,6 +329,35 @@ defmodule DoubleEntryLedger.LeaseFixtures do
   @doc "How many lease-row updates `write_sequence/2` recorded."
   def lease_update_count(sequence), do: Enum.count(sequence, &(&1 == :lease))
 
+  @doc """
+  Drains the repo-query telemetry mailbox for `ref` and returns EVERY statement
+  the connection issued, in order, tagged by its first two words.
+
+  The broad counterpart to `write_sequence/2`, which keeps only writes. Some
+  costs are not writes: `SELECT current_setting('lock_timeout')` and the two
+  `SET LOCAL` statements around a fenced transaction are round trips that no
+  write count and no row state can see, so removing one is invisible to
+  `lease_update_count/1` and visible only here.
+
+  Attach with `RepoCase.attach_telemetry([:double_entry_ledger, :repo, :query])`
+  immediately before the call under test. Recursive, and deliberately kept out
+  of test bodies.
+  """
+  def query_sequence(ref, acc \\ []) do
+    receive do
+      {:telemetry_event, ^ref, _event, _measurements, metadata} ->
+        query_sequence(ref, [statement_tag(metadata) | acc])
+    after
+      50 -> Enum.reverse(acc)
+    end
+  end
+
+  defp statement_tag(%{query: query}) do
+    query |> String.split(" ", trim: true) |> Enum.take(2) |> Enum.join(" ")
+  end
+
+  defp statement_tag(_metadata), do: "unknown"
+
   @doc "Merges `overrides` into the :command_queue config for this test only."
   def put_queue_config(overrides) do
     original = Application.get_env(:double_entry_ledger, :command_queue, [])

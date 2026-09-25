@@ -39,10 +39,23 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
-  @config Application.compile_env(:double_entry_ledger, :command_queue, [])
-  @max_retries Keyword.get(@config, :max_retries, 5)
-  @base_delay Keyword.get(@config, :base_retry_delay, 30)
-  @max_delay Keyword.get(@config, :max_retry_delay, 3600)
+  # Tracked per key rather than as the whole `:command_queue` list. Reading the
+  # list itself with `compile_env/3` tracks every key in it, so setting ANY
+  # queue key at release time — including the live ones `CommandQueue.Config`
+  # reads with `get_env/3` — raised a compile-environment mismatch on boot.
+  # These three are the only queue keys baked in here, so these are the only
+  # three that must not move after compilation.
+  @max_retries Application.compile_env(:double_entry_ledger, [:command_queue, :max_retries], 5)
+  @base_delay Application.compile_env(
+                :double_entry_ledger,
+                [:command_queue, :base_retry_delay],
+                30
+              )
+  @max_delay Application.compile_env(
+               :double_entry_ledger,
+               [:command_queue, :max_retry_delay],
+               3600
+             )
 
   @processable_states QueryHelpers.processable_states()
 

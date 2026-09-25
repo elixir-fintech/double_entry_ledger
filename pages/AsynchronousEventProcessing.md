@@ -70,6 +70,8 @@ Tuning happens under the `:command_queue` config namespace (kept for backwards c
 config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
   pending_fetch_limit: 64,
+  batch_enabled: false,
+  batch_size: 8,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
@@ -77,8 +79,6 @@ config :double_entry_ledger, :command_queue,
   processor_name: "command_queue"
 
 config :double_entry_ledger,
-  batch_enabled: false,
-  batch_size: 8,
   max_batch_retries: 3
 ```
 
