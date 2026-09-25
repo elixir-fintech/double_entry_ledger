@@ -606,6 +606,35 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert Enum.any?(command_queue_item.changes.errors, fn e -> e.message == error end)
     end
 
+    # The queue row is not a boundary: the `commands` row beside it already holds
+    # the whole command_map, and `Command`'s Jason encoder serialises the two
+    # together, so the full message there is redundant rather than a leak — and
+    # it is the column operators read. A telemetry event IS a boundary: it
+    # reaches whatever exporter the host attached and carries no payload of its
+    # own, so this string is the only route out. The event gets the type; the
+    # detail stays on the row, behind database access.
+    test "the dead-letter event carries the failure type, not the detail", %{instance: instance} do
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      ref = attach_telemetry([:double_entry_ledger, :command, :dead_letter])
+
+      assert {:error, _updated} =
+               Scheduling.mark_as_dead_letter(
+                 command,
+                 "Task crashed: MatchError: no match of right hand side value: %{amount: 4200}"
+               )
+
+      assert_receive {:telemetry_event, ^ref, _event, _measurements, %{error: error}}
+      assert error == "Task crashed"
+      refute error =~ "4200"
+
+      assert [%{"message" => persisted} | _] =
+               CommandStore.get_by_id(command.id).command_queue_item.errors
+
+      assert persisted =~ "4200"
+    end
+
     test "logs at error level after dead-lettering is persisted", %{instance: instance} do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))

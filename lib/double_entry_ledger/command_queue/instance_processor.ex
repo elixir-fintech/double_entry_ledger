@@ -8,6 +8,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   ## Responsibilities
 
+    * Hold the ledger's lease for its whole lifetime: it is handed a
+      `Lease.Grant` at start, heartbeats it while idle, lets its transactions
+      refresh it while busy, releases it on drain and on shutdown, and stops
+      the moment another owner has taken the ledger.
     * Fetch pending, failed, or timed-out commands for the assigned instance.
     * Process each command and update its status in the database.
     * Handle retries and error cases according to command queue logic.
@@ -18,19 +22,22 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
       batch; a batch that hits an unexpected database error is reverted to `:pending` and
       its commands are flagged `force_single` so they drain one at a time.
 
+  Worker tasks (single command and batch) run under
+  `DoubleEntryLedger.CommandQueue.WorkerSupervisor`, unlinked and tracked by
+  `Process.monitor/1`, so they belong to the supervision tree and die with the
+  queue supervisor on application stop.
+
   This module is typically supervised under the `InstanceSupervisor` as a dynamic child.
   """
-  use GenServer, restart: :temporary
+  use GenServer, restart: :temporary, shutdown: 10_000
   require Logger
 
   alias DoubleEntryLedger.{BatchProcessor, Command, Telemetry}
-  alias DoubleEntryLedger.CommandQueue.Scheduling
+  alias DoubleEntryLedger.CommandQueue.{Cleanup, Config, Lease, Scheduling}
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
-  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.Workers.CommandWorker
-  import Ecto.Query
 
-  @schema_prefix DoubleEntryLedger.Config.schema_prefix()
+  @worker_supervisor DoubleEntryLedger.CommandQueue.WorkerSupervisor
 
   # Client API
 
@@ -40,20 +47,30 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   ## Parameters
     - `opts` - Keyword list of options where:
       - `:instance_id` - Required UUID of the instance to process commands for
+      - `:grant` - Required `Lease.Grant` proving this node owns the ledger.
+        Acquisition belongs to the `InstanceMonitor`; the processor only holds,
+        renews and releases what it was handed.
 
   ## Returns
     - `{:ok, pid}` - Successfully started the processor
     - `{:error, reason}` - Failed to start the processor
   """
+  @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     instance_id = Keyword.fetch!(opts, :instance_id)
+    grant = Keyword.fetch!(opts, :grant)
     worker = Keyword.get(opts, :worker, CommandWorker)
     batch_processor = Keyword.get(opts, :batch_processor, BatchProcessor)
     name = via_tuple(instance_id)
 
     GenServer.start_link(
       __MODULE__,
-      %{instance_id: instance_id, worker: worker, batch_processor: batch_processor},
+      %{
+        instance_id: instance_id,
+        grant: grant,
+        worker: worker,
+        batch_processor: batch_processor
+      },
       name: name
     )
   end
@@ -67,6 +84,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   ## Returns
     - A tuple in the format expected by Registry for process lookup
   """
+  @spec via_tuple(Ecto.UUID.t()) :: {:via, module(), {module(), Ecto.UUID.t()}}
   def via_tuple(instance_id) do
     {:via, Registry, {DoubleEntryLedger.CommandQueue.Registry, instance_id}}
   end
@@ -74,24 +92,40 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # Server Callbacks
 
   @impl true
-  def init(%{instance_id: instance_id, worker: worker, batch_processor: batch_processor}) do
-    Logger.info("Starting command processor for instance #{instance_id}")
-    Telemetry.instance_processor_start(%{instance_id: instance_id})
+  def init(%{
+        instance_id: instance_id,
+        grant: grant,
+        worker: worker,
+        batch_processor: batch_processor
+      }) do
+    Process.flag(:trap_exit, true)
+    Logger.info("Starting command processor for instance #{instance_id} as #{grant.owner_id}")
+    Telemetry.instance_processor_start(%{instance_id: instance_id, owner_id: grant.owner_id})
 
     # Schedule immediate processing
     send(self(), :process_next)
+    schedule_renew()
 
     {:ok,
      %{
        instance_id: instance_id,
+       grant: grant,
+       lease_lost: false,
+       released: false,
        worker: worker,
        batch_processor: batch_processor,
-       processing: false,
-       current_command_id: nil,
-       current_processor_id: nil,
-       task_ref: nil,
+       # The one task this processor may have running, and everything about it:
+       # nil, {:single, command_id, ref, pid} or {:batch, commands, ref, pid}.
+       # One field rather than five that were only ever written and cleared
+       # together, so "a single command and a batch are mutually exclusive" is
+       # structure rather than clause order, and a lost lease provably cannot
+       # coexist with a live task: every caller of `lease_lost/2` passes a state
+       # that went through `clear_task/1`.
+       in_flight: nil,
        pending_ids: [],
-       current_batch: nil,
+       # A cleanup (revert or crash retry) that found the lease row locked and
+       # must be retried before any further work is dispatched.
+       pending_cleanup: nil,
        # Command ids that must be processed one-at-a-time via the
        # single-cmd path instead of being re-batched. Populated when a
        # batch write hits an unexpected DB error and we fall back to
@@ -102,18 +136,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   @impl true
-  def handle_info(:process_next, %{processing: true} = state) do
-    # We're already processing something, ignore
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_info(:process_next, %{pending_ids: [_ | _]} = state) do
+  def handle_info(
+        :process_next,
+        %{pending_cleanup: nil, in_flight: nil, pending_ids: [_ | _]} = state
+      ) do
     dispatch_pending(state)
   end
 
-  @impl true
-  def handle_info(:process_next, %{pending_ids: []} = state) do
+  def handle_info(:process_next, %{pending_cleanup: nil, in_flight: nil} = state) do
     # Drain from the in-memory buffer first; only hit the DB to refill
     # when it's empty. This amortizes the find_next SELECT cost across
     # `pending_fetch_limit/0` commands per round-trip.
@@ -124,17 +154,59 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         )
 
         Telemetry.instance_processor_stop(%{instance_id: state.instance_id})
-        {:stop, :normal, state}
+        Lease.release(state.grant, :drained)
+        {:stop, :normal, %{state | released: true}}
 
       ids ->
         dispatch_pending(%{state | pending_ids: ids})
     end
   end
 
-  @impl true
-  def handle_info({:processing_complete, command_id, result}, %{task_ref: ref} = state) do
-    if ref, do: Process.demonitor(ref, [:flush])
+  # Idle: renew. :busy is contention, never loss; :lost is the only loss signal.
+  def handle_info(:renew_lease, %{in_flight: nil, grant: grant} = state) do
+    case Lease.renew(grant) do
+      :ok ->
+        Telemetry.lease_renewed(Lease.grant_metadata(grant, %{}))
+        schedule_renew()
+        {:noreply, state}
 
+      :busy ->
+        Logger.debug("lease heartbeat for #{state.instance_id} found the row locked")
+        schedule_renew()
+        {:noreply, state}
+
+      :lost ->
+        lease_lost(state, :renewal)
+    end
+  end
+
+  # In flight: the transaction refreshes the expiry itself; a locked row would
+  # only read as :busy, so do not touch the database.
+  def handle_info(:renew_lease, state) do
+    schedule_renew()
+    {:noreply, state}
+  end
+
+  # Either a task is still running, or a pending cleanup owns the queue row this
+  # processor last touched. With the stale sweep gone only this owner can clean
+  # that row up, so nothing new is dispatched until the cleanup lands (R12.1).
+  def handle_info(:process_next, state), do: {:noreply, state}
+
+  def handle_info(:retry_cleanup, %{pending_cleanup: nil} = state), do: {:noreply, state}
+
+  def handle_info(:retry_cleanup, %{pending_cleanup: cleanup} = state),
+    do: run_cleanup(cleanup, state)
+
+  def handle_info({:processing_complete, command_id, {:error, :lease_lost}}, state) do
+    Logger.warning("command #{command_id}: lease lost during processing")
+    lease_lost(clear_task(state), :transaction)
+  end
+
+  def handle_info({:processing_complete, command_id, {:error, :lease_busy}}, state) do
+    run_cleanup({:revert, [command_id], :resume}, clear_task(state))
+  end
+
+  def handle_info({:processing_complete, command_id, result}, state) do
     case result do
       {:ok, _, _} ->
         Logger.info("Successfully processed command #{command_id}")
@@ -146,25 +218,23 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end
 
     # Command processing completed, check for more commands
-    send(self(), :process_next)
-
-    {:noreply,
-     %{
-       state
-       | processing: false,
-         current_command_id: nil,
-         current_processor_id: nil,
-         task_ref: nil
-     }}
+    continue(clear_task(state))
   end
 
-  @impl true
-  def handle_info({:batch_complete, {:ok, _} = outcomes}, %{task_ref: ref} = state) do
-    if ref, do: Process.demonitor(ref, [:flush])
+  def handle_info({:batch_complete, {:ok, _} = outcomes}, state) do
     log_outcomes(outcomes)
+    continue(clear_task(state))
+  end
 
-    send(self(), :process_next)
-    {:noreply, %{state | processing: false, task_ref: nil, current_batch: nil}}
+  def handle_info({:batch_complete, {:error, :lease_lost}}, state) do
+    lease_lost(clear_task(state), :transaction)
+  end
+
+  def handle_info(
+        {:batch_complete, {:error, :lease_busy}},
+        %{in_flight: {:batch, batch, _ref, _task_pid}} = state
+      ) do
+    run_cleanup({:revert, Enum.map(batch, & &1.id), :resume}, clear_task(state))
   end
 
   # Unexpected (non-stale) DB error from the batched write: the whole
@@ -174,68 +244,156 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # batch forever. Revert the claimed rows to :pending (retry_count set at
   # claim is preserved, and re-claiming from :pending won't double-bump),
   # then flag them `force_single` and re-queue them at the front.
-  @impl true
   def handle_info(
         {:batch_complete, {:error, _reason} = outcomes},
-        %{task_ref: ref, current_batch: batch} = state
+        %{in_flight: {:batch, batch, _ref, _task_pid}} = state
       ) do
-    if ref, do: Process.demonitor(ref, [:flush])
     log_outcomes(outcomes)
-
-    fall_back_to_single(state, batch || [])
+    fall_back_to_single(clear_task(state), batch)
   end
 
   # Batch task crashed — fall back to the single-command path so one
   # deterministically crashing command cannot consume the retry budget of
   # otherwise healthy neighbours.
-  # Must come BEFORE the per-command :DOWN clause so pattern-matching
-  # picks this up when current_batch is set.
-  @impl true
   def handle_info(
         {:DOWN, ref, :process, _pid, reason},
-        %{task_ref: ref, current_batch: batch, instance_id: instance_id} = state
-      )
-      when is_list(batch) do
+        %{in_flight: {:batch, batch, ref, _task_pid}, instance_id: instance_id} = state
+      ) do
     Logger.error(
       "Batch task crashed for instance #{instance_id} (#{length(batch)} cmds): #{inspect(reason)}"
     )
 
-    fall_back_to_single(state, batch)
+    fall_back_to_single(clear_task(state), batch)
   end
 
-  @impl true
   def handle_info(
         {:DOWN, ref, :process, _pid, reason},
-        %{
-          task_ref: ref,
-          current_command_id: command_id,
-          current_processor_id: processor_id,
-          instance_id: instance_id
-        } = state
+        %{in_flight: {:single, command_id, ref, _task_pid}, instance_id: instance_id} = state
       ) do
     Logger.error(
       "Command task crashed for command #{command_id} on instance #{instance_id}: #{inspect(reason)}"
     )
 
-    schedule_retry_for_crashed_command(command_id, processor_id, reason)
-
-    send(self(), :process_next)
-
-    {:noreply,
-     %{
-       state
-       | processing: false,
-         current_command_id: nil,
-         current_processor_id: nil,
-         task_ref: nil
-     }}
+    run_cleanup({:crash_retry, command_id, reason}, clear_task(state))
   end
 
-  @impl true
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
     # :DOWN from an unrelated or already-handled process, ignore
     {:noreply, state}
   end
+
+  # `init/1` traps exits so `terminate/2` runs on shutdown. The parent's exit is
+  # handled by `GenServer` itself; anything else linked to this process would
+  # otherwise arrive here with no clause and kill the processor with a function
+  # clause error — the failure mode this whole task exists to prevent. Worker
+  # tasks are deliberately unlinked, so reaching either of these is already a
+  # surprise: log it and keep the lease.
+  def handle_info({:EXIT, pid, reason}, state) do
+    Logger.warning(
+      "instance #{state.instance_id} trapped an exit from #{inspect(pid)}: #{inspect(reason)}"
+    )
+
+    {:noreply, state}
+  end
+
+  def handle_info(message, state) do
+    Logger.warning(
+      "instance #{state.instance_id} ignoring unexpected message: #{inspect(message)}"
+    )
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def terminate(_reason, %{released: true}), do: :ok
+  def terminate(_reason, %{lease_lost: true}), do: :ok
+
+  # A task still in flight owns a queue row under this lease. Kill it and wait
+  # for it to be gone before releasing, so the successor never starts while the
+  # predecessor's transaction can still commit.
+  def terminate(_reason, %{in_flight: {_tag, _work, _task_ref, pid}, grant: grant} = state) do
+    ref = Process.monitor(pid)
+    Process.exit(pid, :kill)
+
+    receive do
+      {:DOWN, ^ref, :process, ^pid, _} -> Lease.release(grant, :shutdown)
+    after
+      5_000 ->
+        Logger.warning("task for #{state.instance_id} did not stop; leaving the lease to expire")
+    end
+
+    :ok
+  end
+
+  def terminate(_reason, %{grant: grant}) do
+    Lease.release(grant, :shutdown)
+    :ok
+  end
+
+  defp schedule_renew do
+    Process.send_after(self(), :renew_lease, max(div(Config.lease_ttl(), 3), 1) * 1_000)
+  end
+
+  defp continue(state) do
+    send(self(), :process_next)
+    {:noreply, state}
+  end
+
+  defp lease_lost(%{grant: grant} = state, source) do
+    Logger.warning("lease for instance #{state.instance_id} lost (#{source}); stopping")
+    Telemetry.lease_lost(Lease.grant_metadata(grant, %{source: source}))
+    {:stop, :normal, %{state | lease_lost: true}}
+  end
+
+  # A cleanup (revert or crash retry) is a lease-fenced write by this owner.
+  # LostError: the ledger moved, stop. BusyError: the row is locked; keep the
+  # cleanup and retry it by timer, dispatching nothing meanwhile, because
+  # with the stale sweep gone only this owner can clean the row up (R12.1).
+  # Success: clear and continue.
+  defp run_cleanup(cleanup, state) do
+    case Cleanup.perform(cleanup, state.grant) do
+      {:ok, reverted_ids} ->
+        send(self(), :process_next)
+        {:noreply, apply_continuation(cleanup, reverted_ids, %{state | pending_cleanup: nil})}
+
+      :busy ->
+        Logger.debug("cleanup for #{state.instance_id} found the lease row locked; retrying")
+        Process.send_after(self(), :retry_cleanup, Config.lease_lock_timeout_ms())
+        {:noreply, %{state | pending_cleanup: cleanup}}
+
+      :lost ->
+        lease_lost(%{state | pending_cleanup: nil}, :transaction)
+    end
+  end
+
+  # The continuation decides what happens to the reverted ids (R13.1).
+  # :resume puts them back at the head of the queue; :fallback_to_single also
+  # flags them so a deterministically failing batch drains one at a time
+  # instead of being reassembled forever. Only ids actually reverted are
+  # touched, so rows a batch had committed are neither requeued nor flagged.
+  defp apply_continuation({:crash_retry, _id, _reason}, _reverted, state), do: state
+
+  defp apply_continuation({:revert, _ids, :resume}, reverted, state),
+    do: %{state | pending_ids: reverted ++ state.pending_ids}
+
+  defp apply_continuation({:revert, _ids, :fallback_to_single}, reverted, state) do
+    %{
+      state
+      | pending_ids: reverted ++ state.pending_ids,
+        force_single: MapSet.union(state.force_single, MapSet.new(reverted))
+    }
+  end
+
+  # "This task is finished, forget it": drop the monitor so a later `:DOWN`
+  # cannot be mistaken for a fresh crash, and clear the field. The second clause
+  # drops a completion that arrives with nothing in flight — a stale message
+  # from a task this processor has already accounted for.
+  defp clear_task(%{in_flight: {_tag, _work, ref, _pid}} = state) do
+    Process.demonitor(ref, [:flush])
+    %{state | in_flight: nil}
+  end
+
+  defp clear_task(state), do: state
 
   # Route the head of `pending_ids`. Batching is checked live, per cycle,
   # so flipping the `:batch_enabled` flag at runtime takes effect without
@@ -265,7 +423,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # immediately. IDs whose commands disappeared are dropped.
   defp dispatch_batch_or_legacy(%{pending_ids: ids} = state) do
     {candidate_ids, ids_after_window} = Enum.split(ids, batch_size())
-    commands = load_commands(candidate_ids)
+    commands = Scheduling.load_commands(candidate_ids)
     {batchable_prefix, remaining_commands} = Enum.split_while(commands, &batchable?/1)
     remaining_ids = Enum.map(remaining_commands, & &1.id) ++ ids_after_window
 
@@ -289,21 +447,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   defp batchable?(_command), do: false
 
-  # Loads commands with their command_queue_item preloaded, preserving
-  # the order of `ids`. Commands that no longer exist are omitted.
-  defp load_commands(ids) do
-    rows =
-      from(c in Command,
-        prefix: ^@schema_prefix,
-        where: c.id in ^ids,
-        preload: [:command_queue_item]
-      )
-      |> Repo.all()
-
-    by_id = Map.new(rows, &{&1.id, &1})
-    Enum.flat_map(ids, fn id -> List.wrap(Map.get(by_id, id)) end)
-  end
-
   defp start_batch_processing(
          %{batch_processor: bp, instance_id: instance_id} = state,
          commands
@@ -313,14 +456,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     parent = self()
 
     {:ok, pid} =
-      Task.start(fn ->
+      Task.Supervisor.start_child(@worker_supervisor, fn ->
         outcomes = bp.run_batch(commands)
         send(parent, {:batch_complete, outcomes})
       end)
 
     ref = Process.monitor(pid)
 
-    {:noreply, %{state | processing: true, task_ref: ref, current_batch: commands}}
+    {:noreply, %{state | in_flight: {:batch, commands, ref, pid}}}
   end
 
   # Claim the batch via `Scheduling.claim_batch_for_processing/3`, then run
@@ -331,7 +474,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # returns the claimed commands with refreshed queue items, so there's no
   # second load. Commands that raced out of a claimable state are skipped.
   defp claim_and_start_batch(state, commands) do
-    case Scheduling.claim_batch_for_processing(commands, processor_name()) do
+    case Scheduling.claim_batch_for_processing(commands, state.grant) do
       [] ->
         # Everything raced out of a claimable state — nothing to run.
         send(self(), :process_next)
@@ -340,42 +483,19 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
       claimed_commands ->
         start_batch_processing(state, claimed_commands)
     end
+  rescue
+    Lease.LostError ->
+      lease_lost(state, :claim)
+
+    Lease.BusyError ->
+      Process.send_after(self(), :process_next, Config.lease_lock_timeout_ms())
+      {:noreply, %{state | pending_ids: Enum.map(commands, & &1.id) ++ state.pending_ids}}
   end
 
-  # Revert claimed rows back to :pending so they can be re-processed via
-  # the single-cmd path. The claim's processor_version fences each write,
-  # so rows already completed or transferred to another owner are skipped;
-  # retry_count is intentionally left as-is (set at claim time) so the
-  # subsequent single-cmd re-claim from :pending won't double-count it.
-  defp revert_batch_to_pending([]), do: []
-
-  defp revert_batch_to_pending(commands) do
-    Enum.flat_map(commands, fn command ->
-      try do
-        command
-        |> Scheduling.build_revert_to_pending(nil)
-        |> Repo.update!()
-
-        [command.id]
-      rescue
-        Ecto.StaleEntryError -> []
-      end
-    end)
-  end
-
+  # Revert the claimed rows to :pending under the lease and requeue only what
+  # was actually reverted, flagged so the batch drains one command at a time.
   defp fall_back_to_single(state, batch) do
-    reverted_ids = revert_batch_to_pending(batch)
-    send(self(), :process_next)
-
-    {:noreply,
-     %{
-       state
-       | processing: false,
-         task_ref: nil,
-         current_batch: nil,
-         pending_ids: reverted_ids ++ state.pending_ids,
-         force_single: MapSet.union(state.force_single, MapSet.new(reverted_ids))
-     }}
+    run_cleanup({:revert, Enum.map(batch, & &1.id), :fallback_to_single}, state)
   end
 
   # If any pending id is flagged for single-cmd processing, pop the first
@@ -404,67 +524,36 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end)
 
     Enum.each(failures, fn %{command_id: cid, reason: reason} ->
-      Logger.warning("Batched command #{cid} failed: #{inspect(reason)}")
+      Logger.warning("Batched command #{cid} failed: #{Cleanup.failure_shape(reason)}")
     end)
   end
 
   defp log_outcomes({:error, reason}) do
     Logger.warning(
-      "Batch run returned error (commands left in queue for retry): #{inspect(reason)}"
+      "Batch run returned error (commands left in queue for retry): #{Cleanup.failure_shape(reason)}"
     )
   end
 
-  defp schedule_retry_for_crashed_command(command_id, processor_id, reason) do
-    case CommandStore.get_by_id(command_id) do
-      nil ->
-        Logger.error("Could not find command #{command_id} to schedule retry after crash")
-
-      %{command_queue_item: %{status: :processing, processor_id: ^processor_id}} = command ->
-        try do
-          Scheduling.schedule_retry_with_reason(
-            command,
-            "Task crashed: #{inspect(reason)}",
-            :failed
-          )
-        rescue
-          Ecto.StaleEntryError ->
-            log_ownership_changed(command_id)
-        end
-
-      _command ->
-        log_ownership_changed(command_id)
-    end
-  end
-
-  defp log_ownership_changed(command_id) do
-    Logger.warning("Skipped crash retry for command #{command_id} because ownership changed")
-  end
-
-  # Spawns a Task to run the worker for a single command id, monitors it,
-  # and updates state. Caller is responsible for popping the id off
-  # pending_ids before calling.
-  defp start_processing(%{worker: worker, instance_id: instance_id} = state, command_id) do
+  # Spawns a supervised, unlinked Task to run the worker for a single command
+  # id, monitors it, and updates state. Caller is responsible for popping the
+  # id off pending_ids before calling.
+  defp start_processing(
+         %{worker: worker, instance_id: instance_id, grant: grant} = state,
+         command_id
+       ) do
     Logger.info("Processing command #{command_id} for instance #{instance_id}")
 
     parent = self()
-    processor_id = processor_name()
 
     {:ok, pid} =
-      Task.start(fn ->
-        process_result = worker.process_command_with_id(command_id, processor_id)
+      Task.Supervisor.start_child(@worker_supervisor, fn ->
+        process_result = worker.process_command_with_id(command_id, grant)
         send(parent, {:processing_complete, command_id, process_result})
       end)
 
     ref = Process.monitor(pid)
 
-    {:noreply,
-     %{
-       state
-       | processing: true,
-         current_command_id: command_id,
-         current_processor_id: processor_id,
-         task_ref: ref
-     }}
+    {:noreply, %{state | in_flight: {:single, command_id, ref, pid}}}
   end
 
   # Returns up to `limit` ids of the next in-flight commands for this
@@ -499,13 +588,5 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
 
   defp normalize_batch_size(size) do
     raise ArgumentError, "expected :batch_size to be an integer, got: #{inspect(size)}"
-  end
-
-  defp processor_name do
-    prefix =
-      Application.get_env(:double_entry_ledger, :command_queue, [])[:processor_name] ||
-        "command_queue"
-
-    "#{prefix}_#{node()}_#{System.unique_integer([:positive])}"
   end
 end

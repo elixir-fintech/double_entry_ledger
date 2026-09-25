@@ -2,14 +2,23 @@ defmodule DoubleEntryLedger.CommandQueue.Supervisor do
   @moduledoc """
   Supervises the command queue system components.
 
-  This supervisor is responsible for starting and monitoring the following child processes:
+  Children, in start order:
 
-    * `Registry` - A unique-keyed process registry for command queue instances.
-    * `DynamicSupervisor` - Supervises dynamically started command queue processors.
-    * `DoubleEntryLedger.CommandQueue.InstanceMonitor` - Monitors and manages the lifecycle of command queue instances.
+    * `CommandQueue.Registry` - unique-keyed registry of running processors.
+    * `CommandQueue.WorkerSupervisor` - a `Task.Supervisor` for the worker tasks
+      (single command and batch) an `InstanceProcessor` runs. The tasks stay
+      unlinked from the processor that started them and are tracked by monitor.
+    * `CommandQueue.InstanceSupervisor` - a `DynamicSupervisor` holding one
+      `InstanceProcessor` per leased ledger.
+    * `CommandQueue.InstanceMonitor` - discovers work and starts processors.
 
-  The supervisor uses the `:one_for_one` strategy, so if a child process terminates,
-  only that process is restarted.
+  That order matters on the way down. Children terminate in reverse start order,
+  so `WorkerSupervisor` outlives the processors, and each processor gets to kill
+  its own task, wait for it, and release its lease before the task supervisor
+  goes away. Reversing the two would kill the tasks first, turning shutdown into
+  a round of crash-retry writes.
+
+  The strategy is `:one_for_one`, so a child that terminates is restarted alone.
   """
 
   use Supervisor
@@ -39,6 +48,8 @@ defmodule DoubleEntryLedger.CommandQueue.Supervisor do
 
     children = [
       {Registry, keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry},
+      # Must stay before InstanceSupervisor; see the moduledoc on shutdown order.
+      {Task.Supervisor, name: DoubleEntryLedger.CommandQueue.WorkerSupervisor},
       {DynamicSupervisor,
        name: DoubleEntryLedger.CommandQueue.InstanceSupervisor, strategy: :one_for_one},
       {DoubleEntryLedger.CommandQueue.InstanceMonitor, []}
