@@ -290,6 +290,29 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   end
 
   @doc """
+  Loads the commands for `ids` with their `command_queue_item` preloaded,
+  preserving the order of `ids`. Commands that no longer exist are omitted.
+
+  The single-id case is `InstanceProcessor`'s cleanup reloading one row inside
+  its fenced transaction; the many-id case is the same processor filling a
+  batch window. One query rather than two that differ only by `==` versus `in`.
+  """
+  @spec load_commands([Ecto.UUID.t()], Ecto.Repo.t()) :: [Command.t()]
+  def load_commands(ids, repo \\ Repo) do
+    rows =
+      repo.all(
+        from(c in Command,
+          prefix: ^@schema_prefix,
+          where: c.id in ^ids,
+          preload: [:command_queue_item]
+        )
+      )
+
+    by_id = Map.new(rows, &{&1.id, &1})
+    Enum.flat_map(ids, fn id -> List.wrap(Map.get(by_id, id)) end)
+  end
+
+  @doc """
   Query for up to `limit` ids of the next processable commands for
   `instance_id`, lowest queue position first.
 
@@ -570,7 +593,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     Telemetry.command_dead_letter(%{
       command_id: command.id,
       instance_id: command.instance_id,
-      error: message,
+      error: error_type(message),
       trace_context: command.trace_context
     })
   end
@@ -588,6 +611,36 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   end
 
   def emit_persisted_failure(_command, _status, _message), do: :ok
+
+  # The queue row and a telemetry event are not the same kind of sink, so the
+  # message is split by destination rather than by content.
+  #
+  # The COLUMN crosses no boundary. `commands.command_map` sits beside it and
+  # `Command`'s Jason encoder serialises `command_map` and `command_queue_item`
+  # together, so a payload fragment in the queue item's errors tells a reader
+  # nothing the field next to it does not, and this is the column operators
+  # actually read. The full message stays there.
+  #
+  # The EVENT does cross one. It reaches whatever exporter the host attached
+  # and carries no payload of its own — `command_id`, `instance_id` and this
+  # string — so the error text is the only route by which a fragment of a
+  # command's payload could leave the database. A crashed task's reason reaches
+  # here through `InstanceProcessor`'s crash retry (see
+  # `CommandQueue.Cleanup.failure_shape/1`) and again when a takeover re-reads
+  # the row. The event therefore carries the TYPE; a consumer that needs the
+  # detail has the command id and can read the row, which puts the detail
+  # behind database access.
+  #
+  # The type is everything before the FIRST `": "`, and taking only the first
+  # segment is the safety property rather than a formatting choice: every
+  # message this library persists is written `"<type>: <detail>"`, and a detail
+  # can itself contain `": "` — a `MatchError`'s message is `"no match of right
+  # hand side value: <term>"`. A rule that split on a later separator would
+  # carry exactly the fragment this exists to stop. For the same reason the
+  # crashing exception's own module stays on the row: it sits two segments deep,
+  # behind `"Max retry count (N) exceeded: Task crashed: "`.
+  @spec error_type(String.t()) :: String.t()
+  defp error_type(message), do: message |> String.split(": ", parts: 2) |> hd()
 
   # Private function to calculate retry delay
   @spec calculate_retry_delay(non_neg_integer()) :: non_neg_integer()
