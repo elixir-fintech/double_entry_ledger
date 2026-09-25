@@ -9,19 +9,21 @@ case System.get_env("INSERT_PATH") do
   _ -> :ok
 end
 
-# Honor BATCH=on across all environments. Defaults to false. Used to
-# flip InstanceProcessor between the per-command Task path and the
-# multi-command BatchProcessor path during perf validation.
+# BATCH=on flips the InstanceProcessor between the per-command Task path and
+# the multi-command BatchProcessor path during perf validation. It lives in
+# the `:command_queue` list, the one place `CommandQueue.Config` reads and
+# `validate!/0` checks at boot. `config/3` deep-merges keyword lists, so this
+# sets one key and leaves the rest of `:command_queue` alone.
 case System.get_env("BATCH") do
-  "on" -> config :double_entry_ledger, batch_enabled: true
+  "on" -> config :double_entry_ledger, :command_queue, batch_enabled: true
   _ -> :ok
 end
 
-# Override the InstanceProcessor batch size when BATCH_SIZE is set.
-# Used to sweep across M values during perf validation. The
-# `:batch_size` top-level key is the override; the InstanceProcessor
-# falls back to its hardcoded default of 8 if neither is set.
+# BATCH_SIZE=N sweeps the batch size across M values during perf validation.
 case System.get_env("BATCH_SIZE") do
-  size when is_binary(size) -> config :double_entry_ledger, batch_size: String.to_integer(size)
-  _ -> :ok
+  size when is_binary(size) ->
+    config :double_entry_ledger, :command_queue, batch_size: String.to_integer(size)
+
+  _ ->
+    :ok
 end

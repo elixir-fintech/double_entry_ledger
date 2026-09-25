@@ -22,8 +22,11 @@ defmodule DoubleEntryLedger.Stores.BatchTransactionStoreHelperTest do
 
   # `Scheduling.calculate_retry_delay/1` for retry_count 0: base delay plus a
   # jitter of 1..(base/10 + 1) seconds.
-  @base_retry_delay Application.compile_env(:double_entry_ledger, :command_queue, [])
-                    |> Keyword.get(:base_retry_delay, 30)
+  @base_retry_delay Application.compile_env(
+                      :double_entry_ledger,
+                      [:command_queue, :base_retry_delay],
+                      30
+                    )
   @first_retry_delay_range @base_retry_delay..(@base_retry_delay + div(@base_retry_delay, 10) + 1)
 
   alias DoubleEntryLedger.{

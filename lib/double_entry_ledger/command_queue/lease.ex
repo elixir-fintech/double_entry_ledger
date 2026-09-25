@@ -64,14 +64,22 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
           orphans: [Scheduling.orphan()]
         }
 
-  @doc "A new unique owner id: `prefix:node:uuid`."
-  @spec owner_id() :: String.t()
-  def owner_id do
-    prefix =
-      Application.get_env(:double_entry_ledger, :command_queue, [])[:processor_name] ||
-        "command_queue"
+  @doc """
+  A new unique owner id: `prefix:node:uuid`.
 
+  `prefix` defaults to the configured `:processor_name`. The manual path
+  (`CommandWorker.process_command_with_id/2` with a binary owner) passes its
+  own prefix; it goes through here rather than interpolating its own id so
+  there is exactly one definition of the format, node segment included.
+  """
+  @spec owner_id(String.t()) :: String.t()
+  def owner_id(prefix \\ default_owner_prefix()) do
     "#{prefix}:#{node()}:#{Ecto.UUID.generate()}"
+  end
+
+  defp default_owner_prefix do
+    Application.get_env(:double_entry_ledger, :command_queue, [])[:processor_name] ||
+      "command_queue"
   end
 
   @doc """
@@ -542,8 +550,33 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
 
   @doc false
   # Own transaction under the lease lock timeout: `{:ok, result}` or `:busy`.
+  #
+  # Sets the timeout and stops there — no read of the previous value, no
+  # restore, unlike `with_lock_timeout/2`. Both would be pure cost here. Every
+  # caller (`acquire/4`, `renew/3`, `release/3`) refuses to run inside a
+  # caller's transaction, so this always opens its own; the body is one lease
+  # statement and the transaction ends immediately after it, and the commit
+  # discards a `SET LOCAL` regardless. There is no caller's value to protect
+  # and nothing left in the transaction that could observe the restored one,
+  # so the pair was two extra round trips on every heartbeat, release and
+  # acquisition. That is the opposite of `lock!/3`, which joins a transaction
+  # the caller owns and goes on to write queue rows under it; there the
+  # restore is the guarantee that only the wait for the lease row is bounded
+  # (R4.3), and it stays.
+  #
+  # One consequence, and it is confined to tests. Under
+  # `Ecto.Adapters.SQL.Sandbox` this "transaction" is a savepoint inside the
+  # test's own transaction, and releasing a savepoint does not undo a
+  # `SET LOCAL` made within it. So a test that calls `renew/3`, `release/3` or
+  # `acquire/4` runs its remaining statements with `lease_lock_timeout_ms`
+  # rather than the connection default, until the sandbox rolls back at the end
+  # of that test. Nothing leaks between tests, and production never sees it
+  # because there is no enclosing transaction there to leak into.
   def lease_transaction(repo, fun) do
-    repo.transaction(fn -> with_lock_timeout(repo, fun) end)
+    repo.transaction(fn ->
+      set_lease_lock_timeout(repo)
+      fun.()
+    end)
   rescue
     e in Postgrex.Error ->
       if transient?(e), do: :busy, else: reraise(e, __STACKTRACE__)
@@ -568,7 +601,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   # anyway. Hence the split rescue rather than a blanket `after`.
   def with_lock_timeout(repo, fun) do
     %{rows: [[previous]]} = repo.query!("SELECT current_setting('lock_timeout')", [])
-    repo.query!("SET LOCAL lock_timeout = '#{Config.lease_lock_timeout_ms()}ms'", [])
+    set_lease_lock_timeout(repo)
 
     try do
       fun.()
@@ -584,6 +617,11 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
         restore_lock_timeout(repo, previous)
         result
     end
+  end
+
+  defp set_lease_lock_timeout(repo) do
+    repo.query!("SET LOCAL lock_timeout = '#{Config.lease_lock_timeout_ms()}ms'", [])
+    :ok
   end
 
   defp restore_lock_timeout(repo, previous) do

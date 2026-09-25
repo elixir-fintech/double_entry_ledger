@@ -134,7 +134,14 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     # single-cmd path. Proves the flag is read live (per cycle), not cached
     # at init.
     def run_batch(commands, _repo \\ DoubleEntryLedger.Repo) do
-      Application.put_env(:double_entry_ledger, :batch_enabled, false)
+      queue = Application.get_env(:double_entry_ledger, :command_queue, [])
+
+      Application.put_env(
+        :double_entry_ledger,
+        :command_queue,
+        Keyword.put(queue, :batch_enabled, false)
+      )
+
       send(:batch_processor_test_observer, {:batch_run_received, Enum.map(commands, & &1.id)})
 
       successes =
@@ -198,12 +205,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
   # :batch_enabled at app boot via runtime.exs). Each test reads the
   # flag in init/1, so flipping it before start_processor/1 is enough.
   setup do
-    original = Application.get_env(:double_entry_ledger, :batch_enabled)
-    Application.put_env(:double_entry_ledger, :batch_enabled, false)
-
-    on_exit(fn -> restore_env(:batch_enabled, original) end)
-
-    :ok
+    put_queue_config(batch_enabled: false)
   end
 
   setup %{instance: instance} do
@@ -340,9 +342,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     :ok
   end
 
-  defp restore_env(key, nil), do: Application.delete_env(:double_entry_ledger, key)
-  defp restore_env(key, value), do: Application.put_env(:double_entry_ledger, key, value)
-
   # Inserts an additional balanced :create_transaction command for
   # the given instance + accounts. Returns the command struct.
   defp insert_create_command(instance, [a1, a2 | _], amount) do
@@ -423,15 +422,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     } do
       insert_create_command(instance, accounts, 10)
 
-      original = Application.get_env(:double_entry_ledger, :command_queue)
-
-      Application.put_env(
-        :double_entry_ledger,
-        :command_queue,
-        Keyword.put(original || [], :pending_fetch_limit, 1)
-      )
-
-      on_exit(fn -> restore_env(:command_queue, original) end)
+      put_queue_config(pending_fetch_limit: 1)
 
       test_pid = self()
 
@@ -560,12 +551,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       # without us having to thread a pid through.
       Process.register(self(), :batch_processor_test_observer)
 
-      original = Application.get_env(:double_entry_ledger, :batch_enabled)
-      Application.put_env(:double_entry_ledger, :batch_enabled, true)
-
-      on_exit(fn -> restore_env(:batch_enabled, original) end)
-
-      :ok
+      put_queue_config(batch_enabled: true)
     end
 
     test "all-create batch dispatches via BatchProcessor and processes every command",
@@ -600,22 +586,6 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
 
       assert length(qi_statuses) == 3
       assert Enum.all?(qi_statuses, &(&1 == :processed))
-    end
-
-    test "a configured batch size of zero is clamped to one", %{
-      instance: instance,
-      command: command
-    } do
-      original = Application.get_env(:double_entry_ledger, :batch_size)
-      Application.put_env(:double_entry_ledger, :batch_size, 0)
-
-      on_exit(fn -> restore_env(:batch_size, original) end)
-
-      {_pid, ref} = start_processor_with_batch(instance.id, SuccessBatchProcessor)
-
-      assert_receive {:batch_run_received, [command_id]}, 5000
-      assert command_id == command.id
-      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5000
     end
 
     test "selects commands in queue-position order regardless of inserted_at",
@@ -1003,10 +973,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
 
       # batch_size 1 so each :process_next round handles a single command,
       # giving a round boundary at which the flipped flag can take effect.
-      original_size = Application.get_env(:double_entry_ledger, :batch_size)
-      Application.put_env(:double_entry_ledger, :batch_size, 1)
-
-      on_exit(fn -> restore_env(:batch_size, original_size) end)
+      put_queue_config(batch_size: 1)
 
       insert_create_command(instance, accounts, 30)
       insert_create_command(instance, accounts, 40)
@@ -1338,6 +1305,55 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :processed
     end
 
+    # `Config.validate!/0` runs in the supervisor's `init/1`, but that
+    # supervisor does not exist when `:start_command_queue` is false — the perf
+    # and test environments, and the documented embedded setting — and that is
+    # where a batch size typed by hand into an environment variable lands. A
+    # zero is not clamped: it would dispatch nothing and re-send `:process_next`
+    # forever. The processor validates its own configuration for that reason.
+    test "a processor refuses to start on a zero batch size, naming the key", %{
+      instance: instance
+    } do
+      put_queue_config(batch_size: 0)
+      grant = test_grant(instance.id)
+      Process.flag(:trap_exit, true)
+
+      assert {:error, {%ArgumentError{} = error, _stacktrace}} =
+               InstanceProcessor.start_link(instance_id: grant.instance_id, grant: grant)
+
+      assert Exception.message(error) =~ "batch_size"
+    end
+
+    # The retry above has no deadline of its own: whoever holds the lease row is
+    # not a successor (a successor would make the next cleanup read `:lost`),
+    # so without a bound the processor heartbeats the lease and dispatches
+    # nothing forever. `lease_lock_timeout_ms: 20` makes the bound observable
+    # in a few hundred milliseconds; the probe holds the row for the whole test.
+    test "a revert that stays busy gives up the ledger after a bounded number of retries" do
+      put_queue_config(lease_lock_timeout_ms: 20)
+      probe = probe_connection()
+      grant = committed_lease(probe, "stalled-owner:#{Ecto.UUID.generate()}", 1)
+      {:ok, command} = create_command_on(grant.instance_id)
+
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn id, worker_grant ->
+        mark_processing(id, worker_grant.owner_id)
+        {:error, :lease_busy}
+      end)
+
+      hold_lock_on_probe(probe, grant)
+      stalled = attach_telemetry([:double_entry_ledger, :instance_processor, :cleanup_stalled])
+      {_pid, ref} = start_processor_with_grant(grant)
+
+      assert_receive {:telemetry_event, ^stalled, _, _, %{attempts: 10, cleanup: :revert}}, 5_000
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5_000
+
+      # The premise of the whole escalation: the row is still :processing under
+      # the owner that gave up, so only a successor's acquisition can move it.
+      # Giving the ledger up is what makes that successor possible.
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :processing
+    end
+
     test "a {:error, :lease_busy} whose revert finds the lease taken stops the processor", %{
       instance: instance,
       command: command
@@ -1490,9 +1506,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
 
   describe "batch lease outcomes" do
     setup do
-      original = Application.get_env(:double_entry_ledger, :batch_enabled)
-      Application.put_env(:double_entry_ledger, :batch_enabled, true)
-      on_exit(fn -> restore_env(:batch_enabled, original) end)
+      put_queue_config(batch_enabled: true)
 
       :persistent_term.put(
         {DoubleEntryLedger.CommandQueue.InstanceProcessorTest, :busy_done},
@@ -1545,9 +1559,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     # the rejected batch would go to the back and run second.
     test "a batch claim that finds the lease row locked requeues it and retries by timer" do
       put_queue_config(lease_lock_timeout_ms: 150)
-      original_size = Application.get_env(:double_entry_ledger, :batch_size)
-      Application.put_env(:double_entry_ledger, :batch_size, 1)
-      on_exit(fn -> restore_env(:batch_size, original_size) end)
+      put_queue_config(batch_size: 1)
       Process.register(self(), :batch_processor_test_observer)
 
       probe = probe_connection()

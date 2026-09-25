@@ -15,6 +15,11 @@ defmodule Mix.Tasks.Load.MultiDrain do
   Pre-fill is parallelized via `Task.async_stream` and **not**
   included in the measurement — only the drain phase is timed.
 
+  Each processor acquires the ledger's lease before it starts and
+  releases it when it drains. Two nodes against one database can be
+  run by hand to observe lease takeover; failover timing is not
+  automated.
+
   Requires `start_command_queue: false` so the library's own queue supervision
   isn't competing for the instances under test. This repository sets it in
   `config/perf.exs`.

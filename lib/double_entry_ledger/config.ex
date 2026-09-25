@@ -20,28 +20,24 @@ defmodule DoubleEntryLedger.Config do
   ## Command queue configuration
 
       config :double_entry_ledger,
-        batch_enabled: false,
         max_batch_retries: 3,
         start_command_queue: true,
         insert_path: :legacy,
         serialize_enqueue: false,
         max_retries: 5,
         retry_interval: 200,
-        batch_size: 8,
         command_queue: [
           poll_interval: 5_000,
           max_retries: 5,
           base_retry_delay: 30,
           max_retry_delay: 3_600,
           pending_fetch_limit: 64,
+          batch_enabled: false,
+          batch_size: 8,
           processor_name: "command_queue"
         ]
 
-    * `:batch_enabled` - process claimed commands in batches (default: `false`)
     * `:max_batch_retries` - batch write retries before falling back (default: `3`)
-    * `:batch_size` - commands per batch (default: `8`). A `:batch_size` inside
-      `:command_queue` is still honoured as a fallback, but only the top-level
-      form can be changed at release time.
     * `:start_command_queue` - supervise the queue on this node (default: `true`)
     * `:insert_path` - `:legacy` or `:insert_all` transaction insert path (default: `:legacy`)
     * `:serialize_enqueue` - take a transaction-scoped PostgreSQL advisory lock
@@ -59,17 +55,27 @@ defmodule DoubleEntryLedger.Config do
     * `:base_retry_delay` - first retry delay in seconds (default: `30`)
     * `:max_retry_delay` - retry delay cap in seconds (default: `3_600`)
     * `:pending_fetch_limit` - ids fetched per processor round-trip (default: `64`)
+    * `:batch_enabled` - process claimed commands in batches (default: `false`).
+      Read per dispatch round, so it is a live switch.
+    * `:batch_size` - commands per batch (default: `8`)
     * `:processor_name` - prefix for the generated `processor_id` (default: `"command_queue"`)
+
+  `CommandQueue.Config` is the single reader for the queue keys it owns, and
+  its `validate!/0` — called by `CommandQueue.Supervisor.init/1` before any
+  child starts — rejects a bad value by name there, rather than letting it
+  surface later from whatever code path happens to read it first. See that
+  module for the lease keys, which are configured in the same list.
 
   Read at compile time, so changing them requires recompiling this library:
   `:schema_prefix`, `:start_command_queue`, the top-level `:max_retries`, and
-  **the whole `:command_queue` list**. `CommandQueue.Scheduling` reads it with
-  `Application.compile_env(:double_entry_ledger, :command_queue, [])`, which
-  tracks the entire value, so setting any key in it at release time raises a
-  compile-environment mismatch on boot — even keys that other modules go on to
-  read with `Application.get_env/3`. Everything outside that list
-  (`:batch_enabled`, `:batch_size`, `:max_batch_retries`, `:insert_path`,
-  `:serialize_enqueue`, `:retry_interval`) is read at runtime.
+  the three `:command_queue` keys `CommandQueue.Scheduling` bakes into its
+  retry maths — `:max_retries`, `:base_retry_delay` and `:max_retry_delay`.
+  Those three are tracked individually (`compile_env/3` on a key path), so
+  setting any OTHER queue key at release time is fine; reading the list as a
+  whole would have tracked all of them and raised a compile-environment
+  mismatch on boot. Everything else, inside the list and outside it
+  (`:max_batch_retries`, `:insert_path`, `:serialize_enqueue`,
+  `:retry_interval`), is read at runtime.
   """
 
   @schema_prefix Application.compile_env(

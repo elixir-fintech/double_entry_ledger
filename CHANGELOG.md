@@ -6,8 +6,35 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### ⚠️ Breaking changes
+
+- `:batch_enabled` and `:batch_size` moved from the top level of the
+  `:double_entry_ledger` application environment into the `:command_queue`
+  list, alongside `:pending_fetch_limit`. **The top-level spelling is no longer
+  read, and nothing warns about it.** A consumer who leaves
+  `config :double_entry_ledger, batch_enabled: true` in place gets batching
+  silently turned off, because the key is simply not consulted any more and the
+  new default is `false`; a stale top-level `batch_size` is likewise ignored in
+  favour of the default of `8`. Move both keys into the `:command_queue` list
+  when upgrading. `config/runtime.exs`'s `BATCH` and `BATCH_SIZE` environment
+  overrides now write into that list too.
+- All three keys are read and validated by `CommandQueue.Config`.
+  `validate!/0` runs both in `CommandQueue.Supervisor.init/1` and in
+  `CommandQueue.InstanceProcessor.init/1` — the second because the supervisor
+  does not run when `:start_command_queue` is `false` — so a bad value fails
+  the start by name instead of surfacing from the dispatch path mid-drain. A
+  `:batch_size` of `0` is rejected rather than silently clamped to `1`, and a
+  non-integer one is rejected rather than raising from dispatch.
+
 ### Added
 
+- `[:double_entry_ledger, :instance_processor, :cleanup_stalled]` telemetry
+  event. An `InstanceProcessor` that cannot make its post-task cleanup write
+  because the lease row stays locked now gives the ledger up after a bounded
+  number of retries, emitting this event, rather than retrying forever while
+  holding the lease and dispatching nothing. The next owner's acquisition
+  reschedules whatever the stalled owner left `:processing` — though not
+  necessarily at once, since the same lock holder blocks that acquisition too.
 - Opt-in `serialize_enqueue` configuration (runtime, default `false`). When
   enabled, `Stores.CommandStore.create/1` takes a transaction-scoped
   PostgreSQL advisory lock keyed on the instance before the queue item is
@@ -19,6 +46,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `CommandQueue.Scheduling` now tracks its three compile-time queue keys
+  (`:max_retries`, `:base_retry_delay`, `:max_retry_delay`) individually with
+  `Application.compile_env/3` on a key path, instead of reading the whole
+  `:command_queue` list. Setting any other queue key at release time no longer
+  raises a compile-environment mismatch on boot.
 - Requires `flop ~> 0.29`. Flop 0.29 turned `Flop.Schema` from a protocol into
   a behaviour, so the paginated schemas now configure it with `use Flop.Schema`
   and `@flop_options` instead of `@derive`. The Flop options themselves are

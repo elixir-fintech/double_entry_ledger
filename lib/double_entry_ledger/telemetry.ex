@@ -34,6 +34,7 @@ defmodule DoubleEntryLedger.Telemetry do
   | `[:double_entry_ledger, :batch, :processed]` | Batch write completed |
   | `[:double_entry_ledger, :instance_processor, :start]` | Instance processor started |
   | `[:double_entry_ledger, :instance_processor, :stop]` | Instance processor stopped |
+  | `[:double_entry_ledger, :instance_processor, :cleanup_stalled]` | Processor gave up a ledger it could not clean up |
   | `[:double_entry_ledger, :lease, :acquired]` | Ledger lease acquired (fresh or takeover) |
   | `[:double_entry_ledger, :lease, :renewed]` | Ledger lease renewed by an idle heartbeat |
   | `[:double_entry_ledger, :lease, :lost]` | Owner found its lease taken by another owner |
@@ -306,6 +307,26 @@ defmodule DoubleEntryLedger.Telemetry do
   @spec instance_processor_stop(map()) :: :ok
   def instance_processor_stop(metadata) do
     execute([:double_entry_ledger, :instance_processor, :stop], metadata)
+  end
+
+  @doc """
+  Emits a cleanup-stalled event: an `InstanceProcessor` gave up the ledger
+  because the lease row stayed locked across every retry of the cleanup write
+  it owed a queue row. Alert on this; it means something that is not a
+  successor is holding the lease row.
+
+  The rows the processor left `:processing` are rescheduled by the next owner's
+  acquisition, but not necessarily at once: the same lock holder blocks that
+  acquisition too, so until it lets go the successor backs off and retries.
+
+  ## Metadata
+    - `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`
+    - `:attempts` - consecutive `:busy` outcomes before giving up
+    - `:cleanup` - `:revert` or `:crash_retry`
+  """
+  @spec cleanup_stalled(map()) :: :ok
+  def cleanup_stalled(metadata) do
+    execute([:double_entry_ledger, :instance_processor, :cleanup_stalled], metadata)
   end
 
   @doc """

@@ -72,8 +72,6 @@ config :double_entry_ledger,
   start_command_queue: true,
   insert_path: :legacy,
   serialize_enqueue: false,
-  batch_enabled: false,
-  batch_size: 8,
   max_batch_retries: 3,
   max_retries: 5,
   retry_interval: 200
@@ -81,6 +79,8 @@ config :double_entry_ledger,
 config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
   pending_fetch_limit: 64,
+  batch_enabled: false,
+  batch_size: 8,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
@@ -96,9 +96,11 @@ Set a strong `idempotency_secret` — it hashes incoming keys. Set
 `start_command_queue: false` to disable background processing (useful in
 tests or when embedding the ledger without the queue). `retry_interval` is read
 at runtime; `max_retries` is captured into each OCC worker at compile time
-(`Occ.Processor.__using__/1`), so changing it needs a recompile. The
-`:command_queue` list is read with `Application.compile_env/3` and is likewise
-compile-time.
+(`Occ.Processor.__using__/1`), so changing it needs a recompile. Inside the
+`:command_queue` list only `max_retries`, `base_retry_delay` and
+`max_retry_delay` are read with `Application.compile_env/3`; the other keys are
+read at runtime through `CommandQueue.Config`, which also validates the whole
+list when the queue supervisor starts.
 
 `insert_path: :legacy` and `batch_enabled: false` are the conservative
 defaults. To opt into the new paths, set `insert_path: :insert_all` and/or
@@ -106,8 +108,10 @@ defaults. To opt into the new paths, set `insert_path: :insert_all` and/or
 `batch_size` to control how many compatible transaction commands are processed
 together and `max_batch_retries` to control retries after a stale account
 write. Account commands continue through the single-command path.
-`pending_fetch_limit` controls how many queue IDs an instance processor fetches
-per database read; it is independent of `batch_size`. When batching is enabled,
+`batch_enabled`, `batch_size` and `pending_fetch_limit` all live in the
+`:command_queue` list. `pending_fetch_limit` controls how many queue IDs an
+instance processor fetches per database read; it is independent of
+`batch_size`. When batching is enabled,
 set it to at least `batch_size` and preferably to a multiple of `batch_size` so
 each database fetch can be divided into full batches.
 
@@ -346,11 +350,13 @@ still balances, or `PendingTransactionLookup` to inspect open holds.
 The command queue is designed and tested for a **single node processing a given
 ledger**. Run it that way in production.
 
-Every write that completes, retries, or dead-letters a command is fenced by
-`command_queue_items.processor_version`, so a stale processor can never
-overwrite work after ownership has moved, and commands stranded in
-`:processing` by a node that died are recovered automatically. Those guarantees
-hold under concurrency and are what make a crash or restart safe.
+Every write that completes, retries, or dead-letters a command is fenced by the
+ledger's lease: the writing transaction takes the lease row lock, proves its
+`(owner_id, fencing_token)` still holds the ledger, and refreshes the expiry
+last, so a stale processor can never overwrite work after ownership has moved.
+Commands stranded in `:processing` by a node that died are rescheduled by the
+next owner's acquisition. Those guarantees hold under concurrency and are what
+make a crash or restart safe.
 
 What is **not** yet guaranteed across several nodes:
 
@@ -363,14 +369,17 @@ What is **not** yet guaranteed across several nodes:
 - Every node runs its own `InstanceMonitor`, producing redundant polling and
   competing processor starts.
 - `batch_enabled`, `batch_size`, `pending_fetch_limit`, and
-  `stale_processing_after` are read from each node's application environment,
-  so inconsistent deployments process the same queue with different behaviour.
+  `stale_processing_after` are read from each node's `:command_queue`
+  configuration, so inconsistent deployments process the same queue with
+  different behaviour.
 - Enqueueing wakes the local monitor only; other nodes still wait for their
   next poll.
 
 Cluster-wide safety needs an ownership lease per ledger, held in PostgreSQL
 with a fencing token and a database-clock expiry, so that only the current
-owner may claim work for that ledger. That is not implemented.
+owner may claim work for that ledger. That lease is now implemented — see
+`DoubleEntryLedger.CommandQueue.Lease`. The constraints listed above predate
+it and this section has not yet been rewritten around it.
 
 ## Documentation & Further Reading
 
