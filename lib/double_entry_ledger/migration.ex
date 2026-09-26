@@ -64,9 +64,14 @@ defmodule DoubleEntryLedger.Migration do
       def up, do: DoubleEntryLedger.Migration.up(from: 4)
       def down, do: DoubleEntryLedger.Migration.down(from: 5, version: 4)
 
+      # Upgrade from 0.5.x to 0.6.0 (versions 1-5 already applied)
+      def up, do: DoubleEntryLedger.Migration.up(from: 5)
+      # No down: version 6 is one-way and `down/1` raises rather than
+      # crossing it. Take a database backup before migrating.
+
   ## Historical background-job migrations
 
-  Version 0.5.0 no longer depends on or supervises the former job runner. If a
+  Version 0.5.0 onwards no longer depends on or supervises the former job runner. If a
   v0.1.0 consumer copied its migration, the already-applied migration and its
   tables may remain. Applications that still need to execute or roll back that
   historical migration must declare the original dependency themselves.

@@ -132,7 +132,9 @@ defmodule DoubleEntryLedger.Telemetry do
 
     - `:command_id` - Command UUID
     - `:instance_id` - Ledger instance UUID
-    - `:error` - Reason for dead-lettering
+    - `:error` - Failure class: the persisted error message's text before its
+      first `": "`. The full message is not in the event; it is on the queue
+      row's `errors`.
     - `:trace_context` - Consumer-supplied tracing context (map or nil)
   """
   @spec command_dead_letter(map()) :: :ok
@@ -291,6 +293,8 @@ defmodule DoubleEntryLedger.Telemetry do
   ## Metadata
 
     - `:instance_id` - Instance UUID being processed
+    - `:owner_id` - the processor's lease owner id (`prefix:node:uuid`), the
+      same value stamped as `processor_id` on the rows it claims
   """
   @spec instance_processor_start(map()) :: :ok
   def instance_processor_start(metadata) do

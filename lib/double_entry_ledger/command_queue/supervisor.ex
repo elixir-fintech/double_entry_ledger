@@ -69,6 +69,9 @@ defmodule DoubleEntryLedger.CommandQueue.Supervisor do
   @doc false
   def init(_init_arg) do
     Config.validate!()
+    # Boot-time diagnostic, once per queue start. Deliberately not inside
+    # `validate!/0`, which also runs in every `InstanceProcessor.init/1`.
+    Config.warn_stale_config()
 
     children = [
       {Registry, keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry},
