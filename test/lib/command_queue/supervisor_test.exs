@@ -8,9 +8,10 @@ defmodule DoubleEntryLedger.CommandQueue.SupervisorTest do
   the supervisor start rather than any single child.
   """
 
-  # Not async: the configuration test writes application environment.
+  # Not async: the configuration tests write application environment.
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
   import DoubleEntryLedger.LeaseFixtures, only: [put_queue_config: 1]
 
   test "starts supervisor and children" do
@@ -48,4 +49,38 @@ defmodule DoubleEntryLedger.CommandQueue.SupervisorTest do
 
     assert {:error, _reason} = start_supervised(DoubleEntryLedger.CommandQueue.Supervisor)
   end
+
+  # A bad VALUE fails the start (above). A key this release stopped reading
+  # only warns: it is ignored either way, and refusing to boot over one would
+  # have been a further breaking change in the same release.
+  test "a key the queue does not read is named at start-up without failing it" do
+    put_queue_config(stale_processing_after: 300)
+
+    log =
+      capture_log(fn ->
+        assert {:ok, pid} = start_supervised(DoubleEntryLedger.CommandQueue.Supervisor)
+        assert Process.alive?(pid)
+      end)
+
+    assert log =~ "stale_processing_after"
+  end
+
+  test "a batch key left at the top level is named at start-up" do
+    original = Application.get_env(:double_entry_ledger, :batch_enabled)
+    Application.put_env(:double_entry_ledger, :batch_enabled, true)
+    on_exit(fn -> restore_batch_enabled(original) end)
+
+    log =
+      capture_log(fn ->
+        assert {:ok, _pid} = start_supervised(DoubleEntryLedger.CommandQueue.Supervisor)
+      end)
+
+    assert log =~ "batch_enabled"
+  end
+
+  defp restore_batch_enabled(nil),
+    do: Application.delete_env(:double_entry_ledger, :batch_enabled)
+
+  defp restore_batch_enabled(value),
+    do: Application.put_env(:double_entry_ledger, :batch_enabled, value)
 end

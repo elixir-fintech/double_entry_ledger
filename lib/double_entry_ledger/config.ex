@@ -34,6 +34,11 @@ defmodule DoubleEntryLedger.Config do
           pending_fetch_limit: 64,
           batch_enabled: false,
           batch_size: 8,
+          lease_ttl: 20,
+          lease_lock_timeout_ms: 1_000,
+          max_leases_per_node: :infinity,
+          max_concurrent_acquisitions: 4,
+          coordination_strategy: :database_polling,
           processor_name: "command_queue"
         ]
 
@@ -58,13 +63,34 @@ defmodule DoubleEntryLedger.Config do
     * `:batch_enabled` - process claimed commands in batches (default: `false`).
       Read per dispatch round, so it is a live switch.
     * `:batch_size` - commands per batch (default: `8`)
-    * `:processor_name` - prefix for the generated `processor_id` (default: `"command_queue"`)
+    * `:lease_ttl` - seconds a ledger lease lives without a refresh (default: `20`).
+      Also the failover budget: a dead node's ledgers cannot be taken over
+      before its leases expire.
+    * `:lease_lock_timeout_ms` - how long a writer waits for the lease row lock
+      before reporting contention (default: `1_000`)
+    * `:max_leases_per_node` - ledgers this node may work at once, enforced as
+      `InstanceSupervisor`'s `max_children` (default: `:infinity`)
+    * `:max_concurrent_acquisitions` - lease acquisitions in flight on this
+      node, enforced as `AcquireSupervisor`'s `max_children` (default: `4`)
+    * `:coordination_strategy` - which `CommandQueue.Coordinator` decides what
+      this node attempts. `:database_polling` is the only value in this
+      release; anything else is rejected by `CommandQueue.Config.validate!/0`
+      (default:
+      `:database_polling`)
+    * `:processor_name` - prefix of the generated owner id, which is
+      `"prefix:node:uuid"` and is stamped on queue rows as `processor_id`
+      (default: `"command_queue"`)
 
   `CommandQueue.Config` is the single reader for the queue keys it owns, and
-  its `validate!/0` — called by `CommandQueue.Supervisor.init/1` before any
-  child starts — rejects a bad value by name there, rather than letting it
-  surface later from whatever code path happens to read it first. See that
-  module for the lease keys, which are configured in the same list.
+  its `validate!/0` rejects a bad value by name at start-up rather than letting
+  it surface later from whatever code path happens to read it first. It runs in
+  `CommandQueue.Supervisor.init/1` before any child starts, and again in
+  `CommandQueue.InstanceProcessor.init/1`, because the supervisor does not run
+  at all when `:start_command_queue` is `false`. `:processor_name` and the
+  three compile-time retry keys below are not among the keys it checks.
+  `CommandQueue.Config.warn_stale_config/0`, called by the supervisor straight
+  after, logs about keys this release stopped reading; it warns rather than
+  raising and runs once per queue start.
 
   Read at compile time, so changing them requires recompiling this library:
   `:schema_prefix`, `:start_command_queue`, the top-level `:max_retries`, and

@@ -5,10 +5,10 @@ DoubleEntryLedger submits work to an immutable `Command` table and processes it 
 ## How the queue is organized
 
 - **Command submission:** Commands are written through `DoubleEntryLedger.Apis.CommandApi`. Each command carries a `CommandQueueItem` record with status `:pending`, `:processing`, `:processed`, `:failed`, `:occ_timeout`, or `:dead_letter`.
-- **Supervision:** `DoubleEntryLedger.CommandQueue.Supervisor` starts the scheduler stack (registry, dynamic supervisors, and workers). `InstanceMonitor` polls for instances with pending commands and ensures each has an `InstanceProcessor`.
-- **Processing:** An `InstanceProcessor` atomically claims commands, invokes the appropriate worker module, and writes the resulting `JournalEvent`, transactions, entries, and balance history. Journal-event relationships are stored synchronously through direct foreign keys.
+- **Supervision:** `DoubleEntryLedger.CommandQueue.Supervisor` starts the scheduler stack (registry, task supervisors, the instance supervisor, and the monitor). `InstanceMonitor` polls for ledgers that have processable commands and no live lease, acquires a `CommandQueue.Lease` for each one, and starts an `InstanceProcessor` with the resulting grant.
+- **Processing:** An `InstanceProcessor` atomically claims commands under its lease, invokes the appropriate worker module, and writes the resulting `JournalEvent`, transactions, entries, and balance history. Every one of those writes takes the ledger's lease row lock and proves the processor still owns the ledger, so only one node works a ledger's queued commands at a time. The lease covers the queue only: synchronous processing through `CommandApi.process_from_params/2` takes no lease, runs on whichever node calls it, and is serialised against the queue owner only by account-level optimistic concurrency control. Journal-event relationships are stored synchronously through direct foreign keys.
 - **Optional batching:** With `batch_enabled: true`, compatible create/update transaction commands are claimed and written together. Account commands and batches that encounter unexpected database errors fall back to the single-command path.
-- **Crash recovery:** Each worker task is monitored via `Process.monitor/1`. If the task crashes unexpectedly, the `InstanceProcessor` receives a `:DOWN` message and schedules a retry for the command automatically — no manual intervention required. That covers an in-process crash only; a command left in `:processing` by a node that died is recovered by `InstanceMonitor`'s sweep once it is older than `stale_processing_after`.
+- **Crash recovery:** Each worker task is monitored via `Process.monitor/1`. If the task crashes unexpectedly, the `InstanceProcessor` receives a `:DOWN` message and schedules a retry for the command automatically — no manual intervention required. That covers an in-process crash only; a command left in `:processing` by a node that died is rescheduled by the next lease acquisition on that ledger, which happens once the dead node's lease has expired (`lease_ttl`, default 20 seconds) and some node's poll comes round.
 - **Retries:** Workers distinguish validation failures (marked as dead letters) from transient OCC or database errors (scheduled with exponential backoff). The synchronous OCC loop uses the top-level `max_retries`, captured into each worker at compile time, and `retry_interval`, read at runtime; queued retry delays use the compiled `:command_queue` settings described below. Exhausted retries land in `:dead_letter` for manual inspection.
 
 ## Submitting commands asynchronously
@@ -41,12 +41,12 @@ At this point the command is durable, but the associated transaction and journal
 
 ## Monitoring processing
 
-`InstanceMonitor` continuously scans for pending commands and spins up processors per instance. Processors transition commands through statuses:
+`InstanceMonitor` continuously scans for ledgers with pending work, takes each one's lease, and spins up one processor per leased ledger. Processors transition commands through statuses:
 
 1. `:pending` → `:processing` when the worker claims the command.
 2. `:processing` → `:processed` when projections succeed.
 3. `:processing` → `:failed`, `:occ_timeout`, or `:dead_letter` when something goes wrong.
-4. `:processing` → `:failed` or `:dead_letter` when `InstanceMonitor` recovers a command stranded past `stale_processing_after`, for example because its node died.
+4. `:processing` → `:failed` or `:dead_letter` when a lease acquisition reschedules a command stranded by a vanished owner, for example because its node died. Each one emits `[:double_entry_ledger, :command, :recovered]` with `reason: :takeover`.
 
 Use `DoubleEntryLedger.Stores.CommandStore` to inspect queue progress:
 
@@ -75,7 +75,11 @@ config :double_entry_ledger, :command_queue,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
-  stale_processing_after: 300,
+  lease_ttl: 20,
+  lease_lock_timeout_ms: 1_000,
+  max_leases_per_node: :infinity,
+  max_concurrent_acquisitions: 4,
+  coordination_strategy: :database_polling,
   processor_name: "command_queue"
 
 config :double_entry_ledger,
@@ -83,15 +87,19 @@ config :double_entry_ledger,
 ```
 
 - `poll_interval` – how often `InstanceMonitor` looks for pending work. A successful enqueue also wakes the local monitor, so an idle queue does not wait a full interval.
-- `stale_processing_after` – seconds a command may sit in `:processing` before the monitor recovers it; set it above your longest command.
+- `lease_ttl` – seconds a ledger lease lives without a refresh. It is the failover budget: a dead node's ledgers cannot be taken over until its leases expire, so typical detection is `lease_ttl + poll_interval`.
+- `lease_lock_timeout_ms` – how long a writer waits for the lease row lock before reporting contention rather than blocking.
+- `max_leases_per_node` – how many ledgers one node works at once.
+- `max_concurrent_acquisitions` – how many lease acquisitions one node runs at once.
+- `coordination_strategy` – which `CommandQueue.Coordinator` decides what this node attempts. `:database_polling` is the only value in this release.
 - `pending_fetch_limit` – how many queue IDs a processor fetches per database read. When batching is enabled, use a value at least as large as, and preferably a multiple of, `batch_size`.
 - `max_retries`, `base_retry_delay`, `max_retry_delay` – queue retry/backoff behaviour. These values are compiled into `CommandQueue.Scheduling`; change them before compiling the dependency.
-- `processor_name` – used in queue item metadata to identify workers.
+- `processor_name` – prefix of the generated lease owner id (`"prefix:node:uuid"`), which is stamped on queue rows as `processor_id`.
 - `batch_enabled` – live switch for batched transaction processing; account commands remain on the single-command path.
 - `batch_size` – maximum number of compatible transaction commands per write batch.
 - `max_batch_retries` – stale-write retries before the batch is recursively split.
 
-DoubleEntryLedger 0.5.0 does not depend on or supervise a third-party job
+DoubleEntryLedger 0.6.0 does not depend on or supervise a third-party job
 runner. The command queue uses its own `InstanceMonitor` and
 `InstanceProcessor` supervision tree.
 

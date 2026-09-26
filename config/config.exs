@@ -24,10 +24,8 @@ config :double_entry_ledger, :command_queue,
   base_retry_delay: 30,
   # Maximum delay in seconds (1 hour)
   max_retry_delay: 3600,
-  # Seconds a command may stay in :processing before InstanceMonitor treats it
-  # as stranded by a dead node and sends it back through the failure path
-  stale_processing_after: 300,
-  # Name prefix for processors
+  # Prefix of the generated lease owner id ("prefix:node:uuid"), stamped on
+  # queue rows as processor_id
   processor_name: "command_queue"
 
 # Import environment specific config. This must remain at the bottom

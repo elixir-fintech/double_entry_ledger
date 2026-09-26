@@ -3,7 +3,9 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
   Reads and validates the `:command_queue` configuration list.
 
   `CommandQueue.Supervisor.init/1` calls `validate!/0` before starting any
-  child, so a bad value fails the supervisor start with one clear error.
+  child, so a bad value fails the supervisor start with one clear error, and
+  then `warn_stale_config/0`, which logs — never raises — about configuration
+  this release stopped reading.
 
   Keys and defaults:
 
@@ -20,6 +22,13 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
     * `:batch_enabled` - process claimed commands in batches (false). Read per
       dispatch round, so it is a live switch.
     * `:batch_size` - commands per batch (8)
+
+  Four more keys live in the same list but are read elsewhere, so they are not
+  validated here and must not be reported as unknown: `:max_retries`,
+  `:base_retry_delay` and `:max_retry_delay`, which `CommandQueue.Scheduling`
+  bakes in with `Application.compile_env/3` on a key path, and
+  `:processor_name`, the owner-id prefix `CommandQueue.Lease.owner_id/1` reads.
+  `known_keys/0` is the union.
   """
 
   @defaults [
@@ -34,9 +43,35 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
     batch_size: 8
   ]
 
+  # Keys of the :command_queue list that are legitimately configured but NOT
+  # read through this module. Each has exactly one reader, named here so the
+  # unknown-key warning cannot flag correct configuration:
+  #
+  #   :max_retries, :base_retry_delay, :max_retry_delay —
+  #     CommandQueue.Scheduling, `Application.compile_env/3` on a key path.
+  #     Compiled into the retry maths, which is why this module neither reads
+  #     nor validates them.
+  #   :processor_name —
+  #     CommandQueue.Lease.owner_id/1, the prefix of the generated owner id.
+  #
+  # `command_queue_known_keys_test.exs` scans lib/ for every key read out of
+  # the list and fails if one is missing from `known_keys/0`.
+  @external_keys [:max_retries, :base_retry_delay, :max_retry_delay, :processor_name]
+
+  @known_keys Keyword.keys(@defaults) ++ @external_keys
+
+  # Keys that moved INTO the :command_queue list in 0.6.0 and are no longer
+  # read from the top level of the :double_entry_ledger environment. A stale
+  # top-level spelling is silently ignored, which is what this warns about.
+  # `:pending_fetch_limit` is deliberately absent: it was already in the list
+  # in 0.5.0 and was never read from the top level.
+  @relocated_keys [:batch_enabled, :batch_size]
+
   # Strategy atom -> Coordinator implementation. The only entry in this
   # release; :erlang_cluster is a future spec (design §9).
   @coordinators %{database_polling: DoubleEntryLedger.CommandQueue.Coordinator.DatabasePolling}
+
+  require Logger
 
   @spec poll_interval() :: pos_integer()
   def poll_interval, do: get(:poll_interval)
@@ -68,6 +103,108 @@ defmodule DoubleEntryLedger.CommandQueue.Config do
   @doc "The `Coordinator` implementation selected by `:coordination_strategy`."
   @spec coordinator() :: module()
   def coordinator, do: Map.fetch!(@coordinators, coordination_strategy())
+
+  @doc """
+  Every key the `:command_queue` list may legitimately carry: the nine this
+  module reads plus the four read by `CommandQueue.Scheduling` and
+  `CommandQueue.Lease`.
+  """
+  @spec known_keys() :: [atom()]
+  def known_keys, do: @known_keys
+
+  @doc """
+  Logs a warning about command-queue configuration this release stopped
+  reading, and returns `:ok`.
+
+  Two silent upgrade hazards, one message each. Both messages name the
+  offending keys from the environment rather than from a hard-coded list, so
+  they stay correct as keys come and go, and so this module does not have to
+  mention a mechanism it removed (`unified_fencing_test.exs` enforces that).
+
+    * a key in the `:command_queue` list that is not in `known_keys/0` — the
+      key removed in 0.6.0 is the one a 0.5 consumer is most likely to still
+      have;
+    * `:batch_enabled` or `:batch_size` still set at the TOP level of the
+      `:double_entry_ledger` environment, where 0.5 read them and 0.6 does
+      not. That one cannot be seen from inside the list, which is why it is a
+      separate check.
+
+  Warns rather than raises: an ignored key is not a reason to stop a boot, and
+  turning it into one would be a further breaking change in the same release.
+  Never raises, whatever the environment holds — a malformed list yields no
+  keys rather than an exception.
+
+  Called from `CommandQueue.Supervisor.init/1` and NOT from `validate!/0`,
+  which also runs in `CommandQueue.InstanceProcessor.init/1`: a processor
+  starts once per ledger per drain cycle, so warning there would repeat a
+  boot-time diagnostic indefinitely on a busy node.
+  """
+  @spec warn_stale_config() :: :ok
+  def warn_stale_config do
+    warn_unknown_keys(unknown_keys())
+    warn_relocated_keys(relocated_keys_at_top_level())
+  end
+
+  defp warn_unknown_keys([]), do: :ok
+
+  defp warn_unknown_keys(keys) do
+    Logger.warning(
+      "ignoring unknown :command_queue configuration #{inspect(keys)}: " <>
+        "DoubleEntryLedger does not read #{plural(keys)} and #{plural_verb(keys)} no effect. " <>
+        "Keys the command queue reads: #{inspect(@known_keys)}. " <>
+        "See the 0.6.0 CHANGELOG for the keys this release removed."
+    )
+  end
+
+  defp warn_relocated_keys([]), do: :ok
+
+  defp warn_relocated_keys(keys) do
+    Logger.warning(
+      "ignoring #{inspect(keys)} at the top level of the :double_entry_ledger " <>
+        "environment: 0.6.0 reads #{plural(keys)} only inside the :command_queue list. " <>
+        "Move #{plural(keys)} into `config :double_entry_ledger, :command_queue, ...`. " <>
+        "The top-level value is ignored; the :command_queue value applies if set, " <>
+        "otherwise the default (#{defaults_text(keys)})."
+    )
+  end
+
+  defp defaults_text(keys) do
+    @defaults
+    |> Keyword.take(keys)
+    |> Enum.map_join(", ", fn {key, value} -> "#{key}: #{inspect(value)}" end)
+  end
+
+  defp plural([_one]), do: "it"
+  defp plural(_many), do: "them"
+
+  defp plural_verb([_one]), do: "it has"
+  defp plural_verb(_many), do: "they have"
+
+  defp unknown_keys do
+    :double_entry_ledger
+    |> Application.get_env(:command_queue, [])
+    |> configured_keys()
+    |> Enum.reject(&(&1 in @known_keys))
+  end
+
+  defp relocated_keys_at_top_level do
+    Enum.filter(@relocated_keys, fn key ->
+      Application.get_env(:double_entry_ledger, key) != nil
+    end)
+  end
+
+  # Tolerant of anything: a non-keyword value yields no keys rather than
+  # raising, because this is a diagnostic and `validate!/0` is what is allowed
+  # to fail a start.
+  defp configured_keys(value) do
+    value
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      {key, _value} when is_atom(key) -> [key]
+      _other -> []
+    end)
+    |> Enum.uniq()
+  end
 
   @doc "Raises `ArgumentError` naming the first invalid key; returns `:ok`."
   @spec validate!() :: :ok
