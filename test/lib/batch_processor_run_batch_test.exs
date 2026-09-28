@@ -1163,6 +1163,43 @@ defmodule DoubleEntryLedger.BatchProcessorRunBatchTest do
       end
     end
 
+    # The head's grant fences the whole write, so every command must carry
+    # that same grant: a command holding any other grant would be written
+    # under a fence that is not its own.
+    test "a batch whose commands carry different grants raises before writing",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      first = insert_balanced_command(inst, a1, a2, :posted)
+      second = insert_balanced_command(inst, a1, a2, :posted)
+      grant = test_grant(inst.id)
+
+      [claimed_first, claimed_second] =
+        Scheduling.claim_batch_for_processing([first, second], grant)
+
+      other_grant = %{grant | owner_id: "another-owner"}
+
+      assert_raise ArgumentError, fn ->
+        BatchProcessor.run_batch([claimed_first, %{claimed_second | lease_grant: other_grant}])
+      end
+
+      assert count(Transaction) == 0
+      assert reload_command_with_qi(first.id).command_queue_item.status == :processing
+      assert reload_command_with_qi(second.id).command_queue_item.status == :processing
+    end
+
+    test "a command whose grant is for another ledger raises before writing",
+         %{instance: inst, accounts: [a1, a2, _, _]} do
+      command = insert_balanced_command(inst, a1, a2, :posted)
+      other = instance_fixture(address: "other:ledger:address")
+      other_grant = test_grant(other.id)
+
+      assert_raise ArgumentError, fn ->
+        BatchProcessor.run_batch([%{command | lease_grant: other_grant}])
+      end
+
+      assert count(Transaction) == 0
+      assert reload_command_with_qi(command.id).command_queue_item.status == :pending
+    end
+
     # Contention, not loss. The lease row is committed by the probe and the
     # sandbox never locks it — nothing here claims through `Repo` — so a second
     # connection can hold it while `do_write/4` opens its transaction.

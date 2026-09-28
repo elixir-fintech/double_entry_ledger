@@ -358,8 +358,11 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     :ok
   end
 
+  # A third of the lease lifetime, computed in milliseconds so a short lease
+  # still renews well before it expires (a one-second lease renews after
+  # 333 ms, not at its 1000 ms expiry).
   defp schedule_renew do
-    Process.send_after(self(), :renew_lease, max(div(Config.lease_ttl(), 3), 1) * 1_000)
+    Process.send_after(self(), :renew_lease, max(div(Config.lease_ttl() * 1_000, 3), 1))
   end
 
   defp continue(state) do
