@@ -184,10 +184,12 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
        poll_interval: poll_interval,
        coordinator: coordinator,
        coordinator_state: coordinator.init([]),
-       # monitor ref -> %{pid, reservation, kind: :acquisition | :processor}.
-       # The task's pid arrives in the {:acquired, ...} message itself (R22.1);
-       # `kind` tells a task's entry from a processor's without consulting the
-       # coordinator.
+       # monitor ref -> %{pid, reservation}, for acquisition tasks and
+       # processors alike. The task's pid arrives in the {:acquired, ...}
+       # message itself (R22.1). Nothing needs to tell the two apart: a `:DOWN`
+       # releases its reservation only when no other ref still holds it, which
+       # is what separates a task that handed its reservation to a processor
+       # from one that did not, in whichever order the two `:DOWN`s arrive.
        refs: %{}
      }}
   end
@@ -269,7 +271,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
     cs = coordinator.processor_started(reservation, pid, cs)
     Lease.emit_acquisition_events(grant, info)
 
-    entry = %{pid: pid, reservation: reservation, kind: :processor}
+    entry = %{pid: pid, reservation: reservation}
     {:noreply, %{state | coordinator_state: cs, refs: Map.put(state.refs, ref, entry)}}
   end
 
@@ -322,7 +324,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
     case started do
       {:ok, pid} ->
         ref = Process.monitor(pid)
-        entry = %{pid: pid, reservation: reservation, kind: :acquisition}
+        entry = %{pid: pid, reservation: reservation}
 
         %{
           state

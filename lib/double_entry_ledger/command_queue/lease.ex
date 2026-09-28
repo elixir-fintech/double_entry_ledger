@@ -56,7 +56,8 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
     def message(%{grant: g}), do: "lease row for instance #{g.instance_id} is locked; timed out"
   end
 
-  @type release_reason :: :drained | :shutdown | :manual | :start_failed | :monitor_down
+  @type release_reason ::
+          :drained | :shutdown | :cleanup_stalled | :manual | :start_failed | :monitor_down
 
   @type acquire_info :: %{
           previous_owner_id: String.t() | nil,
@@ -112,7 +113,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
     coordination = Keyword.get(opts, :coordination, Config.coordination_strategy())
 
     result =
-      lease_transaction(repo, fn -> insert_or_take_over(instance_id, owner_id, ttl, repo) end)
+      lease_transaction(repo, fn -> acquire_unless_live(instance_id, owner_id, ttl, repo) end)
 
     case unwrap_rollback(result) do
       {:ok, {grant, info}} -> {:ok, %{grant | coordination: coordination}, info}
@@ -128,7 +129,46 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   defp unwrap_rollback({:error, reason}), do: reason
   defp unwrap_rollback(result), do: result
 
-  # The body of the lease transaction. A ledger that has never had a lease gets
+  # The body of the lease transaction, opened by a plain, lock-free read.
+  #
+  # A live lease is somebody's ledger, and a node that is not its owner still
+  # attempts it: `InstanceMonitor.wake/1` gates on the LOCAL Registry only, so
+  # every enqueue on a non-owning node lands here. Neither statement below can
+  # answer that cheaply. The insert-if-absent waits on another transaction's
+  # in-flight update of the conflicting row, and the owner's processing
+  # transactions hold exactly that update, so the probe would sit out the whole
+  # lock timeout and roll back `:held` or `:busy`, while the owner's next lock
+  # queued behind it. The read sees the committed row without waiting and
+  # rolls back `:held` at once, so discovery's live-lease filter and the wake
+  # path now agree.
+  #
+  # It only ever refuses. A row that is absent, released or expired here goes
+  # on to the insert and the `FOR UPDATE` read in `take_over/4`, which remain
+  # the authoritative decision. The cost is on the other side of the race: a
+  # lease released or expired after this read, while an owner's in-flight
+  # update still held it, is taken one poll later instead of after the wait.
+  defp acquire_unless_live(instance_id, owner_id, ttl, repo) do
+    if live_lease?(instance_id, repo),
+      do: repo.rollback(:held),
+      else: insert_or_take_over(instance_id, owner_id, ttl, repo)
+  end
+
+  # Unreleased and unexpired on the database clock, the ledgers discovery's
+  # query leaves out. `all/1` rather than `exists?/1` keeps the repo surface
+  # `acquire/4` needs to the calls it already makes.
+  defp live_lease?(instance_id, repo) do
+    from(l in CommandQueueLeaseRow,
+      prefix: ^@schema_prefix,
+      where:
+        l.instance_id == ^instance_id and is_nil(l.released_at) and
+          l.expires_at > fragment("timezone('UTC', clock_timestamp())"),
+      select: true
+    )
+    |> repo.all()
+    |> Enum.any?()
+  end
+
+  # A ledger that has never had a lease gets
   # its row inserted here and is claimed outright; otherwise the existing row is
   # contended for. Both paths end in `finish_acquire/4`, so the orphan rescue
   # and the closing refresh happen exactly once either way.

@@ -414,6 +414,23 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
       assert {:ok, %Grant{owner_id: "b", fencing_token: 2}, _} = Task.await(task, 5_000)
     end
 
+    # The wake path: a node that does not own the ledger enqueues, and its
+    # monitor attempts the owner's live lease while the owner's processing
+    # transaction holds the row. The insert-if-absent waits on that in-flight
+    # update, so without a lock-free read ahead of it this probe would sit out
+    # the whole lock timeout and then report `:busy`, with the owner's next
+    # lock queued behind it.
+    test "returns :held at once on a live lease whose row is locked, without waiting" do
+      put_queue_config(lease_lock_timeout_ms: 3_000)
+      probe = probe_connection()
+      grant = committed_lease(probe, "a", 1)
+      hold_lock_on_probe(probe, grant)
+
+      started = System.monotonic_time(:millisecond)
+      assert Lease.acquire(grant.instance_id, "b") == :held
+      assert System.monotonic_time(:millisecond) - started < 1_000
+    end
+
     test "returns :busy when the lock is held past the timeout, row unchanged" do
       put_queue_config(lease_lock_timeout_ms: 200)
       probe = probe_connection()
@@ -425,10 +442,15 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
       assert lease_row(grant.instance_id).owner_id == "a"
     end
 
+    # The committed row is expired but unreleased, so the lock-free read ahead of
+    # the insert lets the acquisition through to wait on the lock; a live row
+    # would be refused `:held` without waiting. `takeover: false` can then only
+    # come from the release the `FOR UPDATE` read found, not from that snapshot.
     test "a release committed after acquire started is read from the locked row" do
       put_queue_config(lease_lock_timeout_ms: 5_000)
       probe = probe_connection()
       grant = committed_lease(probe, "a", 1)
+      expire_lease_on_probe(probe, grant)
       hold_lock_on_probe(probe, grant)
 
       task = Task.async(fn -> Lease.acquire(grant.instance_id, "b") end)

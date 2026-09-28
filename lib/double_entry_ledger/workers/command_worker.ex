@@ -406,7 +406,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorker do
   > acquisition rescues orphans: **every** `:processing` row on that ledger,
   > whoever claimed it, is rescheduled to `:failed` — or `:dead_letter` once it
   > is at the retry limit — with an "orphaned by lease acquisition" error, by
-  > `CommandQueue.Scheduling.reschedule_orphaned_processing!/2`. That is the
+  > `CommandQueue.Lease.acquire/4` itself. That is the
   > point of acquisition: a `:processing` row under no live lease is by
   > definition stranded. But it means a manual call touches rows other than
   > the one named by `uuid`, and it will reschedule work a processor on this

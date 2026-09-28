@@ -119,7 +119,9 @@ project follows [Semantic Versioning](https://semver.org/).
   event. An `InstanceProcessor` that cannot make its post-task cleanup write
   because the lease row stays locked now gives the ledger up after a bounded
   number of retries, emitting this event, rather than retrying forever while
-  holding the lease and dispatching nothing. The next owner's acquisition
+  holding the lease and dispatching nothing. Its lease release then reports
+  `reason: :cleanup_stalled` on `[:lease, :released]` rather than
+  `:shutdown`. The next owner's acquisition
   reschedules whatever the stalled owner left `:processing` — though not
   necessarily at once, since the same lock holder blocks that acquisition too.
 - Opt-in `serialize_enqueue` configuration (runtime, default `false`). When

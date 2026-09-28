@@ -204,7 +204,7 @@ succeeds. It has no metadata and carries these measurements:
 |---|---|
 | `instance_id` | Instance UUID that was being processed |
 
-**`[:double_entry_ledger, :instance_processor, :cleanup_stalled]`** — emitted when an `InstanceProcessor` gives the ledger up because the lease row stayed locked across every retry of a cleanup write it owed a queue row. **Alert on this**: it means something that is not a successor is holding the lease row. The rows the processor left `:processing` are rescheduled by the next owner's acquisition, but not necessarily at once — the same lock holder blocks that acquisition too.
+**`[:double_entry_ledger, :instance_processor, :cleanup_stalled]`** — emitted when an `InstanceProcessor` gives the ledger up because the lease row stayed locked across every retry of a cleanup write it owed a queue row. **Alert on this**: it means something that is not a successor is holding the lease row. The rows the processor left `:processing` are rescheduled by the next owner's acquisition, but not necessarily at once — the same lock holder blocks that acquisition too. The processor's own release, when the row lets it through, reports `reason: :cleanup_stalled` on `[:lease, :released]`.
 
 | Metadata | Description |
 |---|---|
@@ -231,7 +231,7 @@ order relative to each other and to command events. `acquired` comes from the
 `InstanceMonitor`, or from the caller of a manual
 `CommandWorker.process_command_with_id/2`. `renewed` and `lost` come from the
 `InstanceProcessor`. `released` comes from the processor (`:drained`,
-`:shutdown`), from the acquisition task (`:start_failed`, `:monitor_down`), or
+`:shutdown`, `:cleanup_stalled`), from the acquisition task (`:start_failed`, `:monitor_down`), or
 from the manual caller (`:manual`). Correlate by `owner_id` and
 `fencing_token` rather than by arrival order. A ledger's first lease starts at
 `fencing_token` 1, and every later acquisition of its row increments it, an
@@ -276,7 +276,7 @@ orderly handover after a release as well as a takeover of an expired lease.
 | `owner_id` | Owner id |
 | `fencing_token` | Fencing token |
 | `coordination` | `:database_polling` or `:manual` |
-| `reason` | `:drained`, `:shutdown`, `:manual`, `:start_failed`, or `:monitor_down` (the acquisition task saw the monitor die before replying) |
+| `reason` | `:drained`, `:shutdown`, `:cleanup_stalled` (the processor gave the ledger up after a cleanup stayed busy, following `[:instance_processor, :cleanup_stalled]`), `:manual`, `:start_failed`, or `:monitor_down` (the acquisition task saw the monitor die before replying) |
 
 ## Defensive Error Handling
 
