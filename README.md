@@ -162,7 +162,13 @@ them over on its next poll, rescheduling any command the dead node left
 `:processing`. Typical detection time is `lease_ttl + poll_interval` (25 s with
 the defaults); completing the takeover also depends on pool checkout and how
 many in-flight commands must be rescheduled, so treat that as typical, not
-guaranteed. `max_leases_per_node` caps how many ledgers one node works at once
+guaranteed. It also assumes PostgreSQL notices the dead node: a node lost with
+a half-open socket (a host crash or a network partition) while one of its
+transactions holds the lease row keeps that row lock until PostgreSQL detects
+the dead client, and until then every successor's acquisition returns `:busy`,
+for a time not bounded by `lease_ttl`. See "What is still open" under
+[Running on several nodes](#running-on-several-nodes) for the settings that
+bound it. `max_leases_per_node` caps how many ledgers one node works at once
 and `max_concurrent_acquisitions` caps acquisition tasks per node; both count
 supervised processors and acquisitions only. Manual processing via
 `CommandWorker.process_command_with_id/2` with a string prefix takes a short
@@ -435,10 +441,37 @@ What is still open across several nodes:
   differently depending on which node picked it up; and `serialize_enqueue`
   only delivers commit-order queue positions if every node that enqueues sets
   it. Deploy the `:command_queue` list consistently.
+- **A half-open connection holds the lease row lock until PostgreSQL notices.**
+  If a node's host dies or is partitioned away while one of its transactions
+  holds the lease row lock, PostgreSQL keeps that lock until it detects the
+  dead client, and every successor's acquisition returns `:busy` for that
+  whole time. That `:busy` is not bounded by `lease_ttl`: the expiry is only
+  read by a transaction that gets the row. PostgreSQL enables TCP keepalive
+  on every client connection but leaves the timing to the operating system
+  (`tcp_keepalives_idle = 0`), which on Linux means a first probe after two
+  hours of silence, and `idle_in_transaction_session_timeout` is off (`0`) by
+  default, so out of the box that is over two hours. For the
+  `lease_ttl + poll_interval` failover figure to hold, set
+  `idle_in_transaction_session_timeout` to a small multiple of `lease_ttl`
+  (for the role or database the ledger connects as) and/or lower the server's
+  `tcp_keepalives_idle`, `tcp_keepalives_interval` and `tcp_keepalives_count`
+  (or the operating system's). Keepalive only probes an idle socket: if the
+  server is still sending unacknowledged data to the dead client, detection
+  waits for the kernel's retransmission limit instead, about fifteen minutes
+  on Linux, and `idle_in_transaction_session_timeout` does not apply to a
+  backend that is mid-statement. The server's `tcp_user_timeout` (PostgreSQL
+  12 and later) bounds that case as well. These are all settings on the
+  PostgreSQL side: it is the server that must give up on the dead client. Client-side keepalive on
+  the repo (`socket_options: [keepalive: true]`; Postgrex sets none by
+  default) lets a live node notice a dead connection to the server, but it
+  cannot make the server drop a lock held by a node that is gone.
 - **Discovery is polling, with no cross-node notification.** Each node runs
   its own `InstanceMonitor` and its own discovery SELECT. `InstanceMonitor.wake/1`
   after an enqueue reaches the local monitor only; a command enqueued on one
   node still reaches another node's monitor through that node's next poll.
+  An enqueue on a node that does not own the ledger does not attempt to
+  acquire a live lease: the acquisition reads the lease row without locking
+  it first and backs off at once, rather than queueing behind the owner.
   Nothing tells the cluster that a node has gone; its ledgers are picked up
   when the lease expires and some node's poll comes round. Typical failover is
   therefore `lease_ttl + poll_interval` — 25 s with the defaults — and slower

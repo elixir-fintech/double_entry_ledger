@@ -322,6 +322,8 @@ defmodule DoubleEntryLedger.Telemetry do
   The rows the processor left `:processing` are rescheduled by the next owner's
   acquisition, but not necessarily at once: the same lock holder blocks that
   acquisition too, so until it lets go the successor backs off and retries.
+  The processor then releases its lease with `reason: :cleanup_stalled`, when
+  the row lets it.
 
   ## Metadata
     - `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`
@@ -356,7 +358,7 @@ defmodule DoubleEntryLedger.Telemetry do
   because another owner holds the ledger. Alert on this.
 
   ## Metadata
-    - `:instance_id`, `:owner_id`, `:fencing_token`
+    - `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`
     - `:source` - `:renewal`, `:claim`, or `:transaction`
   """
   @spec lease_lost(map()) :: :ok
@@ -366,9 +368,11 @@ defmodule DoubleEntryLedger.Telemetry do
   Emits a lease released event, after the release committed.
 
   ## Metadata
-    - `:instance_id`, `:owner_id`, `:fencing_token`
-    - `:reason` - `:drained`, `:shutdown`, `:manual`, `:start_failed`, or
-      `:monitor_down` (the acquisition task saw its monitor die before replying)
+    - `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`
+    - `:reason` - `:drained`, `:shutdown`, `:cleanup_stalled` (the processor
+      gave the ledger up after a cleanup stayed busy; see `cleanup_stalled/1`),
+      `:manual`, `:start_failed`, or `:monitor_down` (the acquisition task saw
+      its monitor die before replying)
   """
   @spec lease_released(map()) :: :ok
   def lease_released(metadata), do: execute([:double_entry_ledger, :lease, :released], metadata)

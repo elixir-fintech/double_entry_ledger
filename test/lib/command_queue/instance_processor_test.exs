@@ -279,6 +279,35 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
     |> Repo.update!()
   end
 
+  # Rolls the probe back from inside the processor, synchronously, at the one
+  # moment a test needs the lease row to come free: telemetry handlers run in
+  # the emitting process, so the processor's NEXT lease statement is the first
+  # to find the row unlocked. A timer in the test body could only guess at that
+  # window. `on_exit` detaches the handler before `hold_lock_on_probe/2`'s own
+  # rollback runs, and a second ROLLBACK on the probe is only a warning.
+  defp rollback_probe_on(event, probe, handler) do
+    handler_id = "rollback-probe-#{System.unique_integer([:positive])}"
+    :telemetry.attach(handler_id, event, handler, probe)
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+    :ok
+  end
+
+  @doc false
+  def rollback_probe_handler(_event, _measurements, _metadata, probe), do: rollback_probe(probe)
+
+  # Only a failed statement against the lease row: the release that timed out
+  # on the probe's lock. Every other repo query passes through untouched.
+  @doc false
+  def rollback_probe_on_lease_error(
+        _event,
+        _measurements,
+        %{source: "command_queue_leases", result: {:error, _}},
+        probe
+      ),
+      do: rollback_probe(probe)
+
+  def rollback_probe_on_lease_error(_event, _measurements, _metadata, _probe), do: :ok
+
   # Every {:attempt, id} the stubs sent, in the order they were sent. Recursive,
   # so it lives outside the test body, and draining rather than a run of
   # `assert_receive` is the point: a selective receive scans past messages that
@@ -1200,6 +1229,38 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       assert collect_attempts() == [first.id, first.id, second.id]
     end
 
+    # The mirror of the test above, and the common case: the CLAIM timed out on
+    # the lease row, so nothing was written and the row is still `:pending`.
+    # The revert finds nothing of this owner's to move and reverts nothing, yet
+    # the id was already popped off the buffer; it must still go back at the
+    # head, or the command runs only after every buffered one.
+    test "a busy claim requeues the command ahead of the buffered ones", %{
+      instance: instance,
+      command: first,
+      accounts: accounts
+    } do
+      put_queue_config(lease_lock_timeout_ms: 50)
+      second = insert_create_command(instance, accounts, 10)
+      test_pid = self()
+
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn id, _grant ->
+        send(test_pid, {:attempt, id})
+        {:error, :lease_busy}
+      end)
+      |> stub(:process_command_with_id, fn id, grant ->
+        send(test_pid, {:attempt, id})
+        {:ok, cmd} = Scheduling.claim_command_for_processing(id, grant)
+        Repo.update!(Scheduling.build_mark_as_processed(cmd))
+        {:ok, :done, :done}
+      end)
+
+      {_pid, ref} = start_processor(instance.id)
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5_000
+      assert collect_attempts() == [first.id, first.id, second.id]
+    end
+
     # Pinned by POSITION, the way `lease_fence_test.exs` pins the other fenced
     # writes: `lock!/3` and `refresh_locked!/3` issue the identical statement,
     # so only the order and count of lease-row writes can show the wrapper is
@@ -1322,6 +1383,60 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
                InstanceProcessor.start_link(instance_id: grant.instance_id, grant: grant)
 
       assert Exception.message(error) =~ "batch_size"
+    end
+
+    # The drain's release found the row locked, so the lease is still live on a
+    # ledger nobody is working. Termination must try once more rather than
+    # leave it to expire by TTL. The probe comes free the moment the first
+    # release times out, so only a second release can stamp the row.
+    test "a drain whose release is busy releases again on termination" do
+      put_queue_config(lease_lock_timeout_ms: 200)
+      probe = probe_connection()
+      grant = committed_lease(probe, "drain-owner:#{Ecto.UUID.generate()}", 1)
+      hold_lock_on_probe(probe, grant)
+
+      rollback_probe_on(
+        [:double_entry_ledger, :repo, :query],
+        probe,
+        &__MODULE__.rollback_probe_on_lease_error/4
+      )
+
+      released = attach_telemetry([:double_entry_ledger, :lease, :released])
+      {_pid, ref} = start_processor_with_grant(grant)
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5_000
+      assert_receive {:telemetry_event, ^released, _, _, %{reason: :drained}}, 1_000
+      assert lease_row(grant.instance_id).released_at
+    end
+
+    # A stall is not a shutdown, and a consumer alerting on `[:lease, :released]`
+    # must be able to tell the two apart. The probe is rolled back from the
+    # stall's own telemetry, so the release in `terminate/2` finds the row free.
+    test "a stalled cleanup releases the lease with :cleanup_stalled" do
+      put_queue_config(lease_lock_timeout_ms: 20)
+      probe = probe_connection()
+      grant = committed_lease(probe, "stall-release-owner:#{Ecto.UUID.generate()}", 1)
+      {:ok, _command} = create_command_on(grant.instance_id)
+
+      DoubleEntryLedger.MockCommandWorker
+      |> expect(:process_command_with_id, fn id, worker_grant ->
+        mark_processing(id, worker_grant.owner_id)
+        {:error, :lease_busy}
+      end)
+
+      hold_lock_on_probe(probe, grant)
+
+      rollback_probe_on(
+        [:double_entry_ledger, :instance_processor, :cleanup_stalled],
+        probe,
+        &__MODULE__.rollback_probe_handler/4
+      )
+
+      released = attach_telemetry([:double_entry_ledger, :lease, :released])
+      {_pid, ref} = start_processor_with_grant(grant)
+
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 5_000
+      assert_receive {:telemetry_event, ^released, _, _, %{reason: :cleanup_stalled}}, 1_000
     end
 
     # The retry above has no deadline of its own: whoever holds the lease row is

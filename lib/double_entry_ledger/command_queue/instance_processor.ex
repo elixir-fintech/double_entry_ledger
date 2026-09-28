@@ -124,6 +124,10 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
        grant: grant,
        lease_lost: false,
        released: false,
+       # What `terminate/2` reports if it has to release: `:shutdown` unless
+       # the processor stopped itself for a reason of its own — a drain whose
+       # release was busy, or a cleanup that stalled.
+       release_reason: :shutdown,
        worker: worker,
        batch_processor: batch_processor,
        # The one task this processor may have running, and everything about it:
@@ -169,8 +173,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
         )
 
         Telemetry.instance_processor_stop(%{instance_id: state.instance_id})
-        Lease.release(state.grant, :drained)
-        {:stop, :normal, %{state | released: true}}
+        drain_release(state)
 
       ids ->
         dispatch_pending(%{state | pending_ids: ids})
@@ -319,6 +322,16 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     {:noreply, state}
   end
 
+  # A busy release is not a release: the lease would stay live for up to
+  # `lease_ttl` on a ledger nobody is working. Leave `released` unset so
+  # `terminate/2` tries once more, still reporting `:drained`.
+  defp drain_release(state) do
+    case Lease.release(state.grant, :drained) do
+      :busy -> {:stop, :normal, %{state | release_reason: :drained}}
+      _released_or_noop -> {:stop, :normal, %{state | released: true}}
+    end
+  end
+
   @impl true
   def terminate(_reason, %{released: true}), do: :ok
   def terminate(_reason, %{lease_lost: true}), do: :ok
@@ -331,7 +344,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     Process.exit(pid, :kill)
 
     receive do
-      {:DOWN, ^ref, :process, ^pid, _} -> Lease.release(grant, :shutdown)
+      {:DOWN, ^ref, :process, ^pid, _} -> Lease.release(grant, state.release_reason)
     after
       5_000 ->
         Logger.warning("task for #{state.instance_id} did not stop; leaving the lease to expire")
@@ -340,8 +353,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     :ok
   end
 
-  def terminate(_reason, %{grant: grant}) do
-    Lease.release(grant, :shutdown)
+  def terminate(_reason, %{grant: grant, release_reason: reason}) do
+    Lease.release(grant, reason)
     :ok
   end
 
@@ -394,8 +407,9 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   # The bound is a stop rather than a shrug: the queue row is left `:processing`
   # under this owner, and the one thing that can rescue it is another owner's
   # acquisition, which reschedules every `:processing` row on the ledger. So
-  # giving up the ledger IS the escalation. `terminate/2` releases the lease,
-  # which stamps the row expired so a successor may acquire it.
+  # giving up the ledger IS the escalation. `terminate/2` releases the lease
+  # with `:cleanup_stalled`, which stamps the row expired so a successor may
+  # acquire it.
   #
   # Not a promise of immediate rescue. The lock holder this owner could not get
   # past blocks the successor's acquisition too, so until it lets go the
@@ -418,7 +432,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
       Lease.grant_metadata(state.grant, %{attempts: attempts, cleanup: elem(cleanup, 0)})
     )
 
-    {:stop, :normal, %{state | pending_cleanup: nil}}
+    {:stop, :normal, %{state | pending_cleanup: nil, release_reason: :cleanup_stalled}}
   end
 
   defp retry_or_give_up(cleanup, state) do
@@ -428,14 +442,26 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   end
 
   # The continuation decides what happens to the reverted ids (R13.1).
-  # :resume puts them back at the head of the queue; :fallback_to_single also
-  # flags them so a deterministically failing batch drains one at a time
-  # instead of being reassembled forever. Only ids actually reverted are
-  # touched, so rows a batch had committed are neither requeued nor flagged.
+  #
+  # :resume puts EVERY id of the revert back at the head of the queue, not only
+  # the reverted ones. A busy result is most often a busy CLAIM, which wrote
+  # nothing: the row is still `:pending`, the revert has nothing to move, and
+  # requeueing only `reverted` would drop a command that dispatch had already
+  # popped behind everything still buffered — a create overtaken by its update.
+  # Requeueing an id that was not reverted is harmless whatever its row holds:
+  # the claim is the only way back into processing, and its status and
+  # retry-deadline guards skip a row that is not claimable. That matters for
+  # the one busy result that can follow a committed write, a batch whose split
+  # committed its first half before the second half timed out on the lease row.
+  #
+  # :fallback_to_single requeues and flags only what was actually reverted, so
+  # a deterministically failing batch drains one at a time instead of being
+  # reassembled forever, and rows a batch had committed are neither requeued
+  # nor flagged.
   defp apply_continuation({:crash_retry, _id, _reason}, _reverted, state), do: state
 
-  defp apply_continuation({:revert, _ids, :resume}, reverted, state),
-    do: %{state | pending_ids: reverted ++ state.pending_ids}
+  defp apply_continuation({:revert, ids, :resume}, _reverted, state),
+    do: %{state | pending_ids: ids ++ state.pending_ids}
 
   defp apply_continuation({:revert, _ids, :fallback_to_single}, reverted, state) do
     %{

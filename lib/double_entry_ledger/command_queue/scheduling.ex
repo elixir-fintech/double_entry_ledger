@@ -60,7 +60,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   @processable_states QueryHelpers.processable_states()
 
   @typedoc """
-  A queue row that `reschedule_orphaned_processing!/2` moved out of
+  A queue row that a lease acquisition (`Lease.acquire/4`) moved out of
   `:processing`, paired with the `processor_id` it carried beforehand.
   """
   @type orphan :: {Command.t(), String.t() | nil}
@@ -313,14 +313,13 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     )
   end
 
-  @doc """
-  Loads the commands for `ids` with their `command_queue_item` preloaded,
-  preserving the order of `ids`. Commands that no longer exist are omitted.
-
-  The single-id case is `InstanceProcessor`'s cleanup reloading one row inside
-  its fenced transaction; the many-id case is the same processor filling a
-  batch window. One query rather than two that differ only by `==` versus `in`.
-  """
+  @doc false
+  # Loads the commands for `ids` with their `command_queue_item` preloaded,
+  # preserving the order of `ids`. Commands that no longer exist are omitted.
+  #
+  # The single-id case is `Cleanup` reloading one row inside its fenced
+  # transaction; the many-id case is `InstanceProcessor` filling a batch
+  # window. One query rather than two that differ only by `==` versus `in`.
   @spec load_commands([Ecto.UUID.t()], Ecto.Repo.t()) :: [Command.t()]
   def load_commands(ids, repo \\ Repo) do
     rows =
@@ -487,22 +486,24 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     end
   end
 
-  @doc """
-  Reschedules every `:processing` row on `instance_id`, whatever its
-  `processor_id`, as `:failed` with a zero retry delay, and returns one
-  `t:orphan/0` per row, lowest queue position first.
-
-  The previous `processor_id` is returned beside each command because the
-  reschedule nulls it on the row: the caller reports it on
-  `[:command, :recovered]` and has no other way to see it.
-
-  Called by `DoubleEntryLedger.CommandQueue.Lease.acquire/4` inside the
-  transaction that already holds the lease row lock, which proves no live
-  lease-aware owner exists, so every `:processing` row is an orphan (a dead
-  owner, a rolling deploy in progress, or a pre-lease manual call). Raises on
-  any failure, including `Ecto.StaleEntryError`, so the caller's transaction
-  rolls back. Emits nothing; the caller emits after commit.
-  """
+  @doc false
+  # Only inside `Lease.acquire/4`, like `Lease.refresh_locked!/3`: called
+  # anywhere else it reschedules a live owner's in-flight rows with no fence.
+  #
+  # Reschedules every `:processing` row on `instance_id`, whatever its
+  # `processor_id`, as `:failed` with a zero retry delay, and returns one
+  # `t:orphan/0` per row, lowest queue position first.
+  #
+  # The previous `processor_id` is returned beside each command because the
+  # reschedule nulls it on the row: the caller reports it on
+  # `[:command, :recovered]` and has no other way to see it.
+  #
+  # `Lease.acquire/4` calls it inside the transaction that already holds the
+  # lease row lock, which proves no live lease-aware owner exists, so every
+  # `:processing` row is an orphan (a dead owner, a rolling deploy in progress,
+  # or a pre-lease manual call). Raises on any failure, including
+  # `Ecto.StaleEntryError`, so the caller's transaction rolls back. Emits
+  # nothing; the caller emits after commit.
   @spec reschedule_orphaned_processing!(Ecto.UUID.t(), Ecto.Repo.t()) :: [orphan()]
   def reschedule_orphaned_processing!(instance_id, repo) do
     from(c in Command,
