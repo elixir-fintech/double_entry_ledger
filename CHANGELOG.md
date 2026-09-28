@@ -49,6 +49,10 @@ project follows [Semantic Versioning](https://semver.org/).
   generated `prefix_node_integer` on every dispatch.
 - `Command` has a virtual `lease_grant` field. `build_schedule_retry_with_reason`
   gains a `retry_delay` option. `InstanceProcessor.start_link/1` requires `:grant`.
+- `BatchProcessor.run_batch/2` raises `ArgumentError`, before reading or
+  writing anything, when its commands do not all carry the identical
+  `lease_grant` or when a command's grant is for another ledger. A batch whose
+  commands all carry no grant runs unfenced as before.
 - Failure reporting changed shape. The `error` metadata on
   `[:double_entry_ledger, :command, :dead_letter]` is now only the failure
   class, the text of the persisted message before its first `": "`; in 0.5.0 it

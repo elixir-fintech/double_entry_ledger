@@ -1134,6 +1134,29 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessorTest do
       Process.exit(pid, :kill)
     end
 
+    # A one-second lease must renew well before it expires. The processor is
+    # parked idle until 700 ms after it started, so a heartbeat timer that
+    # fires inside that window is handled idle and renews at once.
+    test "a one-second lease renews within 700 ms", %{instance: instance} do
+      put_queue_config(lease_ttl: 1)
+
+      DoubleEntryLedger.MockCommandWorker
+      |> stub(:process_command_with_id, blocking_worker(self()))
+
+      started_at = System.monotonic_time(:millisecond)
+      {pid, _ref} = start_processor(instance.id)
+      assert_receive {:worker_blocking, task}, 2_000
+
+      elapsed = System.monotonic_time(:millisecond) - started_at
+      park_idle_for_timer(pid, task, max(700 - elapsed, 0))
+      renewed = attach_telemetry([:double_entry_ledger, :lease, :renewed])
+      :sys.resume(pid)
+
+      assert_receive {:telemetry_event, ^renewed, _, _, _}, 100
+      Process.unlink(pid)
+      Process.exit(pid, :kill)
+    end
+
     test "heartbeat :lost while idle stops without release", %{instance: instance} do
       DoubleEntryLedger.MockCommandWorker
       |> stub(:process_command_with_id, blocking_worker(self()))

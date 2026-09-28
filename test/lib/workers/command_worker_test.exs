@@ -11,7 +11,7 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.LeaseFixtures
 
-  alias DoubleEntryLedger.CommandQueueItem
+  alias DoubleEntryLedger.{CommandQueueItem, JournalEvent, Transaction}
   alias DoubleEntryLedger.Stores.CommandStore
 
   alias DoubleEntryLedger.Workers.CommandWorker
@@ -159,6 +159,20 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
       assert {:ok, _, _} = CommandWorker.process_command_with_id(command.id, grant)
       assert Repo.get_by(CommandQueueItem, command_id: command.id).processor_id == grant.owner_id
+    end
+
+    test "with another ledger's grant, returns an error and writes nothing", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      other = instance_fixture(address: "other:ledger:address")
+      grant = test_grant(other.id)
+
+      assert {:error, _reason} = CommandWorker.process_command_with_id(command.id, grant)
+
+      assert Repo.aggregate(from(j in JournalEvent, where: j.command_id == ^command.id), :count) ==
+               0
+
+      assert Repo.aggregate(Transaction, :count) == 0
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :pending
     end
   end
 

@@ -249,7 +249,11 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
   The lease row lock is the only concurrency check; the queue row carries no
   fence of its own. The status and retry-time guards in the UPDATE skip a
-  command that is not claimable or is rescheduled for a future retry.
+  command that is not claimable or is rescheduled for a future retry, and the
+  ledger guard skips a command on any ledger other than the grant's: the lease
+  lock fences only the grant's own ledger, so a row from another one must never
+  be claimed under it. The guard is part of the UPDATE rather than a check
+  beforehand, so it cannot race.
 
   Returns the subset of `commands` that were actually claimed, in the same
   order, each with a refreshed `command_queue_item` and `lease_grant` set to
@@ -266,7 +270,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
 
     {_count, claimed_items} =
       Lease.with_grant(grant, repo, fn repo ->
-        repo.update_all(claim_query(ids, grant.owner_id), [])
+        repo.update_all(claim_query(ids, grant), [])
       end)
 
     items_by_command_id = Map.new(claimed_items, &{&1.command_id, &1})
@@ -292,10 +296,10 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     claimed_commands
   end
 
-  defp claim_query(ids, processor_id) do
+  defp claim_query(ids, %Grant{instance_id: instance_id, owner_id: processor_id}) do
     from(eqi in CommandQueueItem,
       prefix: ^@schema_prefix,
-      where: eqi.command_id in ^ids and retry_eligible(eqi),
+      where: eqi.command_id in ^ids and eqi.instance_id == ^instance_id and retry_eligible(eqi),
       update: [
         set: [
           status: :processing,

@@ -416,6 +416,37 @@ defmodule DoubleEntryLedger.CommandQueue.SchedulingTest do
       assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :pending
     end
 
+    # A grant fences only its own ledger: every lease lock in the claim
+    # transaction is on the grant's lease row, so a command from another
+    # ledger claimed under it would be processed with no fence on its ledger.
+    test "a grant for one ledger does not claim a command from another", %{instance: instance} do
+      other = instance_fixture(address: "other:ledger:address")
+      grant = test_grant(other.id)
+
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      assert {:error, :command_not_claimable} =
+               Scheduling.claim_command_for_processing(command.id, grant)
+
+      item = Repo.get_by(CommandQueueItem, command_id: command.id)
+      assert item.status == :pending
+      assert item.processor_id == nil
+    end
+
+    test "a batch claim under one ledger's grant skips another ledger's command", %{
+      instance: instance
+    } do
+      other = instance_fixture(address: "other:ledger:address")
+      grant = test_grant(other.id)
+
+      {:ok, command} =
+        CommandStore.create(transaction_command_attrs(instance_address: instance.address))
+
+      assert [] = Scheduling.claim_batch_for_processing([command], grant)
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :pending
+    end
+
     test "runs the claim between a lease lock and a lease refresh", %{instance: instance} do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
