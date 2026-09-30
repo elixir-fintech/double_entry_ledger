@@ -753,7 +753,7 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
 
     # `lease_transaction/2` sets the lease lock timeout and stops there. It
     # cannot be checked by counting writes or by reading the row back: what was
-    # removed is a `SELECT current_setting('lock_timeout')` and the `SET LOCAL`
+    # removed is a `SELECT current_setting('lock_timeout')` and the `set_config`
     # that put the caller's value back, neither of which writes anything. Only
     # the full statement stream shows them, hence `query_sequence/2` rather than
     # `write_sequence/2`. Six statements before, four now.
@@ -771,7 +771,7 @@ defmodule DoubleEntryLedger.CommandQueue.LeaseTest do
 
       assert query_sequence(ref) == [
                "begin",
-               "SET LOCAL",
+               "SELECT set_config('lock_timeout',",
                ~s(UPDATE "#{@prefix}"."command_queue_leases"),
                "commit"
              ]

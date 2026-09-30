@@ -194,8 +194,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   of being retried as routine contention (R11.2).
 
   Note that only the wait for the lease row is bounded.
-  `Lease.with_lock_timeout/2` restores the caller's `lock_timeout` before
-  `lock!/3` returns, so the claim UPDATE waits on queue rows with the
+  `Lease.lock!/3` restores the caller's `lock_timeout` before it returns, so the claim UPDATE waits on queue rows with the
   connection default, which is normally unlimited. Every queue-row writer now
   takes the lease row first, so that wait is bounded by the holder's own
   transaction rather than by an unfenced writer.

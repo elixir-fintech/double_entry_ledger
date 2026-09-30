@@ -335,7 +335,7 @@ defmodule DoubleEntryLedger.LeaseFixtures do
 
   The broad counterpart to `write_sequence/2`, which keeps only writes. Some
   costs are not writes: `SELECT current_setting('lock_timeout')` and the two
-  `SET LOCAL` statements around a fenced transaction are round trips that no
+  `set_config` calls around a fenced transaction are round trips that no
   write count and no row state can see, so removing one is invisible to
   `lease_update_count/1` and visible only here.
 

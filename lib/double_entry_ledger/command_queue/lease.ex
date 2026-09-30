@@ -588,7 +588,6 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
     )
   end
 
-  @doc false
   # Own transaction under the lease lock timeout: `{:ok, result}` or `:busy`.
   #
   # Sets the timeout and stops there — no read of the previous value, no
@@ -612,7 +611,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   # rather than the connection default, until the sandbox rolls back at the end
   # of that test. Nothing leaks between tests, and production never sees it
   # because there is no enclosing transaction there to leak into.
-  def lease_transaction(repo, fun) do
+  defp lease_transaction(repo, fun) do
     repo.transaction(fn ->
       set_lease_lock_timeout(repo)
       fun.()
@@ -628,7 +627,6 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
 
   defp transient?(_), do: false
 
-  @doc false
   # SET LOCAL for the statements in `fun`, then the caller's value is put back.
   #
   # The restore has to run on the raising paths too, and they are not alike.
@@ -639,7 +637,7 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
   # itself fail with 25P02 and, raised from the unwinding path, would replace
   # the in-flight error and hide `BusyError`; the SET dies with the rollback
   # anyway. Hence the split rescue rather than a blanket `after`.
-  def with_lock_timeout(repo, fun) do
+  defp with_lock_timeout(repo, fun) do
     %{rows: [[previous]]} = repo.query!("SELECT current_setting('lock_timeout')", [])
     set_lease_lock_timeout(repo)
 
@@ -659,13 +657,15 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
     end
   end
 
-  defp set_lease_lock_timeout(repo) do
-    repo.query!("SET LOCAL lock_timeout = '#{Config.lease_lock_timeout_ms()}ms'", [])
-    :ok
-  end
+  defp set_lease_lock_timeout(repo),
+    do: set_local_lock_timeout(repo, "#{Config.lease_lock_timeout_ms()}ms")
 
-  defp restore_lock_timeout(repo, previous) do
-    repo.query!("SET LOCAL lock_timeout = '#{previous}'", [])
+  defp restore_lock_timeout(repo, previous), do: set_local_lock_timeout(repo, previous)
+
+  # `set_config(..., true)` is `SET LOCAL` with the value as a bound parameter,
+  # so nothing is interpolated into the SQL.
+  defp set_local_lock_timeout(repo, value) do
+    repo.query!("SELECT set_config('lock_timeout', $1, true)", [value])
     :ok
   end
 
