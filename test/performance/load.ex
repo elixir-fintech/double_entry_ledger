@@ -38,11 +38,11 @@ defmodule DoubleEntryLedger.LoadTesting do
   """
 
   alias DoubleEntryLedger.{Account, Balance, Instance, Repo}
-  alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Apis.CommandApi
-  alias DoubleEntryLedger.CommandQueue.InstanceProcessor
+  alias DoubleEntryLedger.Command.TransactionCommandMap
+  alias DoubleEntryLedger.CommandQueue.{InstanceProcessor, Lease}
   alias DoubleEntryLedger.LoadTesting.TelemetryCollector
+  alias DoubleEntryLedger.Workers.CommandWorker
   @destination_accounts 10
   @drain_prefill_concurrency 10
   # Function to run a single transaction process
@@ -224,25 +224,12 @@ defmodule DoubleEntryLedger.LoadTesting do
     )
 
     # ── Drain phase (measured) ──────────────────────────────────────────
-    # The InstanceProcessor uses a Registry-keyed via_tuple. Start the
-    # Registry locally for the test if the queue's own supervision isn't
-    # running (which is the perf-env default).
     ensure_command_queue_registry_started()
 
     TelemetryCollector.start()
 
     drain_start = System.monotonic_time(:millisecond)
-    {:ok, processor_pid} = InstanceProcessor.start_link(instance_id: instance.id)
-    ref = Process.monitor(processor_pid)
-
-    receive do
-      {:DOWN, ^ref, :process, _pid, :normal} ->
-        :ok
-
-      {:DOWN, ^ref, :process, _pid, reason} ->
-        raise "InstanceProcessor crashed: #{inspect(reason)}"
-    end
-
+    drain_phase(instance)
     drain_elapsed = (System.monotonic_time(:millisecond) - drain_start) / 1000.0
     drain_tps = prefill_count / drain_elapsed
 
@@ -383,7 +370,32 @@ defmodule DoubleEntryLedger.LoadTesting do
   end
 
   defp drain_phase(instance) do
-    {:ok, processor_pid} = InstanceProcessor.start_link(instance_id: instance.id)
+    await_drain(start_leased_processor(instance), instance.address)
+    :ok
+  end
+
+  # Acquire the ledger's lease, then hand it to the processor. Acquisition is
+  # the `InstanceMonitor`'s job in production and the processor refuses to
+  # start without a grant, so every entry point here that starts a processor
+  # directly has to do the monitor's half first.
+  #
+  # Nothing releases the grant here: the processor holds it for its whole
+  # lifetime and releases it itself on drain (`:drained`) or shutdown
+  # (`:shutdown`). Releasing it from the caller would be a second release of a
+  # lease this process no longer owns. A processor that dies without releasing
+  # leaves the lease to expire by TTL, and these tasks drop the database
+  # afterwards anyway.
+  defp start_leased_processor(instance) do
+    {:ok, grant, info} = Lease.acquire(instance.id, Lease.owner_id())
+    Lease.emit_acquisition_events(grant, info)
+
+    {:ok, processor_pid} =
+      InstanceProcessor.start_link(instance_id: instance.id, grant: grant)
+
+    processor_pid
+  end
+
+  defp await_drain(processor_pid, label) do
     ref = Process.monitor(processor_pid)
 
     receive do
@@ -391,16 +403,26 @@ defmodule DoubleEntryLedger.LoadTesting do
         :ok
 
       {:DOWN, ^ref, :process, _pid, reason} ->
-        raise "InstanceProcessor crashed: #{inspect(reason)}"
+        raise "InstanceProcessor for #{label} crashed: #{inspect(reason)}"
     end
   end
 
+  # The processor needs the queue's Registry (its via_tuple name) and the
+  # WorkerSupervisor (where it starts its single-command and batch tasks).
+  # Neither is running under `start_command_queue: false`, which is the perf
+  # default, so start them locally and linked to the task process.
   defp ensure_command_queue_registry_started do
-    case Registry.start_link(keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> :ok
-    end
+    ensure_started(
+      Registry.start_link(keys: :unique, name: DoubleEntryLedger.CommandQueue.Registry)
+    )
+
+    ensure_started(
+      Task.Supervisor.start_link(name: DoubleEntryLedger.CommandQueue.WorkerSupervisor)
+    )
   end
+
+  defp ensure_started({:ok, _pid}), do: :ok
+  defp ensure_started({:error, {:already_started, _pid}}), do: :ok
 
   @doc """
   Runs `n_instances` `InstanceProcessor`s in parallel, each draining
@@ -578,17 +600,7 @@ defmodule DoubleEntryLedger.LoadTesting do
   # closure.
   defp drive_one_processor(instance) do
     start_ms = System.monotonic_time(:millisecond)
-    {:ok, processor_pid} = InstanceProcessor.start_link(instance_id: instance.id)
-    ref = Process.monitor(processor_pid)
-
-    receive do
-      {:DOWN, ^ref, :process, _pid, :normal} ->
-        :ok
-
-      {:DOWN, ^ref, :process, _pid, reason} ->
-        raise "InstanceProcessor for #{instance.address} crashed: #{inspect(reason)}"
-    end
-
+    await_drain(start_leased_processor(instance), instance.address)
     end_ms = System.monotonic_time(:millisecond)
 
     %{
@@ -647,19 +659,17 @@ defmodule DoubleEntryLedger.LoadTesting do
 
     workers =
       Enum.map(0..(concurrency - 1), fn worker_id ->
-        spawn_link(fn ->
-          worker_loop(
-            parent,
-            instance,
-            transaction_lists,
-            num_rounds,
-            worker_id,
-            0,
-            0,
-            end_time,
-            worker_fn
-          )
-        end)
+        worker = %{
+          parent: parent,
+          instance: instance,
+          transaction_lists: transaction_lists,
+          num_rounds: num_rounds,
+          worker_id: worker_id,
+          end_time: end_time,
+          worker_fn: worker_fn
+        }
+
+        spawn_link(fn -> worker_loop(worker, 0, 0) end)
       end)
 
     collect_results(MapSet.new(workers), 0)
@@ -668,44 +678,26 @@ defmodule DoubleEntryLedger.LoadTesting do
   # Each worker is bound to a fixed source account (its worker_id). Across
   # iterations it cycles through the @destination_accounts destination accounts
   # for that source, mirroring the slot the original barrier-based driver would
-  # have placed it in. `worker_fn` is the per-iteration unit of work.
-  defp worker_loop(
-         parent,
-         instance,
-         transaction_lists,
-         num_rounds,
-         worker_id,
-         iter,
-         success_count,
-         end_time,
-         worker_fn
-       ) do
-    if System.monotonic_time(:millisecond) >= end_time do
-      send(parent, {:worker_done, self(), success_count})
+  # have placed it in. `worker.worker_fn` is the per-iteration unit of work;
+  # the fixed per-worker settings travel in the `worker` map, only `iter` and
+  # `success_count` change between iterations.
+  defp worker_loop(worker, iter, success_count) do
+    if System.monotonic_time(:millisecond) >= worker.end_time do
+      send(worker.parent, {:worker_done, self(), success_count})
     else
       params =
-        transaction_lists
-        |> Enum.at(rem(iter, num_rounds))
-        |> Enum.at(worker_id)
+        worker.transaction_lists
+        |> Enum.at(rem(iter, worker.num_rounds))
+        |> Enum.at(worker.worker_id)
 
       delta =
-        case worker_fn.(instance, params) do
+        case worker.worker_fn.(worker.instance, params) do
           {:ok, _, _} -> 1
           {:ok, _} -> 1
           _ -> 0
         end
 
-      worker_loop(
-        parent,
-        instance,
-        transaction_lists,
-        num_rounds,
-        worker_id,
-        iter + 1,
-        success_count + delta,
-        end_time,
-        worker_fn
-      )
+      worker_loop(worker, iter + 1, success_count + delta)
     end
   end
 

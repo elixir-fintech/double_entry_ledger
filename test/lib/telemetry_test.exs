@@ -11,10 +11,12 @@ defmodule DoubleEntryLedger.TelemetryTest do
   import DoubleEntryLedger.InstanceFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.CommandFixtures
+  import DoubleEntryLedger.LeaseFixtures, only: [test_grant: 1]
 
-  alias DoubleEntryLedger.Telemetry, as: LedgerTelemetry
-  alias DoubleEntryLedger.Stores.{CommandStore, InstanceStore}
   alias DoubleEntryLedger.Apis.CommandApi
+  alias DoubleEntryLedger.CommandQueue.Scheduling
+  alias DoubleEntryLedger.Stores.{CommandStore, InstanceStore}
+  alias DoubleEntryLedger.Telemetry, as: LedgerTelemetry
 
   describe "command_enqueue" do
     setup [:create_instance, :create_accounts]
@@ -39,15 +41,14 @@ defmodule DoubleEntryLedger.TelemetryTest do
       {:ok, command} =
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
-      {:ok, _claimed} =
-        DoubleEntryLedger.CommandQueue.Scheduling.claim_command_for_processing(
-          command.id,
-          "test_processor"
-        )
+      grant = test_grant(instance.id)
+      owner_id = grant.owner_id
+
+      {:ok, _claimed} = Scheduling.claim_command_for_processing(command.id, grant)
 
       assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :command, :claim],
                       %{system_time: _},
-                      %{command_id: _, instance_id: _, processor_id: "test_processor"}}
+                      %{command_id: _, instance_id: _, processor_id: ^owner_id}}
     end
   end
 
@@ -61,7 +62,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       assert {:error, _updated_command} =
-               DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
+               Scheduling.schedule_retry_with_reason(
                  command,
                  "test error",
                  :failed
@@ -83,7 +84,7 @@ defmodule DoubleEntryLedger.TelemetryTest do
         CommandStore.create(transaction_command_attrs(instance_address: instance.address))
 
       assert {:error, _updated_command} =
-               DoubleEntryLedger.CommandQueue.Scheduling.mark_as_dead_letter(
+               Scheduling.mark_as_dead_letter(
                  command,
                  "terminal error"
                )
@@ -313,6 +314,89 @@ defmodule DoubleEntryLedger.TelemetryTest do
     end
   end
 
+  describe "lease events" do
+    test "lease_acquired/1 emits with metadata" do
+      ref = attach_telemetry([:double_entry_ledger, :lease, :acquired])
+
+      LedgerTelemetry.lease_acquired(%{
+        instance_id: "i",
+        owner_id: "o",
+        fencing_token: 1,
+        takeover: false,
+        previous_owner_id: nil,
+        orphans: 0
+      })
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :lease, :acquired],
+                      %{system_time: _}, %{owner_id: "o", fencing_token: 1, takeover: false}}
+    end
+
+    test "lease_renewed/1 emits with owner and token" do
+      ref = attach_telemetry([:double_entry_ledger, :lease, :renewed])
+      LedgerTelemetry.lease_renewed(%{instance_id: "i", owner_id: "o", fencing_token: 1})
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :lease, :renewed],
+                      %{system_time: _}, %{owner_id: "o", fencing_token: 1}}
+    end
+
+    test "lease_lost/1 emits with source" do
+      ref = attach_telemetry([:double_entry_ledger, :lease, :lost])
+
+      LedgerTelemetry.lease_lost(%{
+        instance_id: "i",
+        owner_id: "o",
+        fencing_token: 1,
+        source: :renewal
+      })
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :lease, :lost],
+                      %{system_time: _}, %{source: :renewal}}
+    end
+
+    test "lease_released/1 emits with reason" do
+      ref = attach_telemetry([:double_entry_ledger, :lease, :released])
+
+      LedgerTelemetry.lease_released(%{
+        instance_id: "i",
+        owner_id: "o",
+        fencing_token: 1,
+        reason: :drained
+      })
+
+      assert_receive {:telemetry_event, ^ref, [:double_entry_ledger, :lease, :released],
+                      %{system_time: _}, %{reason: :drained}}
+    end
+
+    test "dashboard_metrics/0 counts the four lease events" do
+      names = Enum.map(LedgerTelemetry.dashboard_metrics(), & &1.name)
+
+      assert [:double_entry_ledger, :lease, :acquired, :system_time] in names
+      assert [:double_entry_ledger, :lease, :renewed, :system_time] in names
+      assert [:double_entry_ledger, :lease, :lost, :system_time] in names
+      assert [:double_entry_ledger, :lease, :released, :system_time] in names
+    end
+
+    test "dashboard_metrics/0 tags the four lease counters" do
+      metrics = LedgerTelemetry.dashboard_metrics()
+
+      acquired =
+        Enum.find(metrics, &(&1.name == [:double_entry_ledger, :lease, :acquired, :system_time]))
+
+      renewed =
+        Enum.find(metrics, &(&1.name == [:double_entry_ledger, :lease, :renewed, :system_time]))
+
+      lost = Enum.find(metrics, &(&1.name == [:double_entry_ledger, :lease, :lost, :system_time]))
+
+      released =
+        Enum.find(metrics, &(&1.name == [:double_entry_ledger, :lease, :released, :system_time]))
+
+      assert acquired.tags == [:takeover]
+      assert renewed.tags == []
+      assert lost.tags == [:source]
+      assert released.tags == [:reason]
+    end
+  end
+
   describe "defensive error handling" do
     test "emit_transaction swallows exceptions on malformed input" do
       # Missing required fields on the struct should not crash
@@ -339,11 +423,49 @@ defmodule DoubleEntryLedger.TelemetryTest do
 
   if Code.ensure_loaded?(Telemetry.Metrics) do
     describe "dashboard_metrics/0" do
-      test "returns a list of Telemetry.Metrics structs" do
-        metrics = LedgerTelemetry.dashboard_metrics()
-        assert is_list(metrics)
-        assert length(metrics) > 0
-        assert Enum.all?(metrics, &is_struct/1)
+      test "exposes a metric for every documented ledger event" do
+        names = Enum.map(LedgerTelemetry.dashboard_metrics(), & &1.name)
+
+        expected = [
+          [:double_entry_ledger, :command, :process, :stop, :duration],
+          [:double_entry_ledger, :command, :enqueue, :system_time],
+          [:double_entry_ledger, :command, :claim, :system_time],
+          [:double_entry_ledger, :command, :retry, :system_time],
+          [:double_entry_ledger, :command, :dead_letter, :system_time],
+          [:double_entry_ledger, :command, :recovered, :system_time],
+          [:double_entry_ledger, :command, :idempotency_hit, :system_time],
+          [:double_entry_ledger, :occ, :retry, :system_time],
+          [:double_entry_ledger, :transaction, :created, :system_time],
+          [:double_entry_ledger, :transaction, :posted, :system_time],
+          [:double_entry_ledger, :transaction, :archived, :system_time],
+          [:double_entry_ledger, :account, :created, :system_time],
+          [:double_entry_ledger, :account, :updated, :system_time],
+          [:double_entry_ledger, :instance, :created, :system_time]
+        ]
+
+        assert [] == expected -- names
+      end
+
+      test "builds only counter and summary metrics" do
+        kinds =
+          LedgerTelemetry.dashboard_metrics()
+          |> Enum.map(& &1.__struct__)
+          |> Enum.uniq()
+          |> Enum.sort()
+
+        assert kinds == [Telemetry.Metrics.Counter, Telemetry.Metrics.Summary]
+      end
+
+      test "reports command processing duration as a millisecond summary" do
+        duration =
+          Enum.find(
+            LedgerTelemetry.dashboard_metrics(),
+            &(&1.name == [:double_entry_ledger, :command, :process, :stop, :duration])
+          )
+
+        assert duration.unit == :millisecond
+        assert duration.tags == [:action, :source]
+        assert duration.event_name == [:double_entry_ledger, :command, :process, :stop]
       end
     end
   end

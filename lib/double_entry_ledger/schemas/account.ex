@@ -55,8 +55,8 @@ defmodule DoubleEntryLedger.Account do
     BalanceHistoryEntry,
     Entry,
     Instance,
-    Types,
-    JournalEvent
+    JournalEvent,
+    Types
   }
 
   alias DoubleEntryLedger.Utils.Currency
@@ -119,8 +119,9 @@ defmodule DoubleEntryLedger.Account do
           updated_at: DateTime.t() | nil
         }
 
-  @derive {
-    Flop.Schema,
+  use Flop.Schema
+
+  @flop_options [
     filterable: [:type, :currency, :address],
     sortable: [:inserted_at, :id, :address, :type, :currency],
     default_limit: 40,
@@ -129,7 +130,7 @@ defmodule DoubleEntryLedger.Account do
       order_by: [:inserted_at, :id],
       order_directions: [:desc, :desc]
     }
-  }
+  ]
 
   schema "accounts" do
     field(:currency, Ecto.Enum, values: @currency_atoms)
@@ -638,7 +639,8 @@ defmodule DoubleEntryLedger.Account do
     |> optimistic_lock(:lock_version)
   end
 
-  # if the normal_balance is already set, do nothing. This allows for the setup of accounts with a specific normal_balance
+  # if the normal_balance is already set, do nothing. This allows for the setup of accounts
+  # with a specific normal_balance
   # such as contra accounts and similar
   @spec set_normal_balance_based_on_type(Changeset.t()) :: Changeset.t()
   defp set_normal_balance_based_on_type(%{changes: %{normal_balance: nb}} = changeset)

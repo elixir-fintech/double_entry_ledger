@@ -36,12 +36,12 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   import DoubleEntryLedger.Workers.CommandWorker.TransactionCommandMapResponseHandler,
     only: [default_response_handler: 2]
 
+  alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.JournalEvent
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
-  alias DoubleEntryLedger.Command.TransactionCommandMap
   alias DoubleEntryLedger.Workers.CommandWorker
 
-  alias Ecto.{Multi, Changeset}
+  alias Ecto.{Changeset, Multi}
 
   @impl true
   defdelegate handle_occ_final_timeout(command_map, repo),

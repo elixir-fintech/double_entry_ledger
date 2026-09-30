@@ -20,9 +20,15 @@ defmodule Mix.Tasks.DoubleEntryLedger.Install do
       # Upgrade from v0.1.0 (apply all changes after version 1)
       mix double_entry_ledger.install --from 1
 
-      # Upgrade from v0.4.x (apply versions 5 through 7)
+      # Upgrade from v0.4.x (apply versions 5 and 6)
       mix double_entry_ledger.install --from 4
 
+      # Upgrade from v0.5.x (apply version 6)
+      mix double_entry_ledger.install --from 5
+
+  The generated upgrade migration also defines `down/0`, but version 6 is
+  one-way: `DoubleEntryLedger.Migration.down/1` raises rather than rolling
+  back past it. Take a database backup before migrating to version 6.
   """
 
   use Mix.Task

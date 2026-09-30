@@ -7,12 +7,12 @@ defmodule DoubleEntryLedger.Stores.CommandStoreTest do
   import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
-  alias DoubleEntryLedger.{Command, Repo, PendingTransactionLookup}
+  alias DoubleEntryLedger.{Command, PendingTransactionLookup, Repo}
 
   alias DoubleEntryLedger.Stores.{
+    AccountStore,
     CommandStore,
     CommandStoreHelper,
-    AccountStore,
     InstanceStore,
     TransactionStore
   }

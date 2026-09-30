@@ -52,11 +52,11 @@ defmodule DoubleEntryLedger.Occ.Processor do
 
   """
 
-  alias Ecto.Multi
   alias DoubleEntryLedger.{Command, Transaction}
   alias DoubleEntryLedger.Command.ErrorMap
-  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
   alias DoubleEntryLedger.Occ.Occable
+  alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
+  alias Ecto.Multi
 
   @doc """
   Builds an Ecto.Multi transaction for processing a command.
@@ -170,8 +170,9 @@ defmodule DoubleEntryLedger.Occ.Processor do
     quote do
       @behaviour DoubleEntryLedger.Occ.Processor
 
-      alias DoubleEntryLedger.Telemetry
+      alias DoubleEntryLedger.CommandQueue.Lease
       alias DoubleEntryLedger.Repo.Proxy, as: Repo
+      alias DoubleEntryLedger.Telemetry
       alias Ecto.Multi
       import DoubleEntryLedger.Occ.Helper
       import DoubleEntryLedger.CommandQueue.Scheduling
@@ -257,7 +258,17 @@ defmodule DoubleEntryLedger.Occ.Processor do
       """
       @spec build_multi(module(), Occable.t(), Ecto.Repo.t()) :: Multi.t()
       def build_multi(module, occable_item, repo) do
-        Occable.build_multi(occable_item)
+        # Claimed commands carry the grant they were claimed under:
+        # `Lease.lock_step/2` takes the lease row lock and proves ownership
+        # first, `Lease.refresh_step/2` pushes the expiry forward last so it is
+        # measured at commit. Both are no-ops for the synchronous command-map
+        # path, which holds no lease; a claimed command that reached here
+        # without its grant raises in `Lease.grant_for/1`.
+        grant = Lease.grant_for(occable_item)
+
+        Multi.new()
+        |> Lease.lock_step(grant)
+        |> Multi.append(Occable.build_multi(occable_item))
         |> Multi.merge(fn
           %{transaction_map: {:error, error}, occable_item: item} ->
             module.handle_transaction_map_error(item, error, repo)
@@ -266,6 +277,7 @@ defmodule DoubleEntryLedger.Occ.Processor do
             module.build_transaction(item, transaction_map, instance_id, repo)
             |> module.handle_build_transaction(item, repo)
         end)
+        |> Lease.refresh_step(grant)
       end
 
       @doc """
@@ -336,12 +348,19 @@ defmodule DoubleEntryLedger.Occ.Processor do
       """
       def retry(module, occable_item, error_map, 0, repo) do
         name = :_occable_item
+        # A separate transaction from the processing one, and it writes the
+        # queue row (`:occ_timeout`, then whatever `handle_occ_final_timeout/2`
+        # adds), so it carries the same fence.
+        grant = Lease.grant_for(occable_item)
 
-        Occable.timed_out(occable_item, name, error_map)
+        Multi.new()
+        |> Lease.lock_step(grant)
+        |> Multi.append(Occable.timed_out(occable_item, name, error_map))
         |> Multi.merge(fn
           %{^name => occable_item} ->
             module.handle_occ_final_timeout(occable_item, repo)
         end)
+        |> Lease.refresh_step(grant)
         |> repo.transaction()
       end
 

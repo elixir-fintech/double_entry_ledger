@@ -7,6 +7,7 @@ defmodule DoubleEntryLedger.MigrationTest do
 
   alias DoubleEntryLedger.{CommandQueueItem, Migration, Repo}
   alias DoubleEntryLedger.Stores.CommandStore
+  alias Ecto.Adapters.SQL
 
   @discarded_timestamp ~U[2000-01-01 00:00:00.000000Z]
   @prefix Application.compile_env(:double_entry_ledger, :schema_prefix, "double_entry_ledger")
@@ -18,12 +19,19 @@ defmodule DoubleEntryLedger.MigrationTest do
     use Ecto.Migration
 
     def up, do: DoubleEntryLedger.Migration.down(from: 5, version: 4)
-    def down, do: DoubleEntryLedger.Migration.up(from: 4)
+    def down, do: DoubleEntryLedger.Migration.up(from: 4, version: 5)
+  end
+
+  defmodule RollbackV6 do
+    use Ecto.Migration
+
+    def up, do: DoubleEntryLedger.Migration.down(from: 6, version: 5)
+    def down, do: DoubleEntryLedger.Migration.up(from: 5)
   end
 
   describe "latest_version/0" do
-    test "returns 5" do
-      assert Migration.latest_version() == 5
+    test "returns 6" do
+      assert Migration.latest_version() == 6
     end
   end
 
@@ -158,6 +166,44 @@ defmodule DoubleEntryLedger.MigrationTest do
       assert definition =~ "pending"
       assert definition =~ "occ_timeout"
       assert definition =~ "failed"
+    end
+  end
+
+  describe "version 6 — command_queue_leases" do
+    test "creates the lease table with its columns and expiry index" do
+      assert table_exists?("command_queue_leases")
+      assert column_data_type("command_queue_leases", "owner_id") == "text"
+      assert column_data_type("command_queue_leases", "fencing_token") == "bigint"
+
+      assert column_data_type("command_queue_leases", "expires_at") ==
+               "timestamp without time zone"
+
+      refute column_nullable?("command_queue_leases", "expires_at")
+      assert column_nullable?("command_queue_leases", "released_at")
+      assert index_exists?("idx_command_queue_leases_expires_at")
+      refute column_exists?("command_queue_items", "processor_version")
+    end
+
+    test "down is refused and leaves the schema untouched" do
+      assert_raise RuntimeError, ~r/one-way/, fn ->
+        Ecto.Migrator.run(Repo, [{@rollback_version, RollbackV6}], :up,
+          all: true,
+          log: false,
+          migration_lock: false
+        )
+      end
+
+      assert table_exists?("command_queue_leases")
+      refute column_exists?("command_queue_items", "processor_version")
+    end
+
+    test "Migration.down/1 refuses a rollback that crosses version 6 before touching anything" do
+      assert_raise RuntimeError, ~r/one-way/, fn -> Migration.down(from: 6, version: 5) end
+      assert table_exists?("command_queue_leases")
+    end
+
+    test "Migration.down/1 does not refuse a rollback that stays at or above version 6" do
+      assert Migration.down(from: 6, version: 6) == :ok
     end
   end
 
@@ -401,11 +447,11 @@ defmodule DoubleEntryLedger.MigrationTest do
   end
 
   defp single_value(sql, args) do
-    %{rows: [[value]]} = Ecto.Adapters.SQL.query!(Repo, sql, args)
+    %{rows: [[value]]} = SQL.query!(Repo, sql, args)
     value
   end
 
   defp exists?(sql, args) do
-    Ecto.Adapters.SQL.query!(Repo, sql, args).num_rows > 0
+    SQL.query!(Repo, sql, args).num_rows > 0
   end
 end

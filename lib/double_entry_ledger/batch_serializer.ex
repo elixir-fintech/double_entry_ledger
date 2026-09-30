@@ -15,6 +15,7 @@ defmodule DoubleEntryLedger.BatchSerializer do
   """
 
   alias DoubleEntryLedger.Balance
+  alias Money.Ecto.Map.Type
 
   @doc """
   Dump a `%Balance{}` to a plain JSONB-encodable map.
@@ -43,7 +44,7 @@ defmodule DoubleEntryLedger.BatchSerializer do
   """
   @spec dump_money(Money.t()) :: %{String.t() => integer() | String.t()}
   def dump_money(%Money{} = money) do
-    {:ok, dumped} = Money.Ecto.Map.Type.dump(money)
+    {:ok, dumped} = Type.dump(money)
     dumped
   end
 end

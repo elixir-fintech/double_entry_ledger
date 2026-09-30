@@ -10,13 +10,14 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
   import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
+  import DoubleEntryLedger.LeaseFixtures
 
   alias DoubleEntryLedger.{Command, PendingTransactionLookup, Repo}
   alias DoubleEntryLedger.Command.TransactionData
 
   alias DoubleEntryLedger.Workers.CommandWorker.{
-    UpdateTransactionCommand,
-    CreateTransactionCommand
+    CreateTransactionCommand,
+    UpdateTransactionCommand
   }
 
   alias DoubleEntryLedger.CommandQueue.Scheduling
@@ -212,7 +213,8 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
 
       {:ok, command} = new_update_transaction_command(s, s_id, inst.address, :posted)
 
-      {:ok, processing_command} = Scheduling.claim_command_for_processing(command.id, "manual")
+      {:ok, processing_command} =
+        Scheduling.claim_command_for_processing(command.id, test_grant(inst.id))
 
       {:error, %{command_queue_item: eqm}} = UpdateTransactionCommand.process(processing_command)
       assert eqm.status == :pending
@@ -228,7 +230,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
         new_create_transaction_command(ctx, :pending)
 
       {:error, failed_create_command} =
-        DoubleEntryLedger.CommandQueue.Scheduling.schedule_retry_with_reason(
+        Scheduling.schedule_retry_with_reason(
           pending_command,
           "some reason",
           :failed
@@ -251,7 +253,7 @@ defmodule DoubleEntryLedger.UpdateTransactionCommandTest do
       %{command: %{command_map: %{source: s, source_idempk: s_id}} = pending_command} =
         new_create_transaction_command(ctx, :pending)
 
-      DoubleEntryLedger.CommandQueue.Scheduling.build_mark_as_dead_letter(
+      Scheduling.build_mark_as_dead_letter(
         pending_command,
         "some reason"
       )

@@ -4,6 +4,152 @@ All notable changes to DoubleEntryLedger are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.0]
+
+### ⚠️ Breaking changes
+
+- Schema migration 6 adds `command_queue_leases`. Upgrades from 0.5.x must run
+  `DoubleEntryLedger.Migration.up(from: 5)` before starting 0.6.0 nodes.
+- Deployment requires stopping every 0.5 node, enqueuers included.
+  Migration 6 drops `command_queue_items.processor_version`, which 0.5 writes
+  on every queue update and names in every enqueue INSERT, so a 0.5 node of
+  any kind fails against the 0.6 schema. Order: stop all 0.5 nodes, take a
+  database backup, run `Migration.up(from: 5)`, start 0.6 nodes. Rows left
+  `:processing` by 0.5 are rescheduled by the first 0.6 acquisition on each
+  ledger. There is no supported mixed-version window.
+- Migration 6 is one-way. `Migration.down/1` refuses to cross version 6;
+  the only way back to 0.5 is restoring the backup taken before migrating.
+- Removed: `processor_version` and the per-row optimistic lock,
+  `CommandQueue.OwnershipError` and `{:error, :command_ownership_lost}`,
+  `{:error, :command_already_claimed}`, the stale-processing sweep with
+  `stale_processing_after`, `Scheduling.stale_processing_commands_query/2`,
+  `QueryHelpers.stale_processing/2` and `processing_age_seconds/1`, and
+  `:stale_for_seconds` on `[:command, :recovered]`. The ledger lease is the
+  only ownership fence; orphaned rows are recovered on acquisition.
+- The `:command_queue` key `:stale_processing_after` is gone. It was
+  documented in 0.5.0 and read by `InstanceMonitor`'s recovery sweep; that
+  sweep no longer exists, so a stale entry in the `:command_queue` list is
+  ignored rather than rejected. The queue supervisor logs a warning naming it
+  at start-up; a node running with `start_command_queue: false` gets no
+  warning. Remove it when upgrading. (The
+  reader `CommandQueue.Config.stale_processing_after/0` was introduced and
+  removed within this same unreleased cycle, so it never appeared in a
+  published release; only the configuration key crosses the 0.5.0 boundary.)
+- `CommandQueue.Scheduling.claim_command_for_processing/3` and
+  `claim_batch_for_processing/3` take a `CommandQueue.Lease.Grant` instead of
+  a `processor_id` string and run in a transaction that locks the ledger's
+  lease row.
+- `CommandWorker.process_command_with_id/2` accepts a grant or a string. With a
+  string it acquires its own lease and may return `{:error, :ledger_owned}`,
+  `{:error, :ledger_busy}`, or `{:error, :in_transaction}`; call it outside a
+  transaction. Processing may return `{:error, :lease_lost}` or
+  `{:error, :lease_busy}`.
+- `processor_id` on queue rows identifies a processor process for its whole
+  lifetime (`prefix:node:uuid`), not one dispatch. 0.5 stamped a freshly
+  generated `prefix_node_integer` on every dispatch.
+- `Command` has a virtual `lease_grant` field. `build_schedule_retry_with_reason`
+  gains a `retry_delay` option. `InstanceProcessor.start_link/1` requires `:grant`.
+- `BatchProcessor.run_batch/2` raises `ArgumentError`, before reading or
+  writing anything, when its commands do not all carry the identical
+  `lease_grant` or when a command's grant is for another ledger. A batch whose
+  commands all carry no grant runs unfenced as before.
+- Failure reporting changed shape. The `error` metadata on
+  `[:double_entry_ledger, :command, :dead_letter]` is now only the failure
+  class, the text of the persisted message before its first `": "`; in 0.5.0 it
+  was the full message. Messages can contain fragments of a command's payload,
+  and the event reaches whatever exporter the host attached, so the detail no
+  longer leaves the database this way. Dead-letter handlers receive less text;
+  the full message is on the queue row's `errors`, found by `command_id`.
+  `Scheduling.emit_persisted_failure/3`, which is public, now takes an
+  `ErrorMap` entry (as built by `ErrorMap.build_error/2`) as its third argument
+  instead of a message string; given a string for a failure status it logs an
+  error and emits no event. `InstanceMonitor.recover_stale_processing_commands/1`,
+  public in 0.5.0, is removed with the sweep it ran.
+- `:batch_enabled` and `:batch_size` moved from the top level of the
+  `:double_entry_ledger` application environment into the `:command_queue`
+  list, alongside `:pending_fetch_limit`. **The top-level spelling is no longer
+  read.** It is ignored; the queue supervisor logs a warning naming it at
+  start-up, and a node running with `start_command_queue: false` gets no
+  warning. A consumer who leaves `config :double_entry_ledger, batch_enabled:
+  true` in place gets batching turned off, because the key is not consulted any
+  more and the default is `false`; a stale top-level `batch_size` is likewise
+  ignored, and the `:command_queue` value or the default of `8` applies. Move
+  both keys into the `:command_queue` list
+  when upgrading. `config/runtime.exs`'s `BATCH` and `BATCH_SIZE` environment
+  overrides now write into that list too.
+- All three keys are read and validated by `CommandQueue.Config`.
+  `validate!/0` runs both in `CommandQueue.Supervisor.init/1` and in
+  `CommandQueue.InstanceProcessor.init/1` — the second because the supervisor
+  does not run when `:start_command_queue` is `false` — so a bad value fails
+  the start by name instead of surfacing from the dispatch path mid-drain. A
+  `:batch_size` of `0` is rejected rather than silently clamped to `1`, and a
+  non-integer one is rejected rather than raising from dispatch.
+- Both ignored configuration keys in this release are named in the start-up
+  log: `:stale_processing_after` left inside the `:command_queue` list, and
+  `:batch_enabled` or `:batch_size` left at the top level.
+  `CommandQueue.Config.warn_stale_config/0` runs from
+  `CommandQueue.Supervisor.init/1`, right after `validate!/0`, and logs at
+  `:warning` naming the offending keys and the keys it does know, and points at
+  this changelog. It never raises — an ignored key is not a reason to stop a boot,
+  and making it one would have been a further breaking change. It does not run
+  from `InstanceProcessor.init/1`, which executes once per ledger per drain
+  cycle, so a deployment with `start_command_queue: false` gets no warning.
+  The four keys the list carries for other readers — `:processor_name` and the
+  three compile-time retry keys — are known keys and are never reported.
+
+### Added
+
+- Per-ledger leases in PostgreSQL: one owner of each ledger's queued commands
+  across any number of nodes (synchronous `CommandApi.process_from_params/2`
+  takes no lease), takeover of an expired lease, and immediate rescheduling of the
+  previous owner's in-flight commands. See README "Ownership".
+- Configuration: `lease_ttl` (20 s), `lease_lock_timeout_ms` (1000),
+  `max_leases_per_node` (`:infinity`), `max_concurrent_acquisitions` (4),
+  `coordination_strategy` (`:database_polling`, the only value);
+  `CommandQueue.Config.validate!/0` runs from both the queue supervisor and
+  every `InstanceProcessor.init/1`.
+- `CommandQueue.Coordinator` behaviour with `Coordinator.DatabasePolling`:
+  the seam for a future `:erlang_cluster` strategy. Coordinators nominate
+  candidates; only the PostgreSQL lease grants ownership.
+- Telemetry `[:double_entry_ledger, :lease, :acquired | :renewed | :lost |
+  :released]`. `[:command, :recovered]` is now emitted by lease acquisition,
+  once for every `:processing` row an acquisition reschedules, and carries
+  `reason: :takeover`. That includes an acquisition that inserts a ledger's
+  first lease row, so on the first acquisition after upgrading, rows 0.5 left
+  `:processing` produce `[:command, :recovered]` with `reason: :takeover` while
+  `[:lease, :acquired]` reports `takeover: false`. `Lease.with_grant/3` for fenced
+  queue-row writes.
+- `[:double_entry_ledger, :instance_processor, :cleanup_stalled]` telemetry
+  event. An `InstanceProcessor` that cannot make its post-task cleanup write
+  because the lease row stays locked now gives the ledger up after a bounded
+  number of retries, emitting this event, rather than retrying forever while
+  holding the lease and dispatching nothing. Its lease release then reports
+  `reason: :cleanup_stalled` on `[:lease, :released]` rather than
+  `:shutdown`. The next owner's acquisition
+  reschedules whatever the stalled owner left `:processing` — though not
+  necessarily at once, since the same lock holder blocks that acquisition too.
+- Opt-in `serialize_enqueue` configuration (runtime, default `false`). When
+  enabled, `Stores.CommandStore.create/1` takes a transaction-scoped
+  PostgreSQL advisory lock keyed on the instance before the queue item is
+  inserted, so queue positions for one ledger are allocated in commit order.
+  Enqueues for the same ledger wait on each other; ledgers are locked
+  independently except for a possible hash collision. The flag is node-local
+  and must be set consistently on every node that enqueues. No migration is
+  required. `Config.serialize_enqueue?/0` exposes the flag.
+
+### Changed
+
+- `CommandQueue.Scheduling` now tracks its three compile-time queue keys
+  (`:max_retries`, `:base_retry_delay`, `:max_retry_delay`) individually with
+  `Application.compile_env/3` on a key path, instead of reading the whole
+  `:command_queue` list. Setting any other queue key at release time no longer
+  raises a compile-environment mismatch on boot.
+- Requires `flop ~> 0.29`. Flop 0.29 turned `Flop.Schema` from a protocol into
+  a behaviour, so the paginated schemas now configure it with `use Flop.Schema`
+  and `@flop_options` instead of `@derive`. The Flop options themselves are
+  unchanged. Applications that depend on Flop directly must also be on 0.29 or
+  later.
+
 ## [0.5.0]
 
 ### ⚠️ Breaking changes

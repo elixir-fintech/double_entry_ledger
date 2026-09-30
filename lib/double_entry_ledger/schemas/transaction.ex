@@ -35,8 +35,8 @@ defmodule DoubleEntryLedger.Transaction do
 
   alias DoubleEntryLedger.{
     Entry,
-    JournalEvent,
     Instance,
+    JournalEvent,
     Types
   }
 
@@ -87,8 +87,9 @@ defmodule DoubleEntryLedger.Transaction do
 
   @required_attrs ~w(status instance_id)a
 
-  @derive {
-    Flop.Schema,
+  use Flop.Schema
+
+  @flop_options [
     filterable: [:status],
     sortable: [:inserted_at, :id],
     default_limit: 40,
@@ -97,7 +98,7 @@ defmodule DoubleEntryLedger.Transaction do
       order_by: [:inserted_at, :id],
       order_directions: [:desc, :desc]
     }
-  }
+  ]
 
   schema "transactions" do
     field(:posted_at, :utc_datetime_usec)

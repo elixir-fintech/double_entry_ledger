@@ -15,8 +15,8 @@ defmodule DoubleEntryLedger.Occ.Helper do
   """
 
   import DoubleEntryLedger.Command.ErrorMap
-  alias DoubleEntryLedger.Command.ErrorMap
   alias DoubleEntryLedger.{Command, CommandQueueItem}
+  alias DoubleEntryLedger.Command.ErrorMap
   alias Ecto.Changeset
   import Ecto.Changeset, only: [put_assoc: 3, change: 2]
 

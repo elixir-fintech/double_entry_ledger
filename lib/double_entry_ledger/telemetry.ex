@@ -34,6 +34,11 @@ defmodule DoubleEntryLedger.Telemetry do
   | `[:double_entry_ledger, :batch, :processed]` | Batch write completed |
   | `[:double_entry_ledger, :instance_processor, :start]` | Instance processor started |
   | `[:double_entry_ledger, :instance_processor, :stop]` | Instance processor stopped |
+  | `[:double_entry_ledger, :instance_processor, :cleanup_stalled]` | Processor gave up a ledger it could not clean up |
+  | `[:double_entry_ledger, :lease, :acquired]` | Ledger lease acquired (fresh or takeover) |
+  | `[:double_entry_ledger, :lease, :renewed]` | Ledger lease renewed by an idle heartbeat |
+  | `[:double_entry_ledger, :lease, :lost]` | Owner found its lease taken by another owner |
+  | `[:double_entry_ledger, :lease, :released]` | Ledger lease released gracefully |
 
   ## Phoenix LiveDashboard Integration
 
@@ -127,7 +132,9 @@ defmodule DoubleEntryLedger.Telemetry do
 
     - `:command_id` - Command UUID
     - `:instance_id` - Ledger instance UUID
-    - `:error` - Reason for dead-lettering
+    - `:error` - Failure class: the persisted error message's text before its
+      first `": "`. The full message is not in the event; it is on the queue
+      row's `errors`.
     - `:trace_context` - Consumer-supplied tracing context (map or nil)
   """
   @spec command_dead_letter(map()) :: :ok
@@ -138,8 +145,11 @@ defmodule DoubleEntryLedger.Telemetry do
   @doc """
   Emits a command recovery event.
 
-  Emitted by `CommandQueue.InstanceMonitor` when a queue row left in
-  `:processing` by a vanished owner is routed back through the failure path.
+  Emitted by `CommandQueue.Lease.emit_acquisition_events/3` — not by
+  `acquire/4`, which rescheduled the row but emits nothing — for a queue row
+  left in `:processing` by a vanished owner and routed back through the failure
+  path. `CommandQueue.InstanceMonitor` makes that call, from a different
+  process than the one that ran the acquisition transaction.
   The resulting retry or dead-letter event is emitted as well, so alert on
   this event to distinguish "commands are being recovered" from "a command
   failed".
@@ -149,9 +159,8 @@ defmodule DoubleEntryLedger.Telemetry do
     - `:command_id` - Command UUID
     - `:instance_id` - Ledger instance UUID
     - `:previous_processor_id` - Processor identifier that held the claim
-    - `:stale_for_seconds` - Seconds the row spent in `:processing`, measured
-      on the database clock
     - `:trace_context` - Consumer-supplied tracing context (map or nil)
+    - `:reason` - `:takeover` (a lease acquisition rescheduled the row)
   """
   @spec command_recovered(map()) :: :ok
   def command_recovered(metadata) do
@@ -284,6 +293,8 @@ defmodule DoubleEntryLedger.Telemetry do
   ## Metadata
 
     - `:instance_id` - Instance UUID being processed
+    - `:owner_id` - the processor's lease owner id (`prefix:node:uuid`), the
+      same value stamped as `processor_id` on the rows it claims
   """
   @spec instance_processor_start(map()) :: :ok
   def instance_processor_start(metadata) do
@@ -301,6 +312,70 @@ defmodule DoubleEntryLedger.Telemetry do
   def instance_processor_stop(metadata) do
     execute([:double_entry_ledger, :instance_processor, :stop], metadata)
   end
+
+  @doc """
+  Emits a cleanup-stalled event: an `InstanceProcessor` gave up the ledger
+  because the lease row stayed locked across every retry of the cleanup write
+  it owed a queue row. Alert on this; it means something that is not a
+  successor is holding the lease row.
+
+  The rows the processor left `:processing` are rescheduled by the next owner's
+  acquisition, but not necessarily at once: the same lock holder blocks that
+  acquisition too, so until it lets go the successor backs off and retries.
+  The processor then releases its lease with `reason: :cleanup_stalled`, when
+  the row lets it.
+
+  ## Metadata
+    - `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`
+    - `:attempts` - consecutive `:busy` outcomes before giving up
+    - `:cleanup` - `:revert` or `:crash_retry`
+  """
+  @spec cleanup_stalled(map()) :: :ok
+  def cleanup_stalled(metadata) do
+    execute([:double_entry_ledger, :instance_processor, :cleanup_stalled], metadata)
+  end
+
+  @doc """
+  Emits a lease acquired event, after the acquisition committed.
+
+  ## Metadata
+    - `:instance_id`, `:owner_id`, `:fencing_token`
+    - `:takeover` - `true` when the previous owner expired without releasing
+    - `:previous_owner_id` - previous owner, or nil for a fresh lease
+    - `:orphans` - number of `:processing` rows rescheduled by the acquisition
+    - `:coordination` - who nominated this owner: the `Coordinator` strategy
+      (`:database_polling`) or `:manual`. Present on all four lease events.
+  """
+  @spec lease_acquired(map()) :: :ok
+  def lease_acquired(metadata), do: execute([:double_entry_ledger, :lease, :acquired], metadata)
+
+  @doc "Emits a lease renewed event from an idle heartbeat. Metadata: `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`."
+  @spec lease_renewed(map()) :: :ok
+  def lease_renewed(metadata), do: execute([:double_entry_ledger, :lease, :renewed], metadata)
+
+  @doc """
+  Emits a lease lost event: an owner-filtered update matched zero rows
+  because another owner holds the ledger. Alert on this.
+
+  ## Metadata
+    - `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`
+    - `:source` - `:renewal`, `:claim`, or `:transaction`
+  """
+  @spec lease_lost(map()) :: :ok
+  def lease_lost(metadata), do: execute([:double_entry_ledger, :lease, :lost], metadata)
+
+  @doc """
+  Emits a lease released event, after the release committed.
+
+  ## Metadata
+    - `:instance_id`, `:owner_id`, `:fencing_token`, `:coordination`
+    - `:reason` - `:drained`, `:shutdown`, `:cleanup_stalled` (the processor
+      gave the ledger up after a cleanup stayed busy; see `cleanup_stalled/1`),
+      `:manual`, `:start_failed`, or `:monitor_down` (the acquisition task saw
+      its monitor die before replying)
+  """
+  @spec lease_released(map()) :: :ok
+  def lease_released(metadata), do: execute([:double_entry_ledger, :lease, :released], metadata)
 
   @doc """
   Emits the appropriate transaction lifecycle event based on the transaction's state.
@@ -428,7 +503,11 @@ defmodule DoubleEntryLedger.Telemetry do
           tags: [:type, :currency]
         ),
         counter("double_entry_ledger.account.updated.system_time"),
-        counter("double_entry_ledger.instance.created.system_time")
+        counter("double_entry_ledger.instance.created.system_time"),
+        counter("double_entry_ledger.lease.acquired.system_time", tags: [:takeover]),
+        counter("double_entry_ledger.lease.renewed.system_time"),
+        counter("double_entry_ledger.lease.lost.system_time", tags: [:source]),
+        counter("double_entry_ledger.lease.released.system_time", tags: [:reason])
       ]
     end
   end

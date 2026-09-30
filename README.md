@@ -9,7 +9,7 @@ DoubleEntryLedger is an event sourced, multi-tenant double entry accounting engi
 - Multi tenant ledger instances with typed accounts (asset/liability/equity/revenue/expense) and [Money](https://hexdocs.pm/money) backed multi currency support.
 - Signed amount API converts intent into the correct debit or credit entry and enforces balanced transactions per currency.
 - Immutable `Command`, `JournalEvent`, and `BalanceHistoryEntry` records plus idempotency keys give a complete audit trail.
-- Background command queue with OCC, exponential retries, per-instance processors, and idempotency controls makes command processing safe to retry.
+- Background command queue with a per-ledger PostgreSQL ownership lease, OCC, exponential retries, per-instance processors, and idempotency controls makes command processing safe to retry across any number of nodes.
 - Pending vs. posted projections with automatic `available` balances support holds, authorizations, and delayed settlements.
 - Rich stores and APIs (`InstanceStore`, `AccountStore`, `TransactionStore`, `CommandStore`, `CommandApi`, `JournalEventStore`) keep ledger interactions safe and consistent.
 - Everything lives inside the configurable `double_entry_ledger` schema so it coexists peacefully with your application tables.
@@ -26,7 +26,7 @@ External requests enter through `DoubleEntryLedger.Apis.CommandApi` (`lib/double
 
 ### Queues, Workers & OCC
 
-The command queue (`lib/double_entry_ledger/command_queue`) polls for pending commands via `InstanceMonitor`, spins up `InstanceProcessor` processes per instance, and uses `CommandQueue.Scheduling` to claim, retry, or dead-letter work. The transaction-related workers under `lib/double_entry_ledger/workers/command_worker` implement `DoubleEntryLedger.Occ.Processor`, translating event maps into `Ecto.Multi` workflows that retry on `Ecto.StaleEntryError`. Journal-event relationships are written synchronously with the journal event; there is no internal linking job in 0.5.0.
+The command queue (`lib/double_entry_ledger/command_queue`) polls for pending commands via `InstanceMonitor`, acquires a `CommandQueue.Lease` for each ledger it is going to work, starts one `InstanceProcessor` per leased ledger, and uses `CommandQueue.Scheduling` to claim, retry, or dead-letter work under that lease. The transaction-related workers under `lib/double_entry_ledger/workers/command_worker` implement `DoubleEntryLedger.Occ.Processor`, translating event maps into `Ecto.Multi` workflows that retry on `Ecto.StaleEntryError`. Journal-event relationships are written synchronously with the journal event; there is no internal linking job in 0.6.0.
 
 ### Balances & Audit Trails
 
@@ -50,7 +50,7 @@ Every command requires a `source` and `source_idempk` (plus `update_idempk` for 
 ```elixir
 def deps do
   [
-    {:double_entry_ledger, "~> 0.5.0"}
+    {:double_entry_ledger, "~> 0.6.0"}
   ]
 end
 ```
@@ -71,8 +71,7 @@ config :double_entry_ledger,
   idempotency_secret: System.fetch_env!("LEDGER_IDEMPOTENCY_SECRET"),
   start_command_queue: true,
   insert_path: :legacy,
-  batch_enabled: false,
-  batch_size: 8,
+  serialize_enqueue: false,
   max_batch_retries: 3,
   max_retries: 5,
   retry_interval: 200
@@ -80,11 +79,17 @@ config :double_entry_ledger,
 config :double_entry_ledger, :command_queue,
   poll_interval: 5_000,
   pending_fetch_limit: 64,
+  batch_enabled: false,
+  batch_size: 8,
   max_retries: 5,
   base_retry_delay: 30,
   max_retry_delay: 3_600,
-  stale_processing_after: 300,  # seconds a command may sit in :processing before recovery
-  processor_name: "command_queue"
+  lease_ttl: 20,                    # seconds a ledger lease lives without a refresh
+  lease_lock_timeout_ms: 1_000,     # how long a writer waits for the lease row lock
+  max_leases_per_node: :infinity,   # ledgers this node may work at once
+  max_concurrent_acquisitions: 4,   # lease acquisitions in flight on this node
+  coordination_strategy: :database_polling,  # the only value in this release
+  processor_name: "command_queue"   # prefix of the generated owner id
 ```
 
 In this "BYO-repo" mode the library does not start its own repo. The command
@@ -95,9 +100,20 @@ Set a strong `idempotency_secret` — it hashes incoming keys. Set
 `start_command_queue: false` to disable background processing (useful in
 tests or when embedding the ledger without the queue). `retry_interval` is read
 at runtime; `max_retries` is captured into each OCC worker at compile time
-(`Occ.Processor.__using__/1`), so changing it needs a recompile. The
-`:command_queue` list is read with `Application.compile_env/3` and is likewise
-compile-time.
+(`Occ.Processor.__using__/1`), so changing it needs a recompile. Inside the
+`:command_queue` list only `max_retries`, `base_retry_delay` and
+`max_retry_delay` are read with `Application.compile_env/3`; the other keys are
+read at runtime through `CommandQueue.Config`, which also validates the keys
+it owns. `CommandQueue.Config.validate!/0` runs both when the queue supervisor
+starts and in every `InstanceProcessor.init/1` — the second because the
+supervisor does not run at all when `start_command_queue: false`, which is
+exactly the setup that starts a processor by hand. It raises naming the first
+bad key; `processor_name` and the three compile-time retry keys are not among
+the keys it checks. The supervisor then calls
+`CommandQueue.Config.warn_stale_config/0`, which logs — never raises — about
+configuration this release stopped reading: a key in the `:command_queue` list
+that nothing reads, and `batch_enabled` or `batch_size` still set at the top
+level, where 0.5 read them and 0.6 does not.
 
 `insert_path: :legacy` and `batch_enabled: false` are the conservative
 defaults. To opt into the new paths, set `insert_path: :insert_all` and/or
@@ -105,15 +121,60 @@ defaults. To opt into the new paths, set `insert_path: :insert_all` and/or
 `batch_size` to control how many compatible transaction commands are processed
 together and `max_batch_retries` to control retries after a stale account
 write. Account commands continue through the single-command path.
-`pending_fetch_limit` controls how many queue IDs an instance processor fetches
-per database read; it is independent of `batch_size`. When batching is enabled,
+`batch_enabled`, `batch_size` and `pending_fetch_limit` all live in the
+`:command_queue` list. `pending_fetch_limit` controls how many queue IDs an
+instance processor fetches per database read; it is independent of
+`batch_size`. When batching is enabled,
 set it to at least `batch_size` and preferably to a multiple of `batch_size` so
 each database fetch can be divided into full batches.
+
+`serialize_enqueue: true` makes `CommandStore.create/1` take a
+transaction-scoped PostgreSQL advisory lock keyed on the ledger before the
+queue item allocates its position. Queue positions are assigned from a
+sequence, so without the lock two concurrent enqueues for one ledger can
+commit in the opposite order to their positions and the processor may see the
+later position first. With the lock, positions for one ledger are allocated in
+commit order. Ledgers are locked independently except for a possible 32-bit
+hash collision, which only adds waiting. The cost is that concurrent enqueues
+for the same ledger become serial, and if you wrap `create/1` in your own
+transaction the lock is held until that outer transaction ends. It is read at
+runtime and off by default. The setting is node-local, so every node that
+enqueues commands must enable it for the ordering guarantee to hold.
 Dependency configuration files are not loaded by a host application, so the
 `INSERT_PATH`, `BATCH`, and `BATCH_SIZE` environment-variable helpers in this
 repository's `config/runtime.exs` only apply when running this repository
 directly. A consuming release must translate any environment variables into
 `:double_entry_ledger` configuration in its own `config/runtime.exs`.
+
+**Ownership.** Each ledger (instance) has a lease row in PostgreSQL
+(`command_queue_leases`). A node's `InstanceMonitor` acquires the lease before
+it starts a processor; the processor renews it from an idle heartbeat and
+through every claim, processing and batch transaction, and releases it when the
+ledger drains or the node shuts down. Every write the queue makes to claim,
+complete, retry or dead-letter a queued command takes the lease row lock first,
+proves its `(owner_id, fencing_token)` still holds the ledger, and refreshes
+the expiry last, so a processor that has lost the ledger cannot overwrite its
+successor's work. The lease covers queued commands only: synchronous
+processing through `CommandApi.process_from_params/2` takes no lease, runs on
+whichever node calls it, and is serialised against the ledger's queue owner
+only by account-level optimistic concurrency control. If a node dies, its leases expire after `lease_ttl` and another node takes
+them over on its next poll, rescheduling any command the dead node left
+`:processing`. Typical detection time is `lease_ttl + poll_interval` (25 s with
+the defaults); completing the takeover also depends on pool checkout and how
+many in-flight commands must be rescheduled, so treat that as typical, not
+guaranteed. It also assumes PostgreSQL notices the dead node: a node lost with
+a half-open socket (a host crash or a network partition) while one of its
+transactions holds the lease row keeps that row lock until PostgreSQL detects
+the dead client, and until then every successor's acquisition returns `:busy`,
+for a time not bounded by `lease_ttl`. See "What is still open" under
+[Running on several nodes](#running-on-several-nodes) for the settings that
+bound it. `max_leases_per_node` caps how many ledgers one node works at once
+and `max_concurrent_acquisitions` caps acquisition tasks per node; both count
+supervised processors and acquisitions only. Manual processing via
+`CommandWorker.process_command_with_id/2` with a string prefix takes a short
+lease of its own outside those caps, and must be called outside a transaction.
+Telemetry from different processes may arrive out of order; correlate lease
+events by `owner_id` and `fencing_token`.
 
 **Standalone mode** (omit `:repo`): the library ships its own
 `DoubleEntryLedger.Repo` and supervises it automatically. Configure it
@@ -154,13 +215,15 @@ mix double_entry_ledger.install --from 1
 mix ecto.migrate
 ```
 
-This applies schema versions 2–5, including the FK fixes,
+This applies schema versions 2–6, including the FK fixes,
 `negative_limit`, trace context, query indexes, direct journal-event foreign
-keys, queue instance IDs, and widened balance columns.
+keys, queue instance IDs, widened balance columns, and the
+`command_queue_leases` table. Version 6 is one-way: `Migration.down/1` refuses
+to cross it, so take a database backup first.
 
 **Historical background-job migration:** v0.1.0 included a migration for the
 then-used job runner. An already-applied migration and its tables may remain;
-0.5.0 does not drop them because the host application may use that job runner
+0.6.0 does not drop them because the host application may use that job runner
 independently. If you still need to execute or roll back that migration,
 declare the original dependency in your application rather than relying on DEL
 to provide it.
@@ -179,7 +242,7 @@ end
 ```
 
 See `DoubleEntryLedger.Migration` docs for all options (`:version`, `:from`,
-`:prefix`).
+`:prefix`). `down/1` raises rather than rolling back past version 6.
 
 ### 4. Add the command queue to your supervision tree
 
@@ -320,43 +383,108 @@ still balances, or `PendingTransactionLookup` to inspect open holds.
 
 ## Background Processing
 
-- `DoubleEntryLedger.CommandQueue.InstanceMonitor` polls for commands in `:pending`, `:occ_timeout`, or `:failed` status and ensures each instance has an `InstanceProcessor`.
+- `DoubleEntryLedger.CommandQueue.InstanceMonitor` polls for ledgers that have processable commands and no live lease, acquires the lease for each one in its own task, and starts an `InstanceProcessor` with the resulting grant. Which ledgers this node attempts is decided by a `CommandQueue.Coordinator`; only the PostgreSQL lease grants ownership.
 - `InstanceProcessor` claims work through an atomic scheduling claim — `CommandQueue.Scheduling.claim_command_for_processing/3` for a single command, `claim_batch_for_processing/3` in batch mode — runs the appropriate worker, and marks the `CommandQueueItem` as `:processed`. Each worker task is monitored via `Process.monitor/1`; if the task crashes, the processor schedules a retry automatically.
 - OCC is handled inside the workers (see `lib/double_entry_ledger/occ`). Retries use exponential backoff until `max_retries` is reached, after which commands are marked as `:dead_letter`.
 - Errors and retry metadata live on the `command_queue_item`, so you can inspect processing attempts via `CommandStore` or SQL views.
 - Journal-event relationships are persisted synchronously through direct foreign keys; the command path no longer enqueues an internal linking job.
-- Commands left in `:processing` by a node that died are recovered by `InstanceMonitor` once they are older than `stale_processing_after` and are sent back through the normal retry or dead-letter path. A successful enqueue also wakes the monitor when the queue is supervised locally, so an idle queue starts draining immediately instead of waiting a full `poll_interval`; otherwise the command waits for the next poll on a node that runs the queue.
+- Commands left in `:processing` by a node that died are rescheduled by the next lease acquisition on that ledger and sent back through the normal retry or dead-letter path; each one emits `[:double_entry_ledger, :command, :recovered]` with `reason: :takeover`. Discovery includes ledgers whose only rows are `:processing` under an expired lease, so that happens without new work arriving. A successful enqueue also wakes the monitor when the queue is supervised locally, so an idle queue starts draining immediately instead of waiting a full `poll_interval`; otherwise the command waits for the next poll on a node that runs the queue.
 
-### Deployment scope: one node per ledger
+### Running on several nodes
 
-The command queue is designed and tested for a **single node processing a given
-ledger**. Run it that way in production.
+A ledger's queued commands are worked by one node at a time, and PostgreSQL
+decides which.
+`CommandQueue.Lease` holds one row per ledger with an owner id, a
+monotonically increasing fencing token, and a database-clock expiry. A monitor
+acquires that row before it starts a processor, the processor holds it for its
+whole lifetime, and every write that claims, completes, retries or
+dead-letters a queued command takes the row lock, proves its
+`(owner_id, fencing_token)` still holds the ledger, and refreshes the expiry
+last. A processor whose ledger has moved on sees a zero-row owner update,
+emits `[:lease, :lost]`, and stops without writing. Commands stranded in
+`:processing` by a node that died are rescheduled by the next owner's
+acquisition. Those guarantees hold under concurrency across any number of
+nodes, and are what make a crash, a restart, or a rolling deploy between 0.6
+nodes safe. They do not extend to synchronous processing; see the first open
+item below.
 
-Every write that completes, retries, or dead-letters a command is fenced by
-`command_queue_items.processor_version`, so a stale processor can never
-overwrite work after ownership has moved, and commands stranded in
-`:processing` by a node that died are recovered automatically. Those guarantees
-hold under concurrency and are what make a crash or restart safe.
+Two nodes discovering the same unleased ledger in the same window is expected
+rather than a fault: the loser gets `:held` or `:busy` from `Lease.acquire/4`
+and moves on. Two owners that can both write for one ledger, concurrent
+claims of one ledger's commands from different nodes, and a stale owner
+overwriting its successor's work are all prevented by the lease, not by the
+node-local `CommandQueue.Registry` — the Registry is process naming and one
+node's own exclusion, and it is a correct but no longer load-bearing part of
+the story. The lease does not guarantee a single `InstanceProcessor` process:
+a monitor slow enough to start a processor on a grant that has already expired
+leaves it coexisting with the new owner until its first fenced claim or
+renewal fails, at which point it emits `[:lease, :lost]` and stops without
+writing.
 
-What is **not** yet guaranteed across several nodes:
+What is still open across several nodes:
 
-- `CommandQueue.Registry` is a node-local `Registry`. It prevents duplicate
-  `InstanceProcessor`s for a ledger on one node only, so each node can run its
-  own processor for the same instance.
-- Atomic claims protect individual commands, not a ledger. Processors on
-  different nodes can claim different commands of the same instance, so those
-  commands may execute concurrently and out of order.
-- Every node runs its own `InstanceMonitor`, producing redundant polling and
-  competing processor starts.
-- `batch_enabled`, `batch_size`, `pending_fetch_limit`, and
-  `stale_processing_after` are read from each node's application environment,
-  so inconsistent deployments process the same queue with different behaviour.
-- Enqueueing wakes the local monitor only; other nodes still wait for their
-  next poll.
+- **Synchronous processing takes no lease.** `CommandApi.process_from_params/2`
+  processes the command on the calling node, under no lease, whichever node
+  currently owns the ledger's queue. Its writes are serialised against the
+  queue owner's only by account-level optimistic concurrency control
+  (`Account.lock_version`), the same mechanism that serialises two
+  synchronous callers.
+- **Runtime configuration is per node.** `batch_enabled`, `batch_size`,
+  `pending_fetch_limit`, `poll_interval`, `lease_ttl`, `lease_lock_timeout_ms`,
+  `max_leases_per_node`, `max_concurrent_acquisitions`, `processor_name` and
+  the top-level `serialize_enqueue` are read from each node's own application
+  environment. Correctness does not depend on them agreeing — the lease fences
+  the writes either way — but behaviour does. Failover timing is
+  `lease_ttl + poll_interval`: a node with a shorter `lease_ttl` gives its
+  ledgers up sooner than the others after it dies, and a node with a longer
+  `poll_interval` picks orphaned ledgers up later, so failover is uneven; mismatched batching makes the same queue drain
+  differently depending on which node picked it up; and `serialize_enqueue`
+  only delivers commit-order queue positions if every node that enqueues sets
+  it. Deploy the `:command_queue` list consistently.
+- **A half-open connection holds the lease row lock until PostgreSQL notices.**
+  If a node's host dies or is partitioned away while one of its transactions
+  holds the lease row lock, PostgreSQL keeps that lock until it detects the
+  dead client, and every successor's acquisition returns `:busy` for that
+  whole time. That `:busy` is not bounded by `lease_ttl`: the expiry is only
+  read by a transaction that gets the row. PostgreSQL enables TCP keepalive
+  on every client connection but leaves the timing to the operating system
+  (`tcp_keepalives_idle = 0`), which on Linux means a first probe after two
+  hours of silence, and `idle_in_transaction_session_timeout` is off (`0`) by
+  default, so out of the box that is over two hours. For the
+  `lease_ttl + poll_interval` failover figure to hold, set
+  `idle_in_transaction_session_timeout` to a small multiple of `lease_ttl`
+  (for the role or database the ledger connects as) and/or lower the server's
+  `tcp_keepalives_idle`, `tcp_keepalives_interval` and `tcp_keepalives_count`
+  (or the operating system's). Keepalive only probes an idle socket: if the
+  server is still sending unacknowledged data to the dead client, detection
+  waits for the kernel's retransmission limit instead, about fifteen minutes
+  on Linux, and `idle_in_transaction_session_timeout` does not apply to a
+  backend that is mid-statement. The server's `tcp_user_timeout` (PostgreSQL
+  12 and later) bounds that case as well. These are all settings on the
+  PostgreSQL side: it is the server that must give up on the dead client. Client-side keepalive on
+  the repo (`socket_options: [keepalive: true]`; Postgrex sets none by
+  default) lets a live node notice a dead connection to the server, but it
+  cannot make the server drop a lock held by a node that is gone.
+- **Discovery is polling, with no cross-node notification.** Each node runs
+  its own `InstanceMonitor` and its own discovery SELECT. `InstanceMonitor.wake/1`
+  after an enqueue reaches the local monitor only; a command enqueued on one
+  node still reaches another node's monitor through that node's next poll.
+  An enqueue on a node that does not own the ledger does not attempt to
+  acquire a live lease: the acquisition reads the lease row without locking
+  it first and backs off at once, rather than queueing behind the owner.
+  Nothing tells the cluster that a node has gone; its ledgers are picked up
+  when the lease expires and some node's poll comes round. Typical failover is
+  therefore `lease_ttl + poll_interval` — 25 s with the defaults — and slower
+  if pool checkout or a large set of orphaned rows delays the takeover
+  transaction. There is no `LISTEN`/`NOTIFY` or cluster-aware signal.
+- **`:database_polling` is the only coordination strategy.** The
+  `CommandQueue.Coordinator` behaviour is the seam for an `:erlang_cluster`
+  strategy that would partition discovery instead of having every node poll;
+  it is not implemented, and `CommandQueue.Config.validate!/0` rejects any
+  other value.
 
-Cluster-wide safety needs an ownership lease per ledger, held in PostgreSQL
-with a fencing token and a database-clock expiry, so that only the current
-owner may claim work for that ledger. That is not implemented.
+Two-node failover timing is not covered by the automated suite; the lease
+mechanics it depends on are, single-node.
 
 ## Documentation & Further Reading
 
@@ -381,6 +509,65 @@ Extras are bundled in `pages/` when you run `mix docs`.
 - `mix test` – run the test suite (aliases automatically create/migrate the test DB).
 - `mix credo --strict` and `mix dialyzer` – static analysis.
 - `mix docs` – regenerate documentation, or `mix tidewave` to preview docs via the built-in dev server.
+
+## Migrating from 0.5.x to 0.6.0
+
+> ⚠️ **0.6.0 contains a breaking schema change and requires a drained
+> deployment.** There is no supported mixed-version window, and migration 6
+> cannot be rolled back.
+
+Migration 6 adds `command_queue_leases` and drops
+`command_queue_items.processor_version`. 0.5 writes `processor_version` on
+every queue update and names it in every enqueue INSERT, so a 0.5 node of any
+kind — processor or enqueuer — fails against the 0.6 schema.
+
+1. Stop **every** 0.5 node, enqueuers included.
+2. Take a database backup. Migration 6 is one-way; restoring that backup is
+   the only route back to 0.5.
+3. Apply the migration:
+
+   ```bash
+   mix double_entry_ledger.install --from 5
+   mix ecto.migrate
+   ```
+
+   Or call `DoubleEntryLedger.Migration.up(from: 5)` from your own migration.
+4. Start the 0.6.0 nodes. Rows left `:processing` by 0.5 are rescheduled by
+   the first 0.6 lease acquisition on each ledger.
+
+Configuration changes:
+
+- Remove `:stale_processing_after` from the `:command_queue` list. The
+  recovery sweep it configured is gone and the key is no longer read. Leaving
+  it in place changes nothing, but the queue supervisor logs a warning naming
+  it at start-up — as it does for any `:command_queue` key the library does
+  not read, and for `batch_enabled` or `batch_size` left at the top level.
+- Optionally set the new `:command_queue` keys `lease_ttl`,
+  `lease_lock_timeout_ms`, `max_leases_per_node`,
+  `max_concurrent_acquisitions` and `coordination_strategy`. All have working
+  defaults; see [Configuration](#2-configure-the-application) and "Ownership".
+
+API changes to check for:
+
+- `CommandQueue.Scheduling.claim_command_for_processing/3` and
+  `claim_batch_for_processing/3` take a `CommandQueue.Lease.Grant`, not a
+  `processor_id` string.
+- `InstanceProcessor.start_link/1` requires a `:grant`. Acquire one with
+  `CommandQueue.Lease.acquire/4` if you start a processor by hand.
+- `CommandWorker.process_command_with_id/2` still accepts a string, but that
+  now means "take a lease of your own": call it outside any transaction, and
+  handle `{:error, :ledger_owned}`, `{:error, :ledger_busy}` and
+  `{:error, :in_transaction}`. Processing can additionally return
+  `{:error, :lease_lost}` and `{:error, :lease_busy}`.
+- `{:error, :command_ownership_lost}`, `{:error, :command_already_claimed}` and
+  `CommandQueue.OwnershipError` are gone.
+- `[:double_entry_ledger, :command, :recovered]` no longer carries
+  `stale_for_seconds`; it carries `reason: :takeover` and is emitted only when
+  a lease acquisition reschedules an orphan. Four
+  `[:double_entry_ledger, :lease, …]` events are new — see
+  [Telemetry](pages/Telemetry.md).
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
 ## Migrating from 0.4.x to 0.5.0
 

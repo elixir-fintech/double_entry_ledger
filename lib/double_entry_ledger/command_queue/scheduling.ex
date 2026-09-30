@@ -22,26 +22,48 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   import Ecto.Changeset, only: [change: 2, put_assoc: 3]
   import Ecto.Query, only: [from: 2]
 
-  import DoubleEntryLedger.CommandQueue.QueryHelpers,
-    only: [retry_eligible: 1, stale_processing: 2, processing_age_seconds: 1]
+  import DoubleEntryLedger.CommandQueue.QueryHelpers, only: [retry_eligible: 1]
 
   alias DoubleEntryLedger.Command
+  alias DoubleEntryLedger.Command.ErrorMap
+  alias DoubleEntryLedger.CommandQueue.Lease
+  alias DoubleEntryLedger.CommandQueue.Lease.Grant
   alias DoubleEntryLedger.CommandQueue.QueryHelpers
+  alias DoubleEntryLedger.CommandQueueLeaseRow
 
   alias DoubleEntryLedger.Repo.Proxy, as: Repo
 
-  alias DoubleEntryLedger.Stores.CommandStore
   alias DoubleEntryLedger.CommandQueueItem
+  alias DoubleEntryLedger.Stores.CommandStore
   alias Ecto.Changeset
 
   @schema_prefix DoubleEntryLedger.Config.schema_prefix()
 
-  @config Application.compile_env(:double_entry_ledger, :command_queue, [])
-  @max_retries Keyword.get(@config, :max_retries, 5)
-  @base_delay Keyword.get(@config, :base_retry_delay, 30)
-  @max_delay Keyword.get(@config, :max_retry_delay, 3600)
+  # Tracked per key rather than as the whole `:command_queue` list. Reading the
+  # list itself with `compile_env/3` tracks every key in it, so setting ANY
+  # queue key at release time — including the live ones `CommandQueue.Config`
+  # reads with `get_env/3` — raised a compile-environment mismatch on boot.
+  # These three are the only queue keys baked in here, so these are the only
+  # three that must not move after compilation.
+  @max_retries Application.compile_env(:double_entry_ledger, [:command_queue, :max_retries], 5)
+  @base_delay Application.compile_env(
+                :double_entry_ledger,
+                [:command_queue, :base_retry_delay],
+                30
+              )
+  @max_delay Application.compile_env(
+               :double_entry_ledger,
+               [:command_queue, :max_retry_delay],
+               3600
+             )
 
   @processable_states QueryHelpers.processable_states()
+
+  @typedoc """
+  A queue row that a lease acquisition (`Lease.acquire/4`) moved out of
+  `:processing`, paired with the `processor_id` it carried beforehand.
+  """
+  @type orphan :: {Command.t(), String.t() | nil}
 
   @doc """
   Sets the next retry time for a failed command using exponential backoff.
@@ -55,9 +77,9 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     - `{:error, updated_command}` - The command with updated retry information
     - `{:error, changeset}` - Error updating the command
 
-  Raises `Ecto.StaleEntryError` when the `processor_version` fence loses, i.e.
-  the claim has since moved to another processor. Callers are expected to
-  rescue it and skip the command.
+  A command that carries a `lease_grant` is written under the lease
+  (`fenced_update/3`) and raises `Lease.LostError` when the ledger has moved
+  to another owner, without writing anything.
   """
   @spec schedule_retry_with_reason(
           Command.t(),
@@ -67,141 +89,197 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
         ) ::
           {:error, Command.t()} | {:error, Changeset.t()}
   def schedule_retry_with_reason(command, reason, status, repo \\ Repo) do
-    case build_schedule_retry_with_reason(command, reason, status) |> repo.update() do
-      {:ok, updated_command} ->
-        persisted_failure(updated_command)
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
+    fenced_update(command, repo, fn r ->
+      build_schedule_retry_with_reason(command, reason, status) |> r.update()
+    end)
   end
 
   @doc """
   Marks a command as permanently failed (`:dead_letter`) and persists the change.
+
+  Fenced on the command's `lease_grant` exactly like
+  `schedule_retry_with_reason/4`.
   """
   @spec mark_as_dead_letter(Command.t(), String.t(), Ecto.Repo.t()) ::
           {:error, Command.t()} | {:error, Changeset.t()}
   def mark_as_dead_letter(command, error, repo \\ Repo) do
-    case build_mark_as_dead_letter(command, error) |> repo.update() do
-      {:ok, updated_command} ->
-        persisted_failure(updated_command)
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
+    fenced_update(command, repo, fn r ->
+      build_mark_as_dead_letter(command, error) |> r.update()
+    end)
   end
 
+  # Both writes happen AFTER the processing Multi rolled back, outside any
+  # transaction, so the lease steps inside the Multi cannot cover them. Under a
+  # grant the write therefore runs in its own lease-locked transaction: a
+  # `LostError` propagates to the worker, which reports `{:error, :lease_lost}`,
+  # and nothing is written. With `nil` (the synchronous command-map path, which
+  # never claims and so is never under a lease) the write runs unfenced.
+  #
+  # `Lease.grant_for/1` decides which of the two this is, so "claimed implies a
+  # grant" is written once, in `Lease`, and a change to what counts as claimed
+  # does not have to be found in two modules. A claimed command (`:processing`)
+  # that arrives without its grant raises there, before the write.
+  #
+  # Beyond that, those are the only two clauses, matching `Lease.lock_step/2`
+  # and `BatchProcessor.batch_grant/1`: anything else in `lease_grant` reaches
+  # `fenced_update_with_grant/3`, which matches neither, and raises rather than
+  # quietly landing an unfenced write on a ledger this node may have lost.
+  #
+  # `persisted_failure/1` runs after `with_grant/3` has returned, so a write
+  # that rolled back emits no telemetry.
+  @spec fenced_update(Command.t(), Ecto.Repo.t(), (Ecto.Repo.t() -> term())) ::
+          {:error, Command.t()} | {:error, Changeset.t()}
+  defp fenced_update(%Command{} = command, repo, write) do
+    command
+    |> Lease.grant_for()
+    |> fenced_update_with_grant(repo, write)
+  end
+
+  defp fenced_update_with_grant(%Grant{} = grant, repo, write) do
+    grant
+    |> Lease.with_grant(repo, write)
+    |> emit_or_return()
+  end
+
+  defp fenced_update_with_grant(nil, repo, write) do
+    write.(repo) |> emit_or_return()
+  end
+
+  defp emit_or_return({:ok, updated_command}), do: persisted_failure(updated_command)
+  defp emit_or_return({:error, changeset}), do: {:error, changeset}
+
   @doc """
-  Claims a single command for processing by marking it as being processed by a
-  specific processor.
+  Claims a single command for processing under the lease `grant`.
 
-  The claim itself is `claim_batch_for_processing/3` applied to one command, so
-  status and retry deadline are enforced together inside one atomic UPDATE
-  (`QueryHelpers.retry_eligible/1`, evaluated on the database clock). A command
-  whose `next_retry_after` has not elapsed is therefore never claimed early,
-  and no separate check-then-claim window exists.
+  The claim is `claim_batch_for_processing/3` applied to one command, so it
+  runs in the same single transaction serialized on the ledger's lease row:
+  `Lease.lock!/3`, the claim UPDATE, `Lease.refresh_locked!/3`. Status and
+  retry deadline are enforced together inside that atomic UPDATE
+  (`QueryHelpers.retry_eligible/1`, evaluated on the database clock), so a
+  command whose `next_retry_after` has not elapsed is never claimed early and
+  no check-then-claim window exists.
 
-  The status load before the claim only short-circuits the obvious cases; the
-  reload after a zero-row UPDATE distinguishes "someone else claimed it" from
-  "not claimable".
+  The status load before the claim only short-circuits the obvious cases. A
+  zero-row UPDATE is no longer ambiguous: the lease proves no competing
+  claimer exists, so it can only mean the row is not claimable.
 
   ## Parameters
     - `id`: The UUID of the command to claim
-    - `processor_id`: A string identifier for the processor claiming the command
+    - `grant`: The `Lease.Grant` proving this node owns the ledger; its
+      `owner_id` is stamped on the row
     - `repo`: The Ecto repository to use (defaults to Repo)
 
   ## Returns
     - `{:ok, command}`: Claimed, carrying the refreshed `command_queue_item`
-      (`:processing`, `processor_id` stamped, `processor_version` advanced,
-      `retry_count` bumped for a retry, `next_retry_after` cleared)
+      (`:processing`, `processor_id` stamped,
+      `retry_count` bumped for a retry, `next_retry_after` cleared) and
+      `lease_grant` set to `grant`
     - `{:error, :command_not_found}`: If no command with the given ID exists
-    - `{:error, :command_already_claimed}`: If another processor claimed the
-      command between the load and the UPDATE
     - `{:error, :command_not_claimable}`: If the command is not in a claimable
       state, or its retry deadline is still in the database's future
+    - `{:error, :lease_lost}`: Another owner has the ledger; nothing was written
+    - `{:error, :lease_busy}`: The lease row lock was not granted within
+      `Config.lease_lock_timeout_ms/0`; nothing was written
+
+  Only `Lease.BusyError` becomes `:lease_busy`, which is `Lease.lock!/3`'s
+  narrow rule rather than the wider one `acquire/4`, `renew/3` and `release/3`
+  apply through `Lease.transient?/1`. The reason is structural, and covers all
+  three statements this `rescue` spans, not just the lock: every writer that
+  touches queue rows under the lease takes the lease row first, and none waits
+  on the lease row while already holding a queue row. No lock cycle containing
+  this transaction can therefore form, and the queue runs at READ COMMITTED,
+  where a serialization failure cannot arise either. A `deadlock_detected` or
+  `serialization_failure` here means a writer outside the lease discipline, or
+  a misconfigured isolation level, and must crash the caller visibly instead
+  of being retried as routine contention (R11.2).
+
+  Note that only the wait for the lease row is bounded.
+  `Lease.lock!/3` restores the caller's `lock_timeout` before it returns, so the claim UPDATE waits on queue rows with the
+  connection default, which is normally unlimited. Every queue-row writer now
+  takes the lease row first, so that wait is bounded by the holder's own
+  transaction rather than by an unfenced writer.
   """
-  @spec claim_command_for_processing(Ecto.UUID.t(), String.t(), Ecto.Repo.t()) ::
+  @spec claim_command_for_processing(Ecto.UUID.t(), Grant.t(), Ecto.Repo.t()) ::
           {:ok, Command.t()} | {:error, atom()}
-  def claim_command_for_processing(id, processor_id, repo \\ Repo) do
+  def claim_command_for_processing(id, %Grant{} = grant, repo \\ Repo) do
     case CommandStore.get_by_id(id) do
       nil ->
         {:error, :command_not_found}
 
       %{command_queue_item: %{status: state}} = command when state in @processable_states ->
-        case claim_batch_for_processing([command], processor_id, repo) do
+        case claim_batch_for_processing([command], grant, repo) do
           [claimed] -> {:ok, claimed}
-          [] -> classify_unclaimed(id)
+          [] -> {:error, :command_not_claimable}
         end
 
       _ ->
         {:error, :command_not_claimable}
     end
-  end
-
-  # The UPDATE matched no row: either a competing processor claimed it, or its
-  # retry deadline had not elapsed on the database clock.
-  @spec classify_unclaimed(Ecto.UUID.t()) :: {:error, atom()}
-  defp classify_unclaimed(id) do
-    case CommandStore.get_by_id(id) do
-      %{command_queue_item: %{status: :processing}} -> {:error, :command_already_claimed}
-      _ -> {:error, :command_not_claimable}
-    end
+  rescue
+    Lease.LostError -> {:error, :lease_lost}
+    Lease.BusyError -> {:error, :lease_busy}
   end
 
   @doc """
-  Claims a batch of commands for processing. This is the only claim
-  statement: `claim_command_for_processing/3` runs it with a single command.
+  Claims a batch of commands for processing under the lease `grant`. This is
+  the only claim statement: `claim_command_for_processing/3` runs it with a
+  single command.
 
-  For every command: status → `:processing`, stamps `processor_id`, clears
-  `next_retry_after`, advances `processor_version`, and bumps `retry_count`
-  (unchanged for `:pending`, `+1` otherwise). A single conditional bulk
-  update applies the appropriate retry-count rule to each row. The queue
-  trigger stamps `processing_started_at`.
+  Everything happens in one transaction serialized on the ledger's lease row,
+  opened by `Lease.with_grant/3`: `Lease.lock!/3` is its first statement and
+  `Lease.refresh_locked!/3` its last, with the claim UPDATE in between. The
+  lock is therefore held for the whole claim, so a takeover by another node
+  cannot interleave with it, and a rolled-back claim leaves the queue rows
+  untouched for the successor.
 
-  The status and retry-time guards in the UPDATE are the concurrency check
-  (in place of the single-row `optimistic_lock`): a command already claimed
-  by another processor, or rescheduled for a future retry, is skipped.
+  Going through `with_grant/3` rather than opening the transaction here is
+  what makes "lock first" enforceable rather than merely true. `lock!/3` on
+  its own asserts only that it is *inside* a transaction; a caller that wrapped
+  a claim in its own transaction would have `repo.transaction/1` join that one,
+  leaving the lease lock somewhere in the middle with queue rows already
+  written and no test able to see it. `with_grant/3` carries
+  `require_no_transaction!`, so such a caller raises `ArgumentError` instead.
+
+  For every command: status → `:processing`, stamps the grant's `owner_id` as
+  `processor_id`, clears `next_retry_after`, and
+  bumps `retry_count` (unchanged for `:pending`, `+1` otherwise). A single
+  conditional bulk update applies the appropriate retry-count rule to each
+  row. The queue trigger stamps `processing_started_at`.
+
+  The lease row lock is the only concurrency check; the queue row carries no
+  fence of its own. The status and retry-time guards in the UPDATE skip a
+  command that is not claimable or is rescheduled for a future retry, and the
+  ledger guard skips a command on any ledger other than the grant's: the lease
+  lock fences only the grant's own ledger, so a row from another one must never
+  be claimed under it. The guard is part of the UPDATE rather than a check
+  beforehand, so it cannot race.
 
   Returns the subset of `commands` that were actually claimed, in the same
-  order, each with a refreshed `command_queue_item`. Commands that raced
-  out of a claimable state are omitted.
+  order, each with a refreshed `command_queue_item` and `lease_grant` set to
+  `grant`, so processing can fence on the same grant. `Lease.LostError` and
+  `Lease.BusyError` propagate.
   """
-  @spec claim_batch_for_processing([Command.t()], String.t(), Ecto.Repo.t()) :: [Command.t()]
-  def claim_batch_for_processing(commands, processor_id, repo \\ Repo)
+  @spec claim_batch_for_processing([Command.t()], Grant.t(), Ecto.Repo.t()) :: [Command.t()]
+  def claim_batch_for_processing(commands, grant, repo \\ Repo)
 
-  def claim_batch_for_processing([], _processor_id, _repo), do: []
+  def claim_batch_for_processing([], _grant, _repo), do: []
 
-  def claim_batch_for_processing(commands, processor_id, repo) do
+  def claim_batch_for_processing(commands, %Grant{} = grant, repo) do
     ids = Enum.map(commands, & &1.id)
 
     {_count, claimed_items} =
-      from(eqi in CommandQueueItem,
-        prefix: ^@schema_prefix,
-        where: eqi.command_id in ^ids and retry_eligible(eqi),
-        update: [
-          set: [
-            status: :processing,
-            processor_id: ^processor_id,
-            next_retry_after: nil,
-            retry_count:
-              fragment(
-                "? + CASE WHEN ? IN ('occ_timeout', 'failed') THEN 1 ELSE 0 END",
-                eqi.retry_count,
-                eqi.status
-              )
-          ],
-          inc: [processor_version: 1]
-        ],
-        select: eqi
-      )
-      |> repo.update_all([])
+      Lease.with_grant(grant, repo, fn repo ->
+        repo.update_all(claim_query(ids, grant), [])
+      end)
 
     items_by_command_id = Map.new(claimed_items, &{&1.command_id, &1})
 
     claimed_commands =
       commands
       |> Enum.filter(&Map.has_key?(items_by_command_id, &1.id))
-      |> Enum.map(&%{&1 | command_queue_item: Map.fetch!(items_by_command_id, &1.id)})
+      |> Enum.map(
+        &%{&1 | command_queue_item: Map.fetch!(items_by_command_id, &1.id), lease_grant: grant}
+      )
 
     # One `[:command, :claim]` event per claimed command
     # (Telemetry.command_claim/1), single-command claims included.
@@ -209,12 +287,55 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       Telemetry.command_claim(%{
         command_id: command.id,
         instance_id: command.instance_id,
-        processor_id: processor_id,
+        processor_id: grant.owner_id,
         trace_context: command.trace_context
       })
     end)
 
     claimed_commands
+  end
+
+  defp claim_query(ids, %Grant{instance_id: instance_id, owner_id: processor_id}) do
+    from(eqi in CommandQueueItem,
+      prefix: ^@schema_prefix,
+      where: eqi.command_id in ^ids and eqi.instance_id == ^instance_id and retry_eligible(eqi),
+      update: [
+        set: [
+          status: :processing,
+          processor_id: ^processor_id,
+          next_retry_after: nil,
+          retry_count:
+            fragment(
+              "? + CASE WHEN ? IN ('occ_timeout', 'failed') THEN 1 ELSE 0 END",
+              eqi.retry_count,
+              eqi.status
+            )
+        ]
+      ],
+      select: eqi
+    )
+  end
+
+  @doc false
+  # Loads the commands for `ids` with their `command_queue_item` preloaded,
+  # preserving the order of `ids`. Commands that no longer exist are omitted.
+  #
+  # The single-id case is `Cleanup` reloading one row inside its fenced
+  # transaction; the many-id case is `InstanceProcessor` filling a batch
+  # window. One query rather than two that differ only by `==` versus `in`.
+  @spec load_commands([Ecto.UUID.t()], Ecto.Repo.t()) :: [Command.t()]
+  def load_commands(ids, repo \\ Repo) do
+    rows =
+      repo.all(
+        from(c in Command,
+          prefix: ^@schema_prefix,
+          where: c.id in ^ids,
+          preload: [:command_queue_item]
+        )
+      )
+
+    by_id = Map.new(rows, &{&1.id, &1})
+    Enum.flat_map(ids, fn id -> List.wrap(Map.get(by_id, id)) end)
   end
 
   @doc """
@@ -239,42 +360,33 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   end
 
   @doc """
-  Query for the distinct instance ids that have at least one processable
-  command, evaluating retry eligibility on the database clock
-  (`QueryHelpers.retry_eligible/1`). `InstanceMonitor` runs it on every poll.
+  Query for the distinct ids of instances with an eligible or `:processing`
+  row whose lease is missing, released or expired; `:processing` rows are
+  included so a ledger whose owner died with nothing else queued is still
+  taken over.
+
+  `released_at` is tested in its own right rather than relying on
+  `Lease.release/3` also stamping `expires_at` in the same statement: a
+  gracefully drained ledger must be offered to a successor immediately, and
+  that must not depend on how release happens to be worded.
+
+  Retry eligibility and lease expiry are both evaluated on the database clock
+  (`QueryHelpers.retry_eligible/1`, `statement_timestamp()`), so no
+  application timestamp is bound. `InstanceMonitor` runs it on every poll; a
+  ledger another node already owns is simply not offered.
   """
   @spec instances_with_processable_commands_query() :: Ecto.Query.t()
   def instances_with_processable_commands_query do
-    from(c in Command,
-      join: cqi in CommandQueueItem,
+    from(cqi in CommandQueueItem,
       prefix: ^@schema_prefix,
-      on: c.id == cqi.command_id,
-      where: retry_eligible(cqi),
-      select: c.instance_id,
+      left_join: l in CommandQueueLeaseRow,
+      on: l.instance_id == cqi.instance_id,
+      where:
+        (retry_eligible(cqi) or cqi.status == :processing) and
+          (is_nil(l.instance_id) or not is_nil(l.released_at) or
+             l.expires_at <= fragment("timezone('UTC', statement_timestamp())")),
+      select: cqi.instance_id,
       distinct: true
-    )
-  end
-
-  @doc """
-  Query for up to `limit` commands stranded in `:processing`: rows claimed at
-  least `stale_after_seconds` ago on the database clock whose owner never
-  reported back (`QueryHelpers.stale_processing/2`). Oldest claim first.
-
-  Selects `{command, queue_item, seconds_in_processing}` so the caller can
-  rebuild the command with its queue item and report how long the row was
-  stuck without consulting the application clock. `InstanceMonitor` runs it on
-  every poll and routes each row through the normal failure path.
-  """
-  @spec stale_processing_commands_query(non_neg_integer(), pos_integer()) :: Ecto.Query.t()
-  def stale_processing_commands_query(stale_after_seconds, limit) do
-    from(c in Command,
-      join: cqi in CommandQueueItem,
-      prefix: ^@schema_prefix,
-      on: c.id == cqi.command_id,
-      where: stale_processing(cqi, ^stale_after_seconds),
-      order_by: [asc: cqi.processing_started_at],
-      limit: ^limit,
-      select: {c, cqi, processing_age_seconds(cqi)}
     )
   end
 
@@ -343,37 +455,85 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
   ## Returns
     - `Ecto.Changeset.t()` - The changeset for updating the command
   """
-  @spec build_schedule_retry_with_reason(Command.t(), String.t() | nil, CommandQueueItem.state()) ::
-          Changeset.t()
+  @spec build_schedule_retry_with_reason(
+          Command.t(),
+          String.t() | nil,
+          CommandQueueItem.state(),
+          keyword()
+        ) :: Changeset.t()
   def build_schedule_retry_with_reason(
         %{command_queue_item: command_queue_item} = command,
         error,
-        status
+        status,
+        opts \\ []
       ) do
     retry_count = command_queue_item.retry_count || 0
 
     if retry_count >= @max_retries do
-      # Max retries exceeded, mark as dead letter
       build_mark_as_dead_letter(
         command,
         "Max retry count (#{@max_retries}) exceeded: #{error || status}"
       )
     else
-      # Exponential-backoff delay; the database turns it into next_retry_after.
-      retry_delay = calculate_retry_delay(retry_count)
+      # `retry_delay: 0` is used by lease takeover so orphaned rows are
+      # eligible at once; everything else gets exponential backoff.
+      retry_delay =
+        Keyword.get_lazy(opts, :retry_delay, fn -> calculate_retry_delay(retry_count) end)
 
       command_queue_item_changeset =
-        command_queue_item
-        |> CommandQueueItem.schedule_retry_changeset(
-          error,
-          status,
-          retry_delay
-        )
+        CommandQueueItem.schedule_retry_changeset(command_queue_item, error, status, retry_delay)
 
       command
       |> change(%{})
       |> put_assoc(:command_queue_item, command_queue_item_changeset)
     end
+  end
+
+  @doc false
+  # Only inside `Lease.acquire/4`, like `Lease.refresh_locked!/3`: called
+  # anywhere else it reschedules a live owner's in-flight rows with no fence.
+  #
+  # Reschedules every `:processing` row on `instance_id`, whatever its
+  # `processor_id`, as `:failed` with a zero retry delay, and returns one
+  # `t:orphan/0` per row, lowest queue position first.
+  #
+  # The previous `processor_id` is returned beside each command because the
+  # reschedule nulls it on the row: the caller reports it on
+  # `[:command, :recovered]` and has no other way to see it.
+  #
+  # `Lease.acquire/4` calls it inside the transaction that already holds the
+  # lease row lock, which proves no live lease-aware owner exists, so every
+  # `:processing` row is an orphan (a dead owner, a rolling deploy in progress,
+  # or a pre-lease manual call). Raises on any failure, including
+  # `Ecto.StaleEntryError`, so the caller's transaction rolls back. Emits
+  # nothing; the caller emits after commit.
+  @spec reschedule_orphaned_processing!(Ecto.UUID.t(), Ecto.Repo.t()) :: [orphan()]
+  def reschedule_orphaned_processing!(instance_id, repo) do
+    from(c in Command,
+      prefix: ^@schema_prefix,
+      join: cqi in CommandQueueItem,
+      on: cqi.command_id == c.id,
+      where: cqi.instance_id == ^instance_id and cqi.status == :processing,
+      order_by: [asc: cqi.queue_position],
+      preload: [command_queue_item: cqi]
+    )
+    |> repo.all()
+    |> Enum.map(&reschedule_orphan!(&1, repo))
+  end
+
+  defp reschedule_orphan!(command, repo) do
+    previous_processor_id = command.command_queue_item.processor_id
+
+    reason =
+      "orphaned by lease acquisition; previous processor " <>
+        inspect(previous_processor_id)
+
+    rescheduled =
+      command
+      |> build_schedule_retry_with_reason(reason, :failed, retry_delay: 0)
+      |> repo.update!()
+
+    {rescheduled, previous_processor_id}
   end
 
   @doc """
@@ -431,30 +591,53 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     |> put_assoc(:command_queue_item, command_queue_changeset)
   end
 
-  @doc "Emits telemetry for a persisted command failure and returns its worker error tuple."
+  @doc """
+  Emits telemetry for a persisted command failure and returns its worker error
+  tuple.
+
+  The head pattern is deliberately narrow: this is the library's own path, and
+  a queue row whose newest error is not an entry `ErrorMap.build_error/2` built
+  — an empty list, or a row loaded from the database with string keys and never
+  re-prepended — means the write that was supposed to record a failure did not.
+  That raises here rather than reporting nothing, exactly as it did before
+  `:class` existed.
+  """
   @spec persisted_failure(Command.t()) :: {:error, Command.t()}
   def persisted_failure(
-        %Command{command_queue_item: %{errors: [%{message: message} | _], status: status}} =
-          command
+        %Command{
+          command_queue_item: %{errors: [%{message: _, class: _} = error | _], status: status}
+        } = command
       ) do
-    emit_persisted_failure(command, status, message)
+    emit_persisted_failure(command, status, error)
     {:error, command}
   end
 
-  @doc "Emits retry or dead-letter telemetry after a failure transition is persisted."
-  @spec emit_persisted_failure(Command.t(), CommandQueueItem.state(), String.t()) :: :ok
-  def emit_persisted_failure(command, :dead_letter, message) do
+  @doc """
+  Emits retry or dead-letter telemetry after a failure transition is persisted.
+
+  `error` is the entry `ErrorMap.build_error/2` wrote at the head of the queue
+  row's `errors`. Its `:class` is carried as a field rather than recovered from
+  `:message`, so what leaves the database is decided where the entry is built.
+
+  A failure status whose `error` is not such an entry logs at `:error` and emits
+  nothing; it cannot raise, because this is called by the library after the
+  write already committed. A status that is not a failure transition is a
+  silent `:ok` — there is nothing to report.
+  """
+  @spec emit_persisted_failure(Command.t(), CommandQueueItem.state(), ErrorMap.error()) :: :ok
+  def emit_persisted_failure(command, :dead_letter, %{message: message, class: class}) do
     Logger.error("dead-lettering command #{command.id}: #{message}")
 
     Telemetry.command_dead_letter(%{
       command_id: command.id,
       instance_id: command.instance_id,
-      error: message,
+      error: class,
       trace_context: command.trace_context
     })
   end
 
-  def emit_persisted_failure(command, status, message) when status in [:failed, :occ_timeout] do
+  def emit_persisted_failure(command, status, %{message: message})
+      when status in [:failed, :occ_timeout] do
     Logger.warning("command #{command.id} persisted with #{status} status: #{message}")
 
     Telemetry.command_retry(%{
@@ -466,7 +649,22 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
     })
   end
 
-  def emit_persisted_failure(_command, _status, _message), do: :ok
+  # A failure transition whose head error entry is not one
+  # `ErrorMap.build_error/2` built. Nothing can be reported from it, and this
+  # function is public, so say so at `:error` rather than returning `:ok` as if
+  # the event had fired. The entry itself is NOT logged: it is the one term here
+  # that can hold a fragment of a command's payload, and the command id is
+  # enough to find the row.
+  def emit_persisted_failure(command, status, _error)
+      when status in [:failed, :occ_timeout, :dead_letter] do
+    Logger.error(
+      "no #{status} telemetry emitted for command #{command.id}: the newest entry in its " <>
+        "errors is not an ErrorMap entry, so it carries neither a message nor a class"
+    )
+  end
+
+  # Not a failure transition: there is nothing to report.
+  def emit_persisted_failure(_command, _status, _error), do: :ok
 
   # Private function to calculate retry delay
   @spec calculate_retry_delay(non_neg_integer()) :: non_neg_integer()

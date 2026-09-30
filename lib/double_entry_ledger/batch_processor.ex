@@ -57,7 +57,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
     Transaction
   }
 
-  alias DoubleEntryLedger.CommandQueue.{OwnershipError, Scheduling}
+  alias DoubleEntryLedger.CommandQueue.{Lease, Scheduling}
   alias DoubleEntryLedger.Stores.BatchTransactionStoreHelper
   alias DoubleEntryLedger.Workers.CommandWorker.TransactionCommandTransformer
 
@@ -267,22 +267,31 @@ defmodule DoubleEntryLedger.BatchProcessor do
     # so we discard the local copy and return the original `accounts` to
     # the caller via the error branch (state unchanged for this command).
     Enum.reduce_while(entries, {:ok, accounts, []}, fn entry, {:ok, accs, snaps} ->
-      case Map.fetch(accs, entry.account_id) do
-        {:ok, account} ->
-          case Account.compute_balance_changes(account, entry, trx) do
-            {:ok, change} ->
-              next_account = Account.apply_balance_change(account, change)
-              snapshot = Map.put(entry, :account_after, next_account)
-              {:cont, {:ok, Map.put(accs, account.id, next_account), [snapshot | snaps]}}
+      case apply_entry(accs, entry, trx) do
+        {:ok, next_account} ->
+          snapshot = Map.put(entry, :account_after, next_account)
+          {:cont, {:ok, Map.put(accs, next_account.id, next_account), [snapshot | snaps]}}
 
-            {:error, field, message} ->
-              {:halt, {:error, {:balance_change_error, field, message}}}
-          end
-
-        :error ->
-          {:halt, {:error, {:account_not_found, entry.account_id}}}
+        {:error, reason} ->
+          {:halt, {:error, reason}}
       end
     end)
+  end
+
+  @spec apply_entry(map(), entry(), DoubleEntryLedger.Types.trx_types()) ::
+          {:ok, Account.t()} | {:error, failure_reason()}
+  defp apply_entry(accounts, entry, trx) do
+    case Map.fetch(accounts, entry.account_id) do
+      {:ok, account} -> apply_balance_change(account, entry, trx)
+      :error -> {:error, {:account_not_found, entry.account_id}}
+    end
+  end
+
+  defp apply_balance_change(account, entry, trx) do
+    case Account.compute_balance_changes(account, entry, trx) do
+      {:ok, change} -> {:ok, Account.apply_balance_change(account, change)}
+      {:error, field, message} -> {:error, {:balance_change_error, field, message}}
+    end
   end
 
   @spec build_merged_accounts(map(), map()) :: %{Ecto.UUID.t() => merged_account_state()}
@@ -343,14 +352,21 @@ defmodule DoubleEntryLedger.BatchProcessor do
     * On `Ecto.StaleEntryError`: re-preloads accounts, re-runs fold,
       retries up to `:max_batch_retries` times (default 3, configurable
       via `:double_entry_ledger, :max_batch_retries`).
-    * On command ownership loss: returns `{:error, :command_ownership_lost}`
-      immediately without retrying or splitting the stale command structs.
+    * On lease loss: returns `{:error, :lease_lost}` — another node owns the
+      ledger and nothing was written. On lease contention:
+      `{:error, :lease_busy}` — the lease row lock was not granted within
+      `CommandQueue.Config.lease_lock_timeout_ms/0`, again with nothing
+      written. Both are immediate: no retry, no split.
     * On retry exhaustion AND `length(commands) > 1`: splits the batch
       in half and recurses on each half. Combines results.
     * On retry exhaustion with `length(commands) <= 1`: propagates
       `{:error, %Ecto.StaleEntryError{}}`.
     * On any other DB error: propagates `{:error, reason}` — the caller
       decides whether to fall back to per-cmd processing.
+    * Raises `ArgumentError` before reading or writing anything when the
+      commands do not all carry the identical `lease_grant`, or when a
+      command's grant is for a ledger other than its own `instance_id`. A
+      batch whose commands all carry `nil` runs unfenced, as before.
 
   ## Return shape
 
@@ -374,9 +390,13 @@ defmodule DoubleEntryLedger.BatchProcessor do
     now = DateTime.utc_now()
     started = System.monotonic_time()
 
+    # Resolved before anything else so a batch with mismatched grants raises
+    # before any read or write.
+    grant = batch_grant(commands)
+
     {command_inputs, initial_failures} = extract_inputs(commands)
 
-    case write_with_retry(command_inputs, initial_failures, commands, repo, now, 0) do
+    case write_with_retry(command_inputs, initial_failures, commands, grant, repo, now, 0) do
       {:ok, write_plan} ->
         emit_per_command_telemetry(
           write_plan,
@@ -610,11 +630,12 @@ defmodule DoubleEntryLedger.BatchProcessor do
           [command_input()],
           [failure_record()],
           [Command.t()],
+          Lease.Grant.t() | nil,
           Ecto.Repo.t(),
           DateTime.t(),
           non_neg_integer()
         ) :: {:ok, write_plan()} | {:error, term()}
-  defp write_with_retry(command_inputs, initial_failures, commands, repo, now, attempt) do
+  defp write_with_retry(command_inputs, initial_failures, commands, grant, repo, now, attempt) do
     # B4 same-batch dep detection runs FIRST: same triple appearing on a
     # create+update (the update can't see the still-uncommitted create)
     # or on multiple updates (double-reversal) both produce diverted
@@ -660,10 +681,10 @@ defmodule DoubleEntryLedger.BatchProcessor do
       merged_accounts: fold_plan.merged_accounts
     }
 
-    case do_write(write_plan, repo, now) do
+    case do_write(write_plan, repo, now, grant) do
       {:ok, persisted_failures} ->
         Enum.each(persisted_failures, fn plan ->
-          Scheduling.emit_persisted_failure(plan.command, plan.status, plan.error.message)
+          Scheduling.emit_persisted_failure(plan.command, plan.status, plan.error)
         end)
 
         emit_telemetry(commands, write_plan, attempt)
@@ -681,6 +702,7 @@ defmodule DoubleEntryLedger.BatchProcessor do
             command_inputs,
             initial_failures,
             commands,
+            grant,
             repo,
             now,
             attempt + 1
@@ -701,22 +723,86 @@ defmodule DoubleEntryLedger.BatchProcessor do
   # is converted to `{:error, e}` rather than allowed to crash the batch
   # task — the caller then falls back to per-command processing (plan §8.3),
   # keeping worst-case behaviour no worse than the single-command path.
-  @spec do_write(write_plan(), Ecto.Repo.t(), DateTime.t()) ::
+  @spec do_write(write_plan(), Ecto.Repo.t(), DateTime.t(), Lease.Grant.t() | nil) ::
           {:ok, [BatchTransactionStoreHelper.planned_failure()]} | {:error, term()}
-  defp do_write(write_plan, repo, now) do
+  defp do_write(write_plan, repo, now, grant) do
     repo.transaction(fn ->
+      lease_lock(grant, repo)
       BatchTransactionStoreHelper.write_successes(write_plan, repo, now)
-      BatchTransactionStoreHelper.write_failures(write_plan.failures, repo, now)
+      failures = BatchTransactionStoreHelper.write_failures(write_plan.failures, repo, now)
+      lease_refresh(grant, repo)
+      failures
     end)
     |> case do
       {:ok, persisted_failures} -> {:ok, persisted_failures}
       {:error, reason} -> {:error, reason}
     end
   rescue
-    _error in OwnershipError -> {:error, :command_ownership_lost}
+    _error in Lease.LostError -> {:error, :lease_lost}
+    _error in Lease.BusyError -> {:error, :lease_busy}
     e in Ecto.StaleEntryError -> {:error, e}
     e in [Ecto.ConstraintError, Postgrex.Error] -> {:error, e}
   end
+
+  # One grant fences the whole write, so every command must carry that same
+  # grant, and it must be a grant for the command's own ledger: the lease lock
+  # fences only the grant's ledger. Each command's grant is resolved through
+  # `Lease.grant_for/1`, so any command whose queue row is `:processing` but
+  # carries no grant raises there. Grants that are not all identical, or a
+  # grant for another ledger, raise `ArgumentError` here, before anything is
+  # read or written. The recursive `run_batch/2` calls from
+  # `handle_split_or_give_up/3` re-derive it from their own sub-lists.
+  #
+  # Commands that were never claimed under a lease (the synchronous path) all
+  # carry `nil` and the write runs unfenced. A `lease_grant` that is neither a
+  # grant nor `nil` is passed through unexamined, so it raises in
+  # `lease_lock/2` rather than silently turning the fence off.
+  #
+  # The messages name commands by id and grants by ledger, owner and token,
+  # never by payload.
+  @spec batch_grant([Command.t()]) :: Lease.Grant.t() | nil | term()
+  defp batch_grant([]), do: nil
+
+  defp batch_grant([%Command{} = head | rest]) do
+    grant = Lease.grant_for(head)
+    Enum.each(rest, &same_grant!(&1, Lease.grant_for(&1), head, grant))
+    Enum.each([head | rest], &own_ledger!(&1, grant))
+    grant
+  end
+
+  defp same_grant!(_command, grant, _head, grant), do: :ok
+
+  defp same_grant!(command, other, head, grant) do
+    raise ArgumentError,
+          "a batch must carry one lease grant, but command #{command.id} carries " <>
+            "#{describe_grant(other)} while command #{head.id} carries " <>
+            describe_grant(grant)
+  end
+
+  defp own_ledger!(%Command{instance_id: instance_id}, %Lease.Grant{instance_id: instance_id}),
+    do: :ok
+
+  defp own_ledger!(%Command{} = command, %Lease.Grant{} = grant) do
+    raise ArgumentError,
+          "command #{command.id} is on ledger #{command.instance_id} but carries " <>
+            describe_grant(grant)
+  end
+
+  defp own_ledger!(_command, _not_a_grant), do: :ok
+
+  defp describe_grant(%Lease.Grant{} = grant) do
+    "the grant for ledger #{grant.instance_id} " <>
+      "(owner #{grant.owner_id}, fencing token #{grant.fencing_token})"
+  end
+
+  defp describe_grant(nil), do: "no grant"
+  defp describe_grant(other), do: "a lease_grant of #{inspect(other)}"
+
+  defp lease_lock(%Lease.Grant{} = grant, repo), do: Lease.lock!(grant, repo)
+  defp lease_lock(nil, _repo), do: :ok
+
+  defp lease_refresh(%Lease.Grant{} = grant, repo), do: Lease.refresh_locked!(grant, repo)
+  defp lease_refresh(nil, _repo), do: :ok
 
   # ── split-on-exhaustion ──────────────────────────────────────────
 
@@ -948,22 +1034,25 @@ defmodule DoubleEntryLedger.BatchProcessor do
 
     result =
       Enum.reduce_while(new_entries, {:ok, []}, fn new_entry, {:ok, acc} ->
-        case Map.fetch(existing_by_account_id, new_entry.account_id) do
-          {:ok, existing} ->
-            if new_entry.type == existing.type do
-              {:cont, {:ok, [{new_entry, existing} | acc]}}
-            else
-              {:halt, {:error, :entry_type_changed}}
-            end
-
-          :error ->
-            {:halt, {:error, :entry_account_mismatch}}
+        case pair_entry(existing_by_account_id, new_entry) do
+          {:ok, existing} -> {:cont, {:ok, [{new_entry, existing} | acc]}}
+          {:error, reason} -> {:halt, {:error, reason}}
         end
       end)
 
     case result do
       {:ok, paired_rev} -> {:ok, Enum.reverse(paired_rev)}
       err -> err
+    end
+  end
+
+  defp pair_entry(existing_by_account_id, new_entry) do
+    new_type = new_entry.type
+
+    case Map.fetch(existing_by_account_id, new_entry.account_id) do
+      {:ok, %{type: ^new_type} = existing} -> {:ok, existing}
+      {:ok, _existing} -> {:error, :entry_type_changed}
+      :error -> {:error, :entry_account_mismatch}
     end
   end
 

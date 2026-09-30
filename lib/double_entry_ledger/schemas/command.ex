@@ -11,10 +11,10 @@ defmodule DoubleEntryLedger.Command do
 
   alias DoubleEntryLedger.{
     Account,
-    Transaction,
+    CommandQueueItem,
     Instance,
     JournalEvent,
-    CommandQueueItem
+    Transaction
   }
 
   alias DoubleEntryLedger.Command.CommandMap
@@ -35,6 +35,8 @@ defmodule DoubleEntryLedger.Command do
   * `trace_context`: optional map of vendor-neutral distributed tracing context
     (e.g. W3C traceparent/tracestate). Stored in its own column for independent
     access. The library never interprets the contents.
+  * `lease_grant`: virtual; the grant a claim ran under, so processing can
+    fence on it
   * `instance`: Association to the ledger instance
   * `instance_id`: Foreign key to the ledger instance
   * `command_queue_item`: Association to the queue item holding the processing state
@@ -48,6 +50,7 @@ defmodule DoubleEntryLedger.Command do
           id: Ecto.UUID.t() | nil,
           command_map: map() | nil,
           trace_context: map() | nil,
+          lease_grant: DoubleEntryLedger.CommandQueue.Lease.Grant.t() | nil,
           instance: Instance.t() | Ecto.Association.NotLoaded.t(),
           instance_id: Ecto.UUID.t() | nil,
           journal_event: JournalEvent.t() | Ecto.Association.NotLoaded.t(),
@@ -60,8 +63,9 @@ defmodule DoubleEntryLedger.Command do
 
   @derive {Jason.Encoder, only: [:id, :command_map, :command_queue_item]}
 
-  @derive {
-    Flop.Schema,
+  use Flop.Schema
+
+  @flop_options [
     filterable: [],
     sortable: [:inserted_at, :id],
     default_limit: 40,
@@ -70,11 +74,12 @@ defmodule DoubleEntryLedger.Command do
       order_by: [:inserted_at, :id],
       order_directions: [:desc, :desc]
     }
-  }
+  ]
 
   schema "commands" do
     field(:command_map, CommandMap, skip_default_validation: true)
     field(:trace_context, :map)
+    field(:lease_grant, :map, virtual: true)
 
     belongs_to(:instance, Instance, type: Ecto.UUID)
     has_one(:journal_event, JournalEvent)

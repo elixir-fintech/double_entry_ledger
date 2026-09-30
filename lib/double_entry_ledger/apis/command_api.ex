@@ -33,9 +33,9 @@ defmodule DoubleEntryLedger.Apis.CommandApi do
   import DoubleEntryLedger.Command.Helper, only: [actions: 1]
 
   alias DoubleEntryLedger.Command
-  alias DoubleEntryLedger.Workers.CommandWorker
-  alias DoubleEntryLedger.Command.{TransactionCommandMap, AccountCommandMap}
+  alias DoubleEntryLedger.Command.{AccountCommandMap, TransactionCommandMap}
   alias DoubleEntryLedger.Stores.CommandStore
+  alias DoubleEntryLedger.Workers.CommandWorker
 
   @account_actions actions(:account) |> Enum.map(&Atom.to_string/1)
   @transaction_actions actions(:transaction) |> Enum.map(&Atom.to_string/1)

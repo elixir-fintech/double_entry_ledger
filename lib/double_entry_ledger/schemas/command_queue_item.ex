@@ -22,9 +22,9 @@ defmodule DoubleEntryLedger.CommandQueueItem do
 
   use DoubleEntryLedger.BaseSchema
   import Ecto.Changeset
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
-  alias DoubleEntryLedger.Command.ErrorMap
   alias DoubleEntryLedger.{Command, Instance}
+  alias DoubleEntryLedger.Command.ErrorMap
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateCommandError
   import DoubleEntryLedger.Command.ErrorMap, only: [build_error: 1]
 
   alias __MODULE__, as: CommandQueueItem
@@ -33,7 +33,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
           id: Ecto.UUID.t() | nil,
           status: state() | nil,
           processor_id: String.t() | nil,
-          processor_version: integer() | nil,
           processing_started_at: DateTime.t() | nil,
           processing_completed_at: DateTime.t() | nil,
           retry_count: integer() | nil,
@@ -62,7 +61,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
   schema "command_queue_items" do
     field(:status, Ecto.Enum, values: @states, default: :pending)
     field(:processor_id, :string)
-    field(:processor_version, :integer, default: 1)
     field(:processing_started_at, :utc_datetime_usec, read_after_writes: true)
     field(:processing_completed_at, :utc_datetime_usec, read_after_writes: true)
     field(:retry_count, :integer, default: 0)
@@ -90,7 +88,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
     |> cast(attrs, [
       :status,
       :processor_id,
-      :processor_version,
       :retry_count,
       :next_retry_after,
       :occ_retry_count,
@@ -103,8 +100,8 @@ defmodule DoubleEntryLedger.CommandQueueItem do
   end
 
   @doc """
-  Marks the queue item `:processed` and clears its retry deadline, fenced on
-  `processor_version`.
+  Marks the queue item `:processed` and clears its retry deadline, fenced by
+  the ledger lease held by the calling transaction.
   """
   @spec processing_complete_changeset(CommandQueueItem.t()) :: Ecto.Changeset.t()
   def processing_complete_changeset(command_queue_item) do
@@ -113,12 +110,11 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       status: :processed,
       next_retry_after: nil
     })
-    |> optimistic_lock(:processor_version)
   end
 
   @doc """
   Returns the queue item to `:pending` so it can be claimed again, recording
-  `error` and fenced on `processor_version`.
+  `error`, fenced by the ledger lease held by the calling transaction.
   """
   @spec revert_to_pending_changeset(CommandQueueItem.t(), any()) :: Ecto.Changeset.t()
   def revert_to_pending_changeset(command_queue_item, error \\ nil) do
@@ -127,12 +123,11 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       status: :pending,
       errors: build_errors(command_queue_item, error)
     })
-    |> optimistic_lock(:processor_version)
   end
 
   @doc """
   Marks the queue item `:dead_letter`, recording `error` and clearing its retry
-  deadline, fenced on `processor_version`.
+  deadline, fenced by the ledger lease held by the calling transaction.
   """
   @spec dead_letter_changeset(CommandQueueItem.t(), any()) :: Ecto.Changeset.t()
   def dead_letter_changeset(command_queue_item, error) do
@@ -142,11 +137,11 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       errors: build_errors(command_queue_item, error),
       next_retry_after: nil
     })
-    |> optimistic_lock(:processor_version)
   end
 
   @doc """
-  Schedules a retry `delay` seconds from now on the database clock.
+  Schedules a retry `delay` seconds from now on the database clock, fenced by
+  the ledger lease held by the calling transaction.
 
   Writes `retry_delay_seconds`; the queue trigger computes `next_retry_after`
   from it, so the returned struct carries the database-produced deadline.
@@ -165,12 +160,12 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       processor_id: nil,
       errors: build_errors(command_queue_item, error)
     })
-    |> optimistic_lock(:processor_version)
   end
 
   @doc """
   Schedules the retry of an update command `retry_delay` seconds after its
-  create command's own retry time.
+  create command's own retry time, fenced by the ledger lease held by the
+  calling transaction.
 
   When the create command carries a `next_retry_after` (a database-produced
   value) the deadline is derived from it directly. Otherwise only
@@ -197,7 +192,6 @@ defmodule DoubleEntryLedger.CommandQueueItem do
       errors: build_errors(command_queue_item, message)
     )
     |> change(retry_timing(create_next_retry_after, retry_delay))
-    |> optimistic_lock(:processor_version)
   end
 
   @spec retry_timing(DateTime.t() | nil, non_neg_integer()) :: keyword()

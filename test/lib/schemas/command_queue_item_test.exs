@@ -5,8 +5,8 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
   use ExUnit.Case
   use DoubleEntryLedger.RepoCase
 
-  alias Ecto.Changeset
   alias DoubleEntryLedger.CommandQueueItem
+  alias Ecto.Changeset
 
   doctest CommandQueueItem
 
@@ -14,7 +14,6 @@ defmodule DoubleEntryLedger.EventQueueItemTest do
     test "adds default values" do
       assert %CommandQueueItem{
                status: :pending,
-               processor_version: 1,
                retry_count: 0,
                occ_retry_count: 0,
                errors: []

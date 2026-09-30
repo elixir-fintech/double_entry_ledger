@@ -67,3 +67,13 @@ jobs:
       run: mix load.process 10 10
       env:
         MIX_ENV: perf
+    # Exercises the production consumer path end to end: enqueue through
+    # CommandApi, then acquire a lease and drain with a real InstanceProcessor.
+    # `load.process` starts no processor, so without this step nothing in CI
+    # runs the queue's dispatch, claim and lease code outside the test sandbox.
+    # 200 commands takes a few seconds; the task drops and recreates the perf
+    # database itself.
+    - name: Run drain load test
+      run: mix load.drain 200
+      env:
+        MIX_ENV: perf

@@ -26,7 +26,7 @@ defmodule DoubleEntryLedger.Utils.Currency do
       [:AED, :AFN, :ALL]
   """
   @spec currency_atoms() :: list(currency_atom())
-  def currency_atoms(), do: @currency_atoms
+  def currency_atoms, do: @currency_atoms
 
   @doc """
   Converts an amount and a currency to a `Money` struct, ensuring the amount is positive.
@@ -93,12 +93,10 @@ defmodule DoubleEntryLedger.Utils.Currency do
   end
 
   def to_money(amount, currency) when is_integer(amount) and is_binary(currency) do
-    try do
-      to_money(amount, String.to_existing_atom(currency))
-    rescue
-      ArgumentError ->
-        {:error, "Invalid currency"}
-    end
+    to_money(amount, String.to_existing_atom(currency))
+  rescue
+    ArgumentError ->
+      {:error, "Invalid currency"}
   end
 
   def to_money(_amount, _currency), do: {:error, "Invalid amount or currency"}

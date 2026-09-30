@@ -11,10 +11,10 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoS
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
 
-  alias Ecto.Changeset
   alias DoubleEntryLedger.Command.TransactionCommandMap, as: TransactionCommandMapSchema
-  alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoSaveOnError
   alias DoubleEntryLedger.Workers.CommandWorker.CreateTransactionCommand
+  alias DoubleEntryLedger.Workers.CommandWorker.UpdateTransactionCommandMapNoSaveOnError
+  alias Ecto.Changeset
 
   doctest UpdateTransactionCommandMapNoSaveOnError
 

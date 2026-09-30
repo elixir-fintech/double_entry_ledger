@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.PendingTransactionLookup do
   import Ecto.Changeset
 
   alias __MODULE__, as: PendingTransactionLookup
-  alias DoubleEntryLedger.{Instance, Command, Transaction, JournalEvent}
+  alias DoubleEntryLedger.{Command, Instance, JournalEvent, Transaction}
 
   @type t :: %PendingTransactionLookup{
           source: String.t(),

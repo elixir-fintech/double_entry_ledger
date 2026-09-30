@@ -14,7 +14,10 @@ defmodule DoubleEntryLedger.AccountFixtures do
     random_name =
       "account_#{:crypto.strong_rand_bytes(4) |> Base.encode64() |> binary_part(0, 8)}"
 
-    address = "account:main#{:rand.uniform(1_000_000)}"
+    # `System.unique_integer/1` rather than a random draw: the address has a
+    # unique index, and a 1..1_000_000 draw collides by birthday paradox once a
+    # run inserts a few thousand accounts (it did, at seed 33).
+    address = "account:main#{System.unique_integer([:positive, :monotonic])}"
 
     attrs =
       attrs

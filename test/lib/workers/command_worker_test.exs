@@ -9,7 +9,9 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
   import DoubleEntryLedger.CommandFixtures
   import DoubleEntryLedger.AccountFixtures
   import DoubleEntryLedger.InstanceFixtures
+  import DoubleEntryLedger.LeaseFixtures
 
+  alias DoubleEntryLedger.{CommandQueueItem, JournalEvent, Transaction}
   alias DoubleEntryLedger.Stores.CommandStore
 
   alias DoubleEntryLedger.Workers.CommandWorker
@@ -18,27 +20,6 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
 
   describe "process_command_with_id/1" do
     setup [:create_instance, :create_accounts]
-
-    test "returns ownership lost when another processor replaces its claim", ctx do
-      %{command: pending_command} = new_create_transaction_command(ctx)
-      handler_id = "steal-command-claim-#{System.unique_integer([:positive])}"
-
-      :telemetry.attach(
-        handler_id,
-        [:double_entry_ledger, :command, :claim],
-        &__MODULE__.replace_claim_owner/4,
-        nil
-      )
-
-      on_exit(fn -> :telemetry.detach(handler_id) end)
-
-      assert {:error, :command_ownership_lost} =
-               CommandWorker.process_command_with_id(pending_command.id, "old-owner")
-
-      current = CommandStore.get_by_id(pending_command.id).command_queue_item
-      assert current.status == :processing
-      assert current.processor_id == "replacement-owner"
-    end
 
     test "process create command successfully", ctx do
       %{command: pending_command} = new_create_transaction_command(ctx)
@@ -120,13 +101,79 @@ defmodule DoubleEntryLedger.Workers.CommandWorkerTest do
     end
   end
 
-  def replace_claim_owner(_event, _measurements, %{command_id: command_id}, _config) do
-    command_id
-    |> CommandStore.get_by_id()
-    |> Map.fetch!(:command_queue_item)
-    |> Ecto.Changeset.change(processor_id: "replacement-owner")
-    |> Ecto.Changeset.optimistic_lock(:processor_version)
-    |> Repo.update!()
+  describe "process_command_with_id/2 with a string owner (manual path)" do
+    setup [:create_instance, :create_accounts]
+
+    test "acquires, processes, releases; the lease row shows released_at", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      released = attach_telemetry([:double_entry_ledger, :lease, :released])
+
+      assert {:ok, _, _} = CommandWorker.process_command_with_id(command.id)
+
+      row = lease_row(ctx.instance.id)
+      assert row.released_at
+      assert row.owner_id =~ ~r/^manual:/
+
+      assert_receive {:telemetry_event, ^released, _, _,
+                      %{coordination: :manual, reason: :manual}}
+    end
+
+    test "{:error, :ledger_owned} when another owner holds the ledger; command stays pending",
+         ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      _grant = test_grant(ctx.instance.id)
+
+      assert {:error, :ledger_owned} = CommandWorker.process_command_with_id(command.id)
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :pending
+    end
+
+    # The lease row has to be committed outside the sandbox for a second
+    # connection to contend for it, so this builds its own instance and
+    # command on the probe rather than using the describe's fixtures.
+    test "{:error, :ledger_busy} when the lease row is locked past the timeout" do
+      put_queue_config(lease_lock_timeout_ms: 200)
+      probe = probe_connection()
+      grant = committed_lease(probe, "holder", 1)
+      command_id = committed_command(probe, grant.instance_id)
+      expire_lease_on_probe(probe, grant)
+      hold_lock_on_probe(probe, grant)
+
+      assert {:error, :ledger_busy} = CommandWorker.process_command_with_id(command_id)
+    end
+
+    test "{:error, :in_transaction} inside a transaction, nothing acquired or emitted", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      ref = attach_telemetry([:double_entry_ledger, :lease, :acquired])
+
+      {:ok, result} =
+        Repo.transaction(fn -> CommandWorker.process_command_with_id(command.id) end)
+
+      assert result == {:error, :in_transaction}
+      assert lease_row(ctx.instance.id) == nil
+      refute_receive {:telemetry_event, ^ref, _, _, _}, 100
+    end
+
+    test "with a grant, claims under that grant", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      grant = test_grant(ctx.instance.id)
+
+      assert {:ok, _, _} = CommandWorker.process_command_with_id(command.id, grant)
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).processor_id == grant.owner_id
+    end
+
+    test "with another ledger's grant, returns an error and writes nothing", ctx do
+      {:ok, command} = CommandStore.create(create_transaction_command_map(ctx, :posted))
+      other = instance_fixture(address: "other:ledger:address")
+      grant = test_grant(other.id)
+
+      assert {:error, _reason} = CommandWorker.process_command_with_id(command.id, grant)
+
+      assert Repo.aggregate(from(j in JournalEvent, where: j.command_id == ^command.id), :count) ==
+               0
+
+      assert Repo.aggregate(Transaction, :count) == 0
+      assert Repo.get_by(CommandQueueItem, command_id: command.id).status == :pending
+    end
   end
 
   describe "process_command_map/1" do

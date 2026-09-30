@@ -65,7 +65,7 @@ defmodule DoubleEntryLedger.Command.IdempotencyKey do
   end
 
   @spec secret() :: binary()
-  defp secret() do
+  defp secret do
     Application.get_env(:double_entry_ledger, :idempotency_secret) ||
       raise """
       :double_entry_ledger, :idempotency_secret is not set.

@@ -210,21 +210,28 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
 
   defp compute_account_updates(transaction_map, accounts_by_id, entries, status) do
     Enum.reduce_while(entries, {:ok, %{}}, fn entry, {:ok, acc} ->
-      case Map.fetch(accounts_by_id, entry.account_id) do
-        {:ok, account} ->
-          case Account.compute_balance_changes(account, entry, status) do
-            {:ok, update} ->
-              {:cont, {:ok, Map.put(acc, account.id, update)}}
+      case compute_account_update(accounts_by_id, entry, status) do
+        {:ok, account_id, update} ->
+          {:cont, {:ok, Map.put(acc, account_id, update)}}
 
-            {:error, field, message} ->
-              {:halt, {:error, validation_error_changeset(transaction_map, field, message)}}
-          end
-
-        :error ->
-          {:halt,
-           {:error, validation_error_changeset(transaction_map, :account_id, "account not found")}}
+        {:error, field, message} ->
+          {:halt, {:error, validation_error_changeset(transaction_map, field, message)}}
       end
     end)
+  end
+
+  defp compute_account_update(accounts_by_id, entry, status) do
+    case Map.fetch(accounts_by_id, entry.account_id) do
+      {:ok, account} -> balance_change_update(account, entry, status)
+      :error -> {:error, :account_id, "account not found"}
+    end
+  end
+
+  defp balance_change_update(account, entry, status) do
+    case Account.compute_balance_changes(account, entry, status) do
+      {:ok, update} -> {:ok, account.id, update}
+      {:error, _field, _message} = error -> error
+    end
   end
 
   defp assert_min_entries(_transaction_map, entries) when length(entries) >= 2, do: :ok
@@ -235,17 +242,16 @@ defmodule DoubleEntryLedger.Stores.TransactionStoreHelper do
        validation_error_changeset(transaction_map, :entry_count, "must have at least 2 entries")}
 
   defp assert_accounts_on_ledger(transaction_map, accounts_by_id, entries, instance_id) do
-    if Enum.all?(entries, fn %{account_id: id} ->
-         case Map.fetch(accounts_by_id, id) do
-           {:ok, %{instance_id: ^instance_id}} -> true
-           _ -> false
-         end
-       end) do
+    if Enum.all?(entries, &account_on_ledger?(accounts_by_id, &1.account_id, instance_id)) do
       :ok
     else
       {:error,
        validation_error_changeset(transaction_map, :account_id, "accounts must be on same ledger")}
     end
+  end
+
+  defp account_on_ledger?(accounts_by_id, account_id, instance_id) do
+    match?({:ok, %{instance_id: ^instance_id}}, Map.fetch(accounts_by_id, account_id))
   end
 
   defp assert_balanced(transaction_map, entries) do
