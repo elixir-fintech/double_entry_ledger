@@ -100,10 +100,10 @@ defmodule DoubleEntryLedger.CommandQueue.Lease do
 
   `opts`:
 
-    * `:ttl` - seconds the acquired lease lives (default `Config.lease_ttl/0`)
+    * `:ttl` - seconds the acquired lease lives (default `DoubleEntryLedger.CommandQueue.Config.lease_ttl/0`)
     * `:coordination` - what nominated this owner; recorded on the grant and
       reported on every later lease event (default
-      `Config.coordination_strategy/0`, `:manual` on the manual path)
+      `DoubleEntryLedger.CommandQueue.Config.coordination_strategy/0`, `:manual` on the manual path)
   """
   @spec acquire(Ecto.UUID.t(), String.t(), Ecto.Repo.t(), keyword()) ::
           {:ok, Grant.t(), acquire_info()} | :held | :busy

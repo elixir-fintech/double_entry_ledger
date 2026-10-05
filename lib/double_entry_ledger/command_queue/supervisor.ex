@@ -7,13 +7,13 @@ defmodule DoubleEntryLedger.CommandQueue.Supervisor do
     * `CommandQueue.Registry` - unique-keyed registry of running processors.
     * `CommandQueue.AcquireSupervisor` - a `Task.Supervisor` for the lease
       acquisition tasks the `InstanceMonitor` starts, capped at
-      `Config.max_concurrent_acquisitions/0` children.
+      `DoubleEntryLedger.CommandQueue.Config.max_concurrent_acquisitions/0` children.
     * `CommandQueue.WorkerSupervisor` - a `Task.Supervisor` for the worker tasks
       (single command and batch) an `InstanceProcessor` runs. The tasks stay
       unlinked from the processor that started them and are tracked by monitor.
     * `CommandQueue.InstanceSupervisor` - a `DynamicSupervisor` holding one
       `InstanceProcessor` per leased ledger, capped at
-      `Config.max_leases_per_node/0` children.
+      `DoubleEntryLedger.CommandQueue.Config.max_leases_per_node/0` children.
     * `CommandQueue.InstanceMonitor` - discovers work and starts processors.
 
   That order matters on the way down. Children terminate in reverse start order,

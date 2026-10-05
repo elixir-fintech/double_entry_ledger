@@ -165,7 +165,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
   def handle_info(:process_next, %{pending_cleanup: nil, in_flight: nil} = state) do
     # Drain from the in-memory buffer first; only hit the DB to refill
     # when it's empty. This amortizes the find_next SELECT cost across
-    # `Config.pending_fetch_limit/0` commands per round-trip.
+    # `DoubleEntryLedger.CommandQueue.Config.pending_fetch_limit/0` commands per round-trip.
     case find_next_command_ids(state.instance_id, Config.pending_fetch_limit()) do
       [] ->
         Logger.info(
@@ -506,7 +506,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceProcessor do
     end
   end
 
-  # Loads up to `Config.batch_size/0` commands and batches the longest contiguous
+  # Loads up to `DoubleEntryLedger.CommandQueue.Config.batch_size/0` commands and batches the longest contiguous
   # batchable prefix. The first non-batchable command remains at the head of
   # `pending_ids`, so it is processed singly on the next cycle before any
   # later commands. If the first command is non-batchable, process it singly

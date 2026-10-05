@@ -135,7 +135,7 @@ project follows [Semantic Versioning](https://semver.org/).
   Enqueues for the same ledger wait on each other; ledgers are locked
   independently except for a possible hash collision. The flag is node-local
   and must be set consistently on every node that enqueues. No migration is
-  required. `Config.serialize_enqueue?/0` exposes the flag.
+  required. `DoubleEntryLedger.Config.serialize_enqueue?/0` exposes the flag.
 
 ### Changed
 

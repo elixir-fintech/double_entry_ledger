@@ -18,7 +18,7 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
       acquisition task starts until its processor exits. A reservation is
       advisory: it never grants ownership and losing one never revokes a
       grant. `Coordinator.DatabasePolling` is the only strategy in this
-      release, selected by `Config.coordinator/0`.
+      release, selected by `DoubleEntryLedger.CommandQueue.Config.coordinator/0`.
     * `CommandQueue.Lease` decides who actually owns a ledger, through
       PostgreSQL. A `Lease.Grant` is the only thing that fences a write.
 
@@ -27,8 +27,8 @@ defmodule DoubleEntryLedger.CommandQueue.InstanceMonitor do
 
   ## The cap
 
-  A node runs at most `Config.max_leases_per_node/0` processors and at most
-  `Config.max_concurrent_acquisitions/0` acquisitions at once. The monitor
+  A node runs at most `DoubleEntryLedger.CommandQueue.Config.max_leases_per_node/0` processors and at most
+  `DoubleEntryLedger.CommandQueue.Config.max_concurrent_acquisitions/0` acquisitions at once. The monitor
   clamps each poll's candidate list to the free slots it computes from the two
   supervisors' live child counts, and `InstanceSupervisor`'s `max_children` is
   the durable backstop: unlike the monitor's arithmetic it survives a monitor

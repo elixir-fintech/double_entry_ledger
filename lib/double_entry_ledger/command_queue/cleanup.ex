@@ -38,7 +38,7 @@ defmodule DoubleEntryLedger.CommandQueue.Cleanup do
   Returns `{:ok, reverted_ids}` with the ids whose rows were actually written
   (always `[]` for a crash retry, which writes at most one row and requeues
   nothing), `:lost` when another owner has the ledger, or `:busy` when the
-  lease row lock was not granted within `Config.lease_lock_timeout_ms/0`.
+  lease row lock was not granted within `DoubleEntryLedger.CommandQueue.Config.lease_lock_timeout_ms/0`.
   Nothing is written in either of the last two cases.
   """
   @spec perform(t(), Grant.t(), Ecto.Repo.t()) :: {:ok, [Ecto.UUID.t()]} | :lost | :busy

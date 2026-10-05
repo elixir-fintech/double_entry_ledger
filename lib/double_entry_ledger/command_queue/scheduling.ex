@@ -179,7 +179,7 @@ defmodule DoubleEntryLedger.CommandQueue.Scheduling do
       state, or its retry deadline is still in the database's future
     - `{:error, :lease_lost}`: Another owner has the ledger; nothing was written
     - `{:error, :lease_busy}`: The lease row lock was not granted within
-      `Config.lease_lock_timeout_ms/0`; nothing was written
+      `DoubleEntryLedger.CommandQueue.Config.lease_lock_timeout_ms/0`; nothing was written
 
   Only `Lease.BusyError` becomes `:lease_busy`, which is `Lease.lock!/3`'s
   narrow rule rather than the wider one `acquire/4`, `renew/3` and `release/3`
