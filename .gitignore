@@ -33,3 +33,6 @@ double_entry_ledger-*.tar
 # Local Codex workspace and generated documentation drafts.
 /.codex/
 /docs/
+
+# local opencode files
+opencode.json
