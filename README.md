@@ -96,69 +96,57 @@ In this "BYO-repo" mode the library does not start its own repo. The command
 queue needs the consumer's repo to be running, so add
 `DoubleEntryLedger.children/0` to your supervision tree **after** your repo.
 
-Set a strong `idempotency_secret` — it hashes incoming keys. Set
-`start_command_queue: false` to disable background processing (useful in
-tests or when embedding the ledger without the queue). `retry_interval` is read
-at runtime; `max_retries` is captured into each OCC worker at compile time
-(`Occ.Processor.__using__/1`), so changing it needs a recompile. Inside the
-`:command_queue` list only `max_retries`, `base_retry_delay` and
-`max_retry_delay` are read with `Application.compile_env/3`; the other keys are
-read at runtime through `CommandQueue.Config`, which also validates the keys
-it owns. `CommandQueue.Config.validate!/0` runs both when the queue supervisor
+### Top-level keys (`config :double_entry_ledger, ...`)
+
+`:insert_path: :legacy` and the `false` flags below are the conservative
+defaults; opt in per key.
+
+| Key | Default | Read | Description |
+| --- | --- | --- | --- |
+| `repo` | unset (falls back to `DoubleEntryLedger.Repo`) | runtime | Consumer's Ecto repo, so the library shares one connection pool (and one sandbox in tests). |
+| `idempotency_secret` | none (required) | runtime | Signs incoming idempotency keys. Set a strong value. |
+| `start_command_queue` | `true` | compile time | Supervise the command queue on this node. Set `false` to disable background processing (useful in tests or when embedding the ledger without the queue). |
+| `insert_path` | `:legacy` | runtime | How a single create-transaction command writes its rows. `:legacy` cascades transaction plus entries through one Ecto changeset. `:insert_all` inserts the transaction row first, then bulk-writes entries with `Repo.insert_all/3` and updates balances with explicit `lock_version`-checked UPDATEs. Same validations (balanced per currency, at least two entries, accounts on the same ledger) and same OCC semantics — purely a write strategy. Only `:posted` and `:pending` creates use the fast path; `pending_to_*` updates always use `:legacy`, and any other value falls back to `:legacy`. |
+| `serialize_enqueue` | `false` | runtime | When `true`, `CommandStore.create/1` takes a transaction-scoped PostgreSQL advisory lock keyed on the ledger before allocating the queue position, so positions for one ledger are allocated in commit order (without it, positions come from a sequence and concurrent enqueues can commit in the opposite order). Cost: concurrent enqueues for the same ledger become serial, and the lock is held until your outer transaction ends if you wrap `create/1`. Node-local — every enqueuing node must set the same value. |
+| `max_batch_retries` | `3` | runtime | Stale-write retries per batch before it splits in half and recurses down to single-command processing. |
+| `max_retries` | `5` | compile time | OCC attempts per command before it times out. Baked into each worker (`Occ.Processor.__using__/1`); changing it needs a recompile. Distinct from the `:command_queue` `max_retries` below. |
+| `retry_interval` | `200` | runtime | OCC backoff base in milliseconds. |
+
+### `:command_queue` keys (`config :double_entry_ledger, :command_queue, ...`)
+
+Only `max_retries`, `base_retry_delay` and `max_retry_delay` are read
+with `Application.compile_env/3`; the rest are read at runtime through
+`CommandQueue.Config`.
+
+| Key | Default | Read | Description |
+| --- | --- | --- | --- |
+| `poll_interval` | `5_000` | runtime | Monitor poll interval in milliseconds. |
+| `pending_fetch_limit` | `64` | runtime | Queue IDs fetched per database read. Independent of `batch_size`; when batching, set it to at least `batch_size`, preferably a multiple, so each fetch divides into full batches. |
+| `batch_enabled` | `false` | runtime (live) | Group up to `batch_size` compatible create/update transaction commands per dispatch round instead of processing one at a time. Re-read every round, so it can be flipped without restarting. Account commands always go singly. |
+| `batch_size` | `8` | runtime | Commands per batch. |
+| `max_retries` | `5` | compile time | Queue retries before a command is dead-lettered. |
+| `base_retry_delay` | `30` | compile time | First retry delay in seconds. |
+| `max_retry_delay` | `3_600` | compile time | Retry delay cap in seconds. |
+| `lease_ttl` | `20` | runtime | Seconds a ledger lease lives without refresh. Also the failover budget: a dead node's ledgers cannot be taken over before its leases expire. |
+| `lease_lock_timeout_ms` | `1_000` | runtime | How long a writer waits for the lease row lock before reporting contention. |
+| `max_leases_per_node` | `:infinity` | runtime | Ledgers this node may work at once (enforced as `InstanceSupervisor`'s `max_children`). |
+| `max_concurrent_acquisitions` | `4` | runtime | Lease acquisitions in flight per node (enforced as `AcquireSupervisor`'s `max_children`). |
+| `coordination_strategy` | `:database_polling` | runtime | Which coordinator nominates ledgers. The only value in this release; anything else is rejected. |
+| `processor_name` | `"command_queue"` | runtime | Prefix of the generated owner id (`"prefix:node:uuid"`), stamped on queue rows as `processor_id`. |
+
+`CommandQueue.Config.validate!/0` runs both when the queue supervisor
 starts and in every `InstanceProcessor.init/1` — the second because the
 supervisor does not run at all when `start_command_queue: false`, which is
-exactly the setup that starts a processor by hand. It raises naming the first
-bad key; `processor_name` and the three compile-time retry keys are not among
-the keys it checks. The supervisor then calls
-`CommandQueue.Config.warn_stale_config/0`, which logs — never raises — about
-configuration this release stopped reading: a key in the `:command_queue` list
-that nothing reads, and `batch_enabled` or `batch_size` still set at the top
-level, where 0.5 read them and 0.6 does not.
+exactly the setup that starts a processor by hand. It raises naming the
+first bad key; `processor_name` and the three compile-time retry keys are
+not among the keys it checks. The supervisor then calls
+`CommandQueue.Config.warn_stale_config/0`, which logs — never raises —
+about configuration this release stopped reading: a key in the
+`:command_queue` list that nothing reads, and `batch_enabled` or
+`batch_size` still set at the top level, where 0.5 read them and 0.6
+does not. A batch that fails with a non-staleness database error drains
+one command at a time before batching resumes.
 
-`insert_path: :legacy` and `batch_enabled: false` are the conservative
-defaults. To opt into the new paths, set `insert_path: :insert_all` and/or
-`batch_enabled: true` in the consuming application's configuration. Set
-`batch_size` to control how many compatible transaction commands are processed
-together and `max_batch_retries` to control retries after a stale account
-write. Account commands continue through the single-command path.
-`batch_enabled`, `batch_size` and `pending_fetch_limit` all live in the
-`:command_queue` list. `pending_fetch_limit` controls how many queue IDs an
-instance processor fetches per database read; it is independent of
-`batch_size`. When batching is enabled,
-set it to at least `batch_size` and preferably to a multiple of `batch_size` so
-each database fetch can be divided into full batches.
-
-`insert_path` selects how a single create-transaction command writes its
-rows. `:legacy` inserts the transaction with its entries cascaded through
-one Ecto changeset. `:insert_all` inserts the transaction row first, then
-writes the entries with a bulk `Repo.insert_all/3` and updates account
-balances with explicit `lock_version`-checked UPDATEs. Both enforce the
-same validations (balanced per currency, at least two entries, accounts on
-the same ledger) and the same optimistic-concurrency semantics, so the
-ledger result is identical — it is purely a write strategy. The fast path
-only handles `:posted` and `:pending` creates; `pending_to_*` updates
-always flow through `:legacy`, and any value other than `:insert_all`
-falls back to `:legacy`.
-
-`batch_enabled` is read live on every dispatch round, so it can be
-flipped at runtime without restarting processors. When a batch hits stale
-account writes it retries up to `max_batch_retries` times, then splits in
-half and retries each half, recursing down to single-command processing;
-a batch that fails with any other database error drains one command at a
-time before batching resumes.
-
-`serialize_enqueue: true` makes `CommandStore.create/1` take a
-transaction-scoped PostgreSQL advisory lock keyed on the ledger before the
-queue item allocates its position. Queue positions are assigned from a
-sequence, so without the lock two concurrent enqueues for one ledger can
-commit in the opposite order to their positions and the processor may see the
-later position first. With the lock, positions for one ledger are allocated in
-commit order. Ledgers are locked independently except for a possible 32-bit
-hash collision, which only adds waiting. The cost is that concurrent enqueues
-for the same ledger become serial, and if you wrap `create/1` in your own
-transaction the lock is held until that outer transaction ends. It is read at
-runtime and off by default. The setting is node-local, so every node that
-enqueues commands must enable it for the ordering guarantee to hold.
 Dependency configuration files are not loaded by a host application, so the
 `INSERT_PATH`, `BATCH`, and `BATCH_SIZE` environment-variable helpers in this
 repository's `config/runtime.exs` only apply when running this repository
