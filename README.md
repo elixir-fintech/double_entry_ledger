@@ -128,6 +128,25 @@ instance processor fetches per database read; it is independent of
 set it to at least `batch_size` and preferably to a multiple of `batch_size` so
 each database fetch can be divided into full batches.
 
+`insert_path` selects how a single create-transaction command writes its
+rows. `:legacy` inserts the transaction with its entries cascaded through
+one Ecto changeset. `:insert_all` inserts the transaction row first, then
+writes the entries with a bulk `Repo.insert_all/3` and updates account
+balances with explicit `lock_version`-checked UPDATEs. Both enforce the
+same validations (balanced per currency, at least two entries, accounts on
+the same ledger) and the same optimistic-concurrency semantics, so the
+ledger result is identical — it is purely a write strategy. The fast path
+only handles `:posted` and `:pending` creates; `pending_to_*` updates
+always flow through `:legacy`, and any value other than `:insert_all`
+falls back to `:legacy`.
+
+`batch_enabled` is read live on every dispatch round, so it can be
+flipped at runtime without restarting processors. When a batch hits stale
+account writes it retries up to `max_batch_retries` times, then splits in
+half and retries each half, recursing down to single-command processing;
+a batch that fails with any other database error drains one command at a
+time before batching resumes.
+
 `serialize_enqueue: true` makes `CommandStore.create/1` take a
 transaction-scoped PostgreSQL advisory lock keyed on the ledger before the
 queue item allocates its position. Queue positions are assigned from a
