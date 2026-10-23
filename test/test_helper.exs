@@ -79,3 +79,5 @@ Mox.defmock(DoubleEntryLedger.MockRepo, for: DoubleEntryLedger.RepoBehaviour)
 Mox.defmock(DoubleEntryLedger.MockCommandWorker,
   for: DoubleEntryLedger.Workers.CommandWorkerBehaviour
 )
+
+Cucumber.compile_features!()

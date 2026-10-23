@@ -4,6 +4,14 @@ All notable changes to DoubleEntryLedger are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+- Integration tests can now be written as Gherkin features in `test/features/`,
+  run by the `cucumber` hex package (test-only dependency). Scenarios run with
+  the rest of the suite (`mix test`) or alone with `mix test --only cucumber`.
+- CI now runs on Elixir 1.19.5 / OTP 28. The test suite requires Elixir 1.18+
+  because of cucumber; the library still supports `~> 1.15`.
+
 ## [0.6.0] - 2026-10-05
 
 ### ⚠️ Breaking changes

@@ -517,6 +517,20 @@ Extras are bundled in `pages/` when you run `mix docs`.
 - `mix credo --strict` and `mix dialyzer` – static analysis.
 - `mix docs` – regenerate documentation, or `mix tidewave` to preview docs via the built-in dev server.
 
+Integration acceptance criteria live as Gherkin features in `test/features/`,
+executed by the [`cucumber`](https://hex.pm/packages/cucumber) hex package
+(test-only dependency). Step definitions go in
+`test/features/step_definitions/`, and scenario setup — a per-scenario SQL
+sandbox checkout — in `test/features/support/sandbox.exs`. Run them with the
+rest of the suite (`mix test`) or alone:
+
+```bash
+mix test --only cucumber
+```
+
+Note that cucumber requires Elixir 1.18+ to run the test suite; the library
+itself still supports `~> 1.15`.
+
 ## Migrating from 0.5.x to 0.6.0
 
 > ⚠️ **0.6.0 contains a breaking schema change and requires a drained

@@ -39,7 +39,13 @@ defmodule DoubleEntryLedger.MixProject do
       ],
       docs: docs(),
       consolidate_protocols: if(Mix.env() == :test, do: false, else: true),
-      test_ignore_filters: [~r/test\/performance/]
+      # Cucumber's step definition and support files are loaded by
+      # Cucumber.compile_features!/0, not by mix test
+      test_ignore_filters: [
+        ~r/test\/performance/,
+        ~r/features\/step_definitions/,
+        ~r/features\/support/
+      ]
     ]
   end
 
@@ -70,6 +76,7 @@ defmodule DoubleEntryLedger.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:mox, "~> 1.0", only: [:test]},
+      {:cucumber, "~> 1.0", only: [:test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:tidewave, "~> 0.4", only: :dev},
       {:bandit, "~> 1.0", only: :dev},
