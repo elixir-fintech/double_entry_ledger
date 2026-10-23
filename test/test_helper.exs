@@ -1,6 +1,13 @@
 ExUnit.start(formatters: [ExUnit.CLIFormatter])
 ExUnit.configure(only_failures: true)
 
+# Feature files tagged @wip are executable specifications whose step
+# definitions have not been implemented yet. Exclude them from the
+# default run; `mix test --include wip` runs them (each scenario fails
+# on its first undefined step until its steps are written — remove the
+# @wip tag as features gain step definitions).
+ExUnit.configure(exclude: [:wip])
+
 # Allow running the suite under either insert path. Defaults to
 # :legacy; set INSERT_PATH=insert_all to exercise the new path.
 case System.get_env("INSERT_PATH") do
