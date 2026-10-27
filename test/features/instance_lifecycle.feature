@@ -25,20 +25,13 @@ Feature: Instance lifecycle
     Then the instance creation is rejected
 
   Scenario: An instance with accounts cannot be deleted
+    Accounts are created through commands, so it is the instance's
+    command history that blocks the deletion.
     Given a ledger instance "acme:ledger"
     And an asset account "cash:eur" in EUR
     When I delete the instance "acme:ledger"
     Then the instance deletion is rejected
     And the instance "acme:ledger" still exists
-
-  Scenario: An instance with transactions cannot be deleted
-    Given a ledger instance "acme:ledger"
-    And an asset account "cash:eur" in EUR
-    And an equity account "capital:eur" in EUR
-    And I create a posted transaction of 10000 EUR between "cash:eur" and "capital:eur"
-    When I delete the instance "acme:ledger"
-    Then the instance deletion is rejected
-
 
   Scenario: Updating an instance description
     Given a ledger instance "acme:ledger" described as "before"

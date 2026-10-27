@@ -38,7 +38,7 @@ Feature: Ledger queries
   Scenario: An account's balance history lists its mutations
     When I list the balance history of "cash:eur"
     Then the listing holds 2 balance history entries
-    And the entries are ordered by insertion time
+    And the entries are ordered newest first
 
   Scenario: A fresh account has an empty balance history
     Given an asset account "savings:eur" in EUR

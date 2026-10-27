@@ -2,10 +2,13 @@
 Feature: Available balances
   The available balance is the real calculated balance: posted amount
   minus the pending amount on the opposite side of the account's normal
-  balance. A pending entry that moves in the account's normal direction
-  is an expected inflow and does not change availability; a pending
-  entry on the opposite side is an expected outflow and lowers it. The
-  negative limit bounds how far below zero availability may go.
+  balance. Pending balances are direction-aware like posted ones, so a
+  pending entry against the account's normal direction shows as a
+  negative pending balance. A pending entry that moves in the account's
+  normal direction is an expected inflow and does not change
+  availability; a pending entry on the opposite side is an expected
+  outflow and lowers it. The negative limit bounds how far below zero
+  availability may go.
 
   Background:
     Given a ledger instance
@@ -28,7 +31,7 @@ Feature: Available balances
       | account       | amount | currency |
       | cash:eur      | -30000 | EUR      |
       | capital:eur   | -30000 | EUR      |
-    Then the pending balance of "cash:eur" is 30000
+    Then the pending balance of "cash:eur" is -30000
     And the available balance of "cash:eur" is 70000
 
   Scenario: A pending credit on a credit-normal account does not change availability

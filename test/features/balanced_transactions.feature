@@ -72,14 +72,17 @@ Feature: Balanced transactions
       | cash:usd      | 50000  | EUR      |
     Then the transaction is rejected
 
-  Scenario: Entries from different ledger instances cannot share a transaction
+  Scenario: An account from another ledger instance cannot be referenced
+    Account addresses resolve within the transaction's own instance, so
+    an account that lives in a different instance is simply not found.
     Given a second ledger instance
     And an equity account "other:capital:eur" in EUR
-    When I attempt to create a posted transaction with entries:
+    When I attempt to create a posted transaction in the first ledger instance with entries:
       | account           | amount | currency |
       | cash:eur          | 100000 | EUR      |
       | other:capital:eur | 100000 | EUR      |
-    Then the transaction is rejected with an error containing "same ledger"
+    Then the transaction is rejected with an error containing "some_accounts_not_found"
+    And the posted balance of "cash:eur" in the first ledger instance is 0
 
   Scenario: A transaction cannot repeat an account
     Each entry must name a distinct account.

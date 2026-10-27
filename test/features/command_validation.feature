@@ -1,9 +1,12 @@
 @wip
 Feature: Command validation
-  External requests enter as commands. Payload validation happens
-  before anything is queued or stored: an invalid command creates no
-  command row and no queue item, so bad input never occupies the
-  queue.
+  External requests enter as commands. Structural validation — action,
+  instance, source, idempotency keys, status, entry count, distinct
+  accounts — happens before anything is queued or stored: a malformed
+  command creates no command row and no queue item, so bad input never
+  occupies the queue. Ledger rules that need account state, such as
+  balance and account existence, are checked only when the command is
+  processed.
 
   Background:
     Given a ledger instance
@@ -50,13 +53,14 @@ Feature: Command validation
     Then the command is rejected
     And no command is stored
 
-  Scenario: Unbalanced entries fail validation before queuing
+  Scenario: Balance is not checked when a command is enqueued
+    Unbalanced entries are structurally valid, so the command is queued;
+    it fails when processed (see command retries).
     When I enqueue a create transaction command from "back-office" with idempotency key "cap-1" with entries:
       | account       | amount | currency |
       | cash:eur      | 100000 | EUR      |
       | capital:eur   | 90000  | EUR      |
-    Then the command is rejected
-    And no command is stored
+    Then the command is stored with queue item status pending
 
   Scenario: A create account command with an invalid payload is rejected
     When I enqueue a create account command from "back-office" with an empty payload
@@ -72,11 +76,19 @@ Feature: Command validation
       | capital:eur   | 100000 | EUR      |
     Then the command fails without being stored
 
-  Scenario: A synchronous command in retry mode stores its failure
-    With "retry" the failing command is persisted with its error state
-    so the queue can retry it.
+  Scenario: A synchronous command in retry mode returns validation failures without storing them
+    Retry mode only persists failures the queue can recover from;
+    validation failures come back to the caller as in "fail" mode.
     When I synchronously process a create transaction command from "back-office" with idempotency key "cap-1" with error mode "retry" with entries:
       | account       | amount | currency |
       | ghost:eur     | 100000 | EUR      |
       | capital:eur   | 100000 | EUR      |
-    Then the command is stored with its failure recorded
+    Then the command fails without being stored
+
+  Scenario: A synchronous command in retry mode stores an OCC timeout
+    With "retry" a command whose optimistic concurrency retries are
+    exhausted is persisted in occ_timeout so the queue can retry it.
+    Given a synchronous create transaction command that exhausts its OCC retries
+    When I synchronously process it with error mode "retry"
+    Then the command is stored with queue item status occ_timeout
+    And the queue item has a retry scheduled

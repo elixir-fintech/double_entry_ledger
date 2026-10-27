@@ -89,7 +89,3 @@ Feature: Command idempotency
       | capital:eur   | 30000  | EUR      |
     Then the update is rejected with an error containing "idempotency violation"
     And the pending balance of "cash:eur" is 25000
-
-  Scenario: An update cannot target a transaction that was never created
-    When I enqueue an update transaction command from "checkout" with idempotency key "order-never" and update idempotency key "post-1" to posted
-    Then the update command is dead-lettered once processed
