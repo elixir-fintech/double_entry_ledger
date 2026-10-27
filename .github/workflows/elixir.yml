@@ -63,6 +63,10 @@ jobs:
         MIX_ENV: test
     - name: Run tests
       run: mix test
+    - name: Run features under the insert_all insert path
+      run: mix test --only cucumber
+      env:
+        INSERT_PATH: insert_all
     - name: Run load tests
       run: mix load.process 10 10
       env:

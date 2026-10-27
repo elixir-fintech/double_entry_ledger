@@ -2,10 +2,13 @@ ExUnit.start(formatters: [ExUnit.CLIFormatter])
 ExUnit.configure(only_failures: true)
 
 # Feature files tagged @wip are executable specifications whose step
-# definitions have not been implemented yet. Exclude them from the
-# default run; `mix test --include wip` runs them (each scenario fails
-# on its first undefined step until its steps are written — remove the
-# @wip tag as features gain step definitions).
+# definitions have not been implemented yet. They are compiled only when
+# WIP=1 (see `Cucumber.compile_features!/1` below) — an ExUnit exclude
+# alone is not enough, because `mix test --only cucumber` includes every
+# cucumber test and an include overrides an exclude. With WIP=1 they are
+# still excluded from a plain run; `WIP=1 mix test --only wip` runs them
+# (each scenario fails on its first undefined step until its steps are
+# written — remove the @wip tag as features gain step definitions).
 ExUnit.configure(exclude: [:wip])
 
 # Allow running the suite under either insert path. Defaults to
@@ -87,4 +90,14 @@ Mox.defmock(DoubleEntryLedger.MockCommandWorker,
   for: DoubleEntryLedger.Workers.CommandWorkerBehaviour
 )
 
-Cucumber.compile_features!()
+wip_feature? = fn path ->
+  path |> File.read!() |> String.match?(~r/\A\s*(@\S+\s+)*@wip\b/)
+end
+
+features =
+  case System.get_env("WIP") do
+    "1" -> Path.wildcard("test/features/**/*.feature")
+    _ -> "test/features/**/*.feature" |> Path.wildcard() |> Enum.reject(wip_feature?)
+  end
+
+Cucumber.compile_features!(features: features)
