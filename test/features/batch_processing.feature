@@ -104,3 +104,11 @@ Feature: Batch processing
       | capital:eur   | 10000  | EUR      |
     When the command queue processes the ledger's commands
     Then the command's queue item status is processed
+
+  Scenario: A batch crash hands back only the claims the processor still owns
+    Claims another processor has taken over since are left alone.
+    Given a batch of claimed commands whose task crashes
+    And one of the commands is now owned by another processor
+    When the processor cleans up after the batch
+    Then the commands it still owns are back to pending
+    And the command owned by the other processor is untouched

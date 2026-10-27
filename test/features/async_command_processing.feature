@@ -71,3 +71,20 @@ Feature: Asynchronous command processing
     Then the ledger instance has 0 transactions
     When the command queue processes the ledger's commands
     Then the ledger instance has 1 transaction
+
+  Scenario: A queued account update changes the account
+    Given I enqueue an update account command from "back-office" for "cash:eur" with description "Operating cash"
+    When the command queue processes the ledger's commands
+    Then the account "cash:eur" has description "Operating cash"
+
+  Scenario: A queued update command archives its transaction
+    Given I enqueue a create transaction command from "checkout" with idempotency key "hold-1" with payload status pending with entries:
+      | account       | amount | currency |
+      | cash:eur      | -20000 | EUR      |
+      | capital:eur   | -20000 | EUR      |
+    And the command queue processes the ledger's commands
+    When I enqueue an update transaction command from "checkout" with idempotency key "hold-1" and update idempotency key "hold-1-void" to archived
+    And the command queue processes the ledger's commands
+    Then the pending balance of "cash:eur" is 0
+    And the posted balance of "cash:eur" is 100000
+    And the transaction status is archived

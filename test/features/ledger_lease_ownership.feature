@@ -84,3 +84,29 @@ Feature: Ledger lease ownership
     When I create a posted transaction of 100000 EUR between "cash:eur" and "capital:eur"
     Then the posted balance of "cash:eur" is 100000
     And the node still holds the lease
+
+  Scenario: A working processor renews its lease
+    Renewal pushes the expiry forward while the processor still owns
+    the ledger, so a long drain is not mistaken for a dead owner.
+    Given a processor holding the ledger lease
+    When the lease renewal interval passes
+    Then a "lease renewed" telemetry event is emitted
+    And the lease expiry has moved forward
+    And the fencing token is unchanged
+
+  Scenario: A processor that loses its lease at renewal stops
+    Given a processor holding the ledger lease
+    And another node has taken over the lease
+    When the lease renewal interval passes
+    Then a "lease lost" telemetry event is emitted with source "renewal"
+    And the processor writes nothing further
+
+  Scenario: A worker that finds the lease row busy hands its claim back
+    The worker's final write could not take the lease row lock in time,
+    so nothing was written. Its claim is reverted to pending under the
+    same lease instead of being left in processing.
+    Given a command claimed under the ledger lease
+    And its worker reports the lease as busy
+    When the processor cleans up after the worker
+    Then the command's queue item status is pending
+    And the command can be claimed again

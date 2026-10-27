@@ -53,3 +53,12 @@ Feature: Optimistic concurrency control
     And the command queue processes the ledger's commands
     Then exactly one of the commands is processed
     And the posted balance of "cash:eur" is 10000
+
+  Scenario: With serialized enqueue, queue positions follow commit order
+    Without it, positions come from a sequence, and two concurrent
+    enqueues can commit in the opposite order to their positions.
+    Given serialized enqueue is enabled
+    When an enqueue for the ledger is held open inside an outer transaction
+    And a second enqueue for the ledger starts
+    Then the second enqueue waits until the first commits
+    And the first command has the lower queue position

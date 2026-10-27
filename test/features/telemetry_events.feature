@@ -76,3 +76,13 @@ Feature: Telemetry events
     Given a telemetry handler that raises on every event
     When I create a posted transaction of 10000 EUR between "cash:eur" and "capital:eur"
     Then the posted balance of "cash:eur" is 10000
+
+  Scenario: A command's trace context reaches its telemetry
+    Consumers pass a vendor-neutral trace context with the command; the
+    events it causes carry it so traces can be stitched together.
+    Given no telemetry events have been observed
+    When I create a posted transaction of 10000 EUR between "cash:eur" and "capital:eur" with trace context:
+      | key         | value                                                   |
+      | traceparent | 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01 |
+    Then the "command process stop" telemetry event carries that trace context
+    And the "transaction created" telemetry event carries that trace context

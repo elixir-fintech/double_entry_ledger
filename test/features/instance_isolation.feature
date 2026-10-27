@@ -65,3 +65,17 @@ Feature: Instance isolation
     When the command queue processes the commands of instance "globex:ledger"
     Then the posted balance of "cash:eur" in instance "globex:ledger" is 5000
     And the posted balance of "cash:eur" in instance "acme:ledger" is 10000
+
+  Scenario: A command cannot be fetched through another instance's address
+    Given I enqueue a create transaction command for instance "acme:ledger" from "billing" with idempotency key "pay-1" with entries:
+      | account       | amount | currency |
+      | cash:eur      | 1000   | EUR      |
+      | capital:eur   | 1000   | EUR      |
+    When I fetch that command by id through instance "globex:ledger"
+    Then nothing is found
+    When I fetch that command by id through instance "acme:ledger"
+    Then the command is found
+
+  Scenario: A journal event cannot be fetched through another instance's address
+    When I fetch the latest journal event of "acme:ledger" by id through instance "globex:ledger"
+    Then nothing is found

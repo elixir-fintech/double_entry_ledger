@@ -57,3 +57,28 @@ Feature: Instance lifecycle
     Given a ledger instance
     When I validate the balances of the ledger instance
     Then validation succeeds
+
+  Scenario: An instance with only queued commands cannot be deleted
+    A queued command is part of the instance's history even before it
+    is processed.
+    Given a ledger instance "acme:ledger"
+    And I enqueue a create transaction command from "billing" with idempotency key "pay-1" with entries:
+      | account       | amount | currency |
+      | cash:eur      | 10000  | EUR      |
+      | capital:eur   | 10000  | EUR      |
+    When I delete the instance "acme:ledger"
+    Then the instance deletion is rejected
+    And the instance "acme:ledger" still exists
+
+  Scenario: An instance can carry a configuration map
+    When I create a ledger instance "acme:ledger" with config:
+      | key    | value |
+      | region | eu    |
+    Then the instance "acme:ledger" has config "region" set to "eu"
+
+  Scenario: Updating an instance's configuration
+    Given a ledger instance "acme:ledger" with config:
+      | key    | value |
+      | region | eu    |
+    When I update the instance "acme:ledger" config "region" to "us"
+    Then the instance "acme:ledger" has config "region" set to "us"

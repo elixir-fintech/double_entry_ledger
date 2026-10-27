@@ -89,3 +89,17 @@ Feature: Command idempotency
       | capital:eur   | 30000  | EUR      |
     Then the update is rejected with an error containing "idempotency violation"
     And the pending balance of "cash:eur" is 25000
+
+  Scenario: A duplicate posted create is queued and blocked when processed
+    Only pending creates are deduplicated at enqueue, through the
+    pending transaction lookup. A duplicate posted create is stored, and
+    its idempotency key stops it when the queue processes it.
+    When I enqueue a create transaction command from "billing" with idempotency key "pay-1" with entries:
+      | account       | amount | currency |
+      | cash:eur      | 10000  | EUR      |
+      | capital:eur   | 10000  | EUR      |
+    And I enqueue the same command again
+    Then 2 commands are stored
+    When the command queue processes the ledger's commands exhaustively
+    Then exactly one of the commands is processed
+    And the posted balance of "cash:eur" is 10000

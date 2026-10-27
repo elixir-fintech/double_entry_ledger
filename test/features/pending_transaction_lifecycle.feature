@@ -129,3 +129,15 @@ Feature: Pending transaction lifecycle
     And I post the pending transaction
     Then a "transaction created" journal event exists for that transaction
     And a "transaction posted" journal event exists for that transaction
+
+  Scenario: Posting a hold with amended amounts
+    A hold can be finalized for a different amount than it reserved,
+    such as a tip added at capture. The amounts follow the same rules
+    as an edit.
+    Given I create a pending transaction of 20000 EUR between "cash:eur" and "capital:eur"
+    When I post the pending transaction with entries:
+      | account       | amount | currency |
+      | cash:eur      | 25000  | EUR      |
+      | capital:eur   | 25000  | EUR      |
+    Then the pending balance of "cash:eur" is 0
+    And the posted balance of "cash:eur" is 125000
