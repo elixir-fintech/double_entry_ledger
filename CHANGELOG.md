@@ -25,6 +25,7 @@ project follows [Semantic Versioning](https://semver.org/).
   spaces, other characters or a trailing newline after a valid prefix were
   accepted, and so were sources of any length. Sources longer than 128
   characters are now rejected; check yours before upgrading.
+- Fixed: a `source_idempk` ending in a newline was accepted; it is now rejected.
 
 ## [0.6.0] - 2026-10-05
 

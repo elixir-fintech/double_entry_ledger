@@ -372,7 +372,7 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
     ])
     |> validate_required([:action, :instance_address, :source, :source_idempk])
     |> validate_format(:source, source_regex())
-    |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
+    |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}\z/)
     |> validate_inclusion(:action, @actions)
     |> validate_trace_context()
   end

@@ -114,6 +114,16 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMapTest do
     end
   end
 
+  describe "source_idempk format" do
+    test "changeset rejects a source_idempk ending in a newline" do
+      attrs = command_map_attrs(%{source_idempk: "order-123\n"})
+
+      %{errors: errors} = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+
+      assert {"has invalid format", [validation: :format]} = errors[:source_idempk]
+    end
+  end
+
   describe "trace_context" do
     test "changeset accepts optional trace_context map" do
       attrs =
