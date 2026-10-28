@@ -6,6 +6,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Fixed: `Instance.validate_account_balances/1` summed debits and credits
+  across all currencies, so a surplus in one currency could hide a shortfall
+  in another. It now checks each currency on its own. **Breaking:** it and
+  `Instance.ledger_value/1` now return a map keyed by currency
+  (`%{EUR: %{posted_debit: …, …}}`) instead of one cross-currency total; an
+  instance without accounts yields `%{}`.
 - Integration tests can now be written as Gherkin features in `test/features/`,
   run by the `cucumber` hex package (test-only dependency). Scenarios run with
   the rest of the suite (`mix test`) or alone with `mix test --only cucumber`.

@@ -30,7 +30,7 @@ The command queue (`lib/double_entry_ledger/command_queue`) polls for pending co
 
 ### Balances & Audit Trails
 
-Each transaction updates `Account` projections plus immutable `BalanceHistoryEntry` snapshots, enabling temporal queries and reconciliation. Instances can be validated with `Instance.validate_account_balances/1`, ensuring posted and pending debits/credits remain equal. Direct `command_id`, `transaction_id`, and `account_id` foreign keys on journal events provide traceability from the original request to the final projection.
+Each transaction updates `Account` projections plus immutable `BalanceHistoryEntry` snapshots, enabling temporal queries and reconciliation. Instances can be validated with `Instance.validate_account_balances/1`, ensuring posted and pending debits/credits remain equal in every currency. Direct `command_id`, `transaction_id`, and `account_id` foreign keys on journal events provide traceability from the original request to the final projection.
 
 ### Idempotency & Isolation
 
