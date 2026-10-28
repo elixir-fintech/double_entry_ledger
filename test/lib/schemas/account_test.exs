@@ -63,6 +63,22 @@ defmodule DoubleEntryLedger.AccountTest do
                })
     end
 
+    test "returns error for an address ending in a newline", %{instance: %{id: id}} do
+      assert %Ecto.Changeset{
+               valid?: false,
+               errors: [
+                 address: {"is not a valid address", [validation: :format]}
+               ]
+             } =
+               Account.changeset(%Account{}, %{
+                 name: "some name",
+                 address: "account:main\n",
+                 type: :asset,
+                 currency: :EUR,
+                 instance_id: id
+               })
+    end
+
     test "returns error for invalid currency", %{instance: %{id: id}} do
       assert %Ecto.Changeset{
                valid?: false,

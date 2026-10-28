@@ -63,7 +63,7 @@ defmodule DoubleEntryLedger.Account do
 
   alias __MODULE__, as: Account
 
-  @address_regex ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}$/
+  @address_regex ~r/^[a-zA-Z_0-9]+(:[a-zA-Z_0-9]+){0,}\z/
   @currency_atoms Currency.currency_atoms()
 
   @credit_and_debit Types.credit_and_debit()

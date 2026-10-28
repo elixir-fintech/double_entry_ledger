@@ -11,6 +11,23 @@ project follows [Semantic Versioning](https://semver.org/).
   the rest of the suite (`mix test`) or alone with `mix test --only cucumber`.
 - CI now runs on Elixir 1.19.5 / OTP 28. The test suite requires Elixir 1.18+
   because of cucumber; the library still supports `~> 1.15`.
+- Fixed: creating an `:archived` transaction returned a `BadMapError` instead
+  of a changeset with the `:status` error.
+- Fixed: a transaction rejected for taking an account below its negative limit
+  returned a changeset with no errors. The message now sits on the offending
+  entry's `:amount`.
+- Fixed: `AccountStore.update/4` raised on an unknown account address. Updating
+  a missing account, through the store or `CommandApi`, now returns
+  `{:error, changeset}` with `create_account_event_error: "Account does not
+  exist"` instead of `{:error, String.t()}`.
+- `source` is now validated as a whole string: 2–128 lowercase letters,
+  digits, `_` or `-`. Previously only its start was checked, so sources with
+  spaces, other characters or a trailing newline after a valid prefix were
+  accepted, and so were sources of any length. Sources longer than 128
+  characters are now rejected; check yours before upgrading.
+- Fixed: a `source_idempk` ending in a newline was accepted; it is now rejected.
+- Fixed: account and instance addresses ending in a newline were accepted;
+  they are now rejected.
 
 ## [0.6.0] - 2026-10-05
 

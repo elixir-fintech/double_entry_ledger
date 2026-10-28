@@ -20,6 +20,32 @@ defmodule DoubleEntryLedger.Stores.AccountStoreTest do
   doctest AccountStore
   doctest AccountStoreHelper
 
+  describe "update/4" do
+    setup [:create_instance]
+
+    test "returns an error changeset for an unknown account address", %{instance: instance} do
+      assert {:error, %Ecto.Changeset{errors: errors}} =
+               AccountStore.update(instance.address, "ghost:eur", %{description: "nothing"})
+
+      assert [create_account_event_error: {"Account does not exist", []}] = errors
+    end
+
+    test "does not update an account through another instance's address", %{instance: instance} do
+      account = account_fixture(instance_id: instance.id, description: "original")
+      other_instance = instance_fixture(%{address: "other:instance"})
+
+      assert {:error, %Ecto.Changeset{errors: errors}} =
+               AccountStore.update(other_instance.address, account.address, %{
+                 description: "hijacked"
+               })
+
+      assert [create_account_event_error: {"Account does not exist", []}] = errors
+
+      assert %{description: "original"} =
+               AccountStore.get_by_address(instance.address, account.address)
+    end
+  end
+
   describe "get_accounts_by_instance_id" do
     setup [:create_instance]
 

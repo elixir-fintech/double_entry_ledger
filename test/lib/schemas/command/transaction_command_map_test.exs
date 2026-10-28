@@ -81,6 +81,49 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMapTest do
     end
   end
 
+  describe "source format" do
+    test "changeset rejects a source with invalid characters after a valid prefix" do
+      attrs = command_map_attrs(%{source: "billing Office!!"})
+
+      %{errors: errors} = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+
+      assert {"has invalid format", [validation: :format]} = errors[:source]
+    end
+
+    test "changeset rejects a source ending in a newline" do
+      attrs = command_map_attrs(%{source: "billing\n"})
+
+      %{errors: errors} = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+
+      assert {"has invalid format", [validation: :format]} = errors[:source]
+    end
+
+    test "changeset accepts a 128 character source" do
+      attrs = command_map_attrs(%{source: String.duplicate("a", 128)})
+
+      assert %Changeset{valid?: true} =
+               TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+    end
+
+    test "changeset rejects a 129 character source" do
+      attrs = command_map_attrs(%{source: String.duplicate("a", 129)})
+
+      %{errors: errors} = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+
+      assert {"has invalid format", [validation: :format]} = errors[:source]
+    end
+  end
+
+  describe "source_idempk format" do
+    test "changeset rejects a source_idempk ending in a newline" do
+      attrs = command_map_attrs(%{source_idempk: "order-123\n"})
+
+      %{errors: errors} = TransactionCommandMap.changeset(%TransactionCommandMap{}, attrs)
+
+      assert {"has invalid format", [validation: :format]} = errors[:source_idempk]
+    end
+  end
+
   describe "trace_context" do
     test "changeset accepts optional trace_context map" do
       attrs =

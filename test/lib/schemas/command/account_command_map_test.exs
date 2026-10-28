@@ -6,6 +6,39 @@ defmodule DoubleEntryLedger.Command.AccountCommandMapTest do
 
   doctest AccountCommandMap
 
+  describe "source format" do
+    test "changeset rejects a source with invalid characters after a valid prefix" do
+      attrs = account_command_map_attrs(%{source: "billing Office!!"})
+
+      %{errors: errors} = AccountCommandMap.changeset(%AccountCommandMap{}, attrs)
+
+      assert {"has invalid format", [validation: :format]} = errors[:source]
+    end
+
+    test "changeset rejects a source ending in a newline" do
+      attrs = account_command_map_attrs(%{source: "billing\n"})
+
+      %{errors: errors} = AccountCommandMap.changeset(%AccountCommandMap{}, attrs)
+
+      assert {"has invalid format", [validation: :format]} = errors[:source]
+    end
+
+    test "changeset accepts a 128 character source" do
+      attrs = account_command_map_attrs(%{source: String.duplicate("a", 128)})
+
+      assert %Changeset{valid?: true} =
+               AccountCommandMap.changeset(%AccountCommandMap{}, attrs)
+    end
+
+    test "changeset rejects a 129 character source" do
+      attrs = account_command_map_attrs(%{source: String.duplicate("a", 129)})
+
+      %{errors: errors} = AccountCommandMap.changeset(%AccountCommandMap{}, attrs)
+
+      assert {"has invalid format", [validation: :format]} = errors[:source]
+    end
+  end
+
   describe "trace_context" do
     test "changeset accepts optional trace_context map" do
       attrs =

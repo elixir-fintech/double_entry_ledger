@@ -112,7 +112,8 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
 
   import DoubleEntryLedger.Command.Helper,
     only: [
-      fetch_action: 1
+      fetch_action: 1,
+      source_regex: 0
     ]
 
   import Ecto.Changeset,
@@ -370,8 +371,8 @@ defmodule DoubleEntryLedger.Command.TransactionCommandMap do
       :trace_context
     ])
     |> validate_required([:action, :instance_address, :source, :source_idempk])
-    |> validate_format(:source, ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/)
-    |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}$/)
+    |> validate_format(:source, source_regex())
+    |> validate_format(:source_idempk, ~r/^[A-Za-z0-9](?:[A-Za-z0-9._:-]){0,127}\z/)
     |> validate_inclusion(:action, @actions)
     |> validate_trace_context()
   end
