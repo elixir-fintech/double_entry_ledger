@@ -8,7 +8,7 @@ defmodule DoubleEntryLedger.Command.Helper do
 
   @transaction_actions [:create_transaction, :update_transaction]
   @account_actions [:create_account, :update_account]
-  @source_regex ~r/^[a-z0-9](?:[a-z0-9_-]){1,29}/
+  @source_regex ~r/^[a-z0-9](?:[a-z0-9_-]){1,127}\z/
 
   @type transaction_action ::
           unquote(

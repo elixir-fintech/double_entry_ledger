@@ -275,12 +275,10 @@ defmodule DoubleEntryLedger.Stores.AccountStore do
         attrs,
         source \\ "account_store-update"
       ) do
-    account = get_by_address(instance_address, account_address)
-
     response =
       CommandApi.process_from_params(%{
         "instance_address" => instance_address,
-        "account_address" => account.address,
+        "account_address" => account_address,
         "action" => "update_account",
         "source" => source,
         "payload" => Map.delete(attrs, :instance_address)

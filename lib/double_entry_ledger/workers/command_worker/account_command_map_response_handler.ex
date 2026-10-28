@@ -115,6 +115,11 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.AccountCommandMapResponseHandl
 
         {:error, from_account_to_command_map_payload(command_map, changeset)}
 
+      {:error, :create_account_event_error, changeset, _changes} ->
+        warn("Account not found", command_map, changeset)
+
+        {:error, changeset}
+
       {:error, step, error, _steps_so_far} ->
         {:ok, message} = error("Step :#{step} failed.", command_map, error)
 

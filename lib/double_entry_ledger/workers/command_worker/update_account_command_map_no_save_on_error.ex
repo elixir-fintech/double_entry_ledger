@@ -142,8 +142,8 @@ defmodule DoubleEntryLedger.Workers.CommandWorker.UpdateAccountCommandMapNoSaveO
 
       _ ->
         command_map_changeset =
-          command_map
-          |> AccountCommandMap.changeset(%{})
+          %AccountCommandMap{}
+          |> AccountCommandMap.changeset(AccountCommandMap.to_map(command_map))
           |> Changeset.add_error(:create_account_event_error, to_string("Account does not exist"))
 
         Multi.error(Multi.new(), :create_account_event_error, command_map_changeset)

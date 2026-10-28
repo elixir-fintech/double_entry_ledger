@@ -259,12 +259,15 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
   @spec build_entry_data_changeset({EntryData.t(), integer()}, list()) ::
           Changeset.t(EntryData.t())
   defp build_entry_data_changeset({entry_data, index}, entry_errors) do
-    errors = Enum.at(entry_errors, index)
+    # A transaction changeset can carry fewer entries than the payload (an
+    # archived create has none), so missing indexes mean "no errors".
+    errors = Enum.at(entry_errors, index, %{})
 
     %EntryData{}
     |> EntryData.changeset(EntryData.to_map(entry_data))
     |> add_entry_data_errors(errors)
     |> add_sign_error(errors)
+    |> add_available_error(errors)
     |> Map.put(:action, :insert)
   end
 
@@ -281,6 +284,15 @@ defmodule DoubleEntryLedger.Command.TransferErrors do
         Changeset.add_error(changeset, :amount, msg, opts)
     end
   end
+
+  # Balance-limit errors land on the entry's account (`account.available`);
+  # the entry's amount is what caused them, so surface them there.
+  @spec add_available_error(Changeset.t(EntryData.t()), map()) :: Changeset.t(EntryData.t())
+  defp add_available_error(changeset, %{account: %{available: available_errors}}) do
+    add_unique_field_errors(changeset, :amount, available_errors)
+  end
+
+  defp add_available_error(changeset, _errors), do: changeset
 
   @doc false
   @spec get_entry_errors(Changeset.t(TransactionCommandMap.t())) :: [map()]
