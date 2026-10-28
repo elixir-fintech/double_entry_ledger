@@ -9,6 +9,7 @@ project follows [Semantic Versioning](https://semver.org/).
 - Integration tests can now be written as Gherkin features in `test/features/`,
   run by the `cucumber` hex package (test-only dependency). Scenarios run with
   the rest of the suite (`mix test`) or alone with `mix test --only cucumber`.
+  Features tagged `@wip` are skipped unless `WIP=1` is set.
 - CI now runs on Elixir 1.19.5 / OTP 28. The test suite requires Elixir 1.18+
   because of cucumber; the library still supports `~> 1.15`.
 - Fixed: creating an `:archived` transaction returned a `BadMapError` instead

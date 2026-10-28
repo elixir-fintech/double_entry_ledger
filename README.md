@@ -528,6 +528,10 @@ rest of the suite (`mix test`) or alone:
 mix test --only cucumber
 ```
 
+Features tagged `@wip` are specifications whose step definitions are not
+written yet. They are skipped by default; `WIP=1 mix test --only wip` runs
+them. Remove the tag once a feature's steps land.
+
 Note that cucumber requires Elixir 1.18+ to run the test suite; the library
 itself still supports `~> 1.15`.
 
