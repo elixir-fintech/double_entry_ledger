@@ -26,6 +26,8 @@ project follows [Semantic Versioning](https://semver.org/).
   accepted, and so were sources of any length. Sources longer than 128
   characters are now rejected; check yours before upgrading.
 - Fixed: a `source_idempk` ending in a newline was accepted; it is now rejected.
+- Fixed: account and instance addresses ending in a newline were accepted;
+  they are now rejected.
 
 ## [0.6.0] - 2026-10-05
 

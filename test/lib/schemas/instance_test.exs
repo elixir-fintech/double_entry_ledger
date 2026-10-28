@@ -22,6 +22,15 @@ defmodule DoubleEntryLedger.InstanceTest do
              } = Instance.changeset(%Instance{}, %{})
     end
 
+    test "rejects an address ending in a newline" do
+      assert %Ecto.Changeset{
+               valid?: false,
+               errors: [
+                 address: {"is not a valid address", [validation: :format]}
+               ]
+             } = Instance.changeset(%Instance{}, %{address: "some:address\n"})
+    end
+
     test "it enforces unique address" do
       instance_fixture(%{address: "some:address"})
 
