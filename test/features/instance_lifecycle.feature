@@ -58,6 +58,43 @@ Feature: Instance lifecycle
     When I validate the balances of the ledger instance
     Then validation succeeds
 
+  Scenario: Validation detects posted balances that no longer match
+    The ledger never writes unbalanced books, so the corruption is
+    simulated by writing to the account row directly.
+    Given a ledger instance
+    And an asset account "cash:eur" in EUR
+    And an equity account "capital:eur" in EUR
+    And I create a posted transaction of 100000 EUR between "cash:eur" and "capital:eur"
+    And the posted debit of "cash:eur" is overwritten in the database with 90000
+    When I validate the balances of the ledger instance
+    Then validation fails
+    And the EUR validation report shows posted debit 90000 and posted credit 100000
+
+  Scenario: Validation detects pending balances that no longer match
+    Given a ledger instance
+    And an asset account "cash:eur" in EUR
+    And an equity account "capital:eur" in EUR
+    And I create a pending transaction of 20000 EUR between "cash:eur" and "capital:eur"
+    And the pending debit of "cash:eur" is overwritten in the database with 15000
+    When I validate the balances of the ledger instance
+    Then validation fails
+    And the EUR validation report shows pending debit 15000 and pending credit 20000
+
+  Scenario: Validation checks each currency on its own
+    A surplus in one currency cannot hide a shortfall in another: the
+    totals across currencies match, but neither currency balances.
+    Given a ledger instance
+    And an asset account "cash:eur" in EUR
+    And an equity account "capital:eur" in EUR
+    And an asset account "cash:usd" in USD
+    And an equity account "capital:usd" in USD
+    And I create a posted transaction of 100000 EUR between "cash:eur" and "capital:eur"
+    And I create a posted transaction of 50000 USD between "cash:usd" and "capital:usd"
+    And the posted debit of "cash:eur" is overwritten in the database with 110000
+    And the posted debit of "cash:usd" is overwritten in the database with 40000
+    When I validate the balances of the ledger instance
+    Then validation fails
+
   Scenario: An instance with only queued commands cannot be deleted
     A queued command is part of the instance's history even before it
     is processed.

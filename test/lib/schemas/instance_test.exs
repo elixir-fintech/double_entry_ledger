@@ -91,7 +91,7 @@ defmodule DoubleEntryLedger.InstanceTest do
     test "it works for empty accounts", %{instance: inst} do
       assert {
                :ok,
-               %{pending_credit: 0, pending_debit: 0, posted_credit: 0, posted_debit: 0}
+               %{EUR: %{pending_credit: 0, pending_debit: 0, posted_credit: 0, posted_debit: 0}}
              } = Instance.validate_account_balances(inst)
     end
 
@@ -101,8 +101,35 @@ defmodule DoubleEntryLedger.InstanceTest do
 
       assert {
                :ok,
-               %{pending_credit: 100, pending_debit: 100, posted_credit: 100, posted_debit: 100}
+               %{
+                 EUR: %{
+                   pending_credit: 100,
+                   pending_debit: 100,
+                   posted_credit: 100,
+                   posted_debit: 100
+                 }
+               }
              } = Instance.validate_account_balances(inst)
+    end
+
+    test "it fails when debits and credits balance only across currencies", %{instance: inst} do
+      account_fixture(
+        instance_id: inst.id,
+        currency: :EUR,
+        type: :asset,
+        normal_balance: :debit,
+        posted: %{amount: 100, debit: 100, credit: 0}
+      )
+
+      account_fixture(
+        instance_id: inst.id,
+        currency: :USD,
+        type: :liability,
+        normal_balance: :credit,
+        posted: %{amount: 100, debit: 0, credit: 100}
+      )
+
+      assert {:error, _} = Instance.validate_account_balances(inst)
     end
   end
 end

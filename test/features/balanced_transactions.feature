@@ -64,13 +64,15 @@ Feature: Balanced transactions
     And the posted balance of "cash:usd" is 50000
 
   Scenario: An entry whose currency differs from its account's currency is rejected
+    The entries balance in EUR, so the currency mismatch is the only
+    reason for the rejection.
     Given an asset account "cash:usd" in USD
     When I attempt to create a posted transaction with entries:
       | account       | amount | currency |
-      | cash:eur      | 100000 | EUR      |
+      | cash:usd      | 100000 | EUR      |
       | capital:eur   | 100000 | EUR      |
-      | cash:usd      | 50000  | EUR      |
-    Then the transaction is rejected
+    Then the transaction is rejected with an error containing "must be equal to entry"
+    And the posted balance of "cash:usd" is 0
 
   Scenario: An account from another ledger instance cannot be referenced
     Account addresses resolve within the transaction's own instance, so
